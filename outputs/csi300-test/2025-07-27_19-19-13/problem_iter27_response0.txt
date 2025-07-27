@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, span_n=10, span_m=5):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Volume-Weighted Exponential Momentum with Close Price
+    ema_close = df['close'].ewm(span=span_n, adjust=False).mean()
+    volume_weighted_ema = ema_close * df['volume']
+    
+    # Intraday Return with Open Price
+    open_t = df['open']
+    open_t_minus_1 = df['open'].shift(1)
+    intraday_return = (open_t - open_t_minus_1) / open_t_minus_1
+    
+    # Adjusted Open-Close Price Movement
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    
+    # Combine Factors
+    combined_factors = (intraday_price_range 
+                        - volume_weighted_ema 
+                        * intraday_return 
+                        * (1 + np.sign(open_close_movement) * open_close_movement))
+    
+    # Dynamic Volume Change Adjustment
+    volume_ratio = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_adjustment = (1 + volume_ratio) if volume_ratio > 0 else (1 - abs(volume_ratio))
+    combined_factors *= volume_adjustment
+    
+    # Calculate Raw Price Momentum
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    raw_price_momentum = np.log(1 + close_to_close_return)
+    
+    # Determine Volume Change
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Calculate Volume Ratio
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Weighted Intraday Return
+    weighted_intraday_return = intraday_return * volume_change
+    
+    # Incorporate Trading Amount
+    amount_change = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    weighted_intraday_return *= amount_change
+    
+    # Final Factor
+    final_factor = (weighted_intraday_return * volume_ratio 
+                    + raw_price_momentum)
+    
+    # Integrate Past Movements
+    adjusted_intraday_movements = combined_factors.rolling(window=span_n).sum() / df['close'].rolling(window=span_n).mean()
+    final_factor += adjusted_intraday_movements
+    
+    # Enhanced Volume-Weighted Momentum
+    ema_close_m = df['close'].ewm(span=span_m, adjust=False).mean()
+    enhanced_volume_weighted_momentum = ema_close_m * df['volume']
+    
+    # Short-Term Price Reversal
+    close_to_open_return = (df['close'] - df['open'].shift(-1)) / df['open'].shift(-1)
+    short_term_reversal = np.log(1 + close_to_open_return)
+    
+    # Volume-Adjusted Reversal
+    volume_adjusted_reversal = short_term_reversal * volume_change
+    
+    # Adjusted Final Factor
+    adjusted_final_factor = (final_factor 
+                             + enhanced_volume_weighted_momentum 
+                             + volume_adjusted_reversal 
+                             * intraday_price_range)
+    
+    return adjusted_final_factor
+```

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# cd reevo
+# conda activate ReEvo
+# sh test_csi300.sh
+
+python main.py \
+    problem=csi300 \
+    init_pop_size=10 \
+    pop_size=4 \
+    max_fe=200 \
+    timeout=20 \
+    algorithm=eoh \
+    llm_client=qwen3_api \
+    llm_client.api_key='sk-fb4917a77b7d4a2b88369204d7435aba'

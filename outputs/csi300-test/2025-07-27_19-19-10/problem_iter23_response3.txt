@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Range
+    df['DailyRange'] = df['high'] - df['low']
+    
+    # Compute Volume Adjusted Daily Range
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    df['VolumeAdjustedDailyRange'] = df['DailyRange'] * avg_volume_5d
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Previous Day Return
+    df['PrevDayReturn'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Volume Spike Detection
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolumeSpike'] = df['VolumeChange'].apply(lambda x: 1 if x > 0 else 0)
+    
+    # Adjust Intraday High-Low Range by Inverse of Volume-to-Range Ratio
+    df['VolumeToRangeRatio'] = df['volume'] / df['DailyRange']
+    df['InverseVolumeToRangeRatio'] = 1 / df['VolumeToRangeRatio']
+    df['AdjustedIntradayHLRange'] = df['DailyRange'] * df['InverseVolumeToRangeRatio']
+    
+    # Weighted Intraday Return
+    df['WeightedIntradayReturn'] = df['IntradayReturn'] * df['VolumeSpike']
+    
+    # Incorporate Price Momentum
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    sum_abs_price_change_5d = df['PriceChange'].abs().rolling(window=5).sum()
+    df['MomentumFactor'] = df['PriceChange'] / sum_abs_price_change_5d
+    
+    # Apply Moving Average Trend Adjustment
+    df['10DayEMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['TrendAdjustment'] = df.apply(lambda row: 1.2 if row['close'] > row['10DayEMA'] else 0.8, axis=1)
+    
+    # Compute Price Difference Momentum
+    df['PriceDiffMomentum'] = df['close'] - df['close'].shift(1)
+    df['Last5DaysPriceDiffMomentum'] = df['PriceDiffMomentum'].rolling(window=5).sum()
+    
+    # Combine Factors
+    df['CombinedFactors'] = (
+        df['DailyRange'] +
+        df['VolumeAdjustedDailyRange'] +
+        df['WeightedIntradayReturn'] +
+        df['Last5DaysPriceDiffMomentum'] +
+        df['PrevDayReturn'] +
+        df['AdjustedIntradayHLRange']
+    )
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = df['CombinedFactors'] * df['TrendAdjustment']
+    
+    return df['FinalAlphaFactor']
+```

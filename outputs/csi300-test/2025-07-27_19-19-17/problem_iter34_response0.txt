@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['TR'] = df.apply(lambda x: max(x['high'] - x['low'], 
+                                      abs(x['high'] - df['close'].shift(1).loc[x.name]), 
+                                      abs(x['low'] - df['close'].shift(1).loc[x.name])), axis=1)
+    
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['Open_to_Close_Return'] = df['close'] - df['open']
+    
+    # Integrate Returns with a weighted sum of Intraday High-Low Spread and Open-to-Close Return
+    df['Integrated_Return'] = 0.5 * df['Intraday_Spread'] + 0.5 * df['Open_to_Close_Return']
+    
+    # Smooth the Integrated Returns using EMA with a 5-day window
+    df['Smoothed_Returns'] = df['Integrated_Return'].ewm(span=5, adjust=False).mean()
+    
+    # Adjust for Volume and Amount Confirmation
+    df['Volume_Adjusted_Return'] = df.apply(lambda x: x['Smoothed_Returns'] * (x['volume'] / df['volume'].shift(1).loc[x.name]) 
+                                                      if x['volume'] > df['volume'].shift(1).loc[x.name] else x['Smoothed_Returns'], axis=1)
+    df['Amount_Adjusted_Return'] = df.apply(lambda x: x['Volume_Adjusted_Return'] * (x['amount'] / df['amount'].shift(1).loc[x.name]) 
+                                                          if x['amount'] > df['amount'].shift(1).loc[x.name] else x['Volume_Adjusted_Return'], axis=1)
+    
+    # Price Momentum
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Price_Momentum'] = df['SMA_10'] - df['SMA_50']
+    
+    # Incorporate ATR in Integrated Returns
+    df['Adjusted_ATR'] = df['ATR'] * df['Amount_Adjusted_Return']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Amount_Adjusted_Return'] + df['Adjusted_ATR'] + df['Price_Momentum']
+    
+    # Confirm with Volume
+    df['Max_Volume'] = df['volume'].rolling(window=10).max()
+    df['Volume_Confirmed_Factor'] = df.apply(lambda x: x['Final_Alpha_Factor'] / np.sqrt(x['volume']) * (x['volume'] / x['Max_Volume'])
+                                                     if x['volume'] > df['volume'].shift(1).loc[x.name] else x['Final_Alpha_Factor'], axis=1)
+    
+    return df['Volume_Confirmed_Factor']
+
+# Example usage:
+# data = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(data)
+# print(alpha_factor)
+```

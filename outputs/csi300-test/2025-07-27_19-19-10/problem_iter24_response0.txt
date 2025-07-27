@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Adjust Intraday High-Low Range by Inverse of Volume-to-Range Ratio
+    df['volume_to_range_ratio'] = df['volume'] / df['high_low_range']
+    df['adjusted_high_low_range'] = df['high_low_range'] * (1 / df['volume_to_range_ratio'])
+
+    # Incorporate Price Momentum
+    df['price_change'] = df['close'].diff()
+    df['abs_price_changes_5d'] = df['price_change'].abs().rolling(window=5).sum()
+    df['momentum_adjustment'] = df['price_change'] / df['abs_price_changes_5d']
+    df['volatility_momentum_combined'] = df['adjusted_high_low_range'] + df['momentum_adjustment']
+
+    # Compute Daily Range
+    df['daily_range'] = df['high'] - df['low']
+
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Previous Day Return
+    df['prev_day_return'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Detect Volume Spike
+    df['volume_spike'] = (df['volume'] - df['volume'].shift(1)).apply(lambda x: 1 if x > 0 else 0)
+
+    # Compute Volume Adjusted Daily Range
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['volume_adjusted_daily_range'] = df['daily_range'] * df['avg_volume_5d']
+
+    # Weighted Intraday Return
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_spike']
+
+    # Compute Price Difference Momentum
+    df['price_diff_momentum_5d'] = df['close'] - df['close'].shift(1)
+    df['price_diff_momentum_5d'] = df['price_diff_momentum_5d'].rolling(window=5).sum()
+
+    # Combine Factors
+    df['combined_factors'] = (df['daily_range'] + 
+                              df['volume_adjusted_daily_range'] + 
+                              df['weighted_intraday_return'] + 
+                              df['price_diff_momentum_5d'] + 
+                              df['prev_day_return'] + 
+                              df['volatility_momentum_combined'])
+
+    # Introduce Relative Strength Index (RSI)
+    df['upward_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['downward_change'] = df['close'].diff().apply(lambda x: abs(x) if x < 0 else 0)
+    df['avg_upward_change_14d'] = df['upward_change'].rolling(window=14).mean()
+    df['avg_downward_change_14d'] = df['downward_change'].rolling(window=14).mean()
+    df['rsi'] = 100 - (100 / (1 + (df['avg_upward_change_14d'] / df['avg_downward_change_14d'])))
+
+    # Integrate RSI into Final Alpha Factor
+    df['final_alpha_factor'] = (df['combined_factors'] + df['rsi'])
+
+    return df['final_alpha_factor']
+```

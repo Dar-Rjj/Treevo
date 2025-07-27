@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate a rolling mean of close prices over 10 periods to capture trend information
+    df['rolling_mean_close'] = df['close'].rolling(window=10).mean()
+    
+    # Calculate the standard deviation of the close prices over the same window to measure volatility
+    df['rolling_std_close'] = df['close'].rolling(window=10).std()
+    
+    # Calculate the Relative Strength Index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the Moving Average Convergence Divergence (MACD)
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # Momentum indicator using the difference between the current close and the average close over the past 10 periods, scaled by the current volume
+    momentum = (df['close'] - df['rolling_mean_close']) * df['volume']
+    
+    # Mean reversion factor using the z-score of the close price
+    z_score = (df['close'] - df['rolling_mean_close']) / df['rolling_std_close']
+    
+    # Adaptive weights based on the recent performance of each factor
+    def adaptive_weights(df):
+        momentum_perf = (momentum.diff().abs()).rolling(window=10).mean()
+        rsi_perf = (df['rsi'].diff().abs()).rolling(window=10).mean()
+        macd_perf = (df['macd'].diff().abs()).rolling(window=10).mean()
+        
+        total_perf = momentum_perf + rsi_perf + macd_perf
+        return momentum_perf / total_perf, rsi_perf / total_perf, macd_perf / total_perf
+    
+    momentum_weight, rsi_weight, macd_weight = adaptive_weights(df)
+    
+    # Combine the factors with dynamic weights
+    alpha_factor = momentum_weight * momentum + rsi_weight * (df['rsi'] - 50) + macd_weight * (df['macd'] - df['signal_line'])
+    
+    return alpha_factor
+```

@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = df['close'].pct_change()
+    
+    # Calculate High-Low Price Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Incorporate Historical Price Change
+    df['close_to_close_return'] = df['close'].pct_change()
+    df['high_low_spread_adj'] = df['high_low_spread'] * df['close_to_close_return'].shift(1)
+    
+    # Compute Final Alpha Factor
+    # Intraday Momentum Component
+    df['intraday_momentum'] = 0.5 * df['intraday_return'] + 0.5 * df['open_to_close_return']
+    
+    # Volatility Component
+    df['std_intraday_return'] = df['intraday_return'].rolling(window=20).std()
+    df['std_open_to_close_return'] = df['open_to_close_return'].rolling(window=20).std()
+    df['volatility_component'] = 0.5 * df['std_intraday_return'] + 0.5 * df['std_open_to_close_return']
+    
+    # Adjust for Volume Trend
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_adjusted_factor'] = df['high_low_spread_adj'] * (1 + np.sign(df['volume_change']) * 0.1)
+    
+    # Weight by VWAP
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3
+    df['vwap_weight'] = df['vwap'] * df['volume'] / df['volume'].sum()
+    
+    # Combine Components
+    df['final_alpha_factor'] = (df['intraday_momentum'] * df['vwap_weight'] 
+                                - df['volatility_component'] * df['vwap_weight'] 
+                                + df['volume_adjusted_factor'])
+    
+    return df['final_alpha_factor']
+```

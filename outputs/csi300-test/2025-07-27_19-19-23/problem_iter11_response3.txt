@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    rolling_std = df['volume'].rolling(window=30).std()
+    df['z_score_volume'] = (df['volume'] - df['volume'].rolling(window=30).mean()) / rolling_std
+    spike_threshold = 2.0  # Define the threshold for Z-Score
+    df['spike'] = (df['z_score_volume'] > spike_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    weight = 1.5  # Define the weight for volume spikes
+    df['adjusted_log_return'] = df['log_return'] * (1 + (df['spike'] * (weight - 1)))
+    
+    # Smooth the Adjusted Returns
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=10, adjust=False).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (1 + df['smoothed_returns']).cumprod()
+    
+    # Calculate Daily Price Movement
+    df['daily_price_movement'] = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    df['volume_adjusted_price_movement'] = df['daily_price_movement'] * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    df['rolling_momentum'] = df['volume_adjusted_price_movement'].rolling(window=30).sum().ewm(span=5, adjust=False).mean() - df['volume_adjusted_price_movement'].rolling(window=30).sum().ewm(span=10, adjust=False).mean()
+    
+    # Calculate High-Low Difference
+    df['high_low_difference'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    df['high_low_spike'] = df['high_low_difference'] * df['spike']
+    df['sum_high_low_spike'] = df['high_low_spike'].rolling(window=10).sum()
+    
+    # Combined Factor
+    df['combined_factor'] = df['cumulative_momentum'] + df['sum_high_low_spike'] + df['rolling_momentum']
+    
+    # Volume Trend: Volume Rate of Change (VROC)
+    m = 10  # Define the period for VROC
+    df['vroc'] = df['volume'].pct_change(periods=m)
+    
+    # Final Combined Factor
+    df['final_factor'] = df['combined_factor'] * df['vroc']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': np.random.rand(100) * 100,
+#     'high': np.random.rand(100) * 110,
+#     'low': np.random.rand(100) * 90,
+#     'close': np.random.rand(100) * 100,
+#     'amount': np.random.rand(100) * 1000,
+#     'volume': np.random.randint(1000, 10000, size=100)
+# })
+# df.set_index('date', inplace=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

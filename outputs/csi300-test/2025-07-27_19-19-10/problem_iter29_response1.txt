@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Compute Volume Adjusted Daily Range
+    avg_vol_5d = df['volume'].rolling(window=5).mean()
+    df['Volume_Adjusted_Daily_Range'] = df['Daily_Range'] * avg_vol_5d
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Previous Day Return
+    df['Prev_Day_Return'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Volume Spike Detection
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Spike'] = (df['Volume_Change'] > 0).astype(int)
+    
+    # Adjust Intraday High-Low Range by Inverse of Volume-to-Range Ratio
+    df['Volume_to_Range_Ratio'] = df['volume'] / df['Daily_Range']
+    df['Adjusted_Intraday_High_Low_Range'] = df['Daily_Range'] * (1 / df['Volume_to_Range_Ratio'])
+    
+    # Weighted Intraday Return
+    df['Weighted_Intraday_Return'] = df['Intraday_Return'] * df['Volume_Spike']
+    
+    # Incorporate Price Momentum
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    abs_price_change_5d = df['Price_Change'].abs().rolling(window=5).sum()
+    df['Momentum_Adjusted_Intraday_Volatility'] = df['Price_Change'] / abs_price_change_5d + df['Adjusted_Intraday_High_Low_Range']
+    
+    # Apply Moving Average Trend Adjustment
+    df['10_Day_EMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_Trend_Adjustment'] = (df['close'] > df['10_Day_EMA']).map({True: 1.2, False: 0.8})
+    
+    # Compute Price Difference Momentum
+    df['Price_Difference'] = df['close'] - df['close'].shift(1)
+    df['Price_Diff_Momentum'] = df['Price_Difference'].rolling(window=5).sum()
+    
+    # Calculate Exponential Moving Average (EMA) of Price Difference
+    df['EMA_Price_Diff'] = df['Price_Difference'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Combine Factors
+    df['Combined_Factors'] = (
+        df['Daily_Range'] + 
+        df['Volume_Adjusted_Daily_Range'] + 
+        df['Weighted_Intraday_Return'] + 
+        df['Price_Diff_Momentum'] + 
+        df['EMA_Price_Diff'] + 
+        df['Prev_Day_Return'] + 
+        df['Momentum_Adjusted_Intraday_Volatility']
+    )
+    
+    # Final Alpha Factor with Additional Weighting Based on Moving Average
+    df['Final_Alpha_Factor'] = df['Combined_Factors'] * df['EMA_Trend_Adjustment']
+    
+    return df['Final_Alpha_Factor']
+```

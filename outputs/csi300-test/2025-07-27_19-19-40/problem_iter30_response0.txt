@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Multi-period RSI to capture different time frame overbought/oversold conditions
+    periods = [7, 14, 28]
+    rsi_values = []
+    for period in periods:
+        delta = df['close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        rsi_values.append(rsi)
+    rsi_factor = (rsi_values[0] + rsi_values[1] + rsi_values[2]) / 3
+
+    # Dynamic MACD with adaptive signal line and variable EMA spans
+    short_ema_span = 12
+    long_ema_span = 26
+    signal_smoothing = 9
+    ema_short = df['close'].ewm(span=short_ema_span, adjust=False).mean()
+    ema_long = df['close'].ewm(span=long_ema_span, adjust=False).mean()
+    macd_line = ema_short - ema_long
+    signal_line = macd_line.ewm(span=signal_smoothing, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+    
+    # Volume-Weighted Average Price (VWAP) to integrate volume and price
+    cumulative_volume = df['volume'].cumsum()
+    cumulative_volume_price = (df['volume'] * df['close']).cumsum()
+    vwap = cumulative_volume_price / cumulative_volume
+
+    # Weighted VWAP change to capture the impact of volume on price movements
+    vwpc = (vwap - vwap.shift(1)) * df['volume']
+    
+    # Combine the multi-period RSI, dynamic MACD, and weighted VWAP change
+    alpha_factor = 0.5 * rsi_factor + 0.3 * macd_histogram + 0.2 * vwpc
+
+    return alpha_factor
+```

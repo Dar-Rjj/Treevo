@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, spike_threshold=2.0, e_wma_span=10, vroc_period=10, lookback_period=10):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume and Price Spikes
+    df['volume_zscore'] = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / df['volume'].rolling(window=lookback_period).std()
+    df['price_zscore'] = (df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1) - df[['high', 'low']].max(axis=1).rolling(window=lookback_period).mean()) / df[['high', 'low']].max(axis=1).rolling(window=lookback_period).std()
+    df['spike_indicator'] = (df['volume_zscore'] > spike_threshold) | (df['price_zscore'] > spike_threshold)
+    
+    # Adjust Momentum for Volume and Price Spikes
+    df['adjusted_log_return'] = df.apply(lambda row: row['log_return'] * 0.5 if row['spike_indicator'] else row['log_return'], axis=1)
+    
+    # Smooth the Adjusted Returns
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=e_wma_span).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_returns'] + 1).cumprod()
+    
+    # Calculate Daily Price Movement
+    df['daily_price_movement'] = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    df['volume_adjusted_price_movement'] = df['daily_price_movement'] * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    df['aggregated_volume_adjusted_price_movement'] = df['volume_adjusted_price_movement'].rolling(window=30).sum()
+    df['rolling_avg_aggregated'] = df['aggregated_volume_adjusted_price_movement'].ewm(span=10).mean()
+    df['momentum'] = df['rolling_avg_aggregated'] - df['rolling_avg_aggregated'].ewm(span=5).mean()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference with Volume and Price Spikes
+    df['combined_high_low_spikes'] = df['high_low_diff'] * df['spike_indicator']
+    df['summed_high_low_spikes'] = df['combined_high_low_spikes'].rolling(window=lookback_period).sum()
+    
+    # Price Momentum
+    df['weighted_high_low_diff'] = (df['high_low_diff'] * np.arange(1, len(df) + 1)).rolling(window=lookback_period).sum() / np.arange(1, lookback_period + 1).sum()
+    
+    # Volume Trend
+    df['vroc'] = df['volume'].pct_change(periods=vroc_period)
+    
+    # Combined Factor
+    df['combined_factor'] = df['smoothed_returns'] + df['summed_high_low_spikes']
+    df['combined_factor_with_trend'] = df['combined_factor'] * df['vroc']
+    
+    # Cumulative Adjusted Momentum Factor
+    df['cumulative_adjusted_momentum'] = (df['combined_factor_with_trend'] + 1).cumprod()
+    
+    return df['cumulative_adjusted_momentum']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+```

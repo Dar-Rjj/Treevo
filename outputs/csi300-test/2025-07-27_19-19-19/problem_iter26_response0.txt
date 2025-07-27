@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=5, M=10, P=20, smoothing_factor=0.4):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period
+    avg_price_change = daily_price_change.rolling(window=N).mean()
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    close_open_diff = (df['close'] - df['open']) / df['volume'].rolling(window=P).mean()
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    combined_hl_close_open = (high_low_range * close_open_diff).rolling(window=M).sum()
+    
+    # Calculate Volume Weighted Average
+    volume_weighted_close = (df['volume'] * df['close']) / df['volume'].rolling(window=P).sum()
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_hl_close_open * 1.2
+    volume_weighted_score = volume_weighted_close * 0.6
+    momentum_score = avg_price_change * 1.8
+    
+    # Integrate Trend Indicators
+    spdi = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    mpr_high = df['close'].rolling(window=P).max()
+    mpr_low = df['close'].rolling(window=P).min()
+    mpr = ((df['close'] - mpr_low) / (mpr_high - mpr_low) > 0.5).astype(int)
+    vgf = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+    imvti = (spdi + mpr + vgf) / 3
+    
+    # Combine Price and Volume Factors
+    combined_momentum_volume = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha = high_low_momentum_score + combined_momentum_volume + imvti
+    final_alpha_smoothed = final_alpha.ewm(alpha=smoothing_factor).mean()
+    
+    return final_alpha_smoothed
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [...], 
+#     'high': [...], 
+#     'low': [...], 
+#     'close': [...], 
+#     'amount': [...], 
+#     'volume': [...]
+# }, index=pd.to_datetime([...]))  # Replace with actual data
+# alpha_factors = heuristics_v2(df)
+```

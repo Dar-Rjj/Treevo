@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the ratio of the volume to the amount, which can be seen as a normalized dollar volume
+    dollar_vol_ratio = (df['volume'] * df['close']) / (df['amount'] + 1e-7)
+    
+    # Calculate the relative strength, which is the difference between close and open divided by close
+    rel_strength = (df['close'] - df['open']) / (df['close'] + 1e-7)
+    
+    # Calculate the average true range over the last 14 days as a measure of volatility
+    df['high_low'] = df['high'] - df['low']
+    df['high_close_prev'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close_prev'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['high_low', 'high_close_prev', 'low_close_prev']].max(axis=1)
+    avg_true_range = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the 50-day simple moving average as a trend-following indicator
+    sma_50 = df['close'].rolling(window=50).mean()
+    
+    # Calculate the 100-day simple moving average as a longer-term trend-following indicator
+    sma_100 = df['close'].rolling(window=100).mean()
+    
+    # Calculate the 200-day simple moving average as an even longer-term trend-following indicator
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    # Calculate the relative position of the close price with respect to the 50-day, 100-day, and 200-day SMAs
+    rel_pos_sma_50 = (df['close'] - sma_50) / (sma_50 + 1e-7)
+    rel_pos_sma_100 = (df['close'] - sma_100) / (sma_100 + 1e-7)
+    rel_pos_sma_200 = (df['close'] - sma_200) / (sma_200 + 1e-7)
+    
+    # Calculate the standard deviation of the close price over the last 20 days as a more robust volatility measure
+    std_20 = df['close'].rolling(window=20).std()
+    
+    # Calculate the 20-day Bollinger Bands percentage to capture volatility and trend
+    bollinger_high = sma_50 + 2 * std_20
+    bollinger_low = sma_50 - 2 * std_20
+    bollinger_pct = (df['close'] - bollinger_low) / (bollinger_high - bollinger_low + 1e-7)
+    
+    # Combine the factors using their product to create a composite factor
+    factor = (dollar_vol_ratio * rel_strength * avg_true_range * rel_pos_sma_50 * rel_pos_sma_100 * rel_pos_sma_200 * std_20 * bollinger_pct)
+    
+    return factor
+```

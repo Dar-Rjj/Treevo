@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=5, L=20, K=10, P=7):
+    # Calculate Dynamic Momentum Components
+    df['Close_Price_Momentum'] = df['close'].pct_change(n)
+    df['Open_Price_Momentum'] = df['open'].pct_change(n)
+    df['Volume_Momentum'] = df['volume'].pct_change(n)
+    df['Adjusted_Momentum'] = (df['Close_Price_Momentum'] + df['Open_Price_Momentum']) * df['Volume_Momentum']
+
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Adjust Daily Log Return by Open Price Change
+    df['open_adjusted_log_return'] = df['log_return'] - np.log(df['open'] / df['close'].shift(1))
+
+    # Multiply Open-Adjusted Log Return by Volume
+    df['open_adjusted_volume_log_return'] = df['open_adjusted_log_return'] * df['volume']
+
+    # Sum Over N Days
+    df['sum_over_n_days'] = df['open_adjusted_volume_log_return'].rolling(window=n).sum()
+
+    # Weight by Recent Trading Activity
+    df['avg_volume_m'] = df['volume'].rolling(window=m).mean()
+    df['avg_volume_L'] = df['volume'].rolling(window=L).mean()
+    df['weight'] = df['avg_volume_m'] / df['avg_volume_L']
+    
+    # Detect Volume Shocks
+    df['daily_return'] = df['close'] / df['close'].shift(1)
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['avg_30_day_vol_change'] = df['volume_change'].rolling(window=30).mean()
+    df['volume_shock'] = (df['volume_change'] > 3 * df['avg_30_day_vol_change']).astype(int)
+
+    # Integrate High-Low Range Indicator
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_high_low_range_K'] = df['high_low_range'].rolling(window=K).mean()
+    df['high_low_indicator'] = (df['high_low_range'] > df['avg_high_low_range_K']).astype(int)
+    
+    # Incorporate Dynamic Price Range Momentum
+    df['price_range'] = df['high'] - df['low']
+    df['price_range_momentum'] = df['price_range'].pct_change(n)
+    
+    # Integrate Dynamic Price Momentum
+    df['integrated_price_momentum'] = ((df['close'] - df['open']) / df['open'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)).rolling(window=5).sum() / 5
+    
+    # Calculate 5-Day Dynamic Price Oscillation
+    df['price_oscillation'] = (df['high'] - df['low']).rolling(window=5).sum() / 5
+    
+    # Calculate 5-Day Dynamic Volume Trend
+    df['volume_trend'] = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    df['smoothed_volume_trend'] = df['volume_trend'].rolling(window=5).mean()
+    
+    # Combine Indicators
+    df['momentum_sum'] = df['Close_Price_Momentum'] + df['Open_Price_Momentum'] + df['Volume_Momentum'] + df['price_range_momentum']
+    df['momentum_weighted'] = df['momentum_sum'] * (1.5 * df['volume_shock'])
+    df['momentum_high_low'] = df['momentum_weighted'] * df['high_low_indicator']
+    
+    # Integrate Dynamic Price Momentum and other components
+    df['final_factor'] = df['momentum_high_low'] * df['integrated_price_momentum'] * df['price_oscillation'] * df['smoothed_volume_trend']
+    
+    # Add Sentiment Analysis
+    # Assuming 'sentiment_score' is a column in the DataFrame representing daily sentiment score
+    df['avg_sentiment_P'] = df['sentiment_score'].rolling(window=P).mean()
+    df['sentiment_adjusted_factor'] = df['final_factor'] * (np.where(df['avg_sentiment_P'] > 0, 1.2, np.where(df['avg_sentiment_P'] < 0, 0.8, 1)))
+
+    return df['sentiment_adjusted_factor']
+```

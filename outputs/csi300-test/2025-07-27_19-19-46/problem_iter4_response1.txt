@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's and yesterday's close price for momentum
+    momentum = df['close'].diff(1)
+    
+    # Calculate the total range of the day (high - low) to capture volatility
+    daily_range = (df['high'] - df['low']).fillna(1e-7)
+    
+    # Calculate the money flow ratio by dividing the amount by volume to gauge market sentiment
+    money_flow_ratio = df['amount'] / df['volume']
+    
+    # Compute a factor that combines momentum, money flow ratio, and daily range
+    factor_values = (momentum * money_flow_ratio) / daily_range
+    
+    # Add a simple moving average of the close price to incorporate a trend component
+    sma_20_close = df['close'].rolling(window=20).mean()
+    factor_values += (df['close'] - sma_20_close) / daily_range
+    
+    # Add a longer-term simple moving average of the close price to incorporate a longer trend component
+    sma_50_close = df['close'].rolling(window=50).mean()
+    factor_values += (df['close'] - sma_50_close) / daily_range
+    
+    # Incorporate the relative change in volume
+    volume_change = df['volume'].pct_change().fillna(0)
+    factor_values += volume_change * money_flow_ratio
+    
+    # Combine with the relative strength index (RSI) to capture overbought/oversold conditions
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    factor_values += (rsi - 50) / daily_range
+    
+    return factor_values
+```

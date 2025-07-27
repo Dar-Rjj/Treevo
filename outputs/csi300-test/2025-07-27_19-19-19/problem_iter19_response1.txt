@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (e.g., 5 days)
+    N = 5
+    avg_price_change = daily_price_change.rolling(window=N).mean()
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    avg_volume = df['volume'].rolling(window=10).mean()
+    vol_adj_close_open_diff = (df['close'] - df['open']) / avg_volume
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    combined_score = (high_low_range * vol_adj_close_open_diff).rolling(window=5).sum()
+    
+    # Calculate Volume-Weighted Close Price
+    volume_weighted_close = (df['volume'] * df['close']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_score
+    volume_weighted_score = volume_weighted_close * 0.5  # Scaling factor
+    momentum_score = avg_price_change * 0.5  # Scaling factor
+    
+    # Integrate Trend Indicators
+    spdi = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    mpr = (df['close'] - df['close'].rolling(window=20).min()) / (df['close'].rolling(window=20).max() - df['close'].rolling(window=20).min())
+    vgf = (df['volume'] > df['volume'].rolling(window=3).mean()).astype(int)
+    trend_indicators_score = (spdi + mpr + vgf) / 3
+    
+    # Combine Price and Volume Factors
+    combined_factor = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = combined_factor + high_low_momentum_score + trend_indicators_score
+    final_alpha_factor = final_alpha_factor.ewm(alpha=0.3).mean()
+    
+    return final_alpha_factor
+```

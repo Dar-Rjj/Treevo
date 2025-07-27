@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    z_score_vol = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    spike_indicator = (z_score_vol > 3).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    high_low_diff_spike = high_low_diff * spike_indicator
+    high_low_diff_sum = high_low_diff_spike.rolling(window=10).sum()
+    
+    # Calculate Daily Log Return
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    adjusted_log_return = log_return * spike_indicator + log_return * (1 - spike_indicator)
+    
+    # Smooth the Adjusted Returns
+    smoothed_adjusted_returns = adjusted_log_return.ewm(span=10, adjust=False).mean()
+    
+    # Price Momentum
+    weighted_high_low_diff = (high_low_diff * np.arange(1, len(high_low_diff) + 1)).rolling(window=10).sum() / np.arange(1, 11).sum()
+    
+    # Volume Trend (VROC)
+    vroc = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    
+    # Combined Factor
+    combined_factor = high_low_diff_sum + smoothed_adjusted_returns
+    combined_factor_with_trend = combined_factor * vroc
+    
+    # Volatility-Adjusted Momentum
+    daily_volatility = df['close'].rolling(window=20).std()
+    normalized_returns = adjusted_log_return / daily_volatility
+    smoothed_normalized_returns = normalized_returns.ewm(span=10, adjust=False).mean()
+    
+    # Enhanced Combined Factor
+    enhanced_combined_factor = combined_factor_with_trend + smoothed_normalized_returns
+    
+    # Calculate Daily Price Movement
+    daily_price_movement = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    volume_adjusted_price_movement = daily_price_movement * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    aggregated_volume_adjusted = volume_adjusted_price_movement.rolling(window=30).sum()
+    rolling_momentum = aggregated_volume_adjusted.ewm(span=5, adjust=False).mean() - aggregated_volume_adjusted.ewm(span=10, adjust=False).mean()
+    
+    # Improved Combined Factor
+    final_factor = enhanced_combined_factor + rolling_momentum
+    
+    return final_factor
+```

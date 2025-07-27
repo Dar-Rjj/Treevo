@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, N=10):
+    # Calculate Momentum Components
+    df['Close_Momentum'] = df['close'] / df['close'].shift(n)
+    df['Open_Momentum'] = df['open'] / df['open'].shift(n)
+    df['Volume_Momentum'] = df['volume'] / df['volume'].shift(n)
+    
+    # Adjust Log Return by Open Price
+    df['Adjusted_Log_Return'] = (np.log(df['close']) - np.log(df['open'])) + np.log(df['close'].shift(1))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    df['Vol_Weighted_Adjusted_Return'] = df['Adjusted_Log_Return'] * df['volume']
+    
+    # Detect Volume Shocks
+    df['Daily_Return'] = df['close'] / df['close'].shift(1)
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['30_day_avg_Volume_Change'] = df['Volume_Change'].rolling(window=30).mean()
+    df['Sudden_Volume_Increase'] = (df['Volume_Change'] > 2 * df['30_day_avg_Volume_Change']).astype(int)
+    
+    # Combine Indicators
+    df['Combined_Momentum'] = df['Close_Momentum'] * df['Open_Momentum'] * df['Volume_Momentum']
+    df['Volume_Shock_Indicator'] = df['Sudden_Volume_Increase']
+    df['Momentum_Vol_Shock'] = df['Combined_Momentum'] * df['Volume_Shock_Indicator']
+    
+    # Cumulative Sum of Volume-Weighted Adjusted Returns
+    df['Cumulative_Sum'] = (df['Vol_Weighted_Adjusted_Return'] * df['Volume_Shock_Indicator']).rolling(window=N).sum()
+    
+    return df['Cumulative_Sum']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

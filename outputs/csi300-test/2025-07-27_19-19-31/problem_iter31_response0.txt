@@ -1,0 +1,45 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day weighted moving average of close prices with a recent bias
+    weights_10 = np.arange(1, 11)
+    wma_10_close = df['close'].rolling(window=10).apply(lambda x: np.dot(x, weights_10) / weights_10.sum(), raw=True)
+    
+    # Calculate the 30-day weighted moving average of close prices for longer-term trend with a recent bias
+    weights_30 = np.arange(1, 31)
+    wma_30_close = df['close'].rolling(window=30).apply(lambda x: np.dot(x, weights_30) / weights_30.sum(), raw=True)
+    
+    # Compute the difference between the two weighted moving averages to gauge momentum
+    momentum_factor = wma_10_close - wma_30_close
+    
+    # Calculate the 10-day standard deviation of close prices to represent short-term volatility
+    volatility_factor = df['close'].rolling(window=10).std()
+    
+    # Calculate the 10-day average volume to measure liquidity
+    avg_volume = df['volume'].rolling(window=10).mean()
+    
+    # Calculate a liquidity factor as the ratio of current volume to the 10-day average volume
+    liquidity_factor = df['volume'] / (avg_volume + 1e-6)
+    
+    # Integrate intraday data: ratio of (high - open) to (open - low) to capture intraday sentiment
+    intraday_sentiment = (df['high'] - df['open']) / (df['open'] - df['low'])
+    
+    # Calculate the 5-day and 20-day relative strength index (RSI) to measure recent price strength
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=5).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=5).mean()
+    rsi_5 = 100 - (100 / (1 + gain / (loss + 1e-6)))
+    gain = (delta.where(delta > 0, 0)).rolling(window=20).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=20).mean()
+    rsi_20 = 100 - (100 / (1 + gain / (loss + 1e-6)))
+    
+    # Calculate the relative strength factor as the ratio of 5-day RSI to 20-day RSI
+    relative_strength_factor = rsi_5 / (rsi_20 + 1e-6)
+    
+    # Calculate the amount/volume ratio to measure the buying/selling pressure
+    amount_volume_ratio = df['amount'] / (df['volume'] + 1e-6)
+    
+    # Combine the factors: momentum, adjusted by volatility, liquidity, intraday sentiment, relative strength, and amount/volume ratio
+    factor_value = (momentum_factor * liquidity_factor * intraday_sentiment * relative_strength_factor * amount_volume_ratio) / (volatility_factor + 1e-6)
+    
+    return factor_value
+```

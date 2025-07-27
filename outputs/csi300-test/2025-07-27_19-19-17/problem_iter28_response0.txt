@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['prev_close'] = df['close'].shift(1)
+    df['high_low'] = df['high'] - df['low']
+    df['high_prev_close'] = (df['high'] - df['prev_close']).abs()
+    df['low_prev_close'] = (df['low'] - df['prev_close']).abs()
+    df['tr'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
+    
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    df['close_open_return'] = df['close'] - df['open']
+    
+    # Integrate Returns
+    df['integrated_returns'] = df['intraday_spread'] + df['close_open_return']
+    
+    # Smooth the Integrated Returns using EMA with a 5-day window
+    df['smoothed_returns'] = df['integrated_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Adjust with Volume and Amount
+    df['volume_adjustment'] = (df['volume'] / df['volume'].shift(1)) * (df['amount'] / df['amount'].shift(1))
+    df['adjusted_returns'] = df['smoothed_returns'] * df['volume_adjustment']
+    
+    # Incorporate ATR in Integrated Returns
+    df['weighted_returns'] = df['atr'] * df['adjusted_returns']
+    
+    # Calculate Price Momentum
+    df['sma_short'] = df['close'].rolling(window=10).mean()
+    df['sma_long'] = df['close'].rolling(window=50).mean()
+    df['price_momentum'] = df['sma_short'] - df['sma_long']
+    
+    # Multiply the SMA difference by the adjusted ATR
+    df['price_momentum_atr'] = df['price_momentum'] * df['atr']
+    
+    # Final Alpha Factor
+    df['final_factor'] = df['weighted_returns'] + df['price_momentum_atr']
+    
+    # Confirm with Volume
+    df['volume_growth'] = df['volume'] > df['volume'].shift(1)
+    df['volume_adjusted_factor'] = df['final_factor'] / np.sqrt(df['volume']) * (df['volume'] / df['volume'].rolling(window=10).max())
+    
+    return df['volume_adjusted_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

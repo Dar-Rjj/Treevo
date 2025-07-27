@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, scaling_factors={'hl_momentum': 1.2, 'vol_weighted': 0.6, 'momentum': 1.8}, ema_smoothing=0.4):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N days)
+    df['acc_price_change'] = df['daily_price_change'].rolling(window=N).sum()
+    df['avg_price_change'] = df['acc_price_change'] / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['vol_adj_close_open'] = df['close_open_diff'] * (df['volume'] / avg_volume)
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['combined_hl_vol'] = df['high_low_range'] * df['vol_adj_close_open']
+    df['sum_combined_hl_vol'] = df['combined_hl_vol'].rolling(window=10).sum()
+    
+    # Calculate Volume Weighted Average
+    df['vol_price_product'] = df['volume'] * df['close']
+    vol_sum_20 = df['volume'].rolling(window=20).sum()
+    df['vol_weighted_close'] = df['vol_price_product'] / vol_sum_20
+    
+    # Generate Intermediate Alpha Scores
+    df['hl_momentum_score'] = df['sum_combined_hl_vol'] * scaling_factors['hl_momentum']
+    df['vol_weighted_score'] = df['vol_weighted_close'] * scaling_factors['vol_weighted']
+    df['momentum_score'] = df['avg_price_change'] * scaling_factors['momentum']
+    
+    # Integrate Indicators
+    df['spdi'] = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    df['mp_high'] = df['high'].rolling(window=20).max()
+    df['mp_low'] = df['low'].rolling(window=20).min()
+    df['mpr'] = ((df['close'] - df['mp_low']) / (df['mp_high'] - df['mp_low']) > 0.5).astype(int)
+    df['vgf'] = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+    df['imvti'] = (df['spdi'] + df['mpr'] + df['vgf']) / 3
+    
+    # Combine Price and Volume Factors
+    df['combined_mom_vol'] = df['momentum_score'] + df['vol_weighted_score']
+    
+    # Generate Final Alpha Factor
+    df['final_alpha'] = df['hl_momentum_score'] + df['combined_mom_vol'] + df['imvti']
+    df['smoothed_alpha'] = df['final_alpha'].ewm(alpha=ema_smoothing).mean()
+    
+    return df['smoothed_alpha']
+```

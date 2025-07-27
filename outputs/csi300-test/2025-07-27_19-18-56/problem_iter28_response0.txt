@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Calculate Volume Change
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) > 0
+    
+    # Compute Composite Momentum
+    n = 5
+    df['composite_momentum'] = df['close_return'].rolling(window=n).sum() * df['volume_change']
+    
+    # Calculate Volume-Weighted High-Low Range
+    df['vol_weighted_high_low'] = 0.0
+    for i in range(1, 11):
+        df['vol_weighted_high_low'] += (df['high'] - df['low']).shift(i) * df['volume'].shift(i)
+    df['vol_weighted_high_low'] /= df['volume'].rolling(window=10).sum()
+    
+    # Adjust for Market Sentiment
+    df['close_to_open_return'] = df['close'] - df['open']
+    sentiment_adjustment = df['close_to_open_return'].apply(lambda x: 1 if x > 0 else -1)
+    df['adjusted_vol_weighted_high_low'] = df['vol_weighted_high_low'] * sentiment_adjustment
+    
+    # Smoothed High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['ema_high_low_spread'] = df['high_low_spread'].ewm(span=10).mean()
+    df['smoothed_high_low_spread'] = df['high_low_spread'] - df['ema_high_low_spread']
+    
+    # Integrate with Convergence-Divergence
+    df['short_term_ma'] = (df['high'] + df['low']) / 2.0
+    df['long_term_ma'] = (df['high'] + df['low']) / 2.0
+    df['short_term_ma'] = df['short_term_ma'].rolling(window=5).mean()
+    df['long_term_ma'] = df['long_term_ma'].rolling(window=20).mean()
+    df['convergence_divergence'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Filter by Volume Change
+    df['integrated_momentum'] = df['composite_momentum'] * df['volume_change']
+    df['integrated_high_low_spread'] = df['smoothed_high_low_spread'] * df['volume_change']
+    
+    # Trend Confirmation
+    df['trend_confirmation'] = (df['short_term_ma'] > df['long_term_ma']).astype(int)
+    
+    # Final Alpha Factor Construction
+    df['alpha_factor'] = (df['adjusted_vol_weighted_high_low'] + df['integrated_high_low_spread']) * df['volume_change'] + df['integrated_momentum'] * df['volume_change']
+    df['alpha_factor'] *= df['trend_confirmation']
+    
+    return df['alpha_factor']
+```

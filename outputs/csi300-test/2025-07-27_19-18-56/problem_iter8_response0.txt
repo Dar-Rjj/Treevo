@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, short_term=5, long_term=20, sma_period=10):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change(periods=n)
+    
+    # Sum over n periods
+    df['composite_momentum'] = df['close_return'].rolling(window=n).sum()
+    
+    # Compute Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(n)
+    
+    # Check if Volume is Increasing
+    df['volume_indicator'] = (df['volume'] > df['volume'].shift(n)).astype(int)
+    
+    # Multiply Momentum by Volume Indicator
+    df['confirmed_momentum'] = df['composite_momentum'] * df['volume_indicator']
+    
+    # Calculate Daily Average of High and Low
+    df['high_low_avg'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Short Term Moving Average of High and Low
+    df['short_term_ma'] = df['high_low_avg'].rolling(window=short_term).mean()
+    
+    # Calculate Long Term Moving Average of High and Low
+    df['long_term_ma'] = df['high_low_avg'].rolling(window=long_term).mean()
+    
+    # Subtract Long Term MA from Short Term MA
+    df['convergence_divergence'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Combine Indicators
+    df['integrated_momentum'] = df['confirmed_momentum'] + df['convergence_divergence']
+    
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread
+    df['sma_high_low_spread'] = df['high_low_spread'].rolling(window=sma_period).mean()
+    df['smoothed_high_low_spread'] = df['high_low_spread'] - df['sma_high_low_spread']
+    
+    # Filter by Volume Change
+    df['final_alpha_factor'] = df['integrated_momentum'] * (df['volume_change'] > 0)
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': [100] * 100,
+#     'high': [105] * 100,
+#     'low': [95] * 100,
+#     'close': [102] * 100,
+#     'amount': [10000] * 100,
+#     'volume': [1000] * 100
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

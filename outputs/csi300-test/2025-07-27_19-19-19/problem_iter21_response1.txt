@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (e.g., 5 days)
+    N1 = 5
+    df['avg_price_change'] = df['daily_price_change'].rolling(window=N1).mean()
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    df['vol_adj_close_open_diff'] = (df['close'] - df['open']) / avg_volume_10
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['combined_hl_vol'] = df['high_low_range'] * df['vol_adj_close_open_diff']
+    combined_hl_vol_5 = df['combined_hl_vol'].rolling(window=5).sum()
+    
+    # Calculate Volume Weighted Average
+    N2 = 5
+    vol_sum_N2 = df['volume'].rolling(window=N2).sum()
+    df['vol_weighted_close'] = (df['volume'] * df['close']) / vol_sum_N2
+    
+    # Generate Intermediate Alpha Scores
+    hl_momentum_score = combined_hl_vol_5 * 1.0
+    volume_weighted_score = df['vol_weighted_close'] * 0.7
+    momentum_score = df['avg_price_change'] * 1.5
+    
+    # Integrate Trend Indicators
+    df['spdi'] = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    df['mpr'] = (df['close'] > (df['high'].rolling(window=20).max() + df['low'].rolling(window=20).min()) / 2).astype(int)
+    df['vgf'] = (df['volume'] > df['volume'].rolling(window=3).mean()).astype(int)
+    df['imvti'] = (df['spdi'] + df['mpr'] + df['vgf']) / 3
+    
+    # Combine Price and Volume Factors
+    combined_momentum_vol = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = hl_momentum_score + combined_momentum_vol + df['imvti']
+    
+    # Apply Smoothing
+    alpha_factor_smoothed = final_alpha_factor.ewm(alpha=0.5).mean()
+    
+    return alpha_factor_smoothed
+
+# Example usage:
+# df = pd.read_csv('your_market_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return
+    df['Close_Return'] = df['close'].pct_change()
+    
+    # Compute Logarithmic Transformation
+    df['Log_Return'] = np.log(1 + df['Close_Return'])
+    
+    # Calculate Volume Change and Ratio
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine with Price Momentum
+    df['Volume_Weighted_Momentum'] = df['Log_Return'] * df['Volume_Ratio']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']) + (df['high'] - df['close'].shift(1))
+    
+    # Weighted Intraday Return
+    df['Weighted_Intraday_Return'] = df['Intraday_Return'] * df['Volume_Change']
+    
+    # Combine Factors
+    df['Combined_Factor'] = (df['Intraday_Volatility'] + df['Weighted_Intraday_Return']) * df['Volume_Weighted_Momentum']
+    
+    # Incorporate Trading Amount
+    df['Amount_Change'] = df['amount'].pct_change()
+    df['Amount_Ratio'] = df['amount'] / df['amount'].shift(1)
+    df['Amount_Adjusted_Factor'] = df['Combined_Factor'] * df['Amount_Ratio']
+    
+    # Integrate Past Movements
+    N = 5  # Number of days for the moving sum
+    df['Moving_Sum_Adjusted'] = df['Weighted_Intraday_Return'].rolling(window=N).sum()
+    df['Average_Close_N_Days'] = df['close'].rolling(window=N).mean()
+    df['Past_Movements_Ratio'] = df['Moving_Sum_Adjusted'] / df['Average_Close_N_Days']
+    
+    # Interpretable Adjustment
+    df['Open_To_Close_Return'] = (df['close'] - df['open']) / df['open']
+    
+    def adjust_factor(row):
+        if row['Open_To_Close_Return'] > 0:
+            return row['Amount_Adjusted_Factor'] * (1 + 0.7 * row['Open_To_Close_Return'])
+        else:
+            return row['Amount_Adjusted_Factor'] * (1 - 0.7 * abs(row['Open_To_Close_Return']))
+    
+    df['Alpha_Factor'] = df.apply(adjust_factor, axis=1)
+    
+    return df['Alpha_Factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

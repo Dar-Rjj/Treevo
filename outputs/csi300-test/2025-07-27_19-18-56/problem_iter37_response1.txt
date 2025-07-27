@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Sum over n periods
+    df['momentum'] = df['close_return'].rolling(window=n).sum()
+    
+    # Confirm with Trading Volume Increase
+    df['volume_change'] = df['volume'].diff()
+    df['volume_indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['momentum_volume_adjusted'] = df['momentum'] * df['volume_indicator']
+    
+    # Volume-Adjusted High-Low Range
+    volumes = df['volume'].rolling(window=n).sum()
+    high_low_range = (df['high'] - df['low']).rolling(window=n).apply(lambda x: (x * df['volume']).sum() / volumes, raw=False)
+    
+    # Smoothed High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    ema_high_low_spread = df['high_low_spread'].ewm(span=n, adjust=False).mean()
+    df['smoothed_high_low_spread'] = df['high_low_spread'] - ema_high_low_spread
+    
+    # Integrate with Convergence-Divergence of High-Low Prices
+    short_term_ma = (df[['high', 'low']].mean(axis=1)).rolling(window=5).mean()
+    long_term_ma = (df[['high', 'low']].mean(axis=1)).rolling(window=20).mean()
+    df['high_low_convergence'] = short_term_ma - long_term_ma
+    
+    # Filter by Volume Change
+    df['integrated_high_low'] = df['high_low_convergence'] * df['volume_indicator']
+    
+    # Trend Confirmation
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    df['trend_confirmation'] = (ema_5 > ema_20).astype(int)
+    
+    # Final Alpha Factor Construction
+    df['volume_adjusted_high_low'] = high_low_range * df['volume_indicator']
+    df['smoothed_high_low_adjusted'] = df['smoothed_high_low_spread'] * df['volume_indicator']
+    df['combined_factors'] = (df['volume_adjusted_high_low'] + df['smoothed_high_low_adjusted'] + df['momentum_volume_adjusted']) * df['trend_confirmation']
+    
+    # Enhance with Additional Volume Check
+    df['volume_increase_indicator'] = (df['volume'] > df['volume'].shift(n)).astype(int)
+    df['final_alpha_factor'] = df['combined_factors'] * df['volume_increase_indicator']
+    
+    return df['final_alpha_factor']
+```

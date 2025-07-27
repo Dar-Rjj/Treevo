@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_return'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday price range and return
+    df['intraday_range_return'] = (df['high'] - df['low']) * ((df['close'] - df['open']) / df['open'])
+    
+    # Combine momentum
+    df['combined_momentum'] = df['weighted_return'] * df['intraday_range_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend'].fillna(1, inplace=True)  # Handle the first day with no previous volume
+    
+    # Adjust momentum by volume trend
+    df['adjusted_momentum'] = df['combined_momentum'] * (df['volume_trend'] ** 0.75)
+    
+    # True range
+    df['truerange'] = df[['high' - 'low', 
+                           abs(df['high'] - df['close'].shift(1)), 
+                           abs(df['low'] - df['close'].shift(1))]].max(axis=1)
+    
+    # Volume-adjusted true range
+    df['volume_adjusted_truerange'] = df['truerange'] * (df['volume_trend'] ** 0.5)
+    
+    # Measure high-low range volatility
+    M = 20  # Number of days for rolling standard deviation
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=M).std()
+    df['range_stability'] = 1 / (1 + df['range_volatility'])
+    
+    # Apply EMA to combined momentum
+    df['ema_momentum'] = df['combined_momentum'].ewm(span=5, min_periods=5).mean()
+    
+    # Smooth combined momentum with 3-day SMA
+    df['sma_momentum'] = df['adjusted_momentum'].rolling(window=3, min_periods=3).mean()
+    
+    # Final alpha factor
+    df['alpha_factor'] = df['sma_momentum'] * df['range_stability']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

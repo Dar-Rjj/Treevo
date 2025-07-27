@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement
+    daily_price_movement = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    volume_adjusted_price_movement = daily_price_movement * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    rolling_momentum_5 = volume_adjusted_price_movement.ewm(span=5).mean()
+    rolling_momentum_15 = volume_adjusted_price_movement.ewm(span=15).mean()
+    momentum_indicator = rolling_momentum_5 - rolling_momentum_15
+    
+    # Calculate High-Low Difference
+    high_low_difference = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    z_score = (df['volume'] - df['volume'].rolling(window=30).mean()) / df['volume'].rolling(window=30).std()
+    spike_indicator = (z_score > 2.5).astype(int)  # Threshold for Z-Score
+    
+    # Combine High-Low Difference and Volume Spikes
+    high_low_with_spikes = high_low_difference * spike_indicator
+    sum_high_low_with_spikes = high_low_with_spikes.rolling(window=10).sum()
+    
+    # Adjust Momentum for Volume Spikes
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    adjusted_daily_log_return = daily_log_return * (1 + 0.5 * spike_indicator)
+    
+    # Smooth the Adjusted Returns
+    smoothed_adjusted_returns = adjusted_daily_log_return.ewm(span=7).mean()
+    
+    # Volume Trend
+    vroc = (df['volume'] / df['volume'].shift(14)) - 1
+    
+    # Combined Factor
+    combined_factor = sum_high_low_with_spikes + smoothed_adjusted_returns
+    combined_factor_with_volume_trend = combined_factor * vroc
+    
+    # Cumulative Momentum Factor
+    cumulative_momentum_factor = (1 + combined_factor_with_volume_trend).cumprod()
+    
+    return cumulative_momentum_factor
+```

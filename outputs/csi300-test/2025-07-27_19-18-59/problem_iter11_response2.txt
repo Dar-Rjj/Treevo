@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine 5-day and 20-day returns
+    df['combined_return'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trends
+    df['volume_trend_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend_sum'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined return by volume trend
+    df['volume_adjusted_momentum'] = df['combined_return'] * df['volume_trend_ratio']
+    
+    # True range
+    df['true_range_1'] = df['high'] - df['low']
+    df['true_range_2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['true_range_3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['true_range_1', 'true_range_2', 'true_range_3']].max(axis=1)
+    
+    # Average true ranges
+    df['avg_true_range'] = df['true_range'].rolling(window=5).mean()
+    
+    # High-Low range stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=20).std()
+    
+    # Combine adjusted momentums
+    df['combined_momentum'] = df['volume_adjusted_momentum'] + df['intraday_momentum']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_momentum'] = df['combined_momentum'].rolling(window=3).mean()
+    
+    # Final alpha factor with weighted sum
+    weight_momentum = 0.7
+    weight_stability = 0.3
+    df['alpha_factor'] = (weight_momentum * df['smoothed_combined_momentum']) + (weight_stability * df['range_stability'])
+    
+    # Return the final alpha factor
+    return df['alpha_factor'].dropna()
+```

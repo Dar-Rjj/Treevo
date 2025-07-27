@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_return'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend and accumulated volume
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined intraday and closing price momentum
+    df['adjusted_momentum'] = df['weighted_return'] * (df['volume_trend'] ** 0.8) * (df['accumulated_volume'] / 5)
+    
+    # Calculate volume-adjusted true range
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['volume_adjusted_tr'] = df['true_range'] * (df['volume_trend'] ** 0.6)
+    
+    # High-low range stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_std'] = df['daily_range'].rolling(window=7).std()
+    df['range_stability'] = 1 / df['range_std']
+    
+    # Apply EMA to the combined momentum for final alpha factor
+    df['ema_combined_momentum'] = df['adjusted_momentum'].ewm(span=7, adjust=False).mean()
+    
+    # Compute 5-day ADX
+    def compute_adx(high, low, close, period=5):
+        high_low = high.diff().abs()
+        high_pc = (high - close.shift(1)).abs()
+        low_pc = (low - close.shift(1)).abs()
+        tr = high_low.combine(high_pc, max).combine(low_pc, max)
+        atr = tr.rolling(window=period).mean()
+        plus_dm = high.diff().mask(high.diff() < 0, 0)
+        minus_dm = -low.diff().mask(low.diff() < 0, 0)
+        plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
+        minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        adx = dx.rolling(window=period).mean()
+        return adx
+    df['adx'] = compute_adx(df['high'], df['low'], df['close'])
+    
+    # Adjust stability by directional bias
+    df['adjusted_stability'] = df['range_stability'] * df['adx']
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_adjusted_tr']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_factors'] = df['combined_factors'].rolling(window=3).mean()
+    
+    # Final alpha factor
+    weights = [0.6, 0.3, 0.1]  # Predefined weights for combined momentum, stability, and directional bias
+    df['final_alpha_factor'] = (weights[0] * df['smoothed_combined_factors'] +
+                                weights[1] * df['adjusted_stability'] +
+                                weights[2] * df['adx'])
+    
+    return df['final_alpha_factor']
+```

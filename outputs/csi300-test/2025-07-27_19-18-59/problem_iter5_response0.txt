@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Price Range and Intraday Return
+    intraday_momentum = intraday_price_range * intraday_return
+    
+    # Determine Volume Trends
+    volume_trend = df['volume'] / df['volume'].shift(1)
+    volume_trend_5d = df['volume'].rolling(window=5).sum()
+    
+    # Adjust Intraday Momentum by Volume Trends
+    adjusted_intraday_momentum = intraday_momentum * volume_trend
+    
+    # Calculate True Range
+    true_range = pd.concat([
+        df['high'] - df['low'],
+        abs(df['high'] - df['close'].shift(1)),
+        abs(df['low'] - df['close'].shift(1))
+    ], axis=1).max(axis=1)
+    
+    # Average the True Ranges over 5 days
+    avg_true_range = true_range.rolling(window=5).mean()
+    
+    # Adjust by Volume
+    avg_volume = df['volume'].rolling(window=5).mean()
+    volume_factor = df['volume'] / avg_volume
+    volume_adjusted_true_range = avg_true_range * volume_factor
+    
+    # Measure and Integrate High-Low Range Stability
+    daily_range = df['high'] - df['low']
+    rolling_std = daily_range.rolling(window=5).std()
+    stability_factor = 1 / rolling_std
+    
+    # Combine Adjusted Intraday Momentum and Volume-Adjusted True Range
+    combined_momentum = adjusted_intraday_momentum + volume_adjusted_true_range
+    
+    # Apply a 3-day Simple Moving Average (SMA) to the combined momentum
+    final_alpha_factor = combined_momentum.rolling(window=3).mean() * stability_factor
+    
+    return final_alpha_factor
+```

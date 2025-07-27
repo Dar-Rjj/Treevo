@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine 5-day and 20-day returns
+    df['combined_return'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Price Range and Intraday Return
+    df['intraday_volatility'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume Trends
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['cumulative_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust Combined Intraday and Closing Price Momentum by Volume Trends
+    df['adjusted_momentum'] = df['combined_return'] * df['volume_trend']
+    
+    # Exponential Moving Average (EMA) of Close Prices over N days
+    df['ema_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Subtract EMA of Close Prices from Current Close Price
+    df['price_diff_ema'] = df['close'] - df['ema_close']
+    
+    # Multiply by Cumulative Volume over N days
+    df['volume_adjusted_price_diff'] = df['price_diff_ema'] * df['cumulative_volume']
+    
+    # Apply a 3-day Simple Moving Average (SMA) to the adjusted momentum
+    df['sma_adjusted_momentum'] = df['adjusted_momentum'].rolling(window=3).mean()
+    
+    # Measure Intraday True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    
+    # Average the True Ranges
+    df['average_true_range'] = df['true_range'].rolling(window=5).mean()
+    
+    # Normalize by Daily Volume
+    avg_volume = df['volume'].mean()
+    df['volume_factor'] = df['volume'] / avg_volume
+    
+    # Adjust by Volume
+    df['atr_volume_adjusted'] = df['average_true_range'] * df['volume_factor']
+    
+    # Measure High-Low Range Stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=10).std()
+    
+    # Combine All Factors
+    df['final_alpha_factor'] = (
+        df['sma_adjusted_momentum'] * 0.4 +
+        df['atr_volume_adjusted'] * 0.3 +
+        df['range_stability'] * 0.3
+    )
+    
+    return df['final_alpha_factor'].dropna()
+```

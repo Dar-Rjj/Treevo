@@ -17,6 +17,7 @@ def main(cfg):
     logging.info(f"Project Root: {print_hyperlink(ROOT_DIR)}")
     logging.info(f"Using LLM: {cfg.get('model', cfg.llm_client.model)}")
     logging.info(f"Using Algorithm: {cfg.algorithm}")
+    logging.info(f"Max Function Evaluation: {cfg.max_fe}")
 
     client = init_client(cfg)
     # optional clients for operators (ReEvo)
@@ -30,6 +31,12 @@ def main(cfg):
         from reevo import ReEvo as LHH
     elif cfg.algorithm == "treevo":
         from treevo import TreEvo as LHH
+    elif cfg.algorithm == "treevoo":
+        from treevoo import TreEvoo as LHH
+    elif cfg.algorithm == "reevou":
+        from reevou import ReEvou as LHH
+    elif cfg.algorithm == "treevou":
+        from treevou import TreEvou as LHH
     elif cfg.algorithm == "ael":
         from baselines.ael.ga import AEL as LHH
     elif cfg.algorithm == "eoh":
@@ -39,7 +46,7 @@ def main(cfg):
 
     # Main algorithm
     # add treevo(tree)
-    if cfg.algorithm != "reevo" and cfg.algorithm != "treevo":
+    if cfg.algorithm != "reevo" and cfg.algorithm != "treevo" and cfg.algorithm != "treevoo":
         lhh = LHH(cfg, ROOT_DIR, client)
     else:
         lhh = LHH(cfg, ROOT_DIR, client, long_reflector_llm=long_ref_llm, short_reflector_llm=short_ref_llm, 

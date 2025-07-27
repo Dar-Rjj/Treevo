@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=30, L=100, K=20, vol_window=20, vol_threshold=2.0):
+    # Calculate Close-Price Momentum
+    close_momentum = df['close'] / df['close'].shift(n) - 1
+    
+    # Calculate Open-Price Momentum
+    open_momentum = df['open'] / df['open'].shift(n) - 1
+    
+    # Calculate Volume Momentum
+    volume_momentum = df['volume'] / df['volume'].shift(n) - 1
+    
+    # Adjust Daily Log Return by Open Price Change
+    log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    open_adjusted_log_return = log_return - (np.log(df['open']) - np.log(df['close'].shift(1)))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    open_adjusted_vol_return = open_adjusted_log_return * df['volume']
+    
+    # Sum Over N Days
+    cumulative_sum = open_adjusted_vol_return.rolling(window=n).sum()
+    
+    # Detect Volume Spikes and Shocks
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_volume_change = volume_change.rolling(window=30).mean()
+    volume_spike = (volume_change > 3 * avg_volume_change).astype(int)
+    
+    # Weight by Recent Trading Activity
+    recent_avg_volume = df['volume'].rolling(window=m).mean()
+    long_term_avg_volume = df['volume'].rolling(window=L).mean()
+    trading_activity_weight = (recent_avg_volume / long_term_avg_volume).fillna(1)
+    
+    # Integrate High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range = high_low_range.rolling(window=K).mean()
+    high_low_indicator = (high_low_range > avg_high_low_range).astype(int)
+    
+    # Detect Volatility
+    daily_returns = df['close'].pct_change()
+    rolling_std = daily_returns.rolling(window=vol_window).std()
+    historical_std = daily_returns.rolling(window=100).std().mean()
+    volatility_indicator = (rolling_std > vol_threshold * historical_std).astype(int)
+    
+    # Combine Indicators
+    combined_momentum = close_momentum + open_momentum + volume_momentum
+    combined_factor = (combined_momentum * volume_spike * high_low_indicator * volatility_indicator * trading_activity_weight)
+    
+    return combined_factor
+```

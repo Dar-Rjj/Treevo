@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR'] = df[['high', 'low', 'Prev_Close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['Prev_Close']), abs(x['low'] - x['Prev_Close'])), axis=1)
+
+    # Compute Average True Range (ATR) over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+
+    # Integrate Intraday and Open-to-Close Returns
+    df['Intraday_Return'] = df['high'] - df['low']
+    df['Open_to_Close_Return'] = df['close'] - df['open']
+    df['Integrated_Return'] = df['Intraday_Return'] + df['Open_to_Close_Return']
+
+    # Adjust with Volume Factor
+    df['Volume_Diff'] = df['volume'] - df['volume'].shift(1)
+    df['Average_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Adjustment'] = df['Volume_Diff'] / df['Average_Volume']
+
+    # Combine ATR, Integrated Returns, and Volume Adjustment
+    df['ATR_Weighted_Return'] = df['ATR'] * df['Integrated_Return']
+    df['Combined_Factor'] = df['ATR_Weighted_Return'] + df['Volume_Adjustment']
+
+    # Incorporate Intraday High-Low Spread and Close-Open Return
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Smoothed_Integrated_Momentum'] = df['Intraday_High_Low_Spread'] + df['Open_to_Close_Return']
+    df['Smoothed_Integrated_Momentum'] = df['Smoothed_Integrated_Momentum'].ewm(span=5).mean()
+
+    # Calculate Price Momentum
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Price_Momentum'] = df['SMA_10'] - df['SMA_50']
+
+    # Final Alpha Factor
+    df['Weighted_Integrated_Return'] = df['Combined_Factor'] + df['Smoothed_Integrated_Momentum']
+
+    # Adjust for Volume
+    df['Volume_Adjusted_Factor'] = np.where(df['volume'] > df['volume'].shift(1),
+                                             df['Weighted_Integrated_Return'] / np.cbrt(df['volume']) * (df['volume'] / df['volume'].rolling(window=10).max()),
+                                             df['Weighted_Integrated_Return'])
+
+    # Combine Adjusted ATR, Price Momentum, and Volume-Adjusted Momentum
+    df['Final_Factor'] = df['ATR_Weighted_Return'] + df['Price_Momentum'] + df['Volume_Adjusted_Factor']
+
+    # Introduce a Volatility Component
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volatility'] = df['Daily_Return'].rolling(window=20).std()
+    df['Final_Factor'] = df['Final_Factor'] / df['Volatility']
+
+    return df['Final_Factor'].dropna()
+```

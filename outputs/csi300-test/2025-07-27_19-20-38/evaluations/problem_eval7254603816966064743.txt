@@ -1,0 +1,27 @@
+def heuristics_v2(df):
+    def rsi(column, window=14):
+        delta = column.diff(1)
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    def macd(column, fast=12, slow=26, signal=9):
+        ema_fast = column.ewm(span=fast, adjust=False).mean()
+        ema_slow = column.ewm(span=slow, adjust=False).mean()
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+        return macd_line - signal_line
+    
+    def adl(high, low, close, volume):
+        money_flow_multiplier = ((close - low) - (high - close)) / (high - low)
+        money_flow_volume = money_flow_multiplier * volume
+        return money_flow_volume.cumsum()
+
+    rsi_series = rsi(df['close'])
+    rsi_change = rsi_series.diff(1)
+    macd_series = macd(df['close'])
+    adl_series = adl(df['high'], df['low'], df['close'], df['volume'])
+
+    heuristics_matrix = 0.5 * rsi_change + 0.3 * macd_series + 0.2 * adl_series
+    return heuristics_matrix

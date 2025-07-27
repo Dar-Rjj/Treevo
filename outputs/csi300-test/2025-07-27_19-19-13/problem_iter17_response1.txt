@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return
+    df['close_to_close_return'] = df['close'].pct_change()
+    
+    # Compute Logarithmic Transformation of Close-to-Close Return
+    df['log_return'] = np.log(1 + df['close_to_close_return'])
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Daily Intraday Volatility
+    df['daily_intraday_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Determine Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Weight by Volume Trend
+    df['volume_weighted_log_return'] = df['log_return'] * df['volume_ratio']
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume_ratio']
+    
+    # Incorporate Trading Amount
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['amount_volume_weighted_log_return'] = df['volume_weighted_log_return'] * df['amount_ratio']
+    df['amount_volume_weighted_intraday_return'] = df['volume_weighted_intraday_return'] * df['amount_ratio']
+    
+    # Combine and Adjust Factors
+    alpha_factor = (
+        df['amount_volume_weighted_log_return'] +
+        df['amount_volume_weighted_intraday_return'] +
+        df['daily_intraday_volatility']
+    )
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Conditionally Adjust Alpha Factor based on Open-to-Close Return
+    open_to_close_conditional = np.where(
+        df['open_to_close_return'] > 0,
+        (1 + 0.5 * df['open_to_close_return']),
+        (1 - 0.5 * abs(df['open_to_close_return']))
+    )
+    alpha_factor *= open_to_close_conditional
+    
+    # Volume-Weighted Momentum with Open Price
+    df['momentum_open'] = df['open'].pct_change()
+    df['volume_weighted_momentum_open'] = df['momentum_open'] * df['volume']
+    
+    # Intraday Return with Close Price
+    df['intraday_return_close'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Open-Close Price Movement
+    df['open_close_movement'] = df['close'] - df['open']
+    
+    # Adjust by Open-Close Movement
+    open_close_adjustment = np.where(
+        df['open_close_movement'] > 0,
+        1 + df['open_close_movement'],
+        1 - abs(df['open_close_movement'])
+    )
+    alpha_factor *= open_close_adjustment
+    
+    # Volume Change Adjustment
+    volume_change_adjustment = np.where(
+        df['volume'] > df['volume'].shift(1),
+        1 + (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1),
+        1 - abs((df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1))
+    )
+    alpha_factor *= volume_change_adjustment
+    
+    return alpha_factor
+```

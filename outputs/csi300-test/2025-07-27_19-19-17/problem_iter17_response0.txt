@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['TR'] = df[['High', 'Low', 'Close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1)
+    
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['High'] - df['Low']
+    
+    # Calculate Open-to-Close Return
+    df['Open_to_Close_Return'] = df['Close'] - df['Open']
+    
+    # Integrate Returns
+    df['Integrated_Return'] = df['Intraday_Return'] + df['Open_to_Close_Return']
+    
+    # Adjust with Volume Factor
+    df['Volume_Diff'] = df['Volume'] - df['Volume'].shift(1)
+    df['Average_Volume'] = df['Volume'].rolling(window=20).mean()
+    df['Volume_Adjustment'] = df['Volume_Diff'] / df['Average_Volume']
+    
+    # Combine ATR, Integrated Returns, and Volume Adjustment
+    df['Adjusted_ATR'] = df['ATR'] * df['Integrated_Return'] + df['Volume_Adjustment']
+    
+    # Calculate Price Momentum
+    df['SMA_10'] = df['Close'].rolling(window=10).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    df['SMA_Diff'] = df['SMA_10'] - df['SMA_50']
+    df['Price_Momentum'] = df['SMA_Diff'] * df['Adjusted_ATR']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Intraday_High_Low_Spread'] = df['High'] - df['Low']
+    df['Integrated_Momentum'] = df['Intraday_High_Low_Spread'] * df['Open_to_Close_Return']
+    df['Smoothed_Integrated_Momentum'] = df['Integrated_Momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['Combined_Factor'] = df['Adjusted_ATR'] + df['Price_Momentum'] + df['Smoothed_Integrated_Momentum']
+    
+    # Confirm with Volume and Amount
+    df['Volume_Confirmation'] = df['Volume'] > df['Volume'].shift(1)
+    df['Amount_Confirmation'] = df['Amount'] > df['Amount'].shift(1)
+    
+    # Adjust for Volume and Amount
+    df['Volume_Ratio'] = df['Volume'] / df['Volume'].shift(1)
+    df['Amount_Ratio'] = df['Amount'] / df['Amount'].shift(1)
+    df['Final_Alpha_Factor'] = df['Combined_Factor'] * df['Volume_Ratio'] * df['Amount_Ratio']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

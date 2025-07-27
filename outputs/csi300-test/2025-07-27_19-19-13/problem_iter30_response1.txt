@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Logarithmic Transformation of Close-to-Close Return
+    df['log_momentum'] = np.log(1 + df['close_return'])
+    
+    # Volume Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine with Price Momentum
+    df['volume_weighted_momentum'] = df['log_momentum'] * df['volume_ratio']
+    
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday Volatility
+    df['price_diff_1'] = df['high'] - df['low']
+    df['price_diff_2'] = df['high'] - df['close'].shift(1)
+    df['intraday_volatility'] = (df['price_diff_1'] + df['price_diff_2']) / 2
+    
+    # Weighted Intraday Return
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_ratio']
+    
+    # Combine Factors
+    df['combined_factor'] = df['volume_weighted_momentum'] + df['intraday_volatility'] + df['weighted_intraday_return']
+    
+    # Amount Ratio
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    
+    # Combine with Volume-Weighted Price Momentum
+    df['amount_adjusted_factor'] = df['combined_factor'] * df['amount_ratio']
+    
+    # Moving Average on Adjusted Intraday Movements (N Days)
+    N = 5
+    df['moving_avg'] = df['amount_adjusted_factor'].rolling(window=N).mean()
+    
+    # Compute Ratio
+    df['avg_close_N_days'] = df['close'].rolling(window=N).mean()
+    df['integrated_factor'] = df['moving_avg'] / df['avg_close_N_days']
+    
+    # Interpretable Adjustment
+    df['open_close_return'] = (df['close'] - df['open']) / df['open']
+    df['adjusted_alpha'] = np.where(
+        df['open_close_return'] > 0,
+        df['integrated_factor'] * (1 + 0.8 * df['open_close_return']),
+        df['integrated_factor'] * (1 - 0.8 * abs(df['open_close_return']))
+    )
+    
+    return df['adjusted_alpha']
+```

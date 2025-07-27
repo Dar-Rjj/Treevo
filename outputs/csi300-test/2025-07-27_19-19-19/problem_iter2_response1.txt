@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=5, scaling_factor_mv=1.5, scaling_factor_vol=0.5, smoothing_factor=0.3):
+    # Calculate Short-Term Price Direction Indicator (SPDI)
+    df['5_day_MA_close'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = (df['close'] > df['5_day_MA_close']).astype(int)
+
+    # Calculate Medium-Term Price Direction Indicator (MPDI)
+    df['20_day_high'] = df['high'].rolling(window=20).max()
+    df['20_day_low'] = df['low'].rolling(window=20).min()
+    df['range'] = df['20_day_high'] - df['20_day_low']
+    df['MPDI'] = ((df['close'] - df['20_day_low']) / df['range'] > 0.5).astype(int)
+
+    # Calculate Volume Growth Factor (VGF)
+    df['3_day_MA_volume'] = df['volume'].rolling(window=3).mean()
+    df['VGF'] = (df['volume'] > df['3_day_MA_volume']).astype(int)
+
+    # Integrate Short and Medium-Term Indicators
+    df['integrated_indicator'] = (df['SPDI'] + df['MPDI']) / 2
+
+    # Compute Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    df['daily_price_change_pct'] = df['daily_price_change'] / df['close'].shift(1)
+
+    # Aggregate Price Change Over a Period
+    df['accumulated_price_change'] = df['daily_price_change_pct'].rolling(window=N).sum()
+    df['average_price_change'] = df['accumulated_price_change'] / N
+
+    # Calculate Volume Weighted Average
+    df['volume_price_product'] = df['volume'] * df['close']
+    df['volume_sum'] = df['volume'].rolling(window=N).sum()
+    df['volume_weighted_close'] = df['volume_price_product'].rolling(window=N).sum() / df['volume_sum']
+
+    # Combine Integrated Indicators and Volume Factors
+    df['momentum_volatility_score'] = df['integrated_indicator'] * scaling_factor_mv
+    df['volume_weighted_score'] = df['volume_weighted_close'] * scaling_factor_vol
+
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = df['momentum_volatility_score'] + df['volume_weighted_score']
+
+    # Apply Smoothing
+    df['smoothed_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=smoothing_factor).mean()
+
+    return df['smoothed_alpha_factor']
+```

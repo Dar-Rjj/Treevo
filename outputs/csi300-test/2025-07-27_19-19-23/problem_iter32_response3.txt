@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Difference
+    df['High_Low_Diff'] = df['high'] - df['low']
+    
+    # Identify Volume and Price Spikes
+    df['Volume_Z_Score'] = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    df['Relative_Volume'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Price_Z_Score'] = (df['high'] - df['low']) / ((df['high'] - df['low']).rolling(window=20).std())
+    
+    # Classify as Spike if either Z-Score or Relative Volume exceeds a threshold
+    spike_threshold = 2.0
+    df['Spike_Indicator'] = ((df['Volume_Z_Score'] > spike_threshold) | (df['Relative_Volume'] > spike_threshold)).astype(int)
+    
+    # Combine High-Low Difference and Volume-Price Spikes
+    df['High_Low_Spike'] = df['High_Low_Diff'] * df['Spike_Indicator']
+    df['Sum_High_Low_Spike'] = df['High_Low_Spike'].rolling(window=10).sum()
+    
+    # Calculate Daily Log Return
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume-Price Spikes
+    weight = 1.5
+    df['Adjusted_Log_Return'] = df['Log_Return'] * (1 + (df['Spike_Indicator'] * (weight - 1)))
+    
+    # Smooth the Adjusted Returns
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Log_Return'].ewm(span=7, adjust=False).mean()
+    
+    # Price Momentum: Weighted Average High-Low Difference
+    weights = np.arange(1, 11)
+    df['Weighted_High_Low_Diff'] = df['High_Low_Diff'].rolling(window=10).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    
+    # Volume Trend: Volume Rate of Change (VROC)
+    m = 14
+    df['VROC'] = df['volume'] / df['volume'].shift(m) - 1
+    df['Smoothed_VROC'] = df['VROC'].ewm(span=7, adjust=False).mean()
+    
+    # Combined Factor: High-Low and Price Momentum
+    df['Combined_Factor'] = df['Sum_High_Low_Spike'] + df['Smoothed_Adjusted_Return']
+    
+    # Combine with Volume Trend
+    df['Enhanced_Combined_Factor'] = df['Combined_Factor'] * df['Smoothed_VROC']
+    
+    # Additional Factor: Volatility-Adjusted Momentum
+    df['Daily_Volatility'] = df['close'].rolling(window=20).std()
+    df['Normalized_Log_Return'] = df['Log_Return'] / df['Daily_Volatility']
+    df['Smoothed_Normalized_Return'] = df['Normalized_Log_Return'].ewm(span=7, adjust=False).mean()
+    
+    # Enhanced Combined Factor
+    df['Final_Factor'] = df['Enhanced_Combined_Factor'] + df['Smoothed_Normalized_Return']
+    
+    return df['Final_Factor']
+```

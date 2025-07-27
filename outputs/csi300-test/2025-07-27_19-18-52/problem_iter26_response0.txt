@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Intraday Trading Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Volume Intensity Score
+    df['volume_intensity'] = df['volume'] / df['intraday_range']
+    
+    # Composite Momentum Factor
+    df['composite_momentum'] = df['intraday_return'] * df['volume_intensity']
+    
+    # Compute Volume-Weighted Moving Average (VWMA) of Close Prices
+    lookback_period_vwma = 20
+    df['vwma'] = (df['close'] * df['volume']).rolling(window=lookback_period_vwma).sum() / df['volume'].rolling(window=lookback_period_vwma).sum()
+    
+    # Trend Strength Indicator
+    lookback_period_sma = 50
+    df['sma'] = df['close'].rolling(window=lookback_period_sma).mean()
+    df['trend_strength'] = df['sma'] - df['vwma']
+    
+    # Integrate Composite Momentum Factor, VWMA, and Trend Strength
+    df['integrated_dynamics'] = df['trend_strength'] + (df['vwma'] - df['composite_momentum'])
+    
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['vwap'] = ((df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).rolling(window=lookback_period_vwma).sum()) / df['volume'].rolling(window=lookback_period_vwma).sum()
+    
+    # Integrate Intraday Price Range and VWAP
+    df['intraday_range_vwap'] = df['intraday_range'] * df['vwap']
+    
+    # Calculate Daily Momentum
+    df['daily_momentum'] = (df['close'] - df['close'].shift(lookback_period_vwma)) / df['close'].shift(lookback_period_vwma)
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Integrate Intraday and Daily Momentum with VWAP
+    df['integrated_momentum'] = (df['intraday_momentum'] + df['daily_momentum']) * df['vwap']
+    
+    # Combine Integrated Intraday Dynamics and Momentum
+    df['combined_dynamics_momentum'] = df['integrated_dynamics'] * df['integrated_momentum']
+    
+    # Calculate Volume Surge
+    median_volume = df['volume'].rolling(window=lookback_period_vwma).median()
+    df['volume_surge'] = (df['volume'] > 2 * median_volume).astype(int)
+    
+    # Determine if Today's Volume is a Shock
+    avg_volume = df['volume'].rolling(window=lookback_period_vwma).mean()
+    df['volume_shock'] = (df['volume'] > 1.5 * avg_volume).astype(int)
+    
+    # Determine if Today's Close Price is a Shock
+    avg_close = df['close'].rolling(window=lookback_period_vwma).mean()
+    df['price_shock'] = (df['close'] > 1.5 * avg_close).astype(int)
+    
+    # Introduce Trend Reversal Indicator
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['trend_reversal'] = (df['close'] > df['ma_20']).astype(int) * 2 - 1
+    
+    # Calculate Price Breakout
+    df['highest_high_20'] = df['high'].rolling(window=lookback_period_vwma).max()
+    df['price_breakout'] = (df['high'] > df['highest_high_20']).astype(int)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['intraday_range'].rolling(window=lookback_period_vwma).std()
+    
+    # Combine All Integrated Factors and Shocks
+    alpha_factor = (df['combined_dynamics_momentum'] 
+                    * df['volume_surge'] 
+                    * df['volume_shock'] 
+                    * df['price_shock'] 
+                    * df['trend_reversal'] 
+                    * df['price_breakout'] 
+                    * df['intraday_volatility'])
+    
+    return alpha_factor
+```

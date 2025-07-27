@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, smoothing_factor=0.3):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Daily Price Change and Percentage
+    daily_price_change = df['close'].diff()
+    daily_price_change_percentage = daily_price_change / df['close'].shift(1)
+    
+    # Aggregate Price Change Over a Period
+    accumulated_price_change = daily_price_change.rolling(window=N).sum()
+    average_price_change = accumulated_price_change / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    avg_volume = df['volume'].rolling(window=10).mean()
+    volume_adjusted_close_open = close_open_diff * (df['volume'] / avg_volume)
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    combined_high_low = (high_low_range * volume_adjusted_close_open).rolling(window=5).sum()
+    
+    # Calculate Volume Weighted Average
+    volume_price_product = df['volume'] * df['close']
+    volume_weighted_close = volume_price_product.rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_high_low * 1.0
+    volume_weighted_score = volume_weighted_close * 0.5
+    
+    # Combine Price and Volume Factors
+    momentum_score = average_price_change * 1.5
+    combined_momentum_volume_scores = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = high_low_momentum_score + combined_momentum_volume_scores
+    final_alpha_factor_smoothed = final_alpha_factor.ewm(alpha=smoothing_factor).mean()
+    
+    return final_alpha_factor_smoothed
+```

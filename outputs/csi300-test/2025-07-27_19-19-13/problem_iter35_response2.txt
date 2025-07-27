@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Compute Logarithmic Transformation
+    df['log_return'] = np.log(1 + df['close_return'])
+    
+    # Determine Volume Change and Volume Ratio
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine with Price Momentum
+    df['volume_weighted_momentum'] = df['log_return'] * df['volume_ratio']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Weighted Intraday Return
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_change']
+    
+    # Combine Factors
+    df['combined_factor'] = df['volume_weighted_momentum'] + df['intraday_volatility'] + df['weighted_intraday_return']
+    
+    # Incorporate Trading Amount
+    df['amount_change'] = df['amount'].pct_change()
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['amount_weighted_momentum'] = df['combined_factor'] * df['amount_ratio']
+    
+    # Integrate Past Movements
+    N = 5  # Number of days for moving sum
+    df['aggregated_movements'] = df['amount_weighted_momentum'].rolling(window=N).sum()
+    df['average_close'] = df['close'].rolling(window=N).mean()
+    df['integrated_factor'] = df['aggregated_movements'] / df['average_close']
+    
+    # Interpretable Adjustment
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['open_price_return'] = df['open'].pct_change()
+    
+    # Conditionally Adjust Alpha Factor
+    df['alpha_factor'] = df['integrated_factor'].copy()
+    df.loc[df['open_to_close_return'] > 0, 'alpha_factor'] *= (1 + 0.7 * df['open_to_close_return'])
+    df.loc[df['open_to_close_return'] <= 0, 'alpha_factor'] *= (1 - 0.7 * abs(df['open_to_close_return']))
+    
+    # Incorporate Open-Price Trend
+    df.loc[df['open_price_return'] > 0, 'alpha_factor'] *= (1 + 0.5 * df['open_price_return'])
+    df.loc[df['open_price_return'] <= 0, 'alpha_factor'] *= (1 - 0.5 * abs(df['open_price_return']))
+    
+    return df['alpha_factor']
+```

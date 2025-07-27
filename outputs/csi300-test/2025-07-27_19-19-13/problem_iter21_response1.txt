@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=14):
+    # Calculate Intraday Price Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Volume-Weighted Momentum with Open Price
+    df['open_momentum'] = df['open'] - df['open'].shift(N)
+    df['volume_weighted_momentum'] = df['open_momentum'] * df['volume']
+    
+    # Intraday Return
+    df['intraday_return'] = (df['high'] + df['low']) / 2
+    
+    # Adjust for Volume Impact
+    df['avg_volume_N_days'] = df['volume'].rolling(window=N).mean()
+    df['adjusted_intraday_return'] = df['intraday_return'] / df['avg_volume_N_days']
+    
+    # Aggregate Past Movements
+    df['exp_moving_sum'] = df['adjusted_intraday_return'].ewm(span=N).sum()
+    
+    # Open-Close Price Movement
+    df['open_close_movement'] = df['close'] - df['open']
+    
+    # Combine Factors
+    df['combined_factor'] = df['intraday_volatility'] - df['volume_weighted_momentum'] * df['adjusted_intraday_return']
+    df['combined_factor'] = df['combined_factor'] * np.where(df['open_close_movement'] > 0, 
+                                                             (1 + df['open_close_movement']), 
+                                                             (1 - np.abs(df['open_close_movement'])))
+    
+    # Volume Change Adjustment
+    df['volume_ratio'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['volume_adjustment'] = np.where(df['volume_ratio'] > 0, 
+                                       (1 + df['volume_ratio']), 
+                                       (1 - np.abs(df['volume_ratio'])))
+    df['combined_factor'] = df['combined_factor'] * df['volume_adjustment']
+    
+    # Integrate Past Movements
+    df['moving_sum_adjusted_intraday'] = df['adjusted_intraday_return'].rolling(window=N).sum()
+    df['avg_close_N_days'] = df['close'].rolling(window=N).mean()
+    df['ratio'] = df['moving_sum_adjusted_intraday'] / df['avg_close_N_days']
+    
+    # Daily Price Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).rolling(window=M).mean() / df['close'].rolling(window=M).mean()
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=M).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=M).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    normalized_rsi = rsi / 100
+    
+    # Combine Additional Factors
+    df['alpha_factor'] = df['combined_factor'] + df['daily_volatility'] - df['volume_weighted_momentum'] * normalized_rsi
+    
+    # Interpretable Adjustment
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['alpha_factor'] = df['alpha_factor'] * np.where(df['open_to_close_return'] > 0, 
+                                                       (1 + df['open_to_close_return']), 
+                                                       (1 - np.abs(df['open_to_close_return'])))
+    
+    return df['alpha_factor']
+```

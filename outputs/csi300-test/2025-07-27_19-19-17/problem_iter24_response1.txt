@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    close_open_return = df['close'] - df['open']
+    
+    # Integrate Returns
+    integrated_returns = intraday_high_low_spread + close_open_return
+    
+    # Smooth the Integrated Returns
+    ema_window = 5
+    smoothed_returns = integrated_returns.ewm(span=ema_window).mean()
+    
+    # Confirm with Volume and Amount
+    volume_factor = (df['volume'] / df['volume'].shift(1)) * (df['amount'] / df['amount'].shift(1))
+    adjusted_returns = smoothed_returns * volume_factor
+    
+    # Calculate True Range (TR) for each day
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    atr_window = 14
+    atr = true_range.rolling(window=atr_window).mean()
+    
+    # Incorporate ATR in Integrated Returns
+    atr_integrated_returns = adjusted_returns * atr
+    
+    # Adjust with Volume Factor
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_diff = df['volume'] - df['volume'].shift(1)
+    volume_factor_adjustment = volume_diff / avg_volume
+    atr_integrated_returns_adjusted = atr_integrated_returns + volume_factor_adjustment
+    
+    # Calculate Price Momentum
+    short_term_sma = df['close'].rolling(window=10).mean()
+    long_term_sma = df['close'].rolling(window=50).mean()
+    price_momentum = short_term_sma - long_term_sma
+    price_momentum_atr = price_momentum * atr
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    additional_momentum = intraday_high_low_spread * close_open_return
+    additional_momentum_smoothed = additional_momentum.ewm(span=ema_window).mean()
+    
+    # Final Alpha Factor
+    combined_factor = atr_integrated_returns_adjusted + price_momentum_atr + additional_momentum_smoothed
+    max_volume_10d = df['volume'].rolling(window=10).max()
+    final_alpha_factor = combined_factor / (df['volume'] ** 0.5) * (df['volume'] / max_volume_10d)
+    
+    return final_alpha_factor
+```

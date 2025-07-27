@@ -1,0 +1,32 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, z_score_threshold=2.0, lookback_period=10, ema_span=5):
+    # Calculate Daily Log Return
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['volume_z_score'] = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / df['volume'].rolling(window=lookback_period).std()
+    df['spike_indicator'] = (df['volume_z_score'] > z_score_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    df['adjusted_log_return'] = df['daily_log_return'] * (1 + df['spike_indicator'] * 0.5)  # Weight adjustment
+    df['smoothed_adjusted_return'] = df['adjusted_log_return'].ewm(span=ema_span, min_periods=ema_span).mean()
+    
+    # Adjust High-Low Difference
+    df['adjusted_high_low_diff'] = df['high_low_diff'] * (1 + df['spike_indicator'] * 0.5)  # Weight adjustment
+    df['sum_high_low_diff'] = df['adjusted_high_low_diff'].rolling(window=lookback_period).sum()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_adjusted_return'] + 1).cumprod()
+    df['normalized_cumulative_momentum'] = df['cumulative_momentum'] / df['cumulative_momentum'].iloc[0]
+    
+    # Combine Adjusted Momentum and High-Low Factors
+    combined_factor = 0.5 * df['normalized_cumulative_momentum'] + 0.5 * df['sum_high_low_diff']
+    
+    return combined_factor
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(data: pd.DataFrame) -> pd.Series:
+    # Calculate High-Low Price Spread
+    data['High_Low_Spread'] = data['high'] - data['low']
+    
+    # Calculate Percentage Price Change
+    data['Price_Change_Pct'] = data['close'].pct_change()
+    
+    # Apply Exponential Moving Average on Percentage Price Change
+    alpha_ema = 0.5
+    data['EMA_Price_Change'] = data['Price_Change_Pct'].ewm(alpha=alpha_ema, adjust=False).mean()
+    
+    # Adjust for Volume Trend
+    data['Volume_Change_Pct'] = data['volume'].pct_change()
+    volume_trend_factor = np.where(data['Volume_Change_Pct'] > 0, 1, 0.5)
+    data['EMA_Volume_Adjusted'] = data['EMA_Price_Change'] * volume_trend_factor
+    
+    # Adjust for Amount Trend
+    data['Amount_Change_Pct'] = data['amount'].pct_change()
+    amount_trend_factor = np.where(data['Amount_Change_Pct'] > 0, 1, 0.8)
+    data['EMA_Final_Adjusted'] = data['EMA_Volume_Adjusted'] * amount_trend_factor
+    
+    # Calculate Intraday Return
+    data['Intraday_Return'] = data['high'] - data['low']
+    
+    # Calculate Open-to-Close Return
+    data['Open_Close_Return'] = data['close'] - data['open']
+    
+    # Compute Short-Term and Long-Term Volume Trends
+    short_term_volume = data['volume'].rolling(window=5).mean()
+    long_term_volume = data['volume'].rolling(window=20).mean()
+    data['Volume_Trend_Ratio'] = short_term_volume / long_term_volume
+    
+    # Compute Final Momentum Component
+    data['Intraday_Momentum'] = (data['Intraday_Return'] + data['Open_Close_Return']) / 2
+    data['Long_Term_Momentum'] = data['Price_Change_Pct'] * data['Volume_Trend_Ratio']
+    
+    # Combine Momentum
+    data['Combined_Momentum'] = data['Intraday_Momentum'] + data['Long_Term_Momentum']
+    
+    # Integrate Price Bandwidth
+    high_last_5d = data['high'].rolling(window=5).max()
+    low_last_5d = data['low'].rolling(window=5).min()
+    data['Price_Bandwidth'] = high_last_5d - low_last_5d
+    data['Momentum_Price_Bandwidth'] = data['Combined_Momentum'] + data['Price_Bandwidth']
+    
+    # Calculate VWAP
+    vwap = (data['amount'] / data['volume']).rolling(window=5).mean()
+    data['VWAP'] = vwap
+    
+    # Final Alpha Factor
+    data['Final_Alpha_Factor'] = (data['Momentum_Price_Bandwidth'] * data['VWAP']).rolling(window=5).mean()
+    
+    return data['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

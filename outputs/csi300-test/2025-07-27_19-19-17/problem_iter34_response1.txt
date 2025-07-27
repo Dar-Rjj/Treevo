@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['TR'] = df[['High', 'Low', 'Close']].apply(
+        lambda x: max(x['High'] - x['Low'], abs(x['High'] - df['Close'].shift(1)), abs(x['Low'] - df['Close'].shift(1))), 
+        axis=1
+    )
+    
+    # Calculate ATR over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Calculate Intraday Return and Open-to-Close Return
+    df['Intraday_Return'] = df['High'] - df['Low']
+    df['Open_to_Close_Return'] = df['Close'] - df['Open']
+    df['Integrated_Return'] = df['Intraday_Return'] + df['Open_to_Close_Return']
+    
+    # Adjust with Volume Factor
+    df['Volume_Diff'] = df['Volume'] - df['Volume'].shift(1)
+    df['Avg_Volume_20'] = df['Volume'].rolling(window=20).mean()
+    df['Normalized_Volume_Diff'] = df['Volume_Diff'] / df['Avg_Volume_20']
+    
+    # Combine ATR, Integrated Returns, and Volume Adjustment
+    df['Adjusted_ATR'] = df['ATR'] * df['Integrated_Return'] + df['Normalized_Volume_Diff']
+    
+    # Calculate Price Momentum
+    df['SMA_10'] = df['Close'].rolling(window=10).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    df['SMA_Diff'] = df['SMA_10'] - df['SMA_50']
+    df['Price_Momentum'] = df['SMA_Diff'] * df['Adjusted_ATR']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Intraday_High_Low_Spread'] = df['High'] - df['Low']
+    df['Integrated_Momentum'] = df['Intraday_High_Low_Spread'] * df['Open_to_Close_Return']
+    df['Smoothed_Integrated_Momentum'] = df['Integrated_Momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['Weighted_Integrated_Return'] = df['Adjusted_ATR']
+    df['Combined_Factor'] = df['Weighted_Integrated_Return'] + df['Smoothed_Integrated_Momentum']
+    
+    # Confirm with Volume
+    df['Volume_Adjusted_Combined_Factor'] = df['Combined_Factor'] / np.sqrt(df['Volume']) * (df['Volume'] / df['Volume'].rolling(window=10).max())
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_ATR'] + df['Price_Momentum'] + df['Volume_Adjusted_Combined_Factor']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# data = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(data)
+# print(alpha_factor)
+```

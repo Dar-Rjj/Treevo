@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Direction Indicator (SPDI)
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = (df['close'] > df['5_day_MA']).astype(int)
+
+    # Calculate Medium-Term Price Direction Indicator (MPDI)
+    df['20_day_High'] = df['high'].rolling(window=20).max()
+    df['20_day_Low'] = df['low'].rolling(window=20).min()
+    df['Range'] = (df['20_day_High'] - df['20_day_Low']) / 2
+    df['MPDI'] = ((df['close'] - df['20_day_Low']) > df['Range']).astype(int)
+
+    # Calculate Volume Growth Factor (VGF)
+    df['3_day_Vol_MA'] = df['volume'].rolling(window=3).mean()
+    df['VGF'] = (df['volume'] > df['3_day_Vol_MA']).astype(int)
+
+    # Integrate Short and Medium-Term Indicators
+    df['Integrated_Indicator'] = (df['SPDI'] + df['MPDI']) / 2
+
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['Daily_Price_Change_Percentage'] = df['Daily_Price_Change'] / df['close'].shift(1)
+
+    # Aggregate Price Change Over a Period
+    N = 10  # Example period, can be adjusted
+    df['Sum_Daily_Changes'] = df['Daily_Price_Change'].rolling(window=N).sum()
+    df['Average_Price_Change'] = df['Sum_Daily_Changes'] / N
+
+    # Calculate Volume-Weighted Close Price
+    df['Volume_Price_Product'] = df['volume'] * df['close']
+    df['Volume_Sum'] = df['volume'].rolling(window=N).sum()
+    df['Volume_Weighted_Close'] = df['Volume_Price_Product'].rolling(window=N).sum() / df['Volume_Sum']
+
+    # Combine Integrated Indicators and Volume Factors
+    df['Momentum_Volatility_Score'] = df['Integrated_Indicator'] * 1.5
+    df['Volume_Weighted_Score'] = df['Volume_Weighted_Close'] * 0.5
+
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Momentum_Volatility_Score'] + df['Volume_Weighted_Score']
+
+    # Apply Smoothing
+    df['Smoothed_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(alpha=0.3).mean()
+
+    return df['Smoothed_Alpha_Factor']
+```

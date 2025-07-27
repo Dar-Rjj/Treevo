@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    df['Close_Open_Return'] = df['close'] - df['open']
+    
+    # Integrate Returns
+    df['Integrated_Return'] = df['High_Low_Spread'] + df['Close_Open_Return']
+    
+    # Adjust for Volume and Amount Confirmation
+    df['Volume_Adjustment'] = df['volume'] / df['volume'].shift(1)
+    df['Amount_Adjustment'] = df['amount'] / df['amount'].shift(1)
+    df['Integrated_Return'] *= df['Volume_Adjustment'] * df['Amount_Adjustment']
+    
+    # Calculate True Range (TR) for each day
+    df['TR'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], 
+                                                        x['high'] - df['close'].shift(1), 
+                                                        df['close'].shift(1) - x['low']), axis=1)
+    
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Incorporate ATR in Integrated Returns
+    df['ATR_Adjusted_Return'] = df['Integrated_Return'] * df['ATR']
+    
+    # Calculate the volume difference and normalize by average volume over a 20-day window
+    df['Volume_Difference'] = df['volume'] - df['volume'].shift(1)
+    df['Average_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Normalized_Volume_Difference'] = df['Volume_Difference'] / df['Average_Volume_20']
+    
+    # Adjust with Volume Factor
+    df['Adjusted_ATR_Return'] = df['ATR_Adjusted_Return'] + df['Normalized_Volume_Difference']
+    
+    # Calculate Price Momentum
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Price_Momentum'] = (df['SMA_10'] - df['SMA_50']) * df['ATR']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Integrated_Momentum'] = df['High_Low_Spread'] * df['Close_Open_Return']
+    df['Smoothed_Integrated_Momentum'] = df['Integrated_Momentum'].ewm(span=7, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Adjusted_ATR_Return'] + 
+                                df['Price_Momentum'] + 
+                                df['Smoothed_Integrated_Momentum'])
+    
+    # Confirm with Volume
+    df['Volume_Confirmation'] = df['volume'] / df['volume'].shift(1)
+    df['Max_Volume_15'] = df['volume'].rolling(window=15).max()
+    df['Final_Alpha_Factor'] = (df['Final_Alpha_Factor'] / np.sqrt(df['volume']) * 
+                                (df['volume'] / df['Max_Volume_15']))
+    
+    return df['Final_Alpha_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

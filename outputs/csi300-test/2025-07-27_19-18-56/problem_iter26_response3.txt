@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Composite Momentum Indicator
+    n = 10
+    close_to_close_return = df['close'].diff(n)
+    composite_momentum = close_to_close_return.rolling(window=n).sum()
+
+    # Integrate with Convergence-Divergence of High-Low Prices
+    short_term_high_ma = df['high'].rolling(window=5).mean()
+    short_term_low_ma = df['low'].rolling(window=5).mean()
+    long_term_high_ma = df['high'].rolling(window=20).mean()
+    long_term_low_ma = df['low'].rolling(window=20).mean()
+    convergence_divergence = (short_term_high_ma - short_term_low_ma) - (long_term_high_ma - long_term_low_ma)
+
+    # Volume-Adjusted High-Low Range
+    high_low_range = df['high'] - df['low']
+    volume_adjusted_high_low = (high_low_range.rolling(window=10) * df['volume']).sum() / df['volume'].rolling(window=10).sum()
+
+    # Smoothed High-Low Spread
+    ema_period = 10
+    high_low_spread = df['high'] - df['low']
+    smooth_high_low_spread = high_low_spread - high_low_spread.ewm(span=ema_period, adjust=False).mean()
+
+    # Trend Confirmation
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    trend_confirmation = (sma_5 > sma_20).astype(int)
+
+    # Adjust for Market Sentiment
+    close_to_open_return = df['close'] - df['open']
+    sentiment_adjusted_volume_high_low = volume_adjusted_high_low + (close_to_open_return / df['close'])
+
+    # Filter by Volume Change
+    volume_change = df['volume'].diff(1)
+    volume_filter_indicator = (volume_change > 0).astype(int)
+
+    # Combine Indicators
+    integrated_momentum = composite_momentum * volume_filter_indicator
+    combined_factors = (integrated_momentum + convergence_divergence + sentiment_adjusted_volume_high_low + smooth_high_low_spread) * trend_confirmation
+
+    return combined_factors
+```

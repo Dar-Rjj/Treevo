@@ -1,0 +1,30 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the long-term momentum as the difference between current close and 20-day exponential moving average of close
+    long_term_momentum = df['close'] - df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the short-term volatility as the standard deviation of log returns over the last 5 days
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    short_term_volatility = log_returns.rolling(window=5).std()
+    
+    # Calculate a dynamic weighted moving average, giving more weight to recent data
+    weights = np.arange(1, 21)
+    weighted_close = (df['close'].rolling(window=20).apply(lambda x: (x * weights).sum() / weights.sum(), raw=False))
+    
+    # Calculate the volume trend as the difference between current volume and 10-day exponential moving average of volume
+    volume_trend = df['volume'] - df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the RSI (Relative Strength Index) with a 14-day period
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Generate the alpha factor by combining the long-term momentum, short-term volatility, volume trend, and RSI
+    alpha_factor = (long_term_momentum + short_term_volatility + volume_trend + rsi) / (weighted_close + 1e-7)
+    
+    return alpha_factor
+```

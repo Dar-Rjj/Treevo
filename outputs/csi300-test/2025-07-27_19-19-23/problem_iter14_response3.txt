@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=10, spike_threshold=2.0, vroc_period=10, ema_span=5, weight=0.5):
+    # Calculate High-Low Difference
+    df['High_Low_Diff'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['Volume_ZScore'] = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / df['volume'].rolling(window=lookback_period).std()
+    df['Volume_Spike'] = (df['Volume_ZScore'] > spike_threshold).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    df['Spike_Adjusted_HL'] = df['High_Low_Diff'] * df['Volume_Spike']
+    df['Sum_Spike_Adjusted_HL'] = df['Spike_Adjusted_HL'].rolling(window=lookback_period).sum()
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    df['Adjusted_Return'] = np.where(df['Volume_Spike'] == 1, df['Daily_Log_Return'] * weight, df['Daily_Log_Return'])
+    
+    # Smooth the Adjusted Returns
+    df['Smoothed_Return'] = df['Adjusted_Return'].ewm(span=ema_span).mean()
+    
+    # Price Momentum
+    weights = np.linspace(1, 0, lookback_period)
+    df['Weighted_High_Low_Diff'] = df['High_Low_Diff'].rolling(window=lookback_period).apply(lambda x: (x * weights[:len(x)]).sum(), raw=False)
+    
+    # Volume Trend
+    df['VROC'] = df['volume'].pct_change(periods=vroc_period)
+    
+    # Combined Factor
+    df['Combined_Factor'] = (df['Sum_Spike_Adjusted_HL'] + df['Smoothed_Return']) * df['VROC']
+    
+    # Cumulative Momentum Factor
+    df['Cumulative_Momentum_Factor'] = (df['Combined_Factor'] + 1).cumprod()
+    
+    return df['Cumulative_Momentum_Factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# })
+# factor = heuristics_v2(df)
+```

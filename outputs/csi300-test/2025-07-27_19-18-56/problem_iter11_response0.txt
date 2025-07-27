@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=14, sma_period=5, short_term=7, long_term=25):
+    # Calculate Enhanced High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread
+    sma_high_low = high_low_spread.rolling(window=sma_period).mean()
+    smoothed_high_low_spread = high_low_spread - sma_high_low
+    
+    # Calculate Composite Momentum Indicator
+    close_returns = df['close'].pct_change(periods=n)
+    composite_momentum = close_returns.rolling(window=n).sum()
+    
+    # Calculate Volume Relative Change
+    volume_change = df['volume'].pct_change()
+    
+    # Filter by Volume Change
+    high_low_momentum = smoothed_high_low_spread.where(volume_change > 0, 0)
+    
+    # Confirm with Trading Volume Increase
+    volume_increase = (df['volume'] > df['volume'].shift(n)).astype(int)
+    
+    # Integrate with Enhanced Convergence Divergence of High-Low Prices
+    avg_high_low = (df['high'] + df['low']) / 2
+    short_term_ma = avg_high_low.rolling(window=short_term).mean()
+    long_term_ma = avg_high_low.rolling(window=long_term).mean()
+    diff_high_low = short_term_ma - long_term_ma
+    signal_line = diff_high_low.ewm(span=12, adjust=False).mean()
+    convergence_divergence = diff_high_low - signal_line
+    
+    # Combine Indicators
+    combined_momentum = composite_momentum + convergence_divergence
+    
+    # Combine Momentum and Volume Indicators
+    interim_combined_momentum = high_low_momentum * volume_increase
+    final_alpha_factor = (combined_momentum + interim_combined_momentum) * volume_increase
+    
+    return final_alpha_factor
+```

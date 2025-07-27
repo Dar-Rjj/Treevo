@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, m=5, L=60, K=10, N=20):
+    # Calculate Close-Price Momentum
+    close_momentum = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate Open-Price Momentum
+    open_momentum = df['open'] / df['open'].shift(5) - 1
+    
+    # Calculate Volume Momentum
+    volume_momentum = df['volume'] / df['volume'].shift(5) - 1
+    
+    # Adjust Daily Log Return by Open Price Change
+    log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    adjusted_log_return = log_return - (np.log(df['open']) - np.log(df['close'].shift(1)))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    volume_weighted_adjusted_return = adjusted_log_return * df['volume']
+    
+    # Weight by Recent Trading Activity
+    recent_avg_volume = df['volume'].rolling(window=m).mean()
+    long_term_avg_volume = df['volume'].rolling(window=L).mean()
+    trading_activity_weight = recent_avg_volume / long_term_avg_volume
+    
+    # Integrate High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range = high_low_range.rolling(window=K).mean()
+    high_low_range_indicator = (high_low_range > avg_high_low_range).astype(int)
+    
+    # Detect Volume Shocks and Spikes
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_30_day_volume_change = volume_change.rolling(window=30).mean()
+    threshold = 3 * avg_30_day_volume_change
+    volume_shock_spike = (volume_change > threshold).astype(int)
+    volume_shock_spike[volume_change > 1.5 * threshold] = 1.5
+    
+    # Incorporate Price Range Momentum
+    price_range = df['high'] - df['low']
+    price_range_momentum = price_range / price_range.shift(5) - 1
+    
+    # Calculate 5-Day Price Oscillation
+    price_oscillation = (df['high'] - df['low']).rolling(window=5).sum() / 5
+    
+    # Calculate 5-Day Volume Trend
+    volume_trend = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    smoothed_volume_trend = volume_trend.rolling(window=5).mean()
+    
+    # Combine Indicators
+    momentum_sum = close_momentum + open_momentum + volume_momentum + price_range_momentum
+    volume_shock_spike_factor = volume_shock_spike.replace({0: 1, 1: 1, 1.5: 1.5})
+    combined_factor = (momentum_sum * volume_shock_spike_factor * high_low_range_indicator * trading_activity_weight)
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor + volume_weighted_adjusted_return.rolling(window=N).sum()
+    
+    return final_alpha_factor
+```

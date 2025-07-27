@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, spike_threshold=2.0, ema_span=10, vroc_period=10, proc_period=10, volatility_lookback=20):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Identify Volume and Price Spikes
+    df['vol_20_day_ma'] = df['volume'].rolling(window=20).mean()
+    df['relative_volume'] = df['volume'] / df['vol_20_day_ma']
+    df['z_score_volume'] = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    df['price_range'] = df['high'] - df['low']
+    df['z_score_price'] = (df['price_range'] - df['price_range'].rolling(window=20).mean()) / df['price_range'].rolling(window=20).std()
+    
+    # Classify as Spike if either Z-Score or Relative Volume exceeds a threshold
+    df['spike_indicator'] = ((df['z_score_volume'] > spike_threshold) | (df['relative_volume'] > spike_threshold)).astype(int)
+    
+    # Adjust Momentum for Volume and Price Spikes
+    df['adjusted_log_return'] = df['log_return'] * (1 + 0.5 * df['spike_indicator'])
+    
+    # Smooth the Adjusted Returns
+    df['smoothed_adj_returns'] = df['adjusted_log_return'].ewm(span=ema_span, min_periods=ema_span).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_adj_returns'] + 1).cumprod()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference with Volume and Price Spikes
+    df['hl_spike'] = df['high_low_diff'] * df['spike_indicator']
+    df['sum_hl_spike'] = df['hl_spike'].rolling(window=10).sum()
+    
+    # Calculate Volume Trend
+    df['vroc'] = df['volume'] / df['volume'].shift(vroc_period) - 1
+    
+    # Combined Factor
+    df['combined_factor'] = df['cumulative_momentum'] * df['sum_hl_spike'] * df['vroc']
+    
+    # Calculate Price-Volume Divergence
+    df['proc'] = df['close'] / df['close'].shift(proc_period) - 1
+    df['price_volume_divergence'] = df['proc'] - df['vroc']
+    
+    # Final Combined Alpha Factor
+    df['final_combined_alpha'] = df['combined_factor'] * df['price_volume_divergence']
+    
+    # Additional Factor: Volatility-Adjusted Momentum
+    df['daily_volatility'] = df['close'].rolling(window=volatility_lookback).std()
+    df['normalized_log_return'] = df['log_return'] / df['daily_volatility']
+    df['smoothed_normalized_returns'] = df['normalized_log_return'].ewm(span=ema_span, min_periods=ema_span).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['final_combined_alpha'] * df['smoothed_normalized_returns']
+    
+    return df['alpha_factor'].dropna()
+```

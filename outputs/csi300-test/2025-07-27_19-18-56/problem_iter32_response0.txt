@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Composite Price-Volume Momentum
+    df['Close_Return'] = df['close'].pct_change()
+    n = 10
+    df['Momentum'] = df['Close_Return'].rolling(window=n).sum()
+
+    # Confirm with Trading Volume Increase
+    df['Volume_Indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['Momentum'] *= df['Volume_Indicator']
+
+    # Calculate Volume-Weighted High-Low Range
+    df['High_Low_Range'] = (df['high'] - df['low']) * df['volume']
+    df['Total_Volume'] = df['volume'].rolling(window=10).sum()
+    df['Volume_Weighted_High_Low_Range'] = df['High_Low_Range'].rolling(window=10).sum() / df['Total_Volume']
+
+    # Adjust for Market Sentiment
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    df['Sentiment_Adjusted_Range'] = df['Volume_Weighted_High_Low_Range'] * (1 + df['Close_to_Open_Return'])
+
+    # Smoothing High-Low Spread
+    df['SMA_High_Low_Spread'] = df['high'] - df['low']
+    df['SMA_High_Low_Spread'] = df['SMA_High_Low_Spread'].rolling(window=10).mean()
+    df['Smoothed_High_Low_Spread'] = (df['high'] - df['low']) - df['SMA_High_Low_Spread']
+
+    # Integrate with Convergence-Divergence of High-Low Prices
+    df['Short_Term_MA_High'] = df['high'].rolling(window=5).mean()
+    df['Long_Term_MA_High'] = df['high'].rolling(window=20).mean()
+    df['Short_Term_MA_Low'] = df['low'].rolling(window=5).mean()
+    df['Long_Term_MA_Low'] = df['low'].rolling(window=20).mean()
+    df['Convergence_Divergence_High'] = df['Short_Term_MA_High'] - df['Long_Term_MA_High']
+    df['Convergence_Divergence_Low'] = df['Short_Term_MA_Low'] - df['Long_Term_MA_Low']
+
+    # Filter by Volume Change
+    df['Integrated_Factors'] = df['Convergence_Divergence_High'] + df['Convergence_Divergence_Low']
+    df['Integrated_Factors'] = df['Integrated_Factors'] * df['Volume_Indicator']
+
+    # Trend Confirmation
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Trend_Confirmation'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+
+    # Final Alpha Factor Construction
+    df['Alpha_Factor'] = (df['Sentiment_Adjusted_Range'] + 
+                          df['Smoothed_High_Low_Spread'] + 
+                          df['Momentum'] + 
+                          df['Integrated_Factors']) * df['Trend_Confirmation']
+
+    return df['Alpha_Factor']
+```

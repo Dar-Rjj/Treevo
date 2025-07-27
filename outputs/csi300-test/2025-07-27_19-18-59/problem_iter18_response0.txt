@@ -1,0 +1,29 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday and Closing Price Momentum
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    df['combined_momentum'] = (df['high'] - df['low']) * df['intraday_return']
+
+    # Integrate Volume Activity
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['adjusted_momentum'] = df['combined_momentum'] * (df['volume_trend'] ** 0.75)
+
+    # Calculate Volume-Adjusted True Range
+    df['true_range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+
+    # Measure and Integrate High-Low Range Volatility
+    df['range_volatility'] = (df['high'] - df['low']).rolling(window=20).std()
+    df['inverse_volatility'] = 1 / df['range_volatility']
+    
+    df['final_alpha_factor'] = (df['adjusted_momentum'] + df['volume_adjusted_true_range']) * df['inverse_volatility']
+    df['final_alpha_factor_ema'] = df['final_alpha_factor'].ewm(span=5, adjust=False).mean()
+
+    return df['final_alpha_factor_ema']
+```

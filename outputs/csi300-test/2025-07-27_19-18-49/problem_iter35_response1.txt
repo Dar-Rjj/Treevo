@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=10, L=30, K=10):
+    # Calculate Momentum Components
+    close_momentum = df['close'].pct_change(n)
+    open_momentum = df['open'].pct_change(n)
+    volume_momentum = df['volume'].pct_change(n)
+
+    # Adjust Daily Log Return by Open Price Change
+    log_return_open_adj = np.log(df['close']) - np.log(df['close'].shift(1)) - (np.log(df['open']) - np.log(df['close'].shift(1)))
+
+    # Multiply Open-Adjusted Log Return by Volume
+    log_return_vol_adj = log_return_open_adj * df['volume']
+
+    # Sum Over N Days
+    cumulative_sum = log_return_vol_adj.rolling(window=n).sum()
+
+    # Weight by Recent Trading Activity
+    avg_volume_m_days = df['volume'].rolling(window=m).mean()
+    long_term_avg_volume_L_days = df['volume'].rolling(window=L).mean()
+    trading_activity_weight = avg_volume_m_days / long_term_avg_volume_L_days
+
+    # Detect Volume Shocks and Spikes
+    daily_return = df['close'].pct_change()
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_30_day_vol_change = volume_change.rolling(window=30).mean()
+    
+    volume_shock = (volume_change > 2 * avg_30_day_vol_change).astype(int) * 1.5
+    volume_spike = ((volume_change > 3 * avg_30_day_vol_change) & (volume_change <= 2 * avg_30_day_vol_change)).astype(int)
+    vol_event_factor = volume_shock + volume_spike
+
+    # Integrate High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range_K_days = high_low_range.rolling(window=K).mean()
+    high_low_range_indicator = (high_low_range > avg_high_low_range_K_days).astype(int)
+
+    # Combine Indicators
+    momentum_sum = close_momentum + open_momentum + volume_momentum
+    alpha_factor = (momentum_sum * vol_event_factor * high_low_range_indicator * trading_activity_weight).fillna(0)
+
+    return alpha_factor
+```

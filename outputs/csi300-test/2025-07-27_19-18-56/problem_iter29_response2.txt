@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_ema_period=5, long_ema_period=20, n_periods=10):
+    # Calculate Enhanced High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread
+    ema_high_low_spread = high_low_spread.ewm(span=short_ema_period, adjust=False).mean()
+    smoothed_high_low_spread = high_low_spread - ema_high_low_spread
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = df['close'].pct_change()
+    
+    # Calculate Volume Change
+    volume_change = df['volume'].diff()
+    
+    # Compute Composite Momentum
+    composite_momentum = (close_to_close_return * (volume_change > 0)).rolling(window=n_periods).sum()
+    
+    # Calculate Volume-Weighted High-Low Range
+    volume_weighted_high_low_range = ((df['high'] - df['low']) * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Adjust for Market Sentiment
+    close_to_open_return = df['close'] - df['open']
+    adjusted_volume_weighted_high_low_range = volume_weighted_high_low_range + (close_to_open_return > 0) * 0.1 - (close_to_open_return < 0) * 0.1
+    
+    # Incorporate Convergence Divergence of High-Low Prices
+    short_term_ma = ((df['high'] + df['low']) / 2).rolling(window=5).mean()
+    long_term_ma = ((df['high'] + df['low']) / 2).rolling(window=20).mean()
+    convergence_divergence = short_term_ma - long_term_ma
+    
+    # Filter by Volume Change
+    integrated_momentum_and_spread = (composite_momentum + smoothed_high_low_spread) * (volume_change > 0)
+    
+    # Trend Confirmation
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    trend_confirmation = (sma_5 > sma_20).astype(int)
+    
+    # Final Alpha Factor Construction
+    final_alpha_factor = (adjusted_volume_weighted_high_low_range + smoothed_high_low_spread) * (volume_change > 0)
+    final_alpha_factor += composite_momentum * (volume_change > 0)
+    final_alpha_factor *= trend_confirmation
+    
+    return final_alpha_factor
+```

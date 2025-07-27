@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, short_term_window=5, medium_term_window=20, long_term_window=100, smoothing_factor=0.4):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N days)
+    price_change_N_days = daily_price_change.rolling(window=N).sum()
+    average_price_change = price_change_N_days / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    volume_adjusted_close_open = close_open_diff * (df['volume'] / avg_volume_20)
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    combined_HL_VA_CO = (high_low_range * volume_adjusted_close_open).rolling(window=10).sum()
+    
+    # Calculate Volume Weighted Average
+    volume_price_product = df['volume'] * df['close']
+    volume_weighted_close_price = volume_price_product.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_HL_VA_CO * 1.2
+    volume_weighted_score = volume_weighted_close_price * 0.6
+    momentum_score = average_price_change * 1.8
+    
+    # Integrate Indicators
+    spdi = (df['close'] > df['close'].rolling(window=short_term_window).mean()).astype(int)
+    moving_high = df['high'].rolling(window=medium_term_window).max()
+    moving_low = df['low'].rolling(window=medium_term_window).min()
+    mpr = ((df['close'] - moving_low) / (moving_high - moving_low) > 0.5).astype(int)
+    vgf = (df['volume'] > df['volume'].rolling(window=3).mean()).astype(int)
+    imvti = (spdi + mpr + vgf) / 3
+    
+    # Combine Price and Volume Factors
+    combined_momentum_volume_scores = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = high_low_momentum_score + combined_momentum_volume_scores + imvti
+    final_alpha_factor = final_alpha_factor.ewm(alpha=smoothing_factor).mean()
+    
+    # Incorporate Long-Term Trend
+    long_term_ma = df['close'].rolling(window=long_term_window).mean()
+    trend_adjustment = np.where(df['close'] > long_term_ma, 0.1, -0.1)
+    final_alpha_factor = final_alpha_factor * (1 + trend_adjustment)
+    
+    return final_alpha_factor
+```

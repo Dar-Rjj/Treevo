@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5d_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20d_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['combined_return'] = (df['5d_return'] + df['20d_return']) / 2
+    
+    # Calculate intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Integrate volume activity
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend_5d'] = df['volume'].rolling(window=5).mean()
+    
+    # Adjust combined intraday and closing price momentum by volume trends
+    df['adjusted_momentum'] = df['combined_return'] * df['volume_trend']
+    
+    # Measure and integrate high-low range stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_std'] = df['daily_range'].rolling(window=30).std()
+    df['stability'] = 1 / (df['range_std'] + 1e-6)  # Add a small constant to avoid division by zero
+    
+    # Apply a 7-day exponential moving average (EMA) to the combined momentum
+    df['ema_7d'] = df['adjusted_momentum'].ewm(span=7, adjust=False).mean()
+    
+    # Introduce a weighted momentum component based on volume trend
+    df['weighted_momentum'] = df['ema_7d'] * df['volume_trend']
+    
+    # Normalize the weighted sum
+    df['final_alpha_factor'] = (df['weighted_momentum'] - df['weighted_momentum'].mean()) / df['weighted_momentum'].std()
+    
+    return df['final_alpha_factor'].dropna()
+```

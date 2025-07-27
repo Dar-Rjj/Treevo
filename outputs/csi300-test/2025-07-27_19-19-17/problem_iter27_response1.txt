@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['High-Low'] = df['high'] - df['low']
+    df['High-PrevClose'] = df['high'] - df['close'].shift(1)
+    df['Low-PrevClose'] = df['low'] - df['close'].shift(1)
+    df['TrueRange'] = df[['High-Low', 'High-PrevClose', 'Low-PrevClose']].max(axis=1)
+
+    # Calculate Average True Range (ATR) over 14 days
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+
+    # Calculate Intraday and Open-to-Close Returns
+    df['IntradayReturn'] = df['high'] - df['low']
+    df['OpenCloseReturn'] = df['close'] - df['open']
+
+    # Integrate Returns
+    df['IntegratedReturns'] = df['IntradayReturn'] + df['OpenCloseReturn']
+
+    # Adjust with Volume and Amount Factors
+    df['VolumeDiff'] = df['volume'] - df['volume'].shift(1)
+    df['AverageVolume'] = df['volume'].rolling(window=20).mean()
+    df['NormalizedVolumeDiff'] = df['VolumeDiff'] / df['AverageVolume']
+
+    # Check Volume and Amount
+    df['VolumeAdjustment'] = 1.0
+    df.loc[df['volume'] > df['volume'].shift(1), 'VolumeAdjustment'] = df['volume'] / df['volume'].shift(1)
+    df['AmountAdjustment'] = 1.0
+    df.loc[df['amount'] > df['amount'].shift(1), 'AmountAdjustment'] = df['amount'] / df['amount'].shift(1)
+
+    # Final Adjustment
+    df['FinalAdjustment'] = df['VolumeAdjustment'] * df['AmountAdjustment']
+    df['AdjustedIntegratedReturns'] = df['IntegratedReturns'] * df['FinalAdjustment']
+
+    # Combine ATR, Integrated Returns, and Volume-Amount Adjustment
+    df['ATR_Returns'] = df['ATR'] * df['AdjustedIntegratedReturns'] + df['NormalizedVolumeDiff']
+
+    # Calculate Price Momentum
+    df['SMA_short'] = df['close'].rolling(window=10).mean()
+    df['SMA_long'] = df['close'].rolling(window=50).mean()
+    df['SMA_diff'] = df['SMA_short'] - df['SMA_long']
+    df['PriceMomentum'] = df['SMA_diff'] * df['ATR_Returns']
+
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['IntradaySpread'] = df['high'] - df['low']
+    df['IntegratedMomentum'] = df['IntradaySpread'] * df['OpenCloseReturn']
+    df['SmoothedMomentum'] = df['IntegratedMomentum'].ewm(span=5, adjust=False).mean()
+
+    # Final Alpha Factor
+    df['CombinedFactor'] = df['ATR_Returns'] + df['SmoothedMomentum']
+    df['VolumeAdjust'] = df['volume'] / np.sqrt(df['volume'])
+    df['MaxVolume'] = df['volume'].rolling(window=10).max()
+    df['VolumeRatio'] = df['volume'] / df['MaxVolume']
+    df['FinalAlphaFactor'] = df['CombinedFactor'] * df['VolumeRatio'] / np.sqrt(df['volume'])
+
+    # Return the final alpha factor
+    return df['FinalAlphaFactor']
+```

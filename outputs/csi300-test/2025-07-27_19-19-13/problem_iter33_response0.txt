@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Raw Price Momentum
+    close_t_1 = df['close'].shift(1)
+    close_t = df['close']
+    close_return = (close_t / close_t_1) - 1
+    log_momentum = np.log(1 + close_return)
+
+    # Weight by Volume Trend
+    volume_t_1 = df['volume'].shift(1)
+    volume_t = df['volume']
+    volume_ratio = volume_t / volume_t_1
+    volume_weighted_momentum = log_momentum * volume_ratio
+
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) + (df['high'] - df['open'])
+
+    # Weighted Intraday Return
+    weighted_intraday_return = intraday_return * (volume_t - volume_t_1)
+
+    # Combine Factors
+    combined_factor = (
+        volume_weighted_momentum +
+        intraday_volatility +
+        weighted_intraday_return
+    )
+
+    # Incorporate Trading Amount
+    amount_t_1 = df['amount'].shift(1)
+    amount_t = df['amount']
+    amount_ratio = amount_t / amount_t_1
+    combined_factor *= amount_ratio
+
+    # Integrate Past Movements
+    n_days = 5
+    moving_avg = combined_factor.rolling(window=n_days).mean()
+    avg_close = df['close'].rolling(window=n_days).mean()
+    integrated_factor = moving_avg / avg_close
+
+    # Interpretable Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    adjustment = np.where(
+        open_to_close_return > 0,
+        1 + 0.8 * open_to_close_return,
+        1 - 0.8 * abs(open_to_close_return)
+    )
+    final_alpha_factor = integrated_factor * adjustment
+
+    return final_alpha_factor
+```

@@ -1,0 +1,60 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate adaptive moving average window based on volatility
+    vol_10d = df['close'].rolling(window=10).std()
+    ma_window = (vol_10d / vol_10d.mean() * 5).round().astype(int).clip(lower=3, upper=7)
+    ma = df['close'].rolling(window=ma_window, min_periods=1).mean()
+
+    # Calculate the adaptive high-low range
+    high_low_diff = (df['high'] - df['low']).rolling(window=ma_window, min_periods=1).mean()
+
+    # Calculate the adaptive volume change
+    volume_change = df['volume'].pct_change(periods=ma_window)
+
+    # Calculate the adaptive RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=ma_window*2, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=ma_window*2, min_periods=1).mean()
+    rs = gain / loss.replace(0, 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate price deviation and normalize it with volatility and range
+    price_deviation = df['close'] - ma
+    normalized_price_deviation = price_deviation / (high_low_diff + vol_10d + 1e-7)
+
+    # Calculate the sentiment factor using the ratio of close to open price
+    sentiment_factor = df['close'] / df['open']
+
+    # Calculate the market trend factor using the slope of a linear regression over the last 20 days
+    from scipy.stats import linregress
+    def calculate_trend_slope(data):
+        x = np.arange(len(data))
+        y = data.values
+        slope, _, _, _, _ = linregress(x, y)
+        return slope
+    trend_slope = df['close'].rolling(window=20, min_periods=1).apply(calculate_trend_slope, raw=False)
+
+    # Dynamic weighting based on market conditions
+    weight_price_deviation = 0.4 * (1 + (df['close'].pct_change().abs().rolling(window=20).mean() / 0.01).clip(0, 1))
+    weight_volume_change = 0.3 * (1 + (df['volume'].pct_change().abs().rolling(window=20).mean() / 0.01).clip(0, 1))
+    weight_rsi = 0.2 * (1 + (rsi.rolling(window=20).std() / 10).clip(0, 1))
+    weight_sentiment = 0.1 * (1 + (df['close'].pct_change().abs().rolling(window=20).mean() / 0.01).clip(0, 1))
+    weight_trend = 0.1 * (1 + (trend_slope.abs().rolling(window=20).mean() / 0.01).clip(0, 1))
+
+    # Normalize the weights
+    total_weight = weight_price_deviation + weight_volume_change + weight_rsi + weight_sentiment + weight_trend
+    weight_price_deviation /= total_weight
+    weight_volume_change /= total_weight
+    weight_rsi /= total_weight
+    weight_sentiment /= total_weight
+    weight_trend /= total_weight
+
+    # Combine the factors with dynamic weighting
+    factor = (normalized_price_deviation * weight_price_deviation) + \
+             (volume_change * weight_volume_change) + \
+             (rsi * weight_rsi) + \
+             (sentiment_factor * weight_sentiment) + \
+             (trend_slope * weight_trend)
+
+    return factor
+```

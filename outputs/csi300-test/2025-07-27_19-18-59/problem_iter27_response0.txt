@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_return'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    df['combined_intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend and accumulated volume
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined intraday and closing price momentum
+    df['adjusted_momentum'] = (df['weighted_return'] + df['combined_intraday_momentum']) * \
+                              (df['volume_trend'] ** 0.75) * (df['accumulated_volume'] / 5)
+    
+    # Volume-Adjusted True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], 
+                                                               abs(x['high'] - df['close'].shift(1)), 
+                                                               abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # High-Low Range Stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_std'] = df['daily_range'].rolling(window=5).std()
+    df['stability'] = 1 / df['range_std']
+    
+    # Directional Bias
+    df['adx'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=5)
+    df['adjusted_stability'] = df['stability'] * df['adx']
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_adjusted_true_range']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_factors'] = df['combined_factors'].rolling(window=3).mean()
+    
+    # Incorporate weighted sum with predefined weights
+    final_alpha_factor = 0.6 * df['smoothed_combined_factors'] + 0.4 * df['adjusted_stability']
+    
+    return final_alpha_factor
+```

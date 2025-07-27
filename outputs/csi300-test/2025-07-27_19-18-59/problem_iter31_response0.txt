@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Compute intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday return with weighted returns
+    df['combined_momentum'] = (df['high'] - df['low']) * df['intraday_return'] * df['weighted_returns']
+    
+    # Determine volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined momentum with volume activity
+    df['adjusted_momentum'] = df['combined_momentum'] * (df['volume_trend'] ** 0.75) * (df['accumulated_volume'] / 5)
+    
+    # Calculate Volume-Adjusted True Range
+    df['true_range'] = df[['high' - 'low', abs(df['high'] - df['close'].shift(1)), abs(df['low'] - df['close'].shift(1))]].max(axis=1)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # Measure high-low range stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=20).std()
+    
+    # Apply EMA to the combined momentum
+    df['ema_combined_momentum'] = df['adjusted_momentum'].ewm(span=5, min_periods=5).mean()
+    
+    # Incorporate directional bias
+    df['avg_adx'] = df['adx'].rolling(window=5).mean()
+    df['directional_bias'] = df['range_stability'] * df['avg_adx']
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_adjusted_true_range']
+    
+    # Smooth combined momentum
+    df['sma_combined_factors'] = df['combined_factors'].rolling(window=3).mean()
+    
+    # Final alpha factor
+    df['alpha_factor'] = 0.7 * df['sma_combined_factors'] + 0.3 * df['directional_bias']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

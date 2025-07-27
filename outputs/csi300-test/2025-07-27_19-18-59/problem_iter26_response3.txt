@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + 2 * df['20_day_return']) / 5
+    
+    # Intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['volume_5d_sum'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust enhanced intraday and closing price momentum by volume trends
+    df['adjusted_momentum'] = df['weighted_returns'] * (df['volume_trend'] ** 0.75)
+    
+    # Calculate True Range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['tr3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    
+    # Volume-Adjusted True Range
+    df['volume_adjusted_tr'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # Measure and integrate high-low range volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=20).std()
+    df['range_stability'] = 1 / (df['range_volatility'] + 1e-6)
+    
+    # Smooth combined momentum
+    df['smoothed_momentum'] = df['adjusted_momentum'].rolling(window=3).mean()
+    
+    # Apply EMA with a 14-day span
+    df['ema_momentum'] = df['smoothed_momentum'].ewm(span=14, adjust=False).mean()
+    
+    # Short-Term and Long-Term Volatility
+    df['abs_5_day_return'] = df['5_day_return'].abs()
+    df['short_term_volatility'] = df['abs_5_day_return'].ewm(span=14, adjust=False).mean()
+    df['long_term_volatility'] = df['20_day_return'].abs().ewm(span=28, adjust=False).mean()
+    
+    # Dynamic Weights
+    df['dynamic_weights'] = df['short_term_volatility'] / (df['short_term_volatility'] + df['long_term_volatility'])
+    
+    # Final Alpha Factor
+    df['final_alpha'] = (df['ema_momentum'] * df['dynamic_weights'] +
+                         df['volume_adjusted_tr'] * (1 - df['dynamic_weights']))
+    
+    return df['final_alpha']
+```

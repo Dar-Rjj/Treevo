@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the Relative Strength Index (RSI) with a 14-day window
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = ema_12 - ema_26
+    df['signal_line'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # Mean reversion factor: difference between close and 50-day moving average
+    df['50_day_ma'] = df['close'].rolling(window=50).mean()
+    df['mean_reversion'] = df['close'] - df['50_day_ma']
+    
+    # Short-term mean reversion factor: difference between close and 10-day moving average
+    df['10_day_ma'] = df['close'].rolling(window=10).mean()
+    df['short_term_mean_reversion'] = df['close'] - df['10_day_ma']
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Add sector-specific indicators
+    # Example: Calculate the 30-day return for a sector index (assuming 'sector_close' is available in the DataFrame)
+    if 'sector_close' in df.columns:
+        df['sector_daily_return'] = df['sector_close'].pct_change()
+        df['sector_momentum'] = df['sector_daily_return'].rolling(window=30).mean()
+    else:
+        df['sector_momentum'] = 0  # If sector data is not available, set it to 0
+    
+    # Combine the factors with dynamic weighting
+    alpha_factor = (
+        0.3 * (df['daily_return'] / (df['volatility'] + 1e-7)) +
+        0.2 * (50 - df['rsi']) +
+        0.1 * (df['macd'] - df['signal_line']) +
+        0.1 * df['mean_reversion'] +
+        0.1 * volume_ratio +
+        0.1 * df['short_term_mean_reversion'] +
+        0.1 * df['sector_momentum']
+    )
+    
+    return alpha_factor
+```

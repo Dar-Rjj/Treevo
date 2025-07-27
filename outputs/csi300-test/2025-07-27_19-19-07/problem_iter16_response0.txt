@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Incorporate Historical Price Change
+    close_to_close_return = df['close'].pct_change()
+    weighted_high_low_spread = high_low_spread * close_to_close_return
+    
+    # Adjust for Volume Trend
+    volume_change = df['volume'].pct_change()
+    adjusted_high_low_spread = weighted_high_low_spread * (1 + volume_change)
+    
+    # Calculate Cumulative Sum of Weighted Returns
+    cumulative_sum = adjusted_high_low_spread.rolling(window=20).sum()
+    
+    # Smooth the Resulting Series
+    smoothed_cumulative_sum = cumulative_sum.rolling(window=5).mean()
+    
+    # Adjust for Amount Trend
+    amount_change = df['amount'].pct_change()
+    
+    # Final Factor Calculation
+    final_factor = smoothed_cumulative_sum
+    final_factor = final_factor.where(
+        (volume_change > 0) & (amount_change > 0), 
+        final_factor * 1.2
+    )
+    final_factor = final_factor.where(
+        (volume_change > 0) ^ (amount_change > 0), 
+        final_factor * 1.1
+    )
+    final_factor = final_factor.where(
+        (volume_change < 0) & (amount_change < 0), 
+        final_factor * 0.9
+    )
+    
+    # Combine and Smooth Final Factor
+    final_factor_smoothed = final_factor.rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = df['open'] - df['close']
+    
+    # Compute Short-Term Volume Trend
+    short_term_volume_trend = df['volume'].rolling(window=5).mean()
+    
+    # Calculate Long-Term Volume Trend
+    long_term_volume_trend = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    volume_trend_ratio = short_term_volume_trend / long_term_volume_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    intraday_momentum = intraday_return + open_to_close_return
+    long_term_momentum = close_to_close_return * volume_trend_ratio
+    
+    # Compute Volatility Component
+    volatility_intraday = intraday_return.rolling(window=20).std()
+    volatility_open_to_close = open_to_close_return.rolling(window=20).std()
+    total_volatility = (volatility_intraday + volatility_open_to_close) / 2
+    
+    # Combine Momentum and Volatility
+    combined_momentum = intraday_momentum + long_term_momentum
+    momentum_and_volatility = combined_momentum - total_volatility
+    
+    # Final Alpha Factor
+    alpha_factor = momentum_and_volatility * vwap + high_low_spread + final_factor_smoothed
+    
+    return alpha_factor
+```

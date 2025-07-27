@@ -1,0 +1,34 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate adaptive moving average window based on volatility
+    vol_10d = df['close'].rolling(window=10).std()
+    ma_window = (vol_10d / vol_10d.mean() * 5).round().astype(int).clip(lower=3, upper=7)
+    ma = df['close'].rolling(window=ma_window, min_periods=1).mean()
+
+    # Calculate the adaptive high-low range
+    high_low_diff = (df['high'] - df['low']).rolling(window=ma_window, min_periods=1).mean()
+
+    # Calculate the adaptive volume change
+    volume_change = df['volume'].pct_change(periods=ma_window)
+
+    # Calculate the adaptive RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=ma_window*2, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=ma_window*2, min_periods=1).mean()
+    rs = gain / loss.replace(0, 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate price deviation and normalize it with high-low range and volatility
+    price_deviation = df['close'] - ma
+    normalized_price_deviation = price_deviation / (high_low_diff + vol_10d + 1e-7)
+
+    # Calculate the adaptive weighting based on market conditions
+    weighting_factor = (rsi - 50) / 50
+    weighted_price_deviation = normalized_price_deviation * (1 + weighting_factor)
+    weighted_volume_change = volume_change * (1 - abs(weighting_factor))
+
+    # Combine the factors
+    factor = weighted_price_deviation + weighted_volume_change
+
+    return factor
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    df['avg_volume_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_adj_close_open_diff'] = (df['close_open_diff'] * df['volume']) / df['avg_volume_10']
+    
+    # Compute Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Aggregate Price Change Over a Period (N = 5 for example)
+    N = 5
+    df['agg_price_change'] = df['daily_price_change'].rolling(window=N).mean()
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['combined_hl_vol'] = (df['high_low_range'] * df['volume_adj_close_open_diff']).rolling(window=5).sum()
+    
+    # Calculate Short-Term Price Direction (SPDI)
+    df['ma_5_close'] = df['close'].rolling(window=5).mean()
+    df['spdi'] = (df['close'] > df['ma_5_close']).astype(int)
+    
+    # Calculate Medium-Term Price Range (MPR)
+    df['ma_20_high'] = df['high'].rolling(window=20).max()
+    df['ma_20_low'] = df['low'].rolling(window=20).min()
+    df['position_in_range'] = (df['close'] - df['ma_20_low']) / (df['ma_20_high'] - df['ma_20_low'])
+    df['mpr'] = (df['position_in_range'] > 0.5).astype(int)
+    
+    # Calculate Volume Growth (VGF)
+    df['ma_3_volume'] = df['volume'].rolling(window=3).mean()
+    df['vgf'] = (df['volume'] > df['ma_3_volume']).astype(int)
+    
+    # Integrate Indicators to get IMVTI
+    df['imvti'] = (df['spdi'] + df['mpr'] + df['vgf']) / 3
+    
+    # Generate Intermediate Alpha Scores
+    scaling_factor_hl = 1.0
+    scaling_factor_momentum = 1.5
+    df['hl_momentum_score'] = df['combined_hl_vol'] * scaling_factor_hl
+    df['momentum_score'] = df['agg_price_change'] * scaling_factor_momentum
+    
+    # Generate Final Alpha Factor
+    df['final_alpha'] = df['hl_momentum_score'] + df['momentum_score'] + df['imvti']
+    
+    # Apply Smoothing using Exponential Moving Average
+    smoothing_factor = 0.3
+    df['final_alpha_smoothed'] = df['final_alpha'].ewm(alpha=smoothing_factor).mean()
+    
+    return df['final_alpha_smoothed']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor = heuristics_v2(df)
+```

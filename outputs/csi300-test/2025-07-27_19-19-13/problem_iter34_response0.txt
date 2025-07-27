@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Logarithmic return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Volume ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Volume-weighted log momentum
+    df['volume_weighted_log_momentum'] = df['log_return'] * df['volume_ratio']
+    
+    # Intraday return
+    df['intraday_return'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Intraday volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Combined intraday factor
+    df['combined_intraday_factor'] = df['intraday_volatility'] + (df['intraday_return'] * df['volume_ratio'])
+    
+    # Amount-adjusted momentum
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['amount_adjusted_momentum'] = df['volume_weighted_log_momentum'] * df['amount_ratio']
+    
+    # Aggregated movements (N Days, e.g., 30 days)
+    df['aggregated_movements'] = df['combined_intraday_factor'].rolling(window=30).sum()
+    
+    # Simple Moving Average (SMA) of close over N Days
+    df['SMA_30_close'] = df['close'].rolling(window=30).mean()
+    
+    # Movement ratio
+    df['movement_ratio'] = df['aggregated_movements'] / df['SMA_30_close']
+    
+    # Open-to-close return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Adjusted factor
+    conditions = [
+        (df['open_to_close_return'] > 0),
+        (df['open_to_close_return'] < 0)
+    ]
+    choices = [
+        df['movement_ratio'] * (1 + 0.7 * df['open_to_close_return']),
+        df['movement_ratio'] * (1 - 0.7 * abs(df['open_to_close_return']))
+    ]
+    df['adjusted_factor'] = np.select(conditions, choices, default=df['movement_ratio'])
+    
+    return df['adjusted_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

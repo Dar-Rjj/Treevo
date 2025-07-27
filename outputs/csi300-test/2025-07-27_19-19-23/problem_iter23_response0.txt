@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, spike_threshold=2.0, momentum_smooth_span=10, vroc_period=10):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']).diff()
+
+    # Identify Volume and Price Spikes
+    df['volume_zscore'] = (df['volume'] - df['volume'].rolling(window=30).mean()) / df['volume'].rolling(window=30).std()
+    df['price_range'] = df['high'] - df['low']
+    df['price_zscore'] = (df['price_range'] - df['price_range'].rolling(window=30).mean()) / df['price_range'].rolling(window=30).std()
+    df['spike_indicator'] = ((df['volume_zscore'].abs() > spike_threshold) | (df['price_zscore'].abs() > spike_threshold)).astype(int)
+
+    # Adjust Momentum for Volume and Price Spikes
+    df['adjusted_log_return'] = df['log_return'] * (1 + 0.5 * df['spike_indicator'])
+
+    # Smooth the Adjusted Returns
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=momentum_smooth_span, min_periods=momentum_smooth_span).mean()
+
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_returns'] + 1).cumprod().fillna(1)
+
+    # Calculate Daily Price Movement
+    df['daily_price_movement'] = df['close'] - df['open']
+
+    # Calculate Volume Adjusted Price Movement
+    df['volume_adjusted_price_movement'] = df['daily_price_movement'] * df['volume']
+
+    # Calculate Rolling Momentum Indicator
+    df['rolling_momentum'] = df['volume_adjusted_price_movement'].rolling(window=30).sum()
+    df['rolling_momentum'] = df['rolling_momentum'].ewm(span=5, min_periods=5).mean() - df['rolling_momentum'].ewm(span=10, min_periods=10).mean()
+
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+
+    # Combine High-Low Difference with Volume and Price Spikes
+    df['combined_high_low'] = df['high_low_diff'] * df['spike_indicator']
+    df['summed_combined_high_low'] = df['combined_high_low'].rolling(window=10).sum()
+
+    # Combine High-Low and Price Momentum
+    df['combined_momentum'] = df['cumulative_momentum'] + df['summed_combined_high_low']
+
+    # Volume Trend (VROC)
+    df['vroc'] = df['volume'].pct_change(periods=vroc_period)
+
+    # Combined Factor
+    df['final_factor'] = df['combined_momentum'] * df['vroc']
+
+    return df['final_factor']
+```

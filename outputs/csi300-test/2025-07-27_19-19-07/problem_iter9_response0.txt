@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = df['close'].pct_change()
+    
+    # Multiply High-Low Spread by Close-to-Close Return
+    high_low_momentum = high_low_spread * close_to_close_return
+    
+    # Calculate Volume Change
+    volume_change = df['volume'].pct_change()
+    
+    # Adjust for Volume Trend
+    adjusted_high_low_momentum = high_low_momentum.where(volume_change > 0, high_low_momentum * 0.5)
+    
+    # Calculate Amount Change
+    amount_change = df['amount'].pct_change()
+    
+    # Adjust based on Volume and Amount Changes
+    def adjust_factor(row):
+        if row['volume_change'] > 0 and row['amount_change'] > 0:
+            return row['adjusted_high_low_momentum'] * 1.5
+        elif (row['volume_change'] > 0 and row['amount_change'] < 0) or (row['volume_change'] < 0 and row['amount_change'] > 0):
+            return row['adjusted_high_low_momentum'] * 1.2
+        else:
+            return row['adjusted_high_low_momentum'] * 0.8
+    
+    df['volume_change'] = volume_change
+    df['amount_change'] = amount_change
+    df['adjusted_high_low_momentum'] = adjusted_high_low_momentum
+    df['factor'] = df.apply(adjust_factor, axis=1)
+    
+    # Introduce a smoothing factor using a moving average of past 5 days' Volume and Amount Changes
+    df['smoothing_factor'] = (df['volume_change'] + df['amount_change']).rolling(window=5).mean()
+    df['final_factor'] = df['factor'] * df['smoothing_factor']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

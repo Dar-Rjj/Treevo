@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Short-Term Weighted Moving Average of Close Prices
+    def weighted_moving_average(series, window):
+        weights = np.arange(1, window + 1)
+        wma = series.rolling(window=window).apply(lambda x: np.sum(x * weights) / np.sum(weights), raw=True)
+        return wma
+    
+    # Compute Long-Term Simple Moving Average of Close Prices
+    def simple_moving_average(series, window):
+        sma = series.rolling(window=window).mean()
+        return sma
+    
+    # Calculate the Difference between Short-Term WMA and Long-Term SMA
+    N = 5
+    M = 20
+    short_wma = weighted_moving_average(df['close'], N)
+    long_sma = simple_moving_average(df['close'], M)
+    adjusted_price_momentum = short_wma - long_sma
+    
+    # Calculate Volume Rate of Change (VROC) Indicator
+    VROC_period = 14
+    vroc = df['volume'].pct_change(periods=VROC_period)
+    
+    # Calculate the Exponential Moving Average (EMA) of VROC
+    alpha = 0.1
+    ema_vroc = vroc.ewm(alpha=alpha, adjust=False).mean()
+    
+    # Combine Adjusted Price Momentum and VROC Indicators
+    combined_indicator = adjusted_price_momentum * ema_vroc
+    
+    # Assign Dynamic Weights to Each Indicator Based on Volatility
+    volatility = df['close'].pct_change().rolling(window=10).std()
+    weight_momentum = 1 / (1 + np.exp(-volatility))
+    weighted_combined_indicator = combined_indicator * weight_momentum
+    
+    # Filter and Rank the Combined Indicator
+    market_return = df['close'].pct_change().mean()  # Example: use the average daily return as a proxy for market conditions
+    threshold = market_return * 2  # Example: set a dynamic threshold based on market return
+    significant_values = weighted_combined_indicator[weighted_combined_indicator > threshold]
+    
+    # Calculate the Correlation between Stock Returns and Market Returns
+    stock_returns = df['close'].pct_change()
+    market_returns = df['market_index'].pct_change()  # Assume 'market_index' is available in the DataFrame
+    correlation = stock_returns.rolling(window=30).corr(market_returns)
+    
+    # Rank the Selected Values
+    ranked_values = significant_values * correlation
+    ranked_values = ranked_values.rank(ascending=False, method='first')
+    
+    return ranked_values
+```

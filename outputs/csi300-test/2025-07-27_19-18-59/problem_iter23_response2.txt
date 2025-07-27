@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Determine volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over the past 5 days
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust integrated intraday and closing price momentum by volume trends
+    df['adjusted_momentum'] = df['weighted_returns'] * (df['combined_intraday'] * df['volume_trend'] ** 0.75)
+    
+    # Calculate True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], abs(x[0] - df['close'].shift(1)), abs(x[1] - df['close'].shift(1))), axis=1)
+    
+    # Volume-weighted True Range
+    df['volume_weighted_true_range'] = df['true_range'] * (df['volume'] / df['volume'].shift(1)) ** 0.5
+    
+    # Measure and integrate high-low range volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=5).std()
+    df['inverted_volatility'] = 1 / df['range_volatility']
+    
+    # Incorporate Directional Bias (ADX)
+    df['plus_dm'] = df['high'].diff().where(df['high'].diff() > 0, 0)
+    df['minus_dm'] = df['low'].diff().abs().where(df['low'].diff() < 0, 0)
+    df['tr'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], abs(x[0] - df['close'].shift(1)), abs(x[1] - df['close'].shift(1))), axis=1)
+    df['plus_di'] = 100 * (df['plus_dm'].rolling(window=5).sum() / df['tr'].rolling(window=5).sum())
+    df['minus_di'] = 100 * (df['minus_dm'].rolling(window=5).sum() / df['tr'].rolling(window=5).sum())
+    df['adx'] = 100 * (abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])).rolling(window=5).mean()
+    
+    # Adjust stability by directional bias
+    df['adjusted_stability'] = df['inverted_volatility'] * df['adx']
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_weighted_true_range']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_factors'] = df['combined_factors'].ewm(span=3).mean()
+    
+    # Incorporate weighted sum with predefined weights
+    final_alpha_factor = 0.6 * df['smoothed_combined_factors'] + 0.4 * df['adjusted_stability']
+    
+    return final_alpha_factor
+```

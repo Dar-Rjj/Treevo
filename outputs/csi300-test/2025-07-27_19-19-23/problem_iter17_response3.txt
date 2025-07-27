@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    df['avg_vol_20'] = df['volume'].rolling(window=20).mean()
+    df['relative_vol'] = df['volume'] / df['avg_vol_20']
+    spike_threshold = 2.0
+    df['spike'] = (df['relative_vol'] > spike_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    weight = 1.5
+    df['adjusted_log_return'] = df['log_return'] * (1 + df['spike'] * (weight - 1))
+    
+    # Smooth the Adjusted Returns with Exponential Moving Average
+    span = 10
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=span).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_returns'] + 1).cumprod().fillna(1)
+    
+    # Calculate Daily Price Movement
+    df['price_movement'] = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    df['volume_adjusted_movement'] = df['price_movement'] * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    rolling_window = 30
+    df['aggregated_volume_movement'] = df['volume_adjusted_movement'].rolling(window=rolling_window).sum()
+    df['rolling_momentum_indicator'] = df['aggregated_volume_movement'].ewm(span=span).mean()
+    df['momentum_diff'] = df['rolling_momentum_indicator'].ewm(span=5).mean() - df['rolling_momentum_indicator'].ewm(span=10).mean()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    lookback_period = 10
+    df['weighted_high_low_diff'] = df['high_low_diff'] * df['spike']
+    df['sum_weighted_high_low_diff'] = df['weighted_high_low_diff'].rolling(window=lookback_period).sum()
+    
+    # Price Momentum: Weighted Average High-Low Difference
+    weights = np.arange(1, lookback_period + 1) / sum(range(1, lookback_period + 1))
+    df['weighted_avg_high_low_diff'] = df['high_low_diff'].rolling(window=lookback_period).apply(lambda x: np.sum(x * weights), raw=True)
+    
+    # Volume Trend: Volume Rate of Change (VROC)
+    m = 10
+    df['vroc'] = df['volume'].pct_change(periods=m).fillna(0)
+    
+    # Combined Factor
+    df['combined_factor'] = (df['sum_weighted_high_low_diff'] + df['weighted_avg_high_low_diff']) * df['vroc']
+    
+    return df['combined_factor']
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['TR'] = df[['High', 'Low', 'Close']].join(df['Close'].shift(1)).apply(
+        lambda x: max(x['High'] - x['Low'], abs(x['High'] - x['Close'][1]), abs(x['Low'] - x['Close'][1])), axis=1)
+    
+    # Compute Average True Range (ATR) over 14 days
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Intraday and Open-to-Close Returns
+    df['Intraday_Return'] = df['High'] - df['Low']
+    df['Open_to_Close_Return'] = df['Close'] - df['Open']
+    df['Integrated_Return'] = df['Intraday_Return'] + df['Open_to_Close_Return']
+    
+    # Adjust with Volume Difference and Normalization
+    df['Volume_Difference'] = df['Volume'] - df['Volume'].shift(1)
+    df['Average_Volume_20'] = df['Volume'].rolling(window=20).mean()
+    df['Normalized_Volume'] = df['Volume_Difference'] / df['Average_Volume_20']
+    df['Adjusted_ATR'] = (df['ATR'] * df['Integrated_Return']) + df['Normalized_Volume']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Intraday_High_Low_Spread'] = df['High'] - df['Low']
+    df['Momentum_Product'] = df['Intraday_High_Low_Spread'] * df['Open_to_Close_Return']
+    df['Smoothed_Momentum'] = df['Momentum_Product'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Price Momentum
+    df['SMA_10'] = df['Close'].rolling(window=10).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    df['SMA_Difference'] = df['SMA_10'] - df['SMA_50']
+    
+    # Combine ATR, Integrated Returns, and Momentum
+    df['Combined_Factor'] = df['Adjusted_ATR'] + (df['SMA_Difference'] * df['Adjusted_ATR']) + df['Smoothed_Momentum']
+    
+    # Adjust for Volume and Amount Confirmation
+    volume_condition = (df['Volume'] > df['Volume'].shift(1)) & (df['Amount'] > df['Amount'].shift(1))
+    df['Volume_Adjusted_Factor'] = df['Combined_Factor'] / np.sqrt(df['Volume'])
+    df['Max_Volume_10'] = df['Volume'].rolling(window=10).max()
+    df['Final_Factor'] = np.where(volume_condition, df['Volume_Adjusted_Factor'] * (df['Volume'] / df['Max_Volume_10']), df['Combined_Factor'])
+    
+    # Incorporate Open-Price Trend
+    df['Open_Price_Trend'] = df['Open'] - df['Open'].rolling(window=10).mean()
+    df['Enhanced_Final_Alpha_Factor'] = df['Final_Factor'] + df['Open_Price_Trend']
+    
+    return df['Enhanced_Final_Alpha_Factor']
+```

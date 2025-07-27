@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-day percentage change in closing price
+    df['5d_close_pct_chg'] = df['close'].pct_change(5)
+    
+    # Determine if today's volume is higher than the average of the past 20 days
+    df['volume_20d_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_above_avg'] = (df['volume'] > df['volume_20d_avg']).astype(int)
+    df['volume_pct_chg'] = (df['volume'] - df['volume_20d_avg']) / df['volume_20d_avg']
+    
+    # Create a factor based on the difference between today’s high and today’s low
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_10d_range'] = df['daily_range'].rolling(window=10).mean()
+    df['range_ratio'] = df['daily_range'] / df['avg_10d_range']
+    
+    # Identify if there is a significant gap (up or down) from previous day's close to today's open
+    df['price_gap'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['significant_gap'] = (df['price_gap'].abs() > 0.02).astype(int)
+    df['gap_signal'] = df['price_gap'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Create a factor based on the difference between today’s open and today’s close
+    df['open_close_spread'] = (df['close'] - df['open']).abs()
+    df['avg_10d_open_close_spread'] = df['open_close_spread'].rolling(window=10).mean()
+    df['spread_ratio'] = df['open_close_spread'] / df['avg_10d_open_close_spread']
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['5d_close_pct_chg'] + 
+        df['volume_pct_chg'] * df['volume_above_avg'] +
+        df['range_ratio'] +
+        df['price_gap'] * df['significant_gap'] +
+        df['spread_ratio']
+    )
+    
+    return df['alpha_factor']
+```

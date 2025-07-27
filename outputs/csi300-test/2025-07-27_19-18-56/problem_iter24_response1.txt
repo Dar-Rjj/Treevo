@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, ema_period=5, short_term_ma_period=5, long_term_ma_period=20):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Sum over n periods
+    df['price_momentum'] = df['close_return'].rolling(window=n).sum()
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_increase'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Calculate Volume-Weighted High-Low Range
+    df['vol_weighted_high_low'] = 0
+    for i in range(1, 11):
+        df['vol_weighted_high_low'] += (df['high'] - df['low']).shift(i) * df['volume'].shift(i)
+    df['vol_weighted_high_low'] /= df['volume'].rolling(window=10).sum()
+    
+    # Smoothed High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['ema_high_low_spread'] = df['high_low_spread'].ewm(span=ema_period, adjust=False).mean()
+    df['smoothed_high_low_spread'] = df['high_low_spread'] - df['ema_high_low_spread']
+    
+    # Integrate with Convergence-Divergence of High-Low Prices
+    df['avg_high_low'] = (df['high'] + df['low']) / 2
+    df['short_term_ma'] = df['avg_high_low'].rolling(window=short_term_ma_period).mean()
+    df['long_term_ma'] = df['avg_high_low'].rolling(window=long_term_ma_period).mean()
+    df['ma_convergence_divergence'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Filter by Volume Change
+    df['filtered_ma_convergence_divergence'] = df['ma_convergence_divergence'] * df['volume_increase']
+    
+    # Trend Confirmation
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['trend_confirmation'] = (df['sma_5'] > df['sma_20']).astype(int)
+    
+    # Include Open-Price Volatility
+    df['open_high_diff'] = df['high'] - df['open']
+    df['open_low_diff'] = df['open'] - df['low']
+    df['open_price_volatility'] = (df['open_high_diff'] + df['open_low_diff']).rolling(window=n).sum()
+    
+    # Final Alpha Factor Construction
+    df['adjusted_vol_weighted_high_low'] = df['vol_weighted_high_low'] * df['volume_increase']
+    df['adjusted_smoothed_high_low_spread'] = df['smoothed_high_low_spread'] * df['volume_increase']
+    df['adjusted_price_momentum'] = df['price_momentum'] * df['volume_increase']
+    df['adjusted_open_price_volatility'] = df['open_price_volatility'] * df['volume_increase']
+    
+    df['alpha_factor'] = (
+        df['adjusted_vol_weighted_high_low'] +
+        df['adjusted_smoothed_high_low_spread'] +
+        df['adjusted_price_momentum'] +
+        df['adjusted_open_price_volatility'] +
+        df['filtered_ma_convergence_divergence']
+    ) * df['trend_confirmation']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': np.random.rand(100) * 100,
+#     'high': np.random.rand(100) * 100,
+#     'low': np.random.rand(100) * 100,
+#     'close': np.random.rand(100) * 100,
+#     'amount': np.random.rand(100) * 100,
+#     'volume': np.random.randint(100, 1000, 100)
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+```

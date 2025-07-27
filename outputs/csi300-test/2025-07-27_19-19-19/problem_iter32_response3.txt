@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+
+    # Compute Daily Price Change
+    daily_price_change = df['close'].diff()
+
+    # Aggregate Price Change Over a Period (e.g., last 30 days)
+    N = 30
+    aggregated_price_change = daily_price_change.rolling(window=N).mean()
+
+    # Calculate Volume Adjusted Close-Open Difference
+    volume_adjusted_close_open_diff = (df['close'] - df['open']) / df['volume']
+
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference over the last 5 days
+    combined_hl_vol_adj_diff = (high_low_range * volume_adjusted_close_open_diff).rolling(window=5).sum()
+
+    # Integrate Indicators
+    # Short-Term Price Direction (SPDI)
+    spdi = (df['close'] > df['close'].rolling(window=5).mean()).astype(int) * 2 - 1
+
+    # Medium-Term Price Range (MPR)
+    rolling_high = df['close'].rolling(window=20).max()
+    rolling_low = df['close'].rolling(window=20).min()
+    mpr = ((df['close'] - rolling_low) / (rolling_high - rolling_low) > 0.5).astype(int) * 2 - 1
+
+    # Volume Growth (VGF)
+    vgf = (df['volume'] > df['volume'].rolling(window=3).mean()).astype(int) * 2 - 1
+
+    # Generate IMVTI
+    imvti = (spdi + mpr + vgf) / 3
+
+    # Calculate Volume Weighted Average
+    volume_price_product = df['volume'] * df['close']
+    volume_weighted_close = volume_price_product.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_hl_vol_adj_diff * 1.5
+    volume_weighted_score = volume_weighted_close * 0.7
+    momentum_score = aggregated_price_change * 1.9
+
+    # Combine Price and Volume Factors
+    combined_momentum_volume = momentum_score + high_low_momentum_score
+
+    # Generate Final Alpha Factor
+    final_alpha_factor = high_low_momentum_score + combined_momentum_volume + imvti
+
+    # Apply Smoothing with Exponential Moving Average
+    final_alpha_factor_smoothed = final_alpha_factor.ewm(alpha=0.4, adjust=False).mean()
+
+    # Incorporate Long-Term Trend
+    long_term_trend = df['close'].rolling(window=100).mean()
+    trend_adjustment = 1.15 if df['close'] > long_term_trend else 0.85
+    final_alpha_factor_adjusted = final_alpha_factor_smoothed * trend_adjustment
+
+    return final_alpha_factor_adjusted
+```

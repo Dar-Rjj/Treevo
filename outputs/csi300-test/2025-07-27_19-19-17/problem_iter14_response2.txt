@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range (TR) for each day
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['Prev_Close']).abs()
+    df['TR3'] = (df['low'] - df['Prev_Close']).abs()
+    df['TR'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+
+    # Calculate Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+
+    # Calculate Close-Open Return
+    df['Close_Open_Return'] = df['close'] - df['open']
+
+    # Integrated Return
+    df['Integrated_Return'] = df['Intraday_Spread'] + df['Close_Open_Return']
+
+    # Weighted Sum of Intraday High-Low Spread and Close-Open Return
+    weight_intrady = 0.6
+    weight_close_open = 0.4
+    df['Weighted_Sum'] = weight_intrady * df['Intraday_Spread'] + weight_close_open * df['Close_Open_Return']
+
+    # Adjust for Volume and Amount Confirmation
+    df['Volume_Confirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['Amount_Confirmation'] = (df['amount'] > df['amount'].shift(1)).astype(int)
+    df['Adjusted_Weighted_Sum'] = df['Weighted_Sum'] * (df['volume'] / df['volume'].shift(1)) * (df['amount'] / df['amount'].shift(1))
+
+    # Add a smoothing factor to the final adjusted return
+    df['Prev_Adjusted_Return'] = df['Adjusted_Weighted_Sum'].shift(1)
+    df['Smoothing_Factor'] = 0.1 * (df['Prev_Adjusted_Return'] - df['Adjusted_Weighted_Sum'])
+    df['Smoothed_Adjusted_Weighted_Sum'] = df['Adjusted_Weighted_Sum'] + df['Smoothing_Factor']
+
+    # Price Momentum
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Momentum'] = df['SMA_10'] - df['SMA_50']
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Weighted_Sum'] + df['Smoothed_Adjusted_Weighted_Sum']) * (df['Momentum'] * df['ATR'])
+
+    # Drop intermediate columns
+    df.drop(['Prev_Close', 'TR1', 'TR2', 'TR3', 'TR', 'Intraday_Spread', 'Close_Open_Return', 
+             'Integrated_Return', 'Weighted_Sum', 'Volume_Confirmation', 'Amount_Confirmation', 
+             'Adjusted_Weighted_Sum', 'Prev_Adjusted_Return', 'Smoothing_Factor', 'Smoothed_Adjusted_Weighted_Sum', 
+             'SMA_10', 'SMA_50', 'Momentum'], axis=1, inplace=True)
+
+    return df['Alpha_Factor']
+```

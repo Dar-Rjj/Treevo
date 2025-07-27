@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Adjust by Inverse of Volume-to-Range Ratio
+    df['vol_to_range_ratio'] = df['volume'] / df['daily_range']
+    df['adjusted_daily_range'] = df['daily_range'] * (1 / df['vol_to_range_ratio'])
+    
+    # Incorporate Price Momentum
+    df['price_change'] = df['close'].diff().fillna(0)
+    df['sum_abs_price_changes'] = df['price_change'].abs().rolling(window=5).sum()
+    df['price_momentum'] = df['price_change'] / df['sum_abs_price_changes']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Previous Day Return
+    df['prev_day_return'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Volume Spike Detection
+    df['volume_change'] = df['volume'].diff().fillna(0)
+    df['volume_spike'] = (df['volume_change'] > 0).astype(int)
+    
+    # Compute Volume Adjusted Daily Range
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['volume_adjusted_daily_range'] = df['daily_range'] * df['avg_volume_5d']
+    
+    # Weighted Intraday Return
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_spike']
+    
+    # Apply SMA Trend Adjustment
+    df['sma_10d'] = df['close'].rolling(window=10).mean()
+    df['sma_trend_factor'] = (df['close'] > df['sma_10d']).astype(float) * 1.2 + (df['close'] <= df['sma_10d']).astype(float) * 0.8
+    
+    # Compute Price Difference Momentum
+    df['price_diff_momentum'] = df['close'].diff().fillna(0).rolling(window=5).sum()
+    
+    # Combine Factors
+    df['combined_factors'] = (
+        df['daily_range'] + 
+        df['volume_adjusted_daily_range'] + 
+        df['weighted_intraday_return'] + 
+        df['price_diff_momentum'] + 
+        df['prev_day_return'] + 
+        df['adjusted_daily_range']
+    )
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factors'] * df['sma_trend_factor']
+    
+    return df['alpha_factor']
+```

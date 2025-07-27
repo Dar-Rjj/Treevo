@@ -1,0 +1,32 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum over 30 days for a more extended trend perspective
+    df['momentum_30d'] = df['close'].pct_change(periods=30)
+    
+    # Average true range over 50 days for a longer-term volatility measure
+    df['h-l'] = df['high'] - df['low']
+    df['h-cp'] = abs(df['high'] - df['close'].shift(1))
+    df['l-cp'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['h-l', 'h-cp', 'l-cp']].max(axis=1)
+    df['atr50'] = df['tr'].rolling(window=50).mean()
+
+    # Volume trend over 90 days to capture a longer-term volume pattern
+    df['volume_ratio_90d'] = df['volume'] / df['volume'].rolling(window=90).mean()
+
+    # Calculate the weighted average price by considering both amount and volume
+    df['weighted_price'] = (df['amount'] * df['close']) / (df['volume'] + 1e-7)
+    
+    # Moving average of the weighted price over a 100-day window for enhanced stability
+    df['rolling_mean_weighted_price_100d'] = df['weighted_price'].rolling(window=100).mean()
+    
+    # Price relative to the 100-day moving average
+    df['price_relative_100d'] = df['close'] / df['rolling_mean_weighted_price_100d']
+    
+    # Alpha factor: Combine momentum, average true range (as volatility), volume trend, weighted price, and price relative
+    alpha_factor = (df['momentum_30d'] + 
+                    (df['atr50'] * df['volume_ratio_90d']) + 
+                    (df['weighted_price'] / df['rolling_mean_weighted_price_100d']) + 
+                    df['price_relative_100d']) / 4
+
+    return alpha_factor.dropna()
+```

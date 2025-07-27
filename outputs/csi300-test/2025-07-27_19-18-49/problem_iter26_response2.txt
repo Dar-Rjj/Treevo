@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_close'] = np.log(df['close'])
+    df['daily_log_return'] = df['log_close'] - df['log_close'].shift(1)
+    
+    # Adjust Log Return by Open Price
+    df['log_open'] = np.log(df['open'])
+    df['adjusted_log_return'] = (df['log_close'] - df['log_open']) + df['log_close'].shift(1) - df['log_open'].shift(1)
+    
+    # Calculate Momentum Components
+    df['close_momentum'] = df['close'] / df['close'].shift(5)
+    df['open_momentum'] = df['open'] / df['open'].shift(5)
+    df['volume_momentum'] = df['volume'] / df['volume'].shift(5)
+    df['high_momentum'] = df['high'] / df['high'].shift(5)
+    df['low_momentum'] = df['low'] / df['low'].shift(5)
+    
+    # Weight by Recent Trading Activity
+    m = 5
+    L = 30
+    df['avg_volume_5d'] = df['volume'].rolling(window=m).mean()
+    df['avg_volume_30d'] = df['volume'].rolling(window=L).mean()
+    df['weight'] = df['avg_volume_5d'] / df['avg_volume_30d']
+    
+    # Incorporate Price Range Momentum
+    df['price_range'] = df['high'] - df['low']
+    df['price_range_momentum'] = df['price_range'] / df['price_range'].shift(5)
+    
+    # Integrate Price and Volume Momentum
+    df['integrated_momentum'] = ((df['close'] - df['open']) / df['open']) + ((df['close'] - df['close'].shift(1)) / df['close'].shift(1))
+    df['integrated_momentum_5d'] = df['integrated_momentum'].rolling(window=5).sum() / 5
+    
+    # Calculate 5-Day Price Oscillation
+    df['price_oscillation'] = (df['high'] - df['low']).rolling(window=5).sum() / 5
+    
+    # Calculate 5-Day Volume Trend
+    df['volume_trend'] = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    df['smoothed_volume_trend'] = df['volume_trend'].rolling(window=5).mean()
+    
+    # Detect Volume Shocks
+    df['return'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_shock'] = (df['volume_change'] > 2 * df['volume_change'].rolling(window=30).mean()).astype(int)
+    
+    # Combine Indicators
+    df['combined_momentum'] = (
+        df['close_momentum'] * df['weight'] +
+        df['open_momentum'] * df['weight'] +
+        df['high_momentum'] * df['weight'] +
+        df['low_momentum'] * df['weight'] +
+        df['price_range_momentum'] * df['weight'] +
+        df['price_oscillation'] * df['weight'] +
+        df['smoothed_volume_trend'] * df['weight']
+    ) * df['volume_shock']
+    
+    # Final Alpha Factor
+    N = 20
+    df['volume_weighted_adjusted_return'] = df['adjusted_log_return'] * df['volume']
+    df['cumulative_sum'] = df['volume_weighted_adjusted_return'].rolling(window=N).sum()
+    
+    return df['cumulative_sum'].dropna()
+```

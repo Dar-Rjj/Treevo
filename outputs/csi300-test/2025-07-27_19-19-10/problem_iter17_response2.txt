@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['DailyRange'] = df['high'] - df['low']
+
+    # Calculate Volume Adjusted Daily Range
+    df['AvgVolume5D'] = df['volume'].rolling(window=5).mean()
+    df['VolumeAdjustedDailyRange'] = df['DailyRange'] * df['AvgVolume5D']
+
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Previous Day Return
+    df['PrevDayReturn'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Detect Volume Spike
+    df['VolumeSpike'] = (df['volume'] - df['volume'].shift(1)).apply(lambda x: 1 if x > 0 else 0)
+
+    # Adjust Intraday High-Low Range by Inverse of Volume-to-Range Ratio
+    df['VolToRangeRatio'] = df['volume'] / df['DailyRange']
+    df['InverseVolToRangeRatio'] = 1 / df['VolToRangeRatio']
+    df['AdjustedIntradayHighLowRange'] = df['DailyRange'] * df['InverseVolToRangeRatio']
+
+    # Incorporate Price Momentum
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    df['AbsPriceChangeSum5D'] = df['close'].diff().abs().rolling(window=5).sum()
+    df['MomentumFactor'] = df['PriceChange'] / df['AbsPriceChangeSum5D']
+
+    # Weighted Intraday Return
+    df['WeightedIntradayReturn'] = df['IntradayReturn'] * df['VolumeSpike']
+
+    # Compute Price Difference Momentum
+    df['PriceDiffMomentum'] = df['close'] - df['close'].shift(1)
+    df['PriceDiffMomentum5D'] = df['PriceDiffMomentum'].rolling(window=5).sum()
+
+    # Combine Factors
+    df['CombinedFactors'] = (
+        df['DailyRange'] +
+        df['VolumeAdjustedDailyRange'] +
+        df['WeightedIntradayReturn'] +
+        df['PriceDiffMomentum5D'] +
+        df['PrevDayReturn'] +
+        df['AdjustedIntradayHighLowRange'] +
+        df['MomentumFactor']
+    )
+
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = df['CombinedFactors'] + df['VolumeAdjustedDailyRange']
+
+    return df['FinalAlphaFactor']
+```

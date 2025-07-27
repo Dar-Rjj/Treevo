@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced High-Low Spread
+    high_low_spread = df['high'] - df['low']
+
+    # Smoothing High-Low Spread with SMA and EMA
+    sma_period = 10
+    ema_period = 5
+    high_low_sma = high_low_spread.rolling(window=sma_period).mean()
+    high_low_ema = high_low_spread.ewm(span=ema_period, adjust=False).mean()
+    smoothed_high_low_spread = high_low_spread - high_low_ema
+
+    # Volume-Adjusted High-Low Range
+    volume_adjusted_range = (df['high'] - df['low']) * df['volume']
+    volume_adjusted_range = volume_adjusted_range.rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+
+    # Adjust for Market Sentiment
+    close_to_open_return = df['close'] - df['open']
+    market_sentiment_score = np.where(close_to_open_return > 0, 1, -1)
+    volume_adjusted_range = volume_adjusted_range * market_sentiment_score
+
+    # Calculate Price Momentum
+    price_momentum = df['close'].diff(periods=10).rolling(window=10).sum()
+
+    # Incorporate Convergence-Divergence of High-Low Prices
+    short_term_ma_high = df['high'].rolling(window=5).mean()
+    short_term_ma_low = df['low'].rolling(window=5).mean()
+    long_term_ma_high = df['high'].rolling(window=20).mean()
+    long_term_ma_low = df['low'].rolling(window=20).mean()
+    convergence_divergence = (short_term_ma_high - long_term_ma_high) + (short_term_ma_low - long_term_ma_low)
+
+    # Combine Momentum and Volume Indicators
+    volume_increase_indicator = np.where(df['volume'] > df['volume'].shift(1), 1, 0)
+    combined_momentum = (price_momentum + convergence_divergence) * volume_increase_indicator
+
+    # Trend Confirmation
+    trend_confirmation = np.where(df['close'].ewm(span=5, adjust=False).mean() > df['close'].ewm(span=20, adjust=False).mean(), 1, 0)
+    integrated_momentum = combined_momentum * trend_confirmation
+
+    # Filter by Volume Change
+    integrated_momentum = np.where(volume_increase_indicator == 1, integrated_momentum, 0)
+
+    # Incorporate Volume-Weighted Return
+    volume_weighted_return = ((df['close'] - df['open']) * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+
+    # Final Alpha Factor
+    final_alpha_factor = integrated_momentum + volume_weighted_return + volume_adjusted_range + smoothed_high_low_spread
+    return final_alpha_factor
+```

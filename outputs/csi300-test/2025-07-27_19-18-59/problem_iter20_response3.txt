@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Compute intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['intraday_momentum'] = (df['high'] - df['low']) * df['intraday_return']
+    
+    # Determine volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust enhanced intraday and closing price momentum
+    df['adjusted_momentum'] = df['weighted_returns'] + df['intraday_momentum']
+    df['adjusted_momentum'] = df['adjusted_momentum'] * (df['volume_trend'] ** 0.75) * (df['accumulated_volume'] / 5)
+    
+    # Calculate volume-adjusted true range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x), axis=1) - df['close'].shift(1)
+    df['true_range'] = df['true_range'].fillna(0)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # Measure and integrate high-low range volatility
+    M = 20
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=M).std()
+    df['combined_momentum'] = df['adjusted_momentum'] + df['volume_adjusted_true_range']
+    
+    # Apply exponential moving average (EMA) with a 5-day span to the combined momentum
+    df['ema_combined_momentum'] = df['combined_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Invert rolling standard deviation to reflect stability
+    df['stability'] = 1 / (df['range_volatility'] + 1e-6)
+    
+    # Calculate volume-adjusted momentum
+    N = 5
+    df['sma_close'] = df['close'].rolling(window=N).mean()
+    df['volume_adjusted_momentum'] = (df['close'] - df['sma_close']) * (df['volume'].rolling(window=N).mean())
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_adjusted_momentum']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_momentum'] = df['combined_factors'].rolling(window=3).mean()
+    
+    # Incorporate weighted sum with predefined weights
+    weight_momentum = 0.7
+    weight_stability = 0.3
+    df['final_alpha_factor'] = weight_momentum * df['smoothed_combined_momentum'] + weight_stability * df['stability']
+    
+    return df['final_alpha_factor'].dropna()
+```

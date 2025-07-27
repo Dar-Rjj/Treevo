@@ -1,0 +1,34 @@
+def heuristics_v2(df):
+    # Calculate RSI
+    delta = df['close'].diff(1)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate MFI
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_flow_ratio = positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Calculate ROC
+    roc = df['close'].pct_change(periods=14) * 100
+    
+    # Calculate dynamic weights based on recent performance
+    rsi_performance = rsi.rolling(window=7).mean().shift(1)
+    mfi_performance = mfi.rolling(window=7).mean().shift(1)
+    roc_performance = roc.rolling(window=7).mean().shift(1)
+    total_performance = rsi_performance + mfi_performance + roc_performance
+    rsi_weight = rsi_performance / total_performance
+    mfi_weight = mfi_performance / total_performance
+    roc_weight = roc_performance / total_performance
+    
+    # Combine RSI, MFI, and ROC into a single heuristic matrix using dynamic weights
+    heuristics_matrix = rsi_weight * rsi + mfi_weight * mfi + roc_weight * roc
+    
+    return heuristics_matrix

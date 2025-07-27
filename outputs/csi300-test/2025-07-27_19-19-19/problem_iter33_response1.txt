@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (last 30 days)
+    N = 30
+    df['Accumulated_Price_Change'] = df['Daily_Price_Change'].rolling(window=N).sum()
+    df['Average_Price_Change'] = df['Accumulated_Price_Change'] / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Avg_Volume_30'] = df['volume'].rolling(window=30).mean()
+    df['Volume_Adjusted_Close_Open'] = df['Close_Open_Diff'] * (df['volume'] / df['Avg_Volume_30'])
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference (last 15 days)
+    df['Combined_High_Low_Vol_Adj'] = (df['High_Low_Range'] * df['Volume_Adjusted_Close_Open']).rolling(window=15).sum()
+    
+    # Calculate Volume Weighted Average
+    df['Volume_Price_Product'] = df['volume'] * df['close']
+    df['Sum_Volume_30'] = df['volume'].rolling(window=30).sum()
+    df['Volume_Weighted_Close'] = df['Volume_Price_Product'] / df['Sum_Volume_30']
+    
+    # Generate Intermediate Alpha Scores
+    scaling_high_low_momentum = 2.0
+    scaling_volume_weighted = 0.8
+    scaling_momentum = 2.1
+    df['High_Low_Momentum_Score'] = df['Combined_High_Low_Vol_Adj'] * scaling_high_low_momentum
+    df['Volume_Weighted_Score'] = df['Volume_Weighted_Close'] * scaling_volume_weighted
+    df['Momentum_Score'] = df['Average_Price_Change'] * scaling_momentum
+    
+    # Integrate Indicators
+    df['7_day_MA'] = df['close'].rolling(window=7).mean()
+    df['SPDI'] = np.where(df['close'] > df['7_day_MA'], 1, -1)
+    
+    df['30_day_Moving_High'] = df['high'].rolling(window=30).max()
+    df['30_day_Moving_Low'] = df['low'].rolling(window=30).min()
+    df['MPR'] = np.where((df['close'] - df['30_day_Moving_Low']) > (df['30_day_Moving_High'] - df['close']), 1, -1)
+    
+    df['7_day_Volume_MA'] = df['volume'].rolling(window=7).mean()
+    df['VGF'] = np.where(df['volume'] > df['7_day_Volume_MA'], 1, -1)
+    
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+    
+    # Combine Price and Volume Factors
+    df['Combined_Momentum_Volume_Score'] = df['Momentum_Score'] + df['Volume_Weighted_Score']
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['High_Low_Momentum_Score'] + df['Combined_Momentum_Volume_Score'] + df['IMVTI']
+    
+    # Apply Smoothing
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(alpha=0.6).mean()
+    
+    # Incorporate Long-Term Trend
+    df['200_day_MA'] = df['close'].rolling(window=200).mean()
+    df['Final_Alpha_Factor'] = np.where(df['close'] > df['200_day_MA'], df['Final_Alpha_Factor'] * 1.2, df['Final_Alpha_Factor'] * 0.8)
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

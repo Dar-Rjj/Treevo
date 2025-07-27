@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price and Volume Momentum
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    price_momentum = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    df['5_day_volume_trend'] = df['volume'] - df['volume'].shift(5)
+    df['20_day_volume_trend'] = df['volume'] - df['volume'].shift(20)
+    volume_momentum = (df['5_day_volume_trend'] + df['20_day_volume_trend']) / 2
+    
+    combined_momentum = (price_momentum * 0.7) + (volume_momentum * 0.3)
+    
+    # Calculate Intraday Momentum and Volume-Adjusted Momentum
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    intraday_momentum = df['intraday_range'] * df['intraday_return']
+    
+    df['volume_trend_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend_smoothed'] = df['volume'].rolling(window=5).sum()
+    adjusted_intraday_momentum = intraday_momentum * df['volume_trend_ratio']
+    
+    df['ema_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['volume_adjusted_momentum'] = (df['close'] - df['ema_close']) * df['volume_trend_smoothed']
+    
+    # Measure High-Low Range Stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_median'] = df['daily_range'].rolling(window=5).median()
+    df['range_stability'] = 1 / df['range_median']
+    
+    # Integrate High-Low Range Stability
+    df['range_std'] = df['daily_range'].rolling(window=5).std()
+    high_low_stability = 1 / df['range_std']
+    
+    # Combine All Factors
+    combined_factor = (combined_momentum * 0.4) + (adjusted_intraday_momentum * 0.2) + (df['volume_adjusted_momentum'] * 0.2) + (high_low_stability * 0.2)
+    
+    # Smooth Combined Momentum
+    final_alpha_factor = combined_factor.rolling(window=3).mean()
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, short_ma_period=5, long_ma_period=20, ema_period=10):
+    # Compute Close-to-Close Return
+    close_returns = df['close'].pct_change(n)
+    
+    # Sum over n periods
+    momentum = close_returns.rolling(window=n).sum()
+    
+    # Confirm with Trading Volume Increase
+    volume_change = df['volume'].pct_change(n)
+    volume_indicator = (df['volume'] > df['volume'].shift(n)).astype(int)
+    confirmed_momentum = momentum * volume_indicator
+    
+    # Integrate with Convergence Divergence of High-Low Prices
+    hl_avg = (df['high'] + df['low']) / 2
+    short_term_ma = hl_avg.rolling(window=short_ma_period).mean()
+    long_term_ma = hl_avg.rolling(window=long_ma_period).mean()
+    macd_high_low = short_term_ma - long_term_ma
+    
+    combined_indicator = confirmed_momentum + macd_high_low
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread
+    ema_high_low_spread = high_low_spread.ewm(span=ema_period, adjust=False).mean()
+    smoothed_high_low_spread = high_low_spread - ema_high_low_spread
+    
+    # Filter by Volume Change
+    filtered_combined_indicator = combined_indicator.where(volume_change > 0, other=0)
+    
+    # Combine Integrated Momentum and Smoothed High-Low Spread
+    final_alpha_factor = filtered_combined_indicator + smoothed_high_low_spread
+    
+    return final_alpha_factor
+```

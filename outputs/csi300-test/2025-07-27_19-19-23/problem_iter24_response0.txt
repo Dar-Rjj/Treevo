@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    relative_volume = df['volume'] / df['avg_volume_20']
+    spike_threshold = 2.0  # Example threshold
+    df['spike_indicator'] = (relative_volume > spike_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    weight = 1.5  # Example weight
+    df['adjusted_log_return'] = df['log_return'] * (1 + (df['spike_indicator'] * (weight - 1)))
+    
+    # Smooth the Adjusted Returns using Exponential Moving Average
+    span = 10  # Example span
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=span, adjust=False).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (1 + df['smoothed_returns']).cumprod()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    lookback_period = 10  # Example lookback period
+    df['high_low_with_spike'] = df['high_low_diff'] * df['spike_indicator']
+    df['sum_high_low_with_spike'] = df['high_low_with_spike'].rolling(window=lookback_period).sum()
+    
+    # Calculate Volume Trend (VROC)
+    vroc_period = 10  # Example VROC period
+    df['vroc'] = df['volume'].pct_change(periods=vroc_period)
+    
+    # Combined Factor
+    df['combined_factor'] = df['cumulative_momentum'] * df['sum_high_low_with_spike'] * df['vroc']
+    
+    # Calculate Price-Volume Divergence
+    proc_period = 10  # Example PROC period
+    df['proc'] = df['close'].pct_change(periods=proc_period)
+    df['price_volume_divergence'] = df['proc'] - df['vroc']
+    
+    # Final Combined Alpha Factor
+    df['final_alpha_factor'] = df['combined_factor'] * df['price_volume_divergence']
+    
+    return df['final_alpha_factor'].dropna()
+```

@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=5, L=200):
+    # Calculate Daily Log Return
+    df['log_close'] = np.log(df['close'])
+    df['log_return'] = df['log_close'] - df['log_close'].shift(1)
+    
+    # Adjust Log Return by Open Price
+    df['log_open'] = np.log(df['open'])
+    df['adj_log_return'] = df['log_return'] + df['log_open'].shift(1) - df['log_open']
+    
+    # Calculate Momentum Components
+    df['close_mom'] = df['close'] / df['close'].shift(n)
+    df['open_mom'] = df['open'] / df['open'].shift(n)
+    df['high_mom'] = df['high'] / df['high'].shift(n)
+    df['low_mom'] = df['low'] / df['low'].shift(n)
+    df['vol_mom'] = df['volume'] / df['volume'].shift(n)
+    
+    # Weight by Recent Trading Activity
+    df['avg_vol_m'] = df['volume'].rolling(window=m).mean()
+    df['avg_vol_L'] = df['volume'].rolling(window=L).mean()
+    df['volume_weight'] = df['avg_vol_m'] / df['avg_vol_L']
+    
+    # Combine Momentum and Volume Weights
+    df['mom_weighted'] = (
+        df['close_mom'] * df['volume_weight'] +
+        df['open_mom'] * df['volume_weight'] +
+        df['high_mom'] * df['volume_weight'] +
+        df['low_mom'] * df['volume_weight']
+    )
+    
+    # Cumulative Sum of Volume-Weighted Adjusted Returns
+    df['vol_adj_return'] = df['adj_log_return'] * df['volume']
+    df['cum_vol_adj_return'] = df['vol_adj_return'].rolling(window=n).sum()
+    
+    # Final Factor
+    alpha_factor = df['mom_weighted'] * df['cum_vol_adj_return']
+    
+    return alpha_factor
+```

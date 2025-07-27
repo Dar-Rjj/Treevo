@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for EMA based on volatility
+    volatility = df['close'].rolling(window=20).std()
+    ema_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    df['ema_close'] = df['close'].ewm(span=ema_window, adjust=False).mean()
+    
+    # RSI calculation with adaptive window
+    rsi_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Momentum with adaptive window
+    momentum_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    df['momentum'] = df['close'] / df['close'].shift(momentum_window) - 1
+    
+    # Volume-weighted price
+    volume_weighted_window = (volatility / volatility.mean() * 5).fillna(5).astype(int)
+    df['volume_weighted_price'] = (df['close'] * df['volume']).rolling(window=volume_weighted_window).sum() / df['volume'].rolling(window=volume_weighted_window).sum()
+    
+    # Average True Range (ATR) as a measure of volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['close'].shift(1) - x['low'])), axis=1)
+    atr_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    df['atr'] = df['tr'].rolling(window=atr_window).mean()
+    
+    # Bollinger Bands
+    bb_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    df['sma_close'] = df['close'].rolling(window=bb_window).mean()
+    df['upper_band'] = df['sma_close'] + 2 * df['close'].rolling(window=bb_window).std()
+    df['lower_band'] = df['sma_close'] - 2 * df['close'].rolling(window=bb_window).std()
+    df['bb_width'] = (df['upper_band'] - df['lower_band']) / df['sma_close']
+    
+    # Chaikin Money Flow (CMF) with adaptive window
+    cmf_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['cmf'] = money_flow_volume.rolling(window=cmf_window).sum() / df['volume'].rolling(window=cmf_window).sum()
+    
+    # Combine factors
+    factor_value = (df['momentum'] + (df['rsi'] - 50) / 50) * (df['volume_weighted_price'] - df['ema_close']) / (volatility + 1e-7)
+    factor_value += 0.5 * df['cmf'] * df['bb_width'] / (df['atr'] + 1e-7)
+    
+    return factor_value
+```

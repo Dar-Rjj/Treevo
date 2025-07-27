@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Volume-Weighted Exponential Momentum with Open Price
+    span = 5  # example span, can be adjusted
+    ema_open = df['open'].ewm(span=span, adjust=False).mean()
+    volume_weighted_ema = ema_open * df['volume']
+    
+    # Raw Price Momentum
+    close_to_close_return = df['close'].pct_change()
+    log_return = np.log(1 + close_to_close_return)
+    
+    # Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Daily Intraday Volatility
+    daily_intraday_volatility = (df['high'] - df['low']).combine(
+        (df['high'] - df['close'].shift(1)).abs(), max
+    )
+    
+    # Determine Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Volume Ratio
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Weight by Volume Trend
+    volume_weighted_log_momentum = log_return * volume_ratio
+    volume_weighted_intraday_return = intraday_return * volume_ratio
+    
+    # Incorporate Trading Amount
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    volume_and_amount_weighted_log_momentum = volume_weighted_log_momentum * amount_ratio
+    volume_and_amount_weighted_intraday_return = volume_weighted_intraday_return * amount_ratio
+    
+    # Combine and Adjust Factors
+    combined_factors = (
+        volume_and_amount_weighted_log_momentum + 
+        volume_and_amount_weighted_intraday_return + 
+        daily_intraday_volatility
+    )
+    
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    combined_factors = combined_factors * (1 + 0.5 * open_to_close_return) if open_to_close_return > 0 else \
+                       combined_factors * (1 - 0.5 * abs(open_to_close_return))
+    
+    # Adjusted Open-Close Price Movement
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    combined_factors = combined_factors * (1 + open_close_movement) if open_close_movement > 0 else \
+                       combined_factors * (1 - abs(open_close_movement))
+    
+    # Final Adjustment
+    final_factor = (
+        combined_factors + 
+        intraday_price_range - 
+        volume_weighted_ema
+    ) * intraday_return * (1 + open_close_movement) if open_close_movement > 0 else \
+    (
+        combined_factors + 
+        intraday_price_range - 
+        volume_weighted_ema
+    ) * intraday_return * (1 - abs(open_close_movement))
+    
+    # Volume Change Adjustment
+    volume_change_adjustment = (1 + volume_ratio) if volume_ratio > 1 else (1 - abs(volume_ratio))
+    final_factor = final_factor * volume_change_adjustment
+    
+    return final_factor.dropna()
+```

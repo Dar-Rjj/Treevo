@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume and Price Spikes
+    df['vol_20_ma'] = df['volume'].rolling(window=20).mean()
+    df['rel_vol'] = df['volume'] / df['vol_20_ma']
+    df['z_score_vol'] = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    df['price_range'] = df['high'] - df['low']
+    df['z_score_price'] = (df['price_range'] - df['price_range'].rolling(window=20).mean()) / df['price_range'].rolling(window=20).std()
+    df['spike'] = (df['rel_vol'] > 1.5) | (df['z_score_vol'] > 2) | (df['z_score_price'] > 2)
+    
+    # Adjust Momentum for Volume and Price Spikes
+    weight = 1.5
+    df['adj_log_return'] = df.apply(lambda row: row['log_return'] * weight if row['spike'] else row['log_return'], axis=1)
+    
+    # Smooth the Adjusted Returns
+    df['ema_adj_log_return'] = df['adj_log_return'].ewm(span=10, adjust=False).mean()
+    
+    # Cumulative Momentum Factor
+    df['cum_momentum'] = (df['ema_adj_log_return'] + 1).cumprod()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference with Volume and Price Spikes
+    df['spike_high_low_diff'] = df['high_low_diff'] * df['spike'].astype(int)
+    df['sum_spike_high_low_diff'] = df['spike_high_low_diff'].rolling(window=10).sum()
+    
+    # Calculate Volume Trend (VROC)
+    period_m = 10
+    df['vroc'] = (df['volume'] - df['volume'].shift(period_m)) / df['volume'].shift(period_m)
+    
+    # Combined Factor
+    df['combined_factor'] = df['cum_momentum'] * df['sum_spike_high_low_diff'] * df['vroc']
+    
+    # Calculate Price-Volume Divergence (PROC - VROC)
+    period_n = 10
+    df['proc'] = (df['close'] - df['close'].shift(period_n)) / df['close'].shift(period_n)
+    df['divergence'] = df['proc'] - df['vroc']
+    
+    # Final Combined Alpha Factor
+    df['final_factor'] = df['combined_factor'] * df['divergence']
+    
+    # Additional Factor: Volatility-Adjusted Momentum
+    df['daily_volatility'] = df['close'].rolling(window=20).std()
+    df['norm_log_return'] = df['log_return'] / df['daily_volatility']
+    df['smoothed_norm_return'] = df['norm_log_return'].ewm(span=10, adjust=False).mean()
+    
+    # Additional Factor: Money Flow Index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['raw_money_flow'].where(df['typical_price'] > df['typical_price'].shift(1), 0)
+    df['negative_money_flow'] = df['raw_money_flow'].where(df['typical_price'] < df['typical_price'].shift(1), 0)
+    df['money_ratio'] = df['positive_money_flow'].rolling(window=14).sum() / df['negative_money_flow'].rolling(window=14).sum()
+    df['mfi'] = 100 - (100 / (1 + df['money_ratio']))
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['final_factor'] * df['smoothed_norm_return'] * df['mfi']
+    
+    return df['alpha_factor']
+```

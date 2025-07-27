@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=10, L=100):
+    """
+    Generate a novel and interpretable alpha factor.
+    
+    :param df: DataFrame with (date) as index and columns for open, high, low, close, amount, volume
+    :param n: Number of days to look back for momentum calculation
+    :param m: Number of recent days to compare with long-term average for trading activity
+    :param L: Long-term number of days to calculate the average volume
+    :return: Series representing the alpha factor values
+    """
+    # Calculate Momentum Components
+    close_momentum = df['close'] / df['close'].shift(n)
+    open_momentum = df['open'] / df['open'].shift(n)
+    
+    # Adjust Log Return by Open Price
+    daily_log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    open_adjusted_log_return = daily_log_return - np.log(df['open']) + np.log(df['close'].shift(1))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    volume_weighted_log_return = df['volume'] * open_adjusted_log_return
+    
+    # Weight by Recent Trading Activity
+    recent_activity_avg = df['volume'].rolling(window=m).mean()
+    long_term_avg = df['volume'].rolling(window=L).mean()
+    weight = (recent_activity_avg / long_term_avg).fillna(1)  # Normalize to avoid division by zero
+    
+    # Detect Volume Shocks
+    daily_return = df['close'] / df['close'].shift(1)
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_volume_change = volume_change.rolling(window=30).mean()
+    sudden_volume_increase = (volume_change > 2 * avg_volume_change).astype(int)
+    
+    # Combine Indicators
+    sum_momentum = close_momentum + open_momentum
+    adjusted_momentum = sum_momentum * sudden_volume_increase * weight
+    
+    # Cumulative Sum of Volume-Weighted Adjusted Returns
+    cumulative_sum = volume_weighted_log_return.rolling(window=n).sum() * adjusted_momentum
+    
+    return cumulative_sum
+```

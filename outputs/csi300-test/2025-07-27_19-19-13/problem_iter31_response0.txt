@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, span=5, n_days=10):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Volume-Weighted Exponential Momentum
+    ema_close = df['close'].ewm(span=span, adjust=False).mean()
+    volume_weighted_ema = ema_close * df['volume']
+    
+    # Intraday Return with Open Price
+    intraday_return = (df['open'] / df['open'].shift(1)) - 1
+    
+    # Adjusted Open-Close Price Movement
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    
+    # Combine Factors
+    combined_factors = (
+        intraday_price_range
+        - volume_weighted_ema
+        * intraday_return
+    )
+    combined_factors = np.where(
+        combined_factors > 0,
+        combined_factors * (1 + open_close_movement),
+        combined_factors * (1 - np.abs(open_close_movement))
+    )
+    
+    # Dynamic Volume Change Adjustment
+    volume_ratio = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_adjustment = np.where(
+        volume_ratio > 0,
+        1 + volume_ratio,
+        1 - np.abs(volume_ratio)
+    )
+    combined_factors *= volume_adjustment
+    
+    # Raw Price Momentum
+    raw_price_momentum = np.log((df['close'] / df['close'].shift(1)) - 1)
+    
+    # Weighted Intraday Return
+    weighted_intraday_return = intraday_return * volume_ratio
+    
+    # Incorporate Trading Amount
+    amount_change = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    weighted_intraday_return *= amount_change
+    
+    # Final Factor
+    final_factor = (weighted_intraday_return * volume_ratio) + raw_price_momentum
+    
+    # Integrate Past Movements
+    adjusted_intraday_movements = combined_factors.rolling(window=n_days).sum() / df['close'].rolling(window=n_days).mean()
+    
+    return adjusted_intraday_movements
+```

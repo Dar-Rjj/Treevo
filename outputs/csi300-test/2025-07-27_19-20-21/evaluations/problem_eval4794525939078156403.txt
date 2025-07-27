@@ -1,0 +1,34 @@
+def heuristics_v2(df):
+    # Calculate the 9-period EMA and 21-period EMA
+    ema_9 = df['close'].ewm(span=9, adjust=False).mean()
+    ema_21 = df['close'].ewm(span=21, adjust=False).mean()
+    
+    # Calculate the Percentage Price Oscillator (PPO)
+    ppo_line = ((ema_9 - ema_21) / ema_21) * 100
+    
+    # Calculate Bollinger Bands
+    sma_15 = df['close'].rolling(window=15).mean()
+    std_15 = df['close'].rolling(window=15).std()
+    upper_band = sma_15 + (3 * std_15)
+    lower_band = sma_15 - (3 * std_15)
+    
+    # Calculate the %B indicator (position within Bollinger Bands)
+    b_percentage = (df['close'] - lower_band) / (upper_band - lower_band)
+    
+    # Calculate the 10-period RSI
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=10).mean()
+    avg_loss = loss.rolling(window=10).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the 20-day ATR
+    tr = pd.DataFrame({'H-L': df['high'] - df['low'], 'H-PC': abs(df['high'] - df['close'].shift(1)), 'L-PC': abs(df['low'] - df['close'].shift(1))})
+    atr = tr.max(axis=1).rolling(window=20).mean()
+    
+    # Combine PPO, %B, RSI, and ATR into a single heuristic matrix
+    heuristics_matrix = 0.25 * ppo_line + 0.25 * (1 - b_percentage) + 0.25 * (rsi - 50) + 0.25 * (atr / df['close'])
+    
+    return heuristics_matrix

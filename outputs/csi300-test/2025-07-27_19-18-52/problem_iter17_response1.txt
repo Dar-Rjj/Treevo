@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday Dynamics
+    df['Intraday_Price_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['close'] - df['open']
+    df['Intraday_Trading_Range'] = df['high'] - df['low']
+
+    # Compute Volume-Weighted Average Metrics
+    lookback_period = 20
+    
+    # VWMA of Close Prices
+    df['VWMA_Close'] = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # VWAP
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VWAP'] = (df['Typical_Price'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+
+    # Integrate Intraday and Daily Momentum with Volume-Weighted Metrics
+    df['Intraday_Momentum_1'] = df['Intraday_Price_Range'] * df['VWAP']
+    df['Intraday_Momentum_2'] = df['Intraday_Return'] * df['Intraday_Trading_Range']
+    df['Volume_Intensity_Score'] = df['volume'] / (df['high'] - df['low'])
+    df['Composite_Factor'] = (df['Intraday_Momentum_1'] + df['Intraday_Momentum_2']) * df['Volume_Intensity_Score']
+
+    # Adjusted Composite Momentum Factor
+    df['Adjusted_Composite_Momentum'] = (df['Intraday_Return'] + df['Intraday_Trading_Range']) * df['Volume_Intensity_Score']
+
+    # Integrate Adjusted Composite Momentum Factor with VWMA
+    df['Integrated_Factor'] = df['Adjusted_Composite_Momentum'] * df['VWMA_Close']
+
+    # Calculate Daily Momentum
+    df['Daily_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Determine if Today's Volume is a Shock
+    df['Average_Volume'] = df['volume'].rolling(window=lookback_period).mean()
+    df['Volume_Shock'] = (df['volume'] > 1.5 * df['Average_Volume']).astype(int)
+
+    # Determine if Today's Close Price is a Shock
+    df['Average_Close'] = df['close'].rolling(window=lookback_period).mean()
+    df['Price_Shock'] = (df['close'] > 1.5 * df['Average_Close']).astype(int)
+
+    # Determine if Today's Volume is a Surge
+    df['Median_Volume'] = df['volume'].rolling(window=lookback_period).median()
+    df['Volume_Surge'] = (df['volume'] > 2 * df['Median_Volume']).astype(int)
+
+    # Determine if Today's High Price is a Breakout
+    df['Highest_High'] = df['high'].rolling(window=lookback_period).max()
+    df['Price_Breakout'] = (df['high'] > df['Highest_High']).astype(int)
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Composite_Factor'] * df['Daily_Momentum'] * 
+                          df['Volume_Shock'] * df['Price_Shock'] * 
+                          df['Volume_Surge'] * df['Price_Breakout'])
+
+    return df['Alpha_Factor']
+```

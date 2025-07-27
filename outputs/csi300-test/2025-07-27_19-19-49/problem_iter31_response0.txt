@@ -1,0 +1,57 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum over 30 days for a more extended and stable period
+    df['momentum_30d'] = df['close'].pct_change(periods=30)
+    
+    # Average true range over 40 days for longer-term volatility
+    df['h-l'] = df['high'] - df['low']
+    df['h-cp'] = abs(df['high'] - df['close'].shift(1))
+    df['l-cp'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['h-l', 'h-cp', 'l-cp']].max(axis=1)
+    df['atr40'] = df['tr'].rolling(window=40).mean()
+
+    # Volume trend over 120 days for a more stable long-term trend
+    df['volume_ratio_120d'] = df['volume'] / df['volume'].rolling(window=120).mean()
+
+    # Calculate the weighted average price by considering both amount and volume
+    df['weighted_price'] = (df['amount'] * df['close']) / (df['volume'] + 1e-7)
+    
+    # Moving average of the weighted price over a 90-day window for enhanced stability
+    df['rolling_mean_weighted_price_90d'] = df['weighted_price'].rolling(window=90).mean()
+    
+    # Relative strength index (RSI) over 20 days for momentum
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=20).mean()
+    avg_loss = loss.rolling(window=20).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Interaction terms
+    df['momentum_rsi_interaction'] = df['momentum_30d'] * rsi
+    df['volatility_volume_interaction'] = df['atr40'] * df['volume_ratio_120d']
+
+    # Sector momentum: Assume `sector_return` is a column in the DataFrame
+    df['sector_momentum_30d'] = df['sector_return'].pct_change(periods=30)
+
+    # Volatility clustering: GARCH(1,1) model for conditional volatility
+    from arch import arch_model
+    garch_model = arch_model(df['return'], vol='Garch', p=1, q=1, dist='Normal')
+    garch_res = garch_model.fit(disp='off')
+    df['garch_vol'] = garch_res.conditional_volatility
+
+    # Liquidity: Turnover ratio (volume / float shares)
+    df['turnover_ratio'] = df['volume'] / df['float_shares']
+
+    # Market sentiment: Ratio of high to low prices
+    df['sentiment_ratio'] = df['high'] / df['low']
+
+    # Alpha factor: Combine momentum, RSI, ATR (as volatility), volume trend, weighted price, GARCH volatility, turnover ratio, and sentiment with interaction terms
+    alpha_factor = (df['momentum_30d'] + df['sector_momentum_30d'] + df['atr40'] + df['volume_ratio_120d'] + 
+                    (df['weighted_price'] / df['rolling_mean_weighted_price_90d']) + 
+                    rsi + df['garch_vol'] + df['turnover_ratio'] + df['sentiment_ratio'] + 
+                    df['momentum_rsi_interaction'] + df['volatility_volume_interaction']) / 11
+
+    return alpha_factor.dropna()
+```

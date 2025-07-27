@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    df['high_low_range'] = (df['high'] - df['low']) * df['volume']
+    
+    # Incorporate Historical Price Change
+    df['close_to_close_return'] = df['close'].pct_change()
+    df['weighted_high_low_range'] = df['high_low_range'] * df['close_to_close_return']
+    
+    # Smooth the Resulting Series
+    ema_alpha = 0.1  # Specific Alpha for EMA
+    sma_window = 5   # Specific Window Size for SMA
+    df['smoothed_factor'] = df['weighted_high_low_range'].ewm(alpha=ema_alpha, adjust=False).mean()
+    df['smoothed_factor'] = df['smoothed_factor'].rolling(window=sma_window).mean()
+    
+    # Adjust for Volume Trend
+    df['volume_change'] = df['volume'].pct_change()
+    df['adjusted_smoothed_factor'] = df['smoothed_factor'] * (1 + df['volume_change'])
+    
+    # Introduce New Intraday Strength Indicator
+    df['intraday_strength'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    df['intraday_strength_ema'] = df['intraday_strength'].ewm(alpha=ema_alpha, adjust=False).mean()
+    df['combined_momentum'] = df['adjusted_smoothed_factor'] + df['intraday_strength_ema']
+    
+    # Combine and Smooth Final Factor
+    df['final_factor'] = df['combined_momentum'].rolling(window=sma_window).mean()
+    
+    # Compute Short-Term and Long-Term Volume Trends
+    short_term_vol_trend = df['volume'].rolling(window=5).sum().rolling(window=5).mean()
+    long_term_vol_trend = df['volume'].rolling(window=20).sum().rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    df['vol_trend_ratio'] = short_term_vol_trend / long_term_vol_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    df['intraday_momentum'] = df['high'] - df['low']
+    df['open_to_close_return'] = df['open'] - df['close']
+    df['long_term_momentum'] = df['close'].pct_change(periods=20) * df['vol_trend_ratio']
+    df['momentum_component'] = df['intraday_momentum'] + df['long_term_momentum']
+    
+    # Compute Volatility Component
+    df['intraday_volatility'] = df['intraday_momentum'].std()
+    df['open_to_close_volatility'] = df['open_to_close_return'].std()
+    df['volatility_component'] = df['intraday_volatility'] + df['open_to_close_volatility']
+    
+    # Combine Momentum and Volatility
+    df['combined_momentum_volatility'] = df['momentum_component'] - 0.5 * df['volatility_component']
+    
+    # Final Alpha Factor
+    df['aggregated_high_low_bandwidth'] = (df['high'] - df['low']).rolling(window=5).sum()
+    df['final_alpha_factor'] = df['combined_momentum_volatility'] * df['vwap'] + df['aggregated_high_low_bandwidth'] + df['final_factor']
+    df['momentum_volatility_ratio'] = df['combined_momentum_volatility'] / df['volatility_component']
+    df['final_alpha_factor'] = df['final_alpha_factor'] * (df['momentum_volatility_ratio'] > 0)
+    
+    return df['final_alpha_factor']
+```

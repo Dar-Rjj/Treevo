@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20):
+    # Compute Daily Price and Volume Change
+    df['Close Diff'] = df['close'].diff()
+    df['Volume Diff'] = df['volume'].diff()
+    df['Combined Daily Change'] = df['Close Diff'] + df['Volume Diff']
+    
+    # Aggregate Changes Over a Period
+    df['Accumulated Daily Change'] = df['Combined Daily Change'].rolling(window=N).sum()
+    df['Average Daily Change'] = df['Accumulated Daily Change'] / N
+    
+    # Compute Short-Term Price Direction (SPDI)
+    df['5-day MA Close'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = (df['close'] > df['5-day MA Close']).astype(int)
+    
+    # Compute Medium-Term Price Range (MPR)
+    df['20-day High'] = df['high'].rolling(window=20).max()
+    df['20-day Low'] = df['low'].rolling(window=20).min()
+    df['Price Range Midpoint'] = (df['20-day High'] + df['20-day Low']) / 2
+    df['MPR'] = (df['close'] > df['Price Range Midpoint']).astype(int)
+    
+    # Calculate Volume Growth (VGF)
+    df['3-day MA Volume'] = df['volume'].rolling(window=3).mean()
+    df['VGF'] = (df['volume'] > df['3-day MA Volume']).astype(int)
+    
+    # Integrate Indicators
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+    
+    # Calculate Volume-Weighted Close Price
+    df['Volume-Price Product'] = df['volume'] * df['close']
+    df['Volume-Weighted Price'] = df['Volume-Price Product'].rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Combine Price and Volume Factors
+    df['Momentum Score'] = df['Average Daily Change'] * 1.5
+    df['Volume Weighted Score'] = df['Volume-Weighted Price'] * 0.5
+    
+    # Generate Final Alpha Factor
+    df['Alpha Factor'] = df['Momentum Score'] + df['Volume Weighted Score'] + df['IMVTI']
+    
+    # Apply Smoothing
+    df['Final Alpha Factor'] = df['Alpha Factor'].ewm(alpha=0.3).mean()
+    
+    return df['Final Alpha Factor']
+```

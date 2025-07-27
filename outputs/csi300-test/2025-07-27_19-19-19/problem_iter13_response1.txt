@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    volume_adjusted_close_open_diff = (close_open_diff / df['volume']) * avg_volume_10
+    
+    # Compute Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N=5)
+    N = 5
+    aggregate_price_change = daily_price_change.rolling(window=N).sum() / N
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    combined_high_low = (high_low_range * volume_adjusted_close_open_diff).rolling(window=5).sum()
+    
+    # Calculate Short-Term Price Direction (SPDI)
+    spdi = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    
+    # Calculate Medium-Term Price Range (MPR)
+    moving_high_20 = df['high'].rolling(window=20).max()
+    moving_low_20 = df['low'].rolling(window=20).min()
+    mpr = ((df['close'] - moving_low_20) / (moving_high_20 - moving_low_20) > 0.5).astype(int)
+    
+    # Calculate Volume Growth (VGF)
+    vgf = (df['volume'] > df['volume'].rolling(window=3).mean()).astype(int)
+    
+    # Integrate Indicators
+    imvti = (spdi + mpr + vgf) / 3
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_high_low * 1.0
+    momentum_score = aggregate_price_change * 1.5
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = high_low_momentum_score + momentum_score + imvti
+    smoothed_final_alpha_factor = final_alpha_factor.ewm(alpha=0.3, adjust=False).mean()
+    
+    return smoothed_final_alpha_factor
+```

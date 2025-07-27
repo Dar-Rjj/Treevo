@@ -1,0 +1,70 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for EMA based on volatility
+    volatility = df['close'].rolling(window=20).std()
+    ema_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    df['ema_close'] = df['close'].ewm(span=ema_window, adjust=False).mean()
+
+    # RSI calculation
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Momentum with adaptive window
+    momentum_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    df['momentum'] = df['close'] / df['close'].shift(momentum_window) - 1
+
+    # Volume-weighted measures
+    df['volume_weighted_price'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+
+    # Average True Range (ATR) as a measure of volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+
+    # Bollinger Bands
+    df['sma_close'] = df['close'].rolling(window=20).mean()
+    df['upper_band'] = df['sma_close'] + 2 * df['close'].rolling(window=20).std()
+    df['lower_band'] = df['sma_close'] - 2 * df['close'].rolling(window=20).std()
+    df['bb_width'] = (df['upper_band'] - df['lower_band']) / df['sma_close']
+
+    # Chaikin Money Flow (CMF)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['cmf'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Dynamic factor adjustments
+    df['dynamic_momentum'] = df['momentum'] * (df['volume_weighted_price'] / df['close'])
+    df['dynamic_rsi'] = (df['rsi'] - 50) / 50 * (df['volume_weighted_price'] / df['close'])
+    df['dynamic_cmf'] = df['cmf'] * (df['volume_weighted_price'] / df['close'])
+
+    # Additional feature engineering
+    df['volume_change'] = df['volume'].pct_change()
+    df['price_range'] = df['high'] - df['low']
+    df['volatility_normalized'] = (df['close'] - df['sma_close']) / df['atr']
+    df['price_change'] = df['close'].pct_change()
+
+    # Integrate machine learning for adaptive weighting
+    import numpy as np
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+
+    X = df[['dynamic_momentum', 'dynamic_rsi', 'dynamic_cmf', 'volume_change', 'price_range', 'volatility_normalized', 'price_change']].dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index]
+
+    model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+    tscv = TimeSeriesSplit(n_splits=5)
+    scores = cross_val_score(model, X, y, cv=tscv, scoring='neg_mean_squared_error')
+    print(f"Cross-validated MSE: {np.mean(scores)}")
+
+    model.fit(X, y)
+    weights = model.feature_importances_
+
+    # Combine factors with adaptive weights
+    factor_value = (X['dynamic_momentum'] * weights[0] +
+                    X['dynamic_rsi'] * weights[1] +
+                    X['dynamic_cmf'] * weights[2] +
+                    X['volume_change'] * weights[3] +
+                    X['price_range'] * weights[4] +
+                    X['volatility_normalized'] * weights

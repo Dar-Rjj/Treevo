@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    volume_rolling_std = df['volume'].rolling(window=20).std()
+    df['z_score_volume'] = (df['volume'] - df['volume'].rolling(window=20).mean()) / volume_rolling_std
+    spike_threshold = 2.0  # Adjust threshold as needed
+    df['spike_indicator'] = (df['z_score_volume'] > spike_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    weight_on_spike = 0.5  # Adjust weight as needed
+    df['adjusted_log_return'] = df['log_return'] * (1 + (df['spike_indicator'] * (weight_on_spike - 1)))
+    
+    # Smooth the Adjusted Returns
+    ema_span = 10  # Adjust span as needed
+    df['smoothed_return'] = df['adjusted_log_return'].ewm(span=ema_span, adjust=False).mean()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    lookback_period = 10  # Adjust lookback period as needed
+    df['weighted_high_low_diff'] = df['high_low_diff'] * df['spike_indicator']
+    df['sum_weighted_high_low_diff'] = df['weighted_high_low_diff'].rolling(window=lookback_period).sum()
+    
+    # Price Momentum: Weighted Average High-Low Difference
+    weights = np.arange(1, lookback_period + 1)  # Linear weights
+    df['weighted_high_low_momentum'] = df['high_low_diff'].rolling(window=lookback_period).apply(
+        lambda x: np.sum(x * weights), raw=True
+    )
+    
+    # Volume Trend: Volume Rate of Change (VROC)
+    vroc_period = 10  # Adjust VROC period as needed
+    df['vroc'] = df['volume'].pct_change(periods=vroc_period)
+    
+    # Combined Factor
+    df['combined_factor'] = df['smoothed_return'] + df['sum_weighted_high_low_diff']
+    df['final_factor'] = df['combined_factor'] * df['vroc']
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['final_factor'] + 1).cumprod()
+    
+    return df['cumulative_momentum']
+```

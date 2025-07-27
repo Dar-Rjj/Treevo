@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's and yesterday's close price for momentum
+    momentum = df['close'].diff(1)
+    
+    # Calculate the total range of the day (high - low) to capture volatility
+    daily_range = (df['high'] - df['low']).fillna(1e-7)
+    
+    # Calculate the money flow ratio by dividing the amount by volume to gauge market sentiment
+    money_flow_ratio = df['amount'] / df['volume']
+    
+    # Compute simple moving averages for short and long terms
+    sma_short = df['close'].rolling(window=10).mean()
+    sma_long = df['close'].rolling(window=50).mean()
+    
+    # Calculate the relative positioning of the close price with respect to the SMAs
+    relative_positioning = (df['close'] - sma_short) / (sma_long - sma_short)
+    
+    # Calculate the exponential moving average (EMA) for a different time frame
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the Average True Range (ATR) for volatility
+    tr = df['high'] - df['low']
+    atr_14 = tr.rolling(window=14).mean()
+    
+    # Calculate the Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal_line = macd.ewm(span=9, adjust=False).mean()
+    macd_diff = macd - signal_line
+    
+    # Calculate the Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the Bollinger Bands
+    bb_middle = df['close'].rolling(window=20).mean()
+    bb_std = df['close'].rolling(window=20).std()
+    bb_upper = bb_middle + 2 * bb_std
+    bb_lower = bb_middle - 2 * bb_std
+    bb_width = (bb_upper - bb_lower) / bb_middle
+    
+    # Combine all the factors into a single alpha factor
+    factor_values = (momentum * money_flow_ratio * relative_positioning * ema_20 * atr_14 * macd_diff * rsi * bb_width) / daily_range
+    
+    return factor_values
+```

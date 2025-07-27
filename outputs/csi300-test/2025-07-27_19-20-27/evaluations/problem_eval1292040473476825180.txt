@@ -1,0 +1,29 @@
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    short_window = 5
+    long_window = 20
+    very_long_window = 60
+    
+    # Calculate the percentage change in closing prices
+    short_change = df['close'].pct_change(periods=short_window).fillna(0)
+    long_change = df['close'].pct_change(periods=long_window).fillna(0)
+
+    # Calculate the standard deviation of the percentage changes as a measure of volatility
+    short_volatility = df['close'].pct_change().rolling(window=short_window).std().fillna(0)
+    long_volatility = df['close'].pct_change().rolling(window=long_window).std().fillna(0)
+
+    # Smooth the changes and volatilities using EMA
+    ema_short_change = short_change.ewm(span=short_window, adjust=False).mean()
+    ema_long_change = long_change.ewm(span=long_window, adjust=False).mean()
+    ema_short_volatility = short_volatility.ewm(span=short_window, adjust=False).mean()
+    ema_long_volatility = long_volatility.ewm(span=long_window, adjust=False).mean()
+
+    # Dynamic weighting based on the ratio of smoothed short-term to long-term volatility
+    weight_factor = ema_short_volatility / (ema_short_volatility + ema_long_volatility)
+    momentum_factor = (weight_factor * ema_short_change + (1 - weight_factor) * ema_long_change)
+
+    # Combine smoothed momentum and volatility into a single factor
+    heuristics_matrix = momentum_factor / (ema_short_volatility + ema_long_volatility)
+    return heuristics_matrix

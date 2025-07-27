@@ -1,0 +1,35 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    short_window = 5
+    long_window = 20
+    very_long_window = 60
+    
+    # Calculate exponential moving averages
+    short_ema = df['close'].ewm(span=short_window, adjust=False).mean()
+    long_ema = df['close'].ewm(span=long_window, adjust=False).mean()
+    
+    # Calculate short-term and long-term volatility
+    short_volatility = df['close'].rolling(window=short_window).std()
+    long_volatility = df['close'].rolling(window=long_window).std()
+
+    # Dynamic weighting based on the ratio of short-term to long-term volatility
+    weight_factor = short_volatility / long_volatility
+    trend_factor = (weight_factor * short_ema + (1 - weight_factor) * long_ema)
+    
+    # Incorporate recent price momentum
+    momentum = df['close'].pct_change().rolling(window=short_window).mean()
+    
+    # Combine trend and momentum
+    combined_trend_momentum = (trend_factor + momentum) / 2
+    
+    # Calculate the historical true range
+    tr = df['high'] - df['low']
+    htr = tr.rolling(window=very_long_window).sum()
+    atr = tr.rolling(window=long_window).mean()
+    
+    # Normalize with the sum of historical true range and average true range
+    normalization_factor = htr + atr
+    
+    heuristics_matrix = combined_trend_momentum / normalization_factor
+    return heuristics_matrix

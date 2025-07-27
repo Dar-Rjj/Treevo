@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Raw Price Momentum
+    close_to_close_return = df['close'].pct_change()
+    log_return = np.log(1 + close_to_close_return)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Determine Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Volume Ratio
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Weighted Intraday Return
+    weighted_intraday_return = intraday_return * volume_change
+    
+    # Adjust for Volume Impact
+    adjusted_intraday_return = intraday_return / df['volume']
+    
+    # Combine Factors
+    combined_factors = (weighted_intraday_return * volume_ratio) + intraday_volatility + log_return
+    
+    # Integrate Past Movements
+    N = 5
+    aggregated_movements = adjusted_intraday_return.rolling(window=N).sum()
+    average_close = df['close'].rolling(window=N).mean()
+    ratio = aggregated_movements / average_close
+    
+    # Calculate Daily Price Volatility
+    daily_price_volatility = (df['high'] - df['low']).rolling(window=N).mean() / df['close']
+    
+    # Calculate Volume-Weighted Momentum
+    shifted_close = df['close'].shift(N)
+    volume_weighted_momentum = (shifted_close * df['volume']) / df['volume'].rolling(window=N).mean()
+    
+    # Aggregate Past Movements
+    aggregated_movements = adjusted_intraday_return.rolling(window=N).sum()
+    
+    # Calculate Open-Close Price Movement
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    
+    # Calculate High-Low Range
+    high_low_range = (df['high'] - df['low']) / df['low']
+    
+    # Combine Additional Factors
+    additional_factors = daily_price_volatility - volume_weighted_momentum * high_low_range
+    
+    # Final Factor
+    final_factor = combined_factors + ratio + additional_factors
+    
+    # Interpretable Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    final_factor = final_factor * (1 + np.where(final_factor > 0, open_to_close_return, -np.abs(open_to_close_return)))
+    
+    return final_factor
+```

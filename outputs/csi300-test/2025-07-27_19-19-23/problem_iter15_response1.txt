@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, volume_spike_threshold=2.0, vroc_period=10):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    df['avg_vol_20'] = df['volume'].rolling(window=20).mean()
+    df['relative_vol'] = df['volume'] / df['avg_vol_20']
+    df['is_spike'] = (df['relative_vol'] > volume_spike_threshold).astype(int)
+    
+    # Adjust Momentum for Volume Spikes
+    weight = 1.5  # Example weight, can be adjusted
+    df['adjusted_log_return'] = df['log_return'] * (1 + (df['is_spike'] * (weight - 1)))
+    
+    # Smooth the Adjusted Returns with Exponential Moving Average
+    df['smoothed_adj_return'] = df['adjusted_log_return'].ewm(span=10).mean()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_adj_return'] + 1).cumprod()
+    
+    # Calculate Daily Price Movement
+    df['daily_price_movement'] = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    df['volume_adjusted_price_movement'] = df['daily_price_movement'] * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    df['rolling_aggregated_values'] = df['volume_adjusted_price_movement'].rolling(window=30).sum()
+    df['rolling_avg'] = df['rolling_aggregated_values'].ewm(span=10).mean()
+    df['short_ma'] = df['rolling_avg'].ewm(span=5).mean()
+    df['long_ma'] = df['rolling_avg'].ewm(span=10).mean()
+    df['rolling_momentum'] = df['short_ma'] - df['long_ma']
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    df['high_low_volume_spike'] = df['high_low_diff'] * df['is_spike']
+    df['sum_high_low_volume_spike'] = df['high_low_volume_spike'].rolling(window=10).sum()
+    
+    # Combined Factor
+    df['combined_factor'] = df['cumulative_momentum'] + df['sum_high_low_volume_spike'] + df['rolling_momentum']
+    
+    # Volume Trend
+    df['vroc'] = df['volume'].pct_change(periods=vroc_period)
+    
+    # Final Combined Factor
+    df['final_factor'] = df['combined_factor'] * df['vroc']
+    
+    return df['final_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor = heuristics_v2(df)
+```

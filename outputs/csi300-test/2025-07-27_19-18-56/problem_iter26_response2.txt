@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return
+    df['close_return'] = df['close'].pct_change()
+    
+    # Sum over n periods (e.g., 10 days)
+    df['momentum'] = df['close_return'].rolling(window=10).sum()
+    
+    # Confirm with Trading Volume Increase
+    df['volume_change'] = df['volume'] > df['volume'].shift(1)
+    df['volume_indicator'] = df['volume_change'].astype(int)
+    df['confirmed_momentum'] = df['momentum'] * df['volume_indicator']
+    
+    # Calculate Enhanced Volume-Weighted High-Low Range
+    df['high_low_range'] = (df['high'] - df['low']) * df['volume']
+    total_volume = df['volume'].rolling(window=10).sum()
+    df['volume_weighted_high_low_range'] = df['high_low_range'].rolling(window=10).sum() / total_volume
+    
+    # Adjust for Market Sentiment
+    df['close_open_return'] = df['close'] - df['open']
+    df['sentiment_adjusted_high_low'] = df['volume_weighted_high_low_range'] + df['close_open_return'] * 0.1
+    
+    # Smoothing High-Low Spread
+    df['high_low_sma'] = df['high_low_range'].rolling(window=10).mean()
+    df['smoothed_high_low_spread'] = df['high_low_range'] - df['high_low_sma']
+    
+    # Integrate with Convergence-Divergence of High-Low Prices
+    df['daily_avg_high_low'] = (df['high'] + df['low']) / 2
+    df['short_term_ma'] = df['daily_avg_high_low'].rolling(window=5).mean()
+    df['long_term_ma'] = df['daily_avg_high_low'].rolling(window=20).mean()
+    df['high_low_converge_diverge'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Filter by Volume Change
+    df['filtered_high_low'] = df['high_low_converge_diverge'] * df['volume_indicator']
+    
+    # Trend Confirmation
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['trend_confirmation'] = (df['sma_5'] > df['sma_20']).astype(int)
+    
+    # Final Alpha Factor Construction
+    df['adjusted_volume_weighted_high_low'] = df['sentiment_adjusted_high_low'] * df['volume_indicator']
+    df['final_alpha_factor'] = (df['confirmed_momentum'] + df['smoothed_high_low_spread'] + df['filtered_high_low']) * df['trend_confirmation']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

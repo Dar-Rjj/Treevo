@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, M=20, weight_momentum=0.7, weight_volatility=0.3):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine 5-day and 20-day returns
+    df['combined_return'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Compute intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Adjust combined return with intraday return
+    df['adjusted_combined_return'] = df['combined_return'] * df['intraday_return']
+    
+    # Determine volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Adjust combined intraday and closing price momentum by volume trend
+    df['volume_adjusted_momentum'] = df['adjusted_combined_return'] * df['volume_trend']
+    
+    # Compute rolling variance over M days for high-low range
+    df['high_low_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['high_low_range'].rolling(window=M).var()
+    
+    # Final alpha factor before smoothing
+    df['final_alpha_factor'] = (df['volume_adjusted_momentum'] * weight_momentum) + (df['range_volatility'] * weight_volatility)
+    
+    # Apply a 3-day simple moving average (SMA) to smooth the final alpha factor
+    df['final_alpha_factor_sma'] = df['final_alpha_factor'].rolling(window=3).mean()
+    
+    # Return the final alpha factor
+    return df['final_alpha_factor_sma'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

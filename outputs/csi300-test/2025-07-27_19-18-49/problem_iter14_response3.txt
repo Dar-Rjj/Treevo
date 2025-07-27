@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=10, L=100):
+    # Calculate Momentum Components
+    df['Close_Momentum'] = df['close'].pct_change(n)
+    df['Open_Momentum'] = df['open'].pct_change(n)
+    df['Volume_Momentum'] = df['volume'].pct_change(n)
+    
+    # Calculate Daily Log Return
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Adjust Log Return by Open Price
+    df['Open_Adjusted_Log_Return'] = (np.log(df['close']) - np.log(df['open'])) + (np.log(df['close'].shift(1)) - np.log(df['open'].shift(1)))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    df['Volume_Adjusted_Return'] = df['Open_Adjusted_Log_Return'] * df['volume']
+    
+    # Weight by Recent Trading Activity
+    df['Short_Term_Avg_Volume'] = df['volume'].rolling(window=m).mean()
+    df['Long_Term_Avg_Volume'] = df['volume'].rolling(window=L).mean()
+    df['Trading_Activity_Weight'] = df['Short_Term_Avg_Volume'] / df['Long_Term_Avg_Volume']
+    
+    # Detect Volume Shocks
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Avg_Volume_Change_30'] = df['volume'].pct_change().rolling(window=30).mean()
+    df['Volume_Shock'] = (df['Volume_Change'] > 2 * df['Avg_Volume_Change_30']).astype(int)
+    
+    # Combine Indicators
+    df['Momentum_Sum'] = (df['Close_Momentum'] + df['Open_Momentum'] + df['Volume_Momentum']) * df['Trading_Activity_Weight']
+    df['Volume_Shock_Factor'] = df['Volume_Shock']
+    df['Combined_Momentum'] = df['Momentum_Sum'] * df['Volume_Shock_Factor']
+    
+    # Cumulative Sum of Volume-Weighted Adjusted Returns
+    df['Cumulative_Volume_Adjusted_Return'] = df['Volume_Adjusted_Return'].rolling(window=n).sum()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Combined_Momentum'] + df['Cumulative_Volume_Adjusted_Return']
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

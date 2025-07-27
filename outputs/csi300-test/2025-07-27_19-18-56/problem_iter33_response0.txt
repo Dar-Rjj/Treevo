@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Enhanced High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread
+    ema_period = 10
+    high_low_ema = high_low_spread.ewm(span=ema_period, adjust=False).mean()
+    smoothed_high_low_spread = high_low_spread - high_low_ema
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = df['close'].pct_change()
+    
+    # Calculate Volume Change
+    volume_change = df['volume'].diff()
+    
+    # Compute Composite Momentum
+    n_periods = 5
+    sum_close_to_close_returns = close_to_close_return.rolling(window=n_periods).sum()
+    volume_indicator = (df['volume'] > df['volume'].shift(1)).astype(int)
+    composite_momentum = sum_close_to_close_returns * volume_indicator
+    
+    # Calculate Volume-Weighted High-Low Range
+    volume_weighted_high_low_range = ((df['high'] - df['low']) * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Adjust for Market Sentiment
+    close_to_open_return = df['close'] - df['open']
+    adjusted_volume_weighted_high_low_range = volume_weighted_high_low_range + (close_to_open_return > 0) * 0.1 * volume_weighted_high_low_range - (close_to_open_return < 0) * 0.1 * volume_weighted_high_low_range
+    
+    # Incorporate Convergence Divergence of High-Low Prices
+    short_term_ma = (df['high'] + df['low']) / 2.0
+    long_term_ma = (df['high'] + df['low']) / 2.0
+    short_term_ma = short_term_ma.rolling(window=5).mean()
+    long_term_ma = long_term_ma.rolling(window=20).mean()
+    convergence_divergence = short_term_ma - long_term_ma
+    
+    # Filter by Volume Change
+    integrated_momentum = composite_momentum * (volume_change > 0)
+    integrated_high_low_spread = smoothed_high_low_spread * (volume_change > 0)
+    
+    # Trend Confirmation
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    trend_confirmation = (sma_5 > sma_20).astype(int)
+    
+    # Integrate Price-Volatility Factor
+    price_volatility = df['close'].rolling(window=20).std()
+    price_volatility_factor = price_volatility * volume_indicator
+    
+    # Final Alpha Factor Construction
+    combined_adjusted_factors = (adjusted_volume_weighted_high_low_range + integrated_high_low_spread) * volume_indicator
+    combined_price_factors = (composite_momentum + price_volatility_factor) * volume_indicator
+    final_alpha_factor = (combined_adjusted_factors + combined_price_factors) * trend_confirmation
+    
+    return final_alpha_factor
+```

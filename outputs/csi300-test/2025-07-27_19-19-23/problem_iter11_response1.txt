@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement
+    df['Daily_Price_Movement'] = df['close'] - df['open']
+    
+    # Calculate Volume Adjusted Price Movement
+    df['Volume_Adjusted_Price_Movement'] = df['Daily_Price_Movement'] * df['volume']
+    
+    # Calculate Rolling Momentum Indicator
+    df['Aggregated_Volume_Adjusted_Price'] = df['Volume_Adjusted_Price_Movement'].rolling(window=30).sum()
+    df['Rolling_Avg_5'] = df['Aggregated_Volume_Adjusted_Price'].ewm(span=5, adjust=False).mean()
+    df['Rolling_Avg_10'] = df['Aggregated_Volume_Adjusted_Price'].ewm(span=10, adjust=False).mean()
+    df['Momentum'] = df['Rolling_Avg_5'] - df['Rolling_Avg_10']
+    
+    # Calculate High-Low Difference
+    df['High_Low_Diff'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['Volume_Z_Score'] = (df['volume'] - df['volume'].rolling(window=30).mean()) / df['volume'].rolling(window=30).std()
+    spike_threshold = 20 / 100  # 20% increase
+    df['Spike_Indicator'] = (df['Volume_Z_Score'] > spike_threshold).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    df['High_Low_Spike'] = df['High_Low_Diff'] * df['Spike_Indicator']
+    df['Summed_High_Low_Spike'] = df['High_Low_Spike'].rolling(window=10).sum()
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    df['Adjusted_Return'] = df['Daily_Log_Return'] * df['Spike_Indicator'] + df['Daily_Log_Return'] * (1 - df['Spike_Indicator'])
+    
+    # Smooth the Adjusted Returns
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Return'].ewm(span=10, adjust=False).mean()
+    
+    # Price Momentum
+    df['Avg_High_Low_Diff'] = df['High_Low_Diff'].rolling(window=10).mean()
+    
+    # Volume Trend
+    df['VROC'] = (df['volume'] / df['volume'].shift(1) - 1) * 100
+    
+    # Combined Factor
+    df['Combined_Factor'] = df['Summed_High_Low_Spike'] + df['Smoothed_Adjusted_Return']
+    df['Final_Factor'] = df['Combined_Factor'] * df['VROC']
+    
+    # Cumulative Momentum Factor
+    df['Cumulative_Momentum_Factor'] = (df['Final_Factor'] + 1).cumprod().fillna(1)
+    
+    return df['Cumulative_Momentum_Factor']
+```

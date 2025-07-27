@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N=10)
+    N = 10
+    df['Accumulated_Price_Change'] = df['Daily_Price_Change'].rolling(window=N).sum()
+    df['Average_Price_Change'] = df['Accumulated_Price_Change'] / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Adjusted_Close_Open_Diff'] = (df['Close_Open_Diff'] * df['volume']) / df['Avg_Volume_20']
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['Combined_High_Low_Volume'] = (df['High_Low_Range'] * df['Volume_Adjusted_Close_Open_Diff']).rolling(window=N).sum()
+    
+    # Generate Intermediate Alpha Scores
+    scaling_factor_hl = 1.2
+    scaling_factor_momentum = 1.8
+    df['High_Low_Momentum_Score'] = df['Combined_High_Low_Volume'] * scaling_factor_hl
+    df['Momentum_Score'] = df['Average_Price_Change'] * scaling_factor_momentum
+    
+    # Integrate Indicators
+    df['SPDI'] = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    df['20_day_high'] = df['high'].rolling(window=20).max()
+    df['20_day_low'] = df['low'].rolling(window=20).min()
+    df['MPR'] = ((df['close'] - df['20_day_low']) / (df['20_day_high'] - df['20_day_low']) > 0.5).astype(int)
+    df['VGF'] = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+    
+    # Combine Price and Volume Factors
+    df['Combined_Factors'] = df['Momentum_Score'] + df['High_Low_Momentum_Score']
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Combined_Factors'] + df['IMVTI']
+    
+    # Incorporate Long-Term Trend
+    df['100_day_MA'] = df['close'].rolling(window=100).mean()
+    df['Final_Alpha_Factor'] = df.apply(lambda row: row['Final_Alpha_Factor'] * 1.1 if row['close'] > row['100_day_MA'] else row['Final_Alpha_Factor'] * 0.9, axis=1)
+    
+    return df['Final_Alpha_Factor'].dropna()
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['prev_close'] = df['close'].shift(1)
+    df['high_low'] = df['high'] - df['low']
+    df['high_prev_close'] = (df['high'] - df['prev_close']).abs()
+    df['low_prev_close'] = (df['low'] - df['prev_close']).abs()
+    df['tr'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
+
+    # Calculate Average True Range (ATR) over a 14-day window
+    df['atr'] = df['tr'].rolling(window=14).mean()
+
+    # Integrate Intraday and Open-to-Close Returns
+    df['intraday_return'] = df['high'] - df['low']
+    df['open_to_close_return'] = df['close'] - df['open']
+    df['integrated_return'] = df['intraday_return'] * df['open_to_close_return']
+
+    # Adjust with Volume Factor
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['smoothed_volume_diff'] = df['volume_diff'].ewm(span=5, adjust=False).mean()
+
+    # Combine ATR, Integrated Returns, and Volume Adjustment
+    df['adjusted_atr'] = (df['atr'] * df['integrated_return']) + df['smoothed_volume_diff']
+
+    # Calculate Price Momentum
+    df['sma_short'] = df['close'].rolling(window=10).mean()
+    df['sma_long'] = df['close'].rolling(window=50).mean()
+    df['sma_diff'] = df['sma_short'] - df['sma_long']
+    df['price_momentum'] = df['sma_diff'] * df['adjusted_atr']
+
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['additional_momentum'] = df['intraday_high_low_spread'] * df['open_to_close_return']
+    df['smoothed_additional_momentum'] = df['additional_momentum'].ewm(span=5, adjust=False).mean()
+
+    # Final Alpha Factor
+    df['weighted_integrated_return'] = df['integrated_return'] * df['smoothed_additional_momentum']
+    df['combined_factor'] = df['weighted_integrated_return'] + df['smoothed_additional_momentum']
+
+    # Confirm with Volume
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['combined_factor'] = df['combined_factor'] * df['volume_ratio'] * df['amount_ratio']
+
+    # Adjust for Volume
+    df['max_volume_10d'] = df['volume'].rolling(window=10).max()
+    df['final_alpha_factor'] = (df['adjusted_atr'] + df['price_momentum'] + df['combined_factor']) / np.sqrt(df['volume'])
+    df['final_alpha_factor'] = df['final_alpha_factor'] * (df['volume'] / df['max_volume_10d'])
+
+    return df['final_alpha_factor']
+```

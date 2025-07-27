@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    df['close_open_return'] = df['close'] - df['open']
+    
+    # Integrate Returns
+    df['integrated_returns'] = df['high_low_spread'] + df['close_open_return']
+    
+    # Adjust for Volume and Amount Confirmation
+    df['volume_adjustment'] = (df['volume'] / df['volume'].shift(1)) * (df['amount'] / df['amount'].shift(1))
+    df['integrated_returns_adj'] = df['integrated_returns'] * df['volume_adjustment']
+    
+    # Calculate Average True Range (ATR) with Intraday Return
+    df['tr'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Incorporate Intraday and Open-to-Close Returns
+    df['intraday_return'] = df['high'] - df['low']
+    df['open_close_return'] = df['close'] - df['open']
+    df['integrated_returns'] = df['intraday_return'] + df['open_close_return']
+    
+    # Combine ATR, Integrated Returns, and Volume Adjustment
+    df['atr_integrated_returns'] = df['atr'] * df['integrated_returns_adj']
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['adjusted_atr'] = df['atr_integrated_returns'] + df['volume_diff']
+    
+    # Calculate Price Momentum
+    df['sma_short'] = df['close'].rolling(window=10).mean()
+    df['sma_long'] = df['close'].rolling(window=50).mean()
+    df['price_momentum'] = df['sma_short'] - df['sma_long']
+    df['weighted_price_momentum'] = df['price_momentum'] * df['adjusted_atr']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['momentum'] = df['high_low_spread'] * df['open_close_return']
+    df['smoothed_momentum'] = df['momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha'] = df['weighted_price_momentum'] + df['smoothed_momentum']
+    df['volume_confirmed_alpha'] = df['final_alpha'] / np.sqrt(df['volume'])
+    
+    return df['volume_confirmed_alpha']
+```

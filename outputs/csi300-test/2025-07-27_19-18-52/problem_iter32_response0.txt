@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Intraday Trading Range
+    intraday_range = df['high'] - df['low']
+    
+    # Volume Intensity Score
+    volume_intensity = df['volume'] / (df['high'] - df['low']).replace(0, np.nan)
+    volume_intensity.fillna(method='ffill', inplace=True)
+    
+    # Composite Momentum Factor
+    composite_momentum = (intraday_return * intraday_range * volume_intensity) + 1e-6
+    
+    # Compute Volume-Weighted Moving Average (VWMA) of Close Prices
+    lookback_period_vwma = 20
+    df['close_volume'] = df['close'] * df['volume']
+    vwma = df['close_volume'].rolling(window=lookback_period_vwma).sum() / df['volume'].rolling(window=lookback_period_vwma).sum()
+    
+    # Trend Strength Indicator
+    lookback_period_sma = 50
+    sma_close = df['close'].rolling(window=lookback_period_sma).mean()
+    trend_strength = sma_close - vwma
+    
+    # Weighted Momentum-VWMA Difference
+    weighted_diff = composite_momentum - vwma
+    
+    # Integrated Short-Term Price Trend
+    short_term_ma = df['close'].rolling(window=5).mean()
+    integrated_trend = composite_momentum - short_term_ma
+    
+    # Adjusted Composite Momentum Factor Integrated with VWMA
+    adjusted_composite_momentum = (intraday_return + intraday_range) * volume_intensity
+    adjusted_with_vwma = (adjusted_composite_momentum * vwma) - vwma
+    
+    # Calculate Daily Return
+    daily_return = df['close'].diff().fillna(0)
+    
+    # Final Integrated Alpha Factor
+    weighting_factor = 0.5
+    final_factor = (weighting_factor * daily_return + composite_momentum) + trend_strength + weighted_diff + integrated_trend + adjusted_with_vwma
+    
+    return final_factor
+```

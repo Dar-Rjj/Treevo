@@ -1,0 +1,46 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Multi-period RSI with adaptive weighting
+    periods = [7, 14, 28]
+    rsi_values = []
+    for period in periods:
+        delta = df['close'].diff(1)
+        gain = delta.where(delta > 0, 0).rolling(window=period).mean()
+        loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        rsi_values.append(rsi)
+    
+    # Adaptive weighting based on the standard deviation of the close price
+    volatility = df['close'].rolling(window=10).std()
+    weights_rsi = [volatility / volatility.sum() for _ in periods]
+    rsi_factor = sum(w * r for w, r in zip(weights_rsi, rsi_values))
+
+    # Dynamic MACD with adaptive signal line and variable EMA spans
+    short_ema_span = 12
+    long_ema_span = 26
+    signal_smoothing = 9
+    ema_short = df['close'].ewm(span=short_ema_span, adjust=False).mean()
+    ema_long = df['close'].ewm(span=long_ema_span, adjust=False).mean()
+    macd_line = ema_short - ema_long
+    signal_line = macd_line.ewm(span=signal_smoothing, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+
+    # Volume-Weighted Average Price (VWAP) to integrate volume and price
+    cumulative_volume = df['volume'].cumsum()
+    cumulative_volume_price = (df['volume'] * df['close']).cumsum()
+    vwap = cumulative_volume_price / cumulative_volume
+
+    # Weighted VWAP change to capture the impact of volume on price movements
+    vwpc = (vwap - vwap.shift(1)) * df['volume']
+
+    # Adaptive weighting based on the mean of the volume
+    liquidity = df['volume'].rolling(window=10).mean()
+    weights_vwpc = liquidity / liquidity.sum()
+    vwpc_factor = vwpc * weights_vwpc
+
+    # Combine the multi-period RSI, dynamic MACD, and weighted VWAP change
+    alpha_factor = 0.5 * rsi_factor + 0.3 * macd_histogram + 0.2 * vwpc_factor
+
+    return alpha_factor
+```

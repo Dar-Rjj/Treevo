@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, scaling_high_low=1.2, scaling_vol_weighted=0.6, scaling_momentum=1.8):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N days)
+    df['agg_price_change'] = df['daily_price_change'].rolling(window=N).sum()
+    df['avg_price_change'] = df['agg_price_change'] / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['vol_adj_close_open_diff'] = df['close_open_diff'] * (df['volume'] / avg_volume)
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['combined_high_low_vol_adj'] = df['high_low_range'] * df['vol_adj_close_open_diff']
+    df['sum_combined'] = df['combined_high_low_vol_adj'].rolling(window=N).sum()
+    
+    # Generate Intermediate Alpha Scores
+    df['high_low_momentum_score'] = df['sum_combined'] * scaling_high_low
+    df['vol_weighted_score'] = df['close'] * scaling_vol_weighted
+    df['momentum_score'] = df['avg_price_change'] * scaling_momentum
+    
+    # Integrate Indicators
+    df['spdi'] = (df['close'] > df['close'].rolling(window=5).mean()).astype(int)
+    df['mp_high'] = df['high'].rolling(window=20).max()
+    df['mp_low'] = df['low'].rolling(window=20).min()
+    df['mpr'] = ((df['close'] > (df['mp_high'] + df['mp_low']) / 2)).astype(int)
+    df['vgf'] = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+    
+    # Integrate Momentum, Volume, and Trend Indicators
+    df['imvti'] = (df['spdi'] + df['mpr'] + df['vgf']) / 3
+    
+    # Combine Price and Volume Factors
+    df['combined_momentum_vol_scores'] = df['momentum_score'] + df['vol_weighted_score']
+    
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = df['high_low_momentum_score'] + df['combined_momentum_vol_scores'] + df['imvti']
+    
+    # Incorporate Long-Term Trend
+    df['long_term_trend'] = (df['close'] > df['close'].rolling(window=100).mean()).astype(float)
+    df['final_alpha_factor'] = df['final_alpha_factor'] * (1 + df['long_term_trend'] * 0.1 - (1 - df['long_term_trend']) * 0.1)
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Your DataFrame with columns: 'open', 'high', 'low', 'close', 'amount', 'volume'
+# alpha_factor = heuristics_v2(df)
+```

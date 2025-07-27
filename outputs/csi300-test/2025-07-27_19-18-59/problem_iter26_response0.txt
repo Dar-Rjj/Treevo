@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_return'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['acc_volume_5d'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined momentum by volume trends
+    df['adjusted_momentum'] = df['weighted_return'] * (df['volume_trend'] ** 0.75)
+    
+    # Daily range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Rolling standard deviation of daily range over M days
+    df['range_volatility'] = df['daily_range'].rolling(window=20).std()
+    
+    # Invert rolling standard deviation to reflect stability
+    df['stability'] = 1 / df['range_volatility']
+    
+    # Volume-adjusted true range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['vol_adjusted_tr'] = df['true_range'] * (df['volume'] / df['volume'].shift(1)) ** 0.5
+    
+    # Volume-adjusted momentum
+    df['sma_close_20d'] = df['close'].rolling(window=20).mean()
+    df['momentum_20d'] = df['close'] - df['sma_close_20d']
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_momentum'] = df['momentum_20d'] * df['avg_volume_20d']
+    
+    # Combine factors
+    df['combined_momentum'] = df['adjusted_momentum'] + df['volume_adjusted_momentum']
+    
+    # Smooth combined momentum
+    df['smoothed_momentum'] = df['combined_momentum'].rolling(window=3).mean()
+    
+    # Apply EMA with a 5-day span
+    df['ema_5d'] = df['smoothed_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate weighted sum
+    weights = {'smoothed_momentum': 0.6, 'stability': 0.2, 'ema_5d': 0.2}
+    df['final_alpha_factor'] = df.apply(lambda row: weights['smoothed_momentum'] * row['smoothed_momentum'] + 
+                                                  weights['stability'] * row['stability'] + 
+                                                  weights['ema_5d'] * row['ema_5d'], axis=1)
+    
+    # Return the final alpha factor
+    return df['final_alpha_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

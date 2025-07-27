@@ -1,0 +1,31 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate Exponential Moving Averages (EMA) for different periods
+    ema_short = df['close'].ewm(span=10, adjust=False).mean()
+    ema_long = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Compute the difference between short and long EMAs for trend identification
+    ema_diff = ema_short - ema_long
+    
+    # Calculate Average True Range (ATR) to capture volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    atr = df['tr'].rolling(window=14).mean().fillna(1e-7)
+    
+    # Calculate the volume-weighted close price (VWAP)
+    vwap = (df['amount'] / df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute the relative positioning of the close price with respect to the EMAs
+    relative_positioning = (df['close'] - ema_short) / (ema_long - ema_short)
+    
+    # Calculate the momentum by the difference between today's and yesterday's close price
+    momentum = df['close'].diff(1).fillna(1e-7)
+    
+    # Calculate the On-Balance Volume (OBV) as a volume indicator
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Combine EMA difference, ATR, VWAP, relative positioning, momentum, and OBV
+    factor_values = (ema_diff * vwap * relative_positioning * obv) / (atr * momentum)
+    
+    return factor_values
+```

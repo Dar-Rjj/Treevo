@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    df['Volume_Weighted_HL_Range'] = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate Close-to-Close Return
+    df['Close_to_Close_Return'] = df['close'].pct_change()
+    
+    # Multiply Volume-Weighted High-Low Range by Close-to-Close Return
+    df['Vol_Weighted_HL_Return'] = df['Volume_Weighted_HL_Range'] * df['Close_to_Close_Return']
+    
+    # Smooth the Resulting Series with Exponential Moving Average
+    df['Smoothed_Vol_Weighted_HL_Return'] = df['Vol_Weighted_HL_Return'].ewm(alpha=0.1).mean()
+    
+    # Adjust for Volume Trend
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Final_Factor_Calculation'] = df['Smoothed_Vol_Weighted_HL_Return'] * df['Volume_Change']
+    
+    # Introduce New Intraday Strength Indicator
+    df['Intraday_Strength'] = ((df['high'] - df['low']) / (df['high'] + df['low'])).ewm(alpha=0.1).mean()
+    df['Combined_Momentum'] = df['Final_Factor_Calculation'] + df['Intraday_Strength']
+    
+    # Combine and Smooth Final Factor with Simple Moving Average
+    df['Smoothed_Final_Factor'] = df['Combined_Momentum'].rolling(window=5).mean()
+    
+    # Compute Short-Term and Long-Term Volume Trends
+    df['Short_Term_Volume_Trend'] = df['volume'].rolling(window=5).mean()
+    df['Long_Term_Volume_Trend'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    df['Volume_Trend_Ratio'] = df['Short_Term_Volume_Trend'] / df['Long_Term_Volume_Trend']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    df['Intraday_Return'] = (df['high'] - df['low'])
+    df['Open_to_Close_Return'] = (df['open'] - df['close'])
+    df['Adjusted_Close_Price_Change'] = df['close'].diff() * df['Volume_Trend_Ratio']
+    df['Momentum_Component'] = df['Intraday_Return'] + df['Open_to_Close_Return'] + df['Adjusted_Close_Price_Change']
+    
+    # Compute Volatility Component
+    df['Intraday_Return_Volatility'] = df['Intraday_Return'].rolling(window=5).std()
+    df['Open_to_Close_Return_Volatility'] = df['Open_to_Close_Return'].rolling(window=5).std()
+    df['Volatility_Component'] = df['Intraday_Return_Volatility'] + df['Open_to_Close_Return_Volatility']
+    
+    # Combine Momentum and Volatility
+    df['Combined_Momentum_Volatility'] = df['Momentum_Component'] - 0.5 * df['Volatility_Component']
+    
+    # Final Alpha Factor
+    df['Aggregated_HL_Bandwidth'] = df['high'] - df['low']
+    df['Aggregated_HL_Bandwidth'] = df['Aggregated_HL_Bandwidth'].rolling(window=5).sum()
+    df['Final_Alpha_Factor'] = df['Combined_Momentum_Volatility'] * df['VWAP'] + df['Aggregated_HL_Bandwidth'] + df['Smoothed_Final_Factor']
+    df['Momentum_Volatility_Ratio'] = df['Combined_Momentum_Volatility'] / df['Volatility_Component']
+    df['Final_Alpha_Factor'] += df['Momentum_Volatility_Ratio']
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to capture volatility
+    daily_range = df['high'] - df['low']
+    
+    # Calculate a weighted close based on volume for a more accurate price movement indicator
+    weighted_close = (df['close'] * df['volume']) / df['volume'].rolling(window=5).mean()
+    
+    # Calculate typical price for money flow analysis
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Calculate money flow
+    money_flow = typical_price * df['volume']
+    
+    # Calculate positive and negative money flow
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    
+    # Dynamic window size for money flow ratio
+    dynamic_window = df['volume'].rolling(window=7).mean().apply(lambda x: int(max(1, min(28, x / 100000))))
+    
+    # Calculate the money flow ratio for buying and selling pressure with dynamic window
+    money_flow_ratio = (positive_money_flow.rolling(window=dynamic_window).sum() + 1e-7) / (negative_money_flow.rolling(window=dynamic_window).sum() + 1e-7)
+    
+    # Incorporate the daily range as a measure of volatility
+    volatility_factor = 1 / (daily_range.rolling(window=20).mean() + 1e-7)
+    
+    # Calculate a momentum factor using the difference between the current close and the exponentially weighted moving average
+    exp_momentum = df['close'] - df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the relative strength index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rsi = 100 - (100 / (1 + (gain / loss)))
+    
+    # Combine these factors in a heuristic way to create a novel alpha factor
+    alpha_factor = (weighted_close / (df['open'] + daily_range) * money_flow_ratio * volatility_factor * exp_momentum * rsi).fillna(0)
+    
+    return alpha_factor
+```

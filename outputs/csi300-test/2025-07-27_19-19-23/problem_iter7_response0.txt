@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=10, spike_threshold=0.2, e_w_span=10):
+    """
+    Generate a novel alpha factor based on high-low momentum and price momentum adjusted by volume spikes.
+    
+    Parameters:
+    - df: pandas DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume'] and index as date.
+    - lookback_period: Number of days to sum the high-low difference and volume spikes.
+    - spike_threshold: Percentage increase to define a volume spike.
+    - e_w_span: Span for the exponential moving average.
+    
+    Returns:
+    - pandas Series representing the factor values.
+    """
+    
+    # Calculate High-Low Difference
+    hl_diff = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    volume_pct_change = df['volume'].pct_change()
+    spike_indicator = (volume_pct_change > spike_threshold).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    combined_hl = hl_diff * spike_indicator
+    combined_hl_sum = combined_hl.rolling(window=lookback_period).sum()
+    
+    # Calculate Daily Log Return
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    adjusted_log_returns = log_returns * (1 + (spike_indicator * (spike_threshold - 1)))
+    smoothed_adjusted_returns = adjusted_log_returns.ewm(span=e_w_span).mean()
+    
+    # Cumulative Momentum Factor
+    cumulative_factor = (1 + smoothed_adjusted_returns).cumprod() * (1 + combined_hl_sum)
+    
+    return cumulative_factor
+```

@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Adjust by Inverse of Volume-to-Range Ratio
+    volume_to_range_ratio = df['volume'] / daily_range
+    inverse_volume_to_range_ratio = 1 / volume_to_range_ratio
+    adjusted_intraday_volatility = daily_range * inverse_volume_to_range_ratio
+    
+    # Incorporate Price Momentum
+    price_change = df['close'].diff()
+    sum_abs_price_changes = price_change.abs().rolling(window=5).sum()
+    momentum_factor = price_change / sum_abs_price_changes
+    combined_momentum_volatility = adjusted_intraday_volatility + momentum_factor
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Previous Day Return
+    previous_day_return = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Volume Spike Detection
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike = (volume_change > 0).astype(int)
+    
+    # Compute Volume Adjusted Daily Range
+    avg_volume_last_5_days = df['volume'].rolling(window=5).mean()
+    volume_adjusted_daily_range = daily_range * avg_volume_last_5_days
+    
+    # Weighted Intraday Return
+    weighted_intraday_return = intraday_return * volume_spike
+    
+    # Apply SMA Trend Adjustment
+    sma_10 = df['close'].rolling(window=10).mean()
+    trend_adjustment = (df['close'] > sma_10).astype(float) * 1.2 + (df['close'] <= sma_10).astype(float) * 0.8
+    
+    # Compute Price Difference Momentum
+    price_difference_momentum = (df['close'] - df['close'].shift(1)).rolling(window=5).sum()
+    
+    # Combine Factors
+    combined_factors = (
+        daily_range + 
+        volume_adjusted_daily_range + 
+        weighted_intraday_return + 
+        price_difference_momentum + 
+        previous_day_return + 
+        combined_momentum_volatility
+    )
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factors * trend_adjustment
+    
+    return final_alpha_factor
+```

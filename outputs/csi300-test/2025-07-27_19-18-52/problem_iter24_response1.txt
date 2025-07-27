@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Identify trend direction
+    df['trend_direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Evaluate volatility
+    df['range'] = df['high'] - df['low']
+    df['atr_14'] = df['range'].rolling(window=14).mean()
+    
+    # Analyze volume and price relationship
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_avg'] = df['volume'].rolling(window=10).mean()
+    df['volume_significant'] = (df['volume'] > 1.5 * df['volume_avg']).astype(int)
+    
+    # Investigate momentum
+    df['roc_12'] = df['close'].pct_change(periods=12)
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd_line'] - df['signal_line']
+    
+    # Examine support and resistance levels
+    df['recent_high'] = df['high'].rolling(window=20).max()
+    df['recent_low'] = df['low'].rolling(window=20).min()
+    
+    # Look for breakout signals
+    df['breakout'] = (df['close'] > df['recent_high']).astype(int)
+    df['breakdown'] = (df['close'] < df['recent_low']).astype(int)
+    
+    # Consider gap analysis
+    df['gap_up'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['gap_down'] = (df['open'] < df['close'].shift(1)).astype(int)
+    
+    # Explore intraday price movements
+    df['rsi_14'] = compute_rsi(df['close'], window=14)
+    
+    # Combine all the factors into a single alpha factor
+    alpha_factor = (
+        df['daily_return'] + 
+        df['trend_direction'] * 0.5 +
+        (df['range'] / df['atr_14']) * 0.3 +
+        (df['volume_ratio'] - 1) * 0.2 +
+        df['roc_12'] * 0.4 +
+        df['macd_histogram'] * 0.3 +
+        (df['breakout'] - df['breakdown']) * 0.5 +
+        (df['gap_up'] - df['gap_down']) * 0.2 +
+        (50 - df['rsi_14']) / 50 * 0.3
+    )
+    
+    return alpha_factor.dropna()
+
+def compute_rsi(series, window=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+```

@@ -1,0 +1,30 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    short_window = 5
+    long_window = 20
+    very_long_window = 60
+    
+    # Calculate weighted moving averages
+    short_wma = df['close'].rolling(window=short_window).apply(lambda x: (x * pd.Series(range(1, len(x) + 1))).sum() / pd.Series(range(1, len(x) + 1)).sum(), raw=False)
+    long_wma = df['close'].rolling(window=long_window).apply(lambda x: (x * pd.Series(range(1, len(x) + 1))).sum() / pd.Series(range(1, len(x) + 1)).sum(), raw=False)
+    very_long_wma = df['close'].rolling(window=very_long_window).apply(lambda x: (x * pd.Series(range(1, len(x) + 1))).sum() / pd.Series(range(1, len(x) + 1)).sum(), raw=False)
+
+    # Calculate the modified relative strength index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate Bollinger Bands
+    sma_close = df['close'].rolling(window=long_window).mean()
+    rolling_std = df['close'].rolling(window=long_window).std()
+    upper_band = sma_close + (2 * rolling_std)
+    lower_band = sma_close - (2 * rolling_std)
+
+    # Combine the RSI, ratio of short to long WMA, and Bollinger Band width
+    bb_width = (upper_band - lower_band) / sma_close
+    trend_factor = (short_wma / long_wma) * rsi
+    heuristics_matrix = trend_factor / bb_width
+    return heuristics_matrix

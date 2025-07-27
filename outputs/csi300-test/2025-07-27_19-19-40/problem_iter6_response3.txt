@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    
+    # Calculate the difference between current close and the previous day's close for momentum
+    df['close_diff'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate the 5-day and 20-day moving averages of the closing prices for short-term and medium-term trends
+    df['5_day_avg_close'] = df['close'].rolling(window=5).mean()
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate the ratio of the current volume to the 5-day average volume for volume shock
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_ratio'] = df['volume'] / (df['5_day_avg_volume'] + 1e-7)
+    
+    # Calculate the relative strength compared to the 5-day and 20-day moving averages
+    df['rel_strength_short'] = df['close'] / df['5_day_avg_close'] - 1
+    df['rel_strength_medium'] = df['close'] / df['20_day_avg_close'] - 1
+    
+    # Additional factor: difference between high and low for volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Calculate the RSI (Relative Strength Index) over a 14-period window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the MACD (Moving Average Convergence Divergence)
+    df['12_ema'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['26_ema'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd_line'] = df['12_ema'] - df['26_ema']
+    df['9_ema_macd'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd_line'] - df['9_ema_macd']
+    
+    # Alpha factor: combining momentum, volume shock, recent price trends, intraday volatility, RSI, and MACD
+    alpha_factor = (df['close_diff'] * df['volume_ratio'] * df['rel_strength_short'] * df['rel_strength_medium']) * df['high_low_diff'] * df['rsi'] * df['macd_histogram']
+    
+    return alpha_factor
+```

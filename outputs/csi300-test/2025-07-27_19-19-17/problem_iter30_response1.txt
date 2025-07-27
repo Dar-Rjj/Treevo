@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    close_open_return = df['close'] - df['open']
+    
+    # Integrate Returns (Weighted Sum of Intraday High-Low Spread and Close-Open Return)
+    integrated_returns = 0.5 * intraday_high_low_spread + 0.5 * close_open_return
+    
+    # Smooth the Integrated Returns using EMA with a 7-day window
+    smoothed_returns = integrated_returns.ewm(span=7, adjust=False).mean()
+    
+    # Adjust for Volume Confirmation
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    adjusted_returns = smoothed_returns * np.where(df['volume'] > df['volume'].shift(1), volume_ratio, 1)
+    
+    # Calculate True Range (TR) for each day
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate Average True Range (ATR) over a 21-day window
+    atr = true_range.rolling(window=21, min_periods=1).mean()
+    
+    # Incorporate ATR in Integrated Returns
+    atr_adjusted_returns = adjusted_returns * atr
+    
+    # Calculate Price Momentum
+    short_term_sma = df['close'].rolling(window=10, min_periods=1).mean()
+    long_term_sma = df['close'].rolling(window=60, min_periods=1).mean()
+    price_momentum = short_term_sma - long_term_sma
+    
+    # Final Alpha Factor
+    final_factor = 0.4 * atr_adjusted_returns + 0.6 * price_momentum
+    
+    # Confirm with Volume
+    final_factor = np.where(df['volume'] > df['volume'].shift(1), 
+                             final_factor / (df['volume'] ** (1/3)), 
+                             final_factor)
+    
+    return final_factor
+```

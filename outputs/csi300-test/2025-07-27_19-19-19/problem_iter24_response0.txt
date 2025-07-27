@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Aggregate Price Change Over a Period (N days)
+    df['Accumulated_Price_Change'] = df['Daily_Price_Change'].rolling(window=N).sum()
+    df['Average_Price_Change'] = df['Accumulated_Price_Change'] / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    df['Close_Open_Difference'] = df['close'] - df['open']
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Adjusted_Close_Open_Difference'] = df['Close_Open_Difference'] * (df['volume'] / df['Avg_Volume_20'])
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['Combined_High_Low_Range_VACOD'] = df['High_Low_Range'] * df['Volume_Adjusted_Close_Open_Difference']
+    df['Sum_Combined_HL_VACOD'] = df['Combined_High_Low_Range_VACOD'].rolling(window=10).sum()
+    
+    # Calculate Volume Weighted Average
+    df['Volume_Price_Product'] = df['volume'] * df['close']
+    df['Volume_Sum_20'] = df['volume'].rolling(window=20).sum()
+    df['Volume_Weighted_Close_Price'] = df['Volume_Price_Product'] / df['Volume_Sum_20']
+    
+    # Generate Intermediate Alpha Scores
+    df['High_Low_Momentum_Score'] = df['Sum_Combined_HL_VACOD'] * 1.2
+    df['Volume_Weighted_Score'] = df['Volume_Weighted_Close_Price'] * 0.6
+    df['Momentum_Score'] = df['Average_Price_Change'] * 1.8
+    
+    # Integrate Indicators
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = (df['close'] > df['5_day_MA']).astype(int)
+    df['20_day_High'] = df['high'].rolling(window=20).max()
+    df['20_day_Low'] = df['low'].rolling(window=20).min()
+    df['MPR'] = ((df['close'] - df['20_day_Low']) / (df['20_day_High'] - df['20_day_Low']) > 0.5).astype(int)
+    df['5_day_Avg_Volume'] = df['volume'].rolling(window=5).mean()
+    df['VGF'] = (df['volume'] > df['5_day_Avg_Volume']).astype(int)
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+    
+    # Combine Price and Volume Factors
+    df['Combined_Momentum_Volume_Score'] = df['Momentum_Score'] + df['Volume_Weighted_Score']
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['High_Low_Momentum_Score'] + df['Combined_Momentum_Volume_Score'] + df['IMVTI']
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(alpha=0.4).mean()
+    
+    # Incorporate Long-Term Trend
+    df['100_day_MA'] = df['close'].rolling(window=100).mean()
+    df['Final_Alpha_Factor'] = np.where(df['close'] > df['100_day_MA'], 
+                                         df['Final_Alpha_Factor'] * 1.1, 
+                                         df['Final_Alpha_Factor'] * 0.9)
+    
+    return df['Final_Alpha_Factor']
+```

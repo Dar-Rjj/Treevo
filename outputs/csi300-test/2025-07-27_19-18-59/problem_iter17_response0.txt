@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (2 * df['5_day_return'] + df['20_day_return']) / 3
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Adjust combined intraday and closing price momentum by volume trend
+    df['adjusted_momentum'] = df['weighted_returns'] * np.sqrt(df['volume_trend'])
+    
+    # Volume-weighted true range
+    df['true_range'] = df[['high' - 'low', abs(df['high'] - df['close'].shift(1)), abs(df['low'] - df['close'].shift(1))]].max(axis=1)
+    df['volume_weighted_true_range'] = df['true_range'] * (df['volume'] / df['volume'].shift(1))
+    
+    # High-low range stability
+    M = 20  # Number of days for the rolling standard deviation
+    df['range_stability'] = 1 / df['intraday_range'].rolling(window=M).std()
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_weighted_true_range']
+    
+    # Smooth combined momentum with a 3-day EMA
+    df['smoothed_combined_factors'] = df['combined_factors'].ewm(span=3).mean()
+    
+    # Incorporate weighted sum with predefined weights
+    weight_momentum = 0.7
+    weight_stability = 0.3
+    df['final_alpha_factor'] = (weight_momentum * df['smoothed_combined_factors'] + 
+                                weight_stability * df['range_stability'])
+    
+    return df['final_alpha_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    high_low_range = (df['high'] - df['low']) * df['volume']
+    
+    # Incorporate Historical Price Change
+    close_to_close_return = (df['close'].pct_change()).fillna(0)
+    volume_weighted_high_low = high_low_range * close_to_close_return
+    
+    # Adjust for Volume and Amount Trend
+    volume_change = df['volume'].pct_change().fillna(0)
+    amount_change = df['amount'].pct_change().fillna(0)
+    
+    # Final Factor Calculation based on Volume and Amount Changes
+    factor = volume_weighted_high_low
+    factor[volume_change > 0] *= 1.5 if amount_change[volume_change > 0] > 0 else 1.2
+    factor[(volume_change <= 0) & (amount_change > 0)] *= 1.2
+    factor[(volume_change <= 0) & (amount_change <= 0)] *= 0.8
+    
+    # Smooth the Resulting Series
+    ema_factor = factor.ewm(span=10, adjust=False).mean()
+    sma_factor = factor.rolling(window=20).mean()
+    smoothed_factor = 0.5 * ema_factor + 0.5 * sma_factor
+    
+    # Calculate Intraday and Open-to-Close Returns
+    intraday_return = df['high'] - df['low']
+    open_to_close_return = df['open'] - df['close']
+    
+    # Compute Short-Term and Long-Term Volume Trends
+    short_term_volume_trend = df['volume'].rolling(window=5).mean()
+    long_term_volume_trend = df['volume'].rolling(window=20).mean()
+    volume_trend_ratio = short_term_volume_trend / long_term_volume_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum())
+    
+    # Compute Final Momentum Component
+    adjusted_close_price_change = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    long_term_momentum = adjusted_close_price_change * volume_trend_ratio
+    intraday_momentum = intraday_return + open_to_close_return
+    combined_momentum = intraday_momentum + long_term_momentum
+    
+    # Compute Volatility Component
+    intraday_volatility = intraday_return.rolling(window=20).std()
+    open_to_close_volatility = open_to_close_return.rolling(window=20).std()
+    volatility = 0.5 * intraday_volatility + 0.5 * open_to_close_volatility
+    
+    # Combine Momentum and Volatility
+    momentum_adjusted = combined_momentum - 0.5 * volatility
+    
+    # Final Alpha Factor
+    alpha_factor = momentum_adjusted * vwap + (df['high'] - df['low']).rolling(window=20).mean() + smoothed_factor
+    
+    return alpha_factor
+```

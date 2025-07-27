@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the Rate of Change in Closing Price
+    df['daily_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Apply Logarithmic Transformation to Returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Investigate the Ratio of Today's Volume to the Previous Day's Volume
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Weight Price Momentum by Volume Trend
+    df['volume_weighted_log_momentum'] = df['log_return'] * df['volume_ratio']
+    
+    # Calculate the Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Measure Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight Intraday Return by Volume Change
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_ratio']
+    
+    # Integrate Intraday Volatility and Weighted Intraday Return
+    df['combined_intraday_factor'] = df['intraday_volatility'] + df['weighted_intraday_return']
+    
+    # Calculate the Amount Change
+    df['amount_change'] = df['amount'] / df['amount'].shift(1)
+    
+    # Combine with Volume-Weighted Price Momentum
+    df['amount_adjusted_momentum'] = df['volume_weighted_log_momentum'] * df['amount_change']
+    
+    # Moving Sum on Adjusted Intraday Movements (N Days)
+    N = 30
+    df['aggregated_movements'] = df['combined_intraday_factor'].rolling(window=N).sum()
+    
+    # Compute the Ratio of Aggregated Movements to Average Close over N Days
+    df['movement_ratio'] = df['aggregated_movements'] / df['close'].rolling(window=N).mean()
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Conditionally Adjust Alpha Factor
+    df['adjusted_factor'] = np.where(
+        df['open_to_close_return'] > 0,
+        df['movement_ratio'] * (1 + 0.7 * df['open_to_close_return']),
+        df['movement_ratio'] * (1 - 0.7 * np.abs(df['open_to_close_return']))
+    )
+    
+    return df['adjusted_factor']
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    volume_zscore = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    spike_indicator = (volume_zscore > 2).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    combined_high_low = (high_low_diff * spike_indicator).rolling(window=10).sum()
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    adjusted_returns = daily_log_return * (1 + 0.5 * spike_indicator)
+    
+    # Smooth the Adjusted Returns
+    smoothed_adjusted_returns = adjusted_returns.ewm(span=10, adjust=False).mean()
+    
+    # Price Momentum
+    weighted_high_low = (high_low_diff * np.arange(1, 11)[::-1]).rolling(window=10).sum() / 55
+    
+    # Volume Trend
+    vroc = df['volume'].pct_change(periods=10)
+    
+    # Combined Factor
+    combined_factor = (combined_high_low + smoothed_adjusted_returns) * vroc
+    
+    # Cumulative Momentum Factor
+    cumulative_momentum = (1 + smoothed_adjusted_returns).cumprod()
+    
+    # Additional Factor: Volatility-Adjusted Momentum
+    daily_volatility = df['close'].rolling(window=10).std()
+    normalized_returns = daily_log_return / daily_volatility
+    smoothed_normalized_returns = normalized_returns.ewm(span=10, adjust=False).mean()
+    
+    # Enhanced Combined Factor
+    enhanced_combined_factor = combined_factor + smoothed_normalized_returns
+    
+    # Final Factor
+    final_factor = (enhanced_combined_factor * cumulative_momentum) + smoothed_adjusted_returns
+    
+    return final_factor
+```

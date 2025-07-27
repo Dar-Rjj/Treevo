@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Average 5-day and 20-day Returns
+    df['avg_return'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Combine with Intraday Return: (High - Low) * ((Close - Open) / Open)
+    df['intraday_return'] = (df['high'] - df['low']) * ((df['close'] - df['open']) / df['open'])
+    
+    # Integrated Intraday and Closing Price Momentum
+    df['combined_momentum'] = df['avg_return'] + df['intraday_return']
+    
+    # Determine Volume Trend: Volume(t) / Volume(t-1)
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Adjust Combined Momentum: Combined Momentum * Volume Trend
+    df['adjusted_momentum'] = df['combined_momentum'] * df['volume_trend']
+    
+    # Calculate True Range
+    df['true_range'] = df[['high' - 'low', 'high' - df['close'].shift(1), 'low' - df['close'].shift(1)]].max(axis=1)
+    
+    # Measure High-Low Range Stability
+    df['range_stability'] = df['high'] - df['low']
+    df['range_stability_std'] = df['range_stability'].rolling(window=20).std()
+    
+    # Combine Adjusted Momentum and True Range
+    df['combined_factor'] = df['adjusted_momentum'] + df['true_range']
+    
+    # Apply 3-day SMA to the combined factor for final alpha factor
+    df['alpha_factor'] = df['combined_factor'].rolling(window=3).mean()
+    
+    return df['alpha_factor'].dropna()
+```

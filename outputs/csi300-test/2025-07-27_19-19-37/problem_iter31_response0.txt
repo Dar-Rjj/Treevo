@@ -1,0 +1,32 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the long-term momentum as the difference between current close and 20-day exponential moving average of close
+    long_term_momentum = df['close'] - df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the short-term volatility as the standard deviation of log returns over a dynamic window
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    short_term_volatility = log_returns.rolling(window=5).std()
+    
+    # Calculate a dynamic weighted moving average, giving more weight to recent data with an adaptive window
+    def adaptive_weighted_close(x):
+        weights = np.arange(1, len(x) + 1)
+        return (x * weights).sum() / weights.sum()
+    
+    weighted_close = df['close'].rolling(window=20, min_periods=1).apply(adaptive_weighted_close, raw=True)
+    
+    # Calculate the relative strength index (RSI) with a 14-day window, adjusted for volume
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (delta.where(delta < 0, 0).abs()).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Adjust the RSI based on volume, using a 10-day exponential moving average of volume
+    volume_ema = df['volume'].ewm(span=10, adjust=False).mean()
+    rsi_adjusted_factor = rsi / 50 * (df['volume'] / volume_ema)
+    
+    # Generate the alpha factor by combining the long-term momentum, short-term volatility, and dynamic weighted moving average, adjusted for RSI
+    alpha_factor = ((long_term_momentum + short_term_volatility) / (weighted_close + 1e-7)) * rsi_adjusted_factor
+    
+    return alpha_factor
+```

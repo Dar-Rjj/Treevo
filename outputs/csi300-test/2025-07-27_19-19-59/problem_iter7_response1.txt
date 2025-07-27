@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to capture volatility
+    daily_range = df['high'] - df['low']
+    
+    # Calculate a smoothed, volume-weighted close for a more accurate price movement indicator
+    weighted_close = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate typical price for money flow analysis
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Calculate money flow
+    money_flow = typical_price * df['volume']
+    
+    # Calculate positive and negative money flow
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    
+    # Calculate the money flow ratio for buying and selling pressure
+    money_flow_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum().fillna(1)
+    
+    # Incorporate the daily range as a measure of volatility
+    volatility_factor = 1 / (daily_range.rolling(window=14).mean() + 1e-7)
+    
+    # Calculate an exponential momentum factor using the difference between the current close and the exponential moving average
+    momentum_factor = df['close'] - df['close'].ewm(span=20).mean()
+    
+    # Enhance with liquidity: use the rolling sum of volume as a proxy
+    liquidity_factor = df['volume'].rolling(window=10).sum()
+    
+    # Combine these factors in a heuristic way to create a novel alpha factor
+    alpha_factor = (weighted_close / (df['open'] + daily_range) * money_flow_ratio * volatility_factor * momentum_factor * liquidity_factor).fillna(0)
+    
+    return alpha_factor
+```

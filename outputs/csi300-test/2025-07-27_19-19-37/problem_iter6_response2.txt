@@ -1,0 +1,29 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between the close and open price
+    close_open_diff = df['close'] - df['open']
+    
+    # Calculate the ratio of amount to volume as a price factor
+    price_factor = df['amount'] / (df['volume'] + 1e-7)
+    
+    # Calculate the average true range (ATR) over the last 14 days for volatility
+    tr1 = abs(df['high'] - df['low'])
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Calculate the 5-day and 20-day weighted moving averages of the close price
+    weights_5 = np.array([0.1, 0.2, 0.3, 0.2, 0.1])
+    ma5_weighted = df['close'].rolling(window=5).apply(lambda x: (x * weights_5).sum(), raw=True)
+    weights_20 = np.arange(1, 21)
+    ma20_weighted = df['close'].rolling(window=20).apply(lambda x: (x * weights_20).sum() / weights_20.sum(), raw=True)
+    
+    # Generate the alpha factor by scaling the close-open difference with the price factor and ATR
+    alpha_factor = (close_open_diff * price_factor) / (atr + 1e-7)
+    
+    # Incorporate momentum by adding the difference between the 5-day and 20-day weighted moving averages
+    alpha_factor += (ma5_weighted - ma20_weighted)
+    
+    return alpha_factor
+```

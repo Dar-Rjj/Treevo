@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+
+    # Aggregate Price Change Over a Period
+    df['Accumulated_Price_Change'] = df['Daily_Price_Change'].rolling(window=N).sum()
+    df['Average_Price_Change'] = df['Accumulated_Price_Change'] / N
+
+    # Calculate Volume Adjusted Close-Open Difference
+    df['Close_Open_Difference'] = df['close'] - df['open']
+    df['Volume_Adjusted_Close_Open'] = (df['Close_Open_Difference'] * df['volume']) / df['volume'].rolling(window=20).mean()
+
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference
+    df['Combined_High_Low_Volume'] = (df['High_Low_Range'] * df['Volume_Adjusted_Close_Open']).rolling(window=10).sum()
+
+    # Generate Intermediate Alpha Scores
+    scaling_factors = {'High_Low_Momentum': 1.2, 'Volume_Weighted': 0.6, 'Momentum': 1.8}
+    df['High_Low_Momentum_Score'] = df['Combined_High_Low_Volume'] * scaling_factors['High_Low_Momentum']
+    df['Volume_Weighted_Score'] = (df['close'] * df['volume']).rolling(window=20).mean() * scaling_factors['Volume_Weighted']
+    df['Momentum_Score'] = df['Average_Price_Change'] * scaling_factors['Momentum']
+
+    # Integrate Indicators
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = df.apply(lambda row: 1 if row['close'] > row['5_day_MA'] else 0, axis=1)
+
+    df['20_day_High'] = df['high'].rolling(window=20).max()
+    df['20_day_Low'] = df['low'].rolling(window=20).min()
+    df['MPR'] = df.apply(lambda row: 1 if (row['close'] - row['20_day_Low']) > (row['20_day_High'] - row['close']) else 0, axis=1)
+
+    df['3_day_Avg_Volume'] = df['volume'].rolling(window=3).mean()
+    df['VGF'] = df.apply(lambda row: 1 if row['volume'] > row['3_day_Avg_Volume'] else 0, axis=1)
+
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+
+    # Combine Price and Volume Factors
+    df['Combined_Momentum_Volume_Score'] = df['Momentum_Score'] + df['Volume_Weighted_Score']
+
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['High_Low_Momentum_Score'] + df['Combined_Momentum_Volume_Score'] + df['IMVTI']
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(alpha=0.4).mean()
+
+    # Incorporate Long-Term Trend
+    df['100_day_MA'] = df['close'].rolling(window=100).mean()
+    df['Final_Alpha_Factor'] = df.apply(
+        lambda row: row['Final_Alpha_Factor'] * 1.1 if row['close'] > row['100_day_MA'] else row['Final_Alpha_Factor'] * 0.9, axis=1
+    )
+
+    return df['Final_Alpha_Factor']
+```

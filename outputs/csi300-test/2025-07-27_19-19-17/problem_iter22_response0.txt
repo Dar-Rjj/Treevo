@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute True Range (TR)
+    df['Previous Close'] = df['close'].shift(1)
+    df['TR'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['Previous Close']), abs(x['low'] - x['Previous Close'])), axis=1)
+    
+    # Calculate ATR over 14 days
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Intraday and Open-to-Close Returns
+    df['Intraday Return'] = df['high'] - df['low']
+    df['Open-to-Close Return'] = df['close'] - df['open']
+    df['Integrated Return'] = df['Intraday Return'] + df['Open-to-Close Return']
+    
+    # Volume Factor
+    df['Volume Difference'] = df['volume'] - df['volume'].shift(1)
+    df['Average Volume'] = df['volume'].rolling(window=20).mean()
+    df['Normalized Volume'] = df['Volume Difference'] / df['Average Volume']
+    
+    # Adjusted ATR
+    df['Adjusted ATR'] = (df['ATR'] * df['Integrated Return']) + df['Normalized Volume']
+    
+    # Price Momentum
+    df['Short-term SMA'] = df['close'].rolling(window=10).mean()
+    df['Long-term SMA'] = df['close'].rolling(window=50).mean()
+    df['SMA Difference'] = df['Short-term SMA'] - df['Long-term SMA']
+    
+    # Additional Momentum
+    df['Intraday High-Low Spread'] = df['high'] - df['low']
+    df['Momentum Product'] = df['Intraday High-Low Spread'] * df['Open-to-Close Return']
+    df['Smoothed Momentum'] = df['Momentum Product'].ewm(span=5, adjust=False).mean()
+    
+    # Combined Factor
+    df['Combined Factor'] = df['Adjusted ATR'] + (df['SMA Difference'] * df['Adjusted ATR']) + df['Smoothed Momentum']
+    
+    # Volume Confirmation
+    df['Volume-Adjusted Factor'] = df['Combined Factor'] / np.sqrt(df['volume'])
+    df['Max Volume'] = df['volume'].rolling(window=10).max()
+    df['Final Factor'] = df['Volume-Adjusted Factor'] * (df['volume'] / df['Max Volume'])
+    
+    return df['Final Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Incorporate Historical Price Change
+    close_change = df['close'].pct_change()
+    
+    # Adjust for Volume Trend
+    volume_change = df['volume'].pct_change()
+    volume_adjustment = volume_change.apply(lambda x: 1 + x if x > 0 else 1 - abs(x))
+    
+    # Combine and Smooth Final Factor
+    combined_factor = high_low_spread * close_change * volume_adjustment
+    smoothed_factor = combined_factor.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Short-Term Volume Trend
+    short_term_vol_trend = df['volume'].rolling(window=5).mean()
+    
+    # Calculate Long-Term Volume Trend
+    long_term_vol_trend = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    vol_trend_ratio = short_term_vol_trend / long_term_vol_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    final_momentum = (intraday_return + open_to_close_return) * vol_trend_ratio
+    
+    # Compute Volatility Component
+    intraday_volatility = intraday_return.rolling(window=5).std()
+    open_to_close_volatility = open_to_close_return.rolling(window=5).std()
+    volatility_component = (intraday_volatility + open_to_close_volatility) * 0.5
+    
+    # Combine Momentum and Volatility
+    combined_momentum_volatility = final_momentum - volatility_component
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_momentum_volatility * vwap + high_low_spread + smoothed_factor
+    
+    return final_alpha_factor
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100, freq='D'),
+#     'open': np.random.rand(100),
+#     'high': np.random.rand(100),
+#     'low': np.random.rand(100),
+#     'close': np.random.rand(100),
+#     'amount': np.random.rand(100) * 100,
+#     'volume': np.random.randint(100, 1000, size=100)
+# }).set_index('date')
+
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

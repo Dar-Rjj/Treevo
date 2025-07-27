@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Intraday Trading Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Volume Intensity Score
+    df['volume_intensity'] = df['volume'] / df['intraday_range']
+    
+    # Composite Momentum Factor
+    df['composite_momentum'] = df['intraday_return'] * df['intraday_range'] * df['volume_intensity']
+    
+    # Compute Volume-Weighted Moving Average (VWMA) of Close Prices
+    lookback_period = 20
+    df['vwm_multiplier'] = df['close'] * df['volume']
+    df['vwm_denominator'] = df['volume'].rolling(window=lookback_period).sum()
+    df['vwm_numerator'] = df['vwm_multiplier'].rolling(window=lookback_period).sum()
+    df['vwma'] = df['vwm_numerator'] / df['vwm_denominator']
+    
+    # Integrate Adjusted Composite Momentum Factor with VWMA
+    df['adjusted_composite_momentum'] = df['composite_momentum'] - df['vwma']
+    
+    # Analyze price patterns
+    short_sma_window = 5
+    long_sma_window = 20
+    df['short_sma'] = df['close'].rolling(window=short_sma_window).mean()
+    df['long_sma'] = df['close'].rolling(window=long_sma_window).mean()
+    df['sma_trend'] = (df['close'] > df['short_sma']).astype(int)
+    df['sma_crossover'] = (df['short_sma'] > df['long_sma']).astype(int)
+    
+    # Incorporate volume analysis
+    avg_volume_short_window = 5
+    df['avg_volume'] = df['volume'].rolling(window=avg_volume_short_window).mean()
+    df['volume_strength'] = (df['volume'] > df['avg_volume']).astype(int)
+    df['volume_spike'] = (df['volume'] > df['avg_volume'] * 1.5).astype(int)
+    
+    # Combine price and volume insights
+    df['price_movement'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['volume_confirmation'] = (df['volume_spike'] & df['price_movement']).astype(int)
+    
+    # Explore advanced price and volume features
+    rsi_window = 14
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    df['obv'] = ((df['close'] > df['close'].shift(1)) * df['volume']).cumsum()
+    
+    # Synthesize alpha factor
+    df['alpha_factor'] = (
+        0.3 * df['adjusted_composite_momentum'] +
+        0.2 * df['sma_trend'] +
+        0.2 * df['sma_crossover'] +
+        0.1 * df['volume_strength'] +
+        0.1 * df['volume_confirmation'] +
+        0.05 * (df['rsi'] < 30).astype(int) - 0.05 * (df['rsi'] > 70).astype(int) +
+        0.05 * (df['obv'] > df['obv'].shift(1)).astype(int)
+    )
+    
+    return df['alpha_factor']
+```

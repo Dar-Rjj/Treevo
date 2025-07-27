@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['Previous Close'] = df['close'].shift(1)
+    df['TR'] = df[['high', 'low', 'close', 'Previous Close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[3]), abs(x[1] - x[3])), axis=1)
+    
+    # Compute Average True Range (ATR) over 14 days
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Incorporate Intraday and Open-to-Close Returns
+    df['Intraday Return'] = df['high'] - df['low']
+    df['Open-to-Close Return'] = df['close'] - df['open']
+    df['Integrated Return'] = df['Intraday Return'] + df['Open-to-Close Return']
+    
+    # Adjust with Volume Difference
+    df['Volume Difference'] = df['volume'] - df['volume'].shift(1)
+    df['Volume Adjustment'] = np.where(df['volume'] > df['volume'].shift(1), df['volume'] / df['volume'].shift(1), 1)
+    df['Amount Adjustment'] = np.where(df['amount'] > df['amount'].shift(1), df['amount'] / df['amount'].shift(1), 1)
+    df['Combined Adjustment'] = np.where((df['volume'] > df['volume'].shift(1)) & (df['amount'] > df['amount'].shift(1)), 
+                                         df['Volume Adjustment'] * df['Amount Adjustment'], 1)
+    
+    # Combine ATR and Integrated Returns
+    df['ATR Integrated Return'] = df['ATR'] * df['Integrated Return']
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Intraday High-Low Spread'] = df['high'] - df['low']
+    df['Momentum Product'] = df['Intraday High-Low Spread'] * df['Open-to-Close Return']
+    df['Smoothed Momentum'] = df['Momentum Product'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Price Momentum
+    df['Short-term SMA'] = df['close'].rolling(window=10).mean()
+    df['Long-term SMA'] = df['close'].rolling(window=50).mean()
+    df['SMA Difference'] = df['Short-term SMA'] - df['Long-term SMA']
+    
+    # Combine ATR, Integrated Returns, and Momentum
+    df['Adjusted ATR'] = df['ATR'] * df['Integrated Return']
+    df['Weighted Integrated Return'] = df['Adjusted ATR'] * df['Combined Adjustment']
+    df['Price Momentum'] = df['SMA Difference'] * df['ATR']
+    df['Volume-Adjusted Momentum'] = df['Smoothed Momentum'] * df['Combined Adjustment']
+    
+    # Final Alpha Factor
+    df['Final Alpha Factor'] = (df['Weighted Integrated Return'] + df['Volume-Adjusted Momentum'] + 
+                                df['Price Momentum'] + df['open'] - df['open'].rolling(window=10).mean())
+    
+    return df['Final Alpha Factor']
+```

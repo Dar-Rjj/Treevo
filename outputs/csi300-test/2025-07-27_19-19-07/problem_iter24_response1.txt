@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    high_low_range = (df['high'] - df['low']) * df['volume']
+    
+    # Incorporate Historical Price Change
+    close_to_close_return = df['close'].pct_change()
+    high_low_adj = high_low_range * close_to_close_return
+    
+    # Adjust for Volume Trend
+    volume_change = df['volume'].pct_change()
+    volume_adj_factor = np.where(volume_change > 0, 1.5, 0.5)
+    volume_adjusted_factor = high_low_adj * volume_adj_factor
+    
+    # Smooth the Resulting Series
+    ema_alpha = 0.2
+    sma_window = 10
+    smoothed_factor = (volume_adjusted_factor.ewm(alpha=ema_alpha).mean() + 
+                       volume_adjusted_factor.rolling(window=sma_window).mean()) / 2
+    
+    # Adjust for Amount Trend
+    amount_change = df['amount'].pct_change()
+    amount_adj_factor = np.where((volume_change > 0) & (amount_change > 0), 1.5,
+                                 np.where((volume_change > 0) | (amount_change > 0), 1, 0.5))
+    amount_adjusted_factor = smoothed_factor * amount_adj_factor
+    
+    # Combine and Smooth Final Factor
+    final_smoothed_factor = amount_adjusted_factor.rolling(window=sma_window).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = (df['open'] - df['close']) / df['open']
+    
+    # Compute Short-Term and Long-Term Volume Trends
+    short_term_vol_trend = df['volume'].rolling(window=5).mean()
+    long_term_vol_trend = df['volume'].rolling(window=20).mean()
+    vol_trend_ratio = short_term_vol_trend / long_term_vol_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / 
+            df['volume'].cumsum())
+    
+    # Compute Final Momentum Component
+    adjusted_close_price_change = df['close'].pct_change() * vol_trend_ratio
+    long_term_momentum = adjusted_close_price_change
+    intraday_momentum = intraday_return + open_to_close_return
+    combined_momentum = intraday_momentum + long_term_momentum
+    
+    # Compute Volatility Component
+    intraday_volatility = intraday_return.rolling(window=sma_window).std()
+    open_to_close_volatility = open_to_close_return.rolling(window=sma_window).std()
+    total_volatility = (intraday_volatility + open_to_close_volatility) / 2
+    
+    # Combine Momentum and Volatility
+    combined_momentum_volatility = combined_momentum - (total_volatility * 0.5)
+    
+    # Introduce New Factor: Momentum-Volatility Ratio
+    momentum_volatility_ratio = combined_momentum / total_volatility
+    momentum_volatility_ratio = np.sign(momentum_volatility_ratio) * np.abs(momentum_volatility_ratio) ** 0.5
+    
+    # Final Alpha Factor
+    alpha_factor = (combined_momentum_volatility * vwap +
+                    high_low_range.rolling(window=sma_window).mean() +
+                    final_smoothed_factor)
+    
+    return alpha_factor
+```

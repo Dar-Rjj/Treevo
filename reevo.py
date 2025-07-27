@@ -79,18 +79,35 @@ class ReEvo:
         
         
         # Common prompts
-        self.system_generator_prompt = file_to_string(f'{self.prompt_dir}/common/system_generator.txt')
-        self.system_reflector_prompt = file_to_string(f'{self.prompt_dir}/common/system_reflector.txt')
-        self.user_reflector_st_prompt = file_to_string(f'{self.prompt_dir}/common/user_reflector_st.txt') if self.problem_type != "black_box" else file_to_string(f'{self.prompt_dir}/common/user_reflector_st_black_box.txt') # shrot-term reflection
-        self.user_reflector_lt_prompt = file_to_string(f'{self.prompt_dir}/common/user_reflector_lt.txt') # long-term reflection
-        self.crossover_prompt = file_to_string(f'{self.prompt_dir}/common/crossover.txt')
-        self.mutation_prompt = file_to_string(f'{self.prompt_dir}/common/mutation.txt')
-        self.user_generator_prompt = file_to_string(f'{self.prompt_dir}/common/user_generator.txt').format(
+        # self.system_generator_prompt = file_to_string(f'{self.prompt_dir}/common/system_generator.txt')
+        # self.system_reflector_prompt = file_to_string(f'{self.prompt_dir}/common/system_reflector.txt')
+        # self.user_reflector_st_prompt = file_to_string(f'{self.prompt_dir}/common/user_reflector_st.txt') if self.problem_type != "black_box" else file_to_string(f'{self.prompt_dir}/common/user_reflector_st_black_box.txt') # shrot-term reflection
+        # self.user_reflector_lt_prompt = file_to_string(f'{self.prompt_dir}/common/user_reflector_lt.txt') # long-term reflection
+        # self.crossover_prompt = file_to_string(f'{self.prompt_dir}/common/crossover.txt')
+        # self.mutation_prompt = file_to_string(f'{self.prompt_dir}/common/mutation.txt')
+        # self.user_generator_prompt = file_to_string(f'{self.prompt_dir}/common/user_generator.txt').format(
+        #     func_name=self.func_name, 
+        #     problem_desc=self.problem_desc,
+        #     func_desc=self.func_desc,
+        #     )
+        # self.seed_prompt = file_to_string(f'{self.prompt_dir}/common/seed.txt').format(
+        #     seed_func=self.seed_func,
+        #     func_name=self.func_name,
+        # )
+
+        # CommonF prompts
+        self.system_generator_prompt = file_to_string(f'{self.prompt_dir}/commonF/system_generator.txt')
+        self.system_reflector_prompt = file_to_string(f'{self.prompt_dir}/commonF/system_reflector.txt')
+        self.user_reflector_st_prompt = file_to_string(f'{self.prompt_dir}/commonF/user_reflector_st.txt') if self.problem_type != "black_box" else file_to_string(f'{self.prompt_dir}/commonF/user_reflector_st_black_box.txt') # shrot-term reflection
+        self.user_reflector_lt_prompt = file_to_string(f'{self.prompt_dir}/commonF/user_reflector_lt.txt') # long-term reflection
+        self.crossover_prompt = file_to_string(f'{self.prompt_dir}/commonF/crossover.txt')
+        self.mutation_prompt = file_to_string(f'{self.prompt_dir}/commonF/mutation.txt')
+        self.user_generator_prompt = file_to_string(f'{self.prompt_dir}/commonF/user_generator.txt').format(
             func_name=self.func_name, 
             problem_desc=self.problem_desc,
             func_desc=self.func_desc,
             )
-        self.seed_prompt = file_to_string(f'{self.prompt_dir}/common/seed.txt').format(
+        self.seed_prompt = file_to_string(f'{self.prompt_dir}/commonF/seed.txt').format(
             seed_func=self.seed_func,
             func_name=self.func_name,
         )

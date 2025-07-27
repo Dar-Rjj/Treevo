@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=10, spike_threshold=2, ema_span=5, vroc_period=10, volatility_lookback=10):
+    # Calculate High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Identify Volume Spikes using Z-Score
+    rolling_std = df['volume'].rolling(window=lookback_period).std()
+    z_score = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / rolling_std
+    volume_spikes = (z_score > spike_threshold).astype(int)
+    
+    # Combine High-Low Difference and Volume Spikes
+    high_low_spike = high_low_diff * volume_spikes
+    high_low_sum = high_low_spike.rolling(window=lookback_period).sum()
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Adjust Momentum for Volume Spikes
+    adjusted_returns = daily_log_return * (1 + (volume_spikes * 0.5))  # Weight of 0.5 for spikes
+    
+    # Smooth the Adjusted Returns using Exponential Moving Average
+    smoothed_adjusted_returns = adjusted_returns.ewm(span=ema_span).mean()
+    
+    # Price Momentum: Weighted Average High-Low Difference
+    weights = np.arange(1, lookback_period + 1) / lookback_period
+    weighted_high_low = (high_low_diff.rolling(window=lookback_period).apply(lambda x: (x * weights).sum(), raw=True))
+    
+    # Volume Trend: Volume Rate of Change (VROC)
+    vroc = df['volume'].pct_change(periods=vroc_period)
+    
+    # Combined Factor
+    combined_factor = high_low_sum + smoothed_adjusted_returns
+    combined_with_volume_trend = combined_factor * vroc
+    
+    # Additional Factor: Volatility-Adjusted Momentum
+    daily_volatility = df['close'].rolling(window=volatility_lookback).std()
+    normalized_returns = daily_log_return / daily_volatility
+    smoothed_normalized_returns = normalized_returns.ewm(span=ema_span).mean()
+    
+    # Enhanced Combined Factor
+    enhanced_combined_factor = combined_with_volume_trend + smoothed_normalized_returns
+    
+    return enhanced_combined_factor
+```

@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Daily Price Change and its Percentage
+    daily_price_change = df['close'].diff()
+    daily_price_change_percentage = daily_price_change / df['close'].shift(1)
+    
+    # Aggregate Price Change Over a Period (e.g., N=20)
+    N = 20
+    accumulated_price_change = daily_price_change.rolling(window=N).sum()
+    average_price_change = accumulated_price_change / N
+    
+    # Calculate Volume Adjusted Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    volume_adjusted_close_open_diff = close_open_diff * (df['volume'] / avg_volume_10)
+    
+    # Combine High-Low Range and Volume Adjusted Close-Open Difference over the last 5 days
+    combined_hl_range_vol_adj = (high_low_range * volume_adjusted_close_open_diff).rolling(window=5).sum()
+    
+    # Compute Short-Term Price Direction (SPDI)
+    ma_5 = df['close'].rolling(window=5).mean()
+    spdi = (df['close'] > ma_5).astype(int)
+    
+    # Compute Medium-Term Price Range (MPR)
+    rolling_high_20 = df['close'].rolling(window=20).max()
+    rolling_low_20 = df['close'].rolling(window=20).min()
+    mpr = ((df['close'] - rolling_low_20) / (rolling_high_20 - rolling_low_20) > 0.5).astype(int)
+    
+    # Calculate Volume Growth (VGF)
+    ma_volume_3 = df['volume'].rolling(window=3).mean()
+    vgf = (df['volume'] > ma_volume_3).astype(int)
+    
+    # Integrate Indicators to get IMVTI
+    imvti = (spdi + mpr + vgf) / 3
+    
+    # Calculate Volume Weighted Average
+    volume_price_product = df['volume'] * df['close']
+    volume_weighted_close_price = volume_price_product / df['volume'].rolling(window=N).sum()
+    
+    # Generate Intermediate Alpha Scores
+    high_low_momentum_score = combined_hl_range_vol_adj * 1.0
+    volume_weighted_score = volume_weighted_close_price * 0.5
+    
+    # Combine Price and Volume Factors
+    momentum_score = average_price_change * 1.5
+    combined_momentum_vol_scores = momentum_score + volume_weighted_score
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = high_low_momentum_score + combined_momentum_vol_scores + imvti
+    smoothed_alpha_factor = final_alpha_factor.ewm(alpha=0.3).mean()
+    
+    return smoothed_alpha_factor
+```

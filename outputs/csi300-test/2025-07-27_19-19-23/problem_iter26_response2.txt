@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Identify Volume and Price Spikes
+    df['vol_20d_avg'] = df['volume'].rolling(window=20).mean()
+    df['relative_vol'] = df['volume'] / df['vol_20d_avg']
+    
+    df['price_z_score'] = (df['high'] - df['low']) / df['high'].rolling(window=20).std()
+    spike_threshold = 2.0  # Example threshold
+    df['is_spike'] = (df['relative_vol'] > spike_threshold) | (np.abs(df['price_z_score']) > spike_threshold)
+
+    # Adjust Momentum for Spikes
+    weight = 1.5  # Example weight
+    df['adjusted_log_return'] = df['log_return'] * np.where(df['is_spike'], weight, 1)
+
+    # Smooth the Adjusted Returns
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=10, adjust=False).mean()
+
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (1 + df['smoothed_returns']).cumprod()
+
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+
+    # Combine High-Low Difference with Spikes
+    df['spike_high_low_diff'] = df['high_low_diff'] * df['is_spike']
+    df['sum_spiked_high_low'] = df['spike_high_low_diff'].rolling(window=10).sum()
+
+    # Calculate Daily Price Movement
+    df['daily_price_move'] = df['close'] - df['open']
+
+    # Calculate Volume-Adjusted Price Movement
+    cap = 1e6  # Example cap value
+    df['vol_adj_price_move'] = df['daily_price_move'] * df['volume']
+    df['vol_adj_price_move'] = df['vol_adj_price_move'].clip(upper=cap)
+
+    # Calculate Rolling Momentum Indicator
+    df['aggregated_vol_adj_move'] = df['vol_adj_price_move'].rolling(window=30).sum()
+    df['ewma_aggregated'] = df['aggregated_vol_adj_move'].ewm(span=10, adjust=False).mean()
+    df['short_ewma'] = df['aggregated_vol_adj_move'].ewm(span=5, adjust=False).mean()
+    df['momentum_ind'] = df['short_ewma'] - df['ewma_aggregated']
+
+    # Combined Momentum Factor
+    df['combined_momentum'] = df['cumulative_momentum'] * df['sum_spiked_high_low']
+
+    # Volume Trend
+    m = 10  # Example period for VROC
+    df['vroc'] = df['volume'].pct_change(periods=m)
+    df['smoothed_vroc'] = df['vroc'].ewm(span=10, adjust=False).mean()
+
+    # Final Combined Alpha Factor
+    df['alpha_factor'] = df['combined_momentum'] * df['smoothed_vroc']
+
+    return df['alpha_factor']
+```

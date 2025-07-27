@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range (TR)
+    df['Previous Close'] = df['close'].shift(1)
+    df['High-Low'] = df['high'] - df['low']
+    df['High-PrevClose'] = abs(df['high'] - df['Previous Close'])
+    df['Low-PrevClose'] = abs(df['low'] - df['Previous Close'])
+    df['True Range'] = df[['High-Low', 'High-PrevClose', 'Low-PrevClose']].max(axis=1)
+
+    # Calculate Average True Range (ATR)
+    df['ATR'] = df['True Range'].rolling(window=14).mean()
+
+    # Intraday High-Low Spread
+    df['Intraday HL'] = df['high'] - df['low']
+
+    # Open-to-Close Return
+    df['OC Return'] = df['close'] - df['open']
+
+    # Integrate Returns
+    df['Integrated Returns'] = 0.5 * df['Intraday HL'] + 0.5 * df['OC Return']
+
+    # Smooth the Integrated Returns with EMA
+    df['Smoothed IR'] = df['Integrated Returns'].ewm(span=5, adjust=False).mean()
+
+    # Adjust for Volume and Amount Confirmation
+    df['Volume Adj'] = df['volume'].div(df['volume'].shift(1))
+    df['Amount Adj'] = df['amount'].div(df['amount'].shift(1))
+
+    # Final Adjustment
+    df['Final Adj'] = np.where((df['volume'] > df['volume'].shift(1)) & (df['amount'] > df['amount'].shift(1)),
+                                df['Volume Adj'] * df['Amount Adj'],
+                                1.0)
+    df['Adjusted IR'] = df['Smoothed IR'] * df['Final Adj']
+
+    # Price Momentum
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Price Momentum'] = df['SMA_10'] - df['SMA_50']
+
+    # Incorporate ATR in Integrated Returns
+    df['ATR_IR'] = df['ATR'] * df['Adjusted IR']
+
+    # Adjust with Volume Factor
+    df['Volume Diff'] = df['volume'] - df['volume'].shift(1)
+    df['Avg Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume Factor'] = df['Volume Diff'] / df['Avg Volume']
+    df['ATR_Vol_Adj'] = df['ATR_IR'] + df['Volume Factor']
+
+    # Integrate High-Low and Close-Open for Additional Momentum
+    df['Integrated Momentum'] = df['Intraday HL'] * df['OC Return']
+    df['Smoothed Momentum'] = df['Integrated Momentum'].ewm(span=5, adjust=False).mean()
+
+    # Final Alpha Factor
+    df['Alpha Factor'] = df['Adjusted IR'] + df['ATR_Vol_Adj'] + df['Price Momentum'] + df['Smoothed Momentum']
+
+    # Confirm with Volume
+    df['Max Vol'] = df['volume'].rolling(window=10).max()
+    df['Vol Confirmed Factor'] = df['Alpha Factor'].div(np.sqrt(df['volume'])) * (df['volume'] / df['Max Vol'])
+
+    return df['Vol Confirmed Factor'].dropna()
+```

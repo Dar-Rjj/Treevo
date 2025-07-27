@@ -1,0 +1,53 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day exponentially weighted moving average of close prices with a recent bias
+    ewma_10_close = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 30-day exponentially weighted moving average of close prices for longer-term trend with a recent bias
+    ewma_30_close = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Compute the difference between the two exponentially weighted moving averages to gauge momentum
+    momentum_factor = ewma_10_close - ewma_30_close
+    
+    # Calculate the 10-day exponentially weighted standard deviation of close prices to represent short-term volatility
+    volatility_factor = df['close'].ewm(span=10, adjust=False).std()
+    
+    # Calculate the 10-day average volume to measure liquidity
+    avg_volume = df['volume'].rolling(window=10).mean()
+    
+    # Calculate a liquidity factor as the ratio of current volume to the 10-day average volume
+    liquidity_factor = df['volume'] / (avg_volume + 1e-6)
+    
+    # Integrate intraday data: ratio of (high - open) to (open - low) to capture intraday sentiment
+    intraday_sentiment = (df['high'] - df['open']) / (df['open'] - df['low'])
+    
+    # Calculate the 5-day and 20-day relative strength index (RSI) to measure recent price strength
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=5, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=5, adjust=False).mean()
+    rsi_5 = 100 - (100 / (1 + gain / (loss + 1e-6)))
+    gain = (delta.where(delta > 0, 0)).ewm(span=20, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=20, adjust=False).mean()
+    rsi_20 = 100 - (100 / (1 + gain / (loss + 1e-6)))
+    
+    # Calculate the relative strength factor as the ratio of 5-day RSI to 20-day RSI
+    relative_strength_factor = rsi_5 / (rsi_20 + 1e-6)
+    
+    # Calculate the amount/volume ratio to measure the buying/selling pressure
+    amount_volume_ratio = df['amount'] / (df['volume'] + 1e-6)
+    
+    # Calculate the 14-day Average True Range (ATR) to measure market volatility
+    high_low = df['high'] - df['low']
+    high_close = (df['high'] - df['close'].shift()).abs()
+    low_close = (df['low'] - df['close'].shift()).abs()
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr_14 = true_range.rolling(window=14).mean()
+    
+    # Combine the factors: momentum, adjusted by volatility, liquidity, intraday sentiment, relative strength, and amount/volume ratio
+    factor_value = (momentum_factor * liquidity_factor * intraday_sentiment * relative_strength_factor * amount_volume_ratio) / (volatility_factor + 1e-6)
+    
+    # Further adjust the factor value by the ATR to account for overall market volatility
+    factor_value = factor_value / (atr_14 + 1e-6)
+    
+    return factor_value
+```

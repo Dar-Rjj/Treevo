@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['sum_volume_5'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust enhanced intraday and closing price momentum by volume trends
+    df['adjusted_momentum'] = df['weighted_returns'] * (df['volume_trend'] ** 0.75)
+    
+    # Measure high-low range volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=5).std().apply(lambda x: 1 / x if x > 0 else np.nan)
+    
+    # Calculate volume-adjusted true range
+    df['true_range'] = df[['high' - 'low', abs('high' - df['close'].shift(1)), abs('low' - df['close'].shift(1))]].max(axis=1)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume'] / df['volume'].shift(1)) ** 0.5
+    
+    # Calculate volume-adjusted momentum
+    df['sma_close_5'] = df['close'].rolling(window=5).mean()
+    df['momentum'] = (df['close'] - df['sma_close_5']) * df['sum_volume_5']
+    
+    # Combine factors
+    df['combined_momentum'] = df['adjusted_momentum'] + df['momentum']
+    
+    # Smooth combined momentum
+    df['smoothed_combined_momentum'] = df['combined_momentum'].rolling(window=3).mean()
+    
+    # Apply exponential moving average (EMA) with a 5-day span
+    df['ema_combined_momentum'] = df['combined_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate weighted sum
+    weights = {'smoothed_combined_momentum': 0.4, 'range_volatility': 0.2, 'ema_combined_momentum': 0.3, 'volume_adjusted_true_range': 0.1}
+    df['final_alpha_factor'] = (
+        df['smoothed_combined_momentum'] * weights['smoothed_combined_momentum'] +
+        df['range_volatility'] * weights['range_volatility'] +
+        df['ema_combined_momentum'] * weights['ema_combined_momentum'] +
+        df['volume_adjusted_true_range'] * weights['volume_adjusted_true_range']
+    )
+    
+    return df['final_alpha_factor']
+```

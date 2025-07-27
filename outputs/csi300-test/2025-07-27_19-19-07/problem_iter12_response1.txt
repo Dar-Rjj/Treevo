@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    df['HighLowRange'] = (df['high'] - df['low']).abs()
+    df['VolumeWeightedHLRange'] = df['HighLowRange'] * df['volume']
+    
+    # Calculate Close-to-Previous Close Return
+    df['CloseToPrevCloseReturn'] = df['close'].pct_change()
+    
+    # Multiply Volume-Weighted High-Low Range by Close-to-Previous Close Return
+    df['MomentumFactor'] = df['VolumeWeightedHLRange'] * df['CloseToPrevCloseReturn']
+    
+    # Smooth the Resulting Series
+    ema_alpha = 0.1  # Exponential Moving Average Alpha
+    sma_window = 5  # Simple Moving Average Window
+    df['SmoothedMomentumFactor'] = df['MomentumFactor'].ewm(alpha=ema_alpha, adjust=False).mean()
+    df['SmoothedMomentumFactor'] = df['SmoothedMomentumFactor'].rolling(window=sma_window).mean()
+    
+    # Adjust for Volume Trend
+    df['VolumeChange'] = df['volume'].pct_change()
+    df['AdjustedMomentumFactor'] = df['SmoothedMomentumFactor'] * np.sign(df['VolumeChange'])
+    
+    # Combine and Smooth Final Factor
+    final_sma_window = 10  # Specific Window Size for Final SMA
+    df['FinalFactor'] = df['AdjustedMomentumFactor'].rolling(window=final_sma_window).mean()
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['OpenToCloseReturn'] = df['open'] - df['close']
+    
+    # Compute Short-Term Volume Trend
+    df['ShortTermVolumeTrend'] = df['volume'].rolling(window=5).mean()
+    
+    # Calculate Long-Term Volume Trend
+    df['LongTermVolumeTrend'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    df['VolumeTrendRatio'] = df['ShortTermVolumeTrend'] / df['LongTermVolumeTrend']
+    
+    # Calculate High-Low Price Bandwidth
+    df['PriceBandwidth'] = df['high'] - df['low']
+    
+    # Aggregate High-Low Price Bandwidth
+    df['AggregatedPriceBandwidth'] = df['PriceBandwidth'].rolling(window=5).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    df['IntradayMomentum'] = df['IntradayReturn'] + df['OpenToCloseReturn']
+    df['LongTermMomentum'] = df['close'].pct_change(20) * df['VolumeTrendRatio']
+    df['MomentumComponent'] = df['IntradayMomentum'] + df['LongTermMomentum']
+    
+    # Compute Volatility Component
+    df['VolatilityComponent'] = df['IntradayReturn'].std() + df['OpenToCloseReturn'].std()
+    
+    # Combine Momentum and Volatility
+    df['CombinedMomentumVolatility'] = df['MomentumComponent'] - df['VolatilityComponent']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (df['CombinedMomentumVolatility'] * df['VWAP'] + df['AggregatedPriceBandwidth']).rolling(window=final_sma_window).mean()
+    
+    return df['FinalAlphaFactor']
+```

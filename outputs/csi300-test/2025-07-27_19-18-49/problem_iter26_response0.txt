@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=10, L=50, K=30, price_momentum_days=5):
+    # Calculate Close-Price Momentum
+    close_price_momentum = df['close'].pct_change(periods=n)
+    
+    # Calculate Open-Price Momentum
+    open_price_momentum = df['open'].pct_change(periods=n)
+    
+    # Calculate Volume Momentum
+    volume_momentum = df['volume'].pct_change(periods=n)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Adjust Daily Log Return by Open Price Change
+    open_adjusted_log_return = daily_log_return - (np.log(df['open']) - np.log(df['close'].shift(1)))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    open_adjusted_volume_log_return = open_adjusted_log_return * df['volume']
+    
+    # Sum Over N Days
+    sum_n_days = open_adjusted_volume_log_return.rolling(window=n).sum()
+    
+    # Weight by Recent Trading Activity
+    avg_vol_m_days = df['volume'].rolling(window=m).mean()
+    long_term_avg_vol_L_days = df['volume'].rolling(window=L).mean()
+    weight = avg_vol_m_days / long_term_avg_vol_L_days
+    
+    # Detect Volume Shocks
+    daily_return = df['close'] / df['close'].shift(1)
+    vol_change = df['volume'] - df['volume'].shift(1)
+    avg_30_day_vol_change = vol_change.rolling(window=30).mean()
+    volume_shock = (vol_change > 2.5 * avg_30_day_vol_change).astype(int)
+    
+    # Integrate High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range_K_days = high_low_range.rolling(window=K).mean()
+    high_low_range_indicator = (high_low_range > avg_high_low_range_K_days).astype(int)
+    
+    # Incorporate Price Range Momentum
+    price_range = df['high'] - df['low']
+    price_range_momentum = price_range.pct_change(periods=n)
+    
+    # Integrate Price Momentum
+    integrated_price_momentum = ((df['close'] - df['open']) / df['open'] + 
+                                 (df['close'] - df['close'].shift(1)) / df['close'].shift(1)).rolling(window=price_momentum_days).mean()
+    
+    # Calculate 5-Day Price Oscillation
+    price_oscillation = (df['high'] - df['low']).rolling(window=price_momentum_days).mean()
+    
+    # Calculate 5-Day Volume Trend
+    volume_trend = (df['volume'] - df['volume'].shift(price_momentum_days)) / df['volume'].shift(price_momentum_days)
+    smoothed_volume_trend = volume_trend.rolling(window=price_momentum_days).mean()
+    
+    # Combine Indicators
+    combined_momentum = (close_price_momentum + open_price_momentum + volume_momentum + price_range_momentum) * weight
+    combined_momentum *= volume_shock
+    combined_momentum *= high_low_range_indicator
+    combined_momentum += integrated_price_momentum
+    combined_momentum *= price_oscillation
+    combined_momentum *= smoothed_volume_trend
+    
+    return combined_momentum
+```

@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return and sum over n periods (e.g., 10 days)
+    df['close_return'] = df['close'].pct_change()
+    df['momentum'] = df['close_return'].rolling(window=10).sum()
+
+    # Confirm with Trading Volume Increase
+    df['volume_increase'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['momentum'] *= df['volume_increase']
+
+    # Calculate Volume-Weighted High-Low Range
+    df['high_low_range_vol_weighted'] = ((df['high'] - df['low']) * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+
+    # Adjust for Market Sentiment
+    df['close_open_return'] = df['close'] - df['open']
+    sentiment_factor = df['close_open_return'].apply(lambda x: 1 if x > 0 else -1)
+    df['high_low_range_adjusted'] = df['high_low_range_vol_weighted'] * sentiment_factor
+
+    # Smoothing High-Low Spread
+    df['high_low_sma'] = df['high_low_range_vol_weighted'].rolling(window=10).mean()
+    df['smoothed_high_low_spread'] = df['high_low_range_vol_weighted'] - df['high_low_sma']
+
+    # Integrate with Convergence-Divergence of High-Low Prices
+    df['high_5_ma'] = df['high'].rolling(window=5).mean()
+    df['low_5_ma'] = df['low'].rolling(window=5).mean()
+    df['high_20_ma'] = df['high'].rolling(window=20).mean()
+    df['low_20_ma'] = df['low'].rolling(window=20).mean()
+    df['high_low_convergence_divergence'] = (df['high_5_ma'] + df['low_5_ma']) - (df['high_20_ma'] + df['low_20_ma'])
+
+    # Filter by Volume Change
+    df['integrated_factors'] = df['high_low_convergence_divergence'] * (df['volume'] > df['volume'].shift(1))
+
+    # Trend Confirmation
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['trend_confirmation'] = (df['sma_5'] > df['sma_20']).astype(int)
+
+    # Final Alpha Factor Construction
+    df['alpha_factor'] = (df['momentum'] + df['high_low_range_adjusted'] + df['smoothed_high_low_spread']) * df['trend_confirmation']
+
+    return df['alpha_factor']
+```

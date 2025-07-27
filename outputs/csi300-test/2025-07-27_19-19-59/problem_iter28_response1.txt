@@ -1,0 +1,61 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to capture volatility
+    daily_range = df['high'] - df['low']
+    
+    # Calculate a weighted close based on volume for a more accurate price movement indicator
+    weighted_close = (df['close'] * df['volume']) / df['volume'].rolling(window=10, min_periods=1).mean()
+    
+    # Calculate typical price for money flow analysis
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Calculate money flow
+    money_flow = typical_price * df['volume']
+    
+    # Calculate positive and negative money flow
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    
+    # Calculate the money flow ratio for buying and selling pressure with an adaptive window
+    adaptive_window = df['volume'].rolling(window=10, min_periods=1).mean().astype(int)
+    money_flow_ratio = (positive_money_flow.rolling(window=adaptive_window, min_periods=1).sum() / 
+                        negative_money_flow.rolling(window=adaptive_window, min_periods=1).sum()).fillna(1)
+    
+    # Incorporate the daily range as a measure of volatility
+    volatility_factor = 1 / (daily_range + 1e-7)
+    
+    # Calculate a momentum factor using the difference between the current close and the moving average with an adaptive window
+    momentum_factor = df['close'] - df['close'].rolling(window=adaptive_window, min_periods=1).mean()
+    
+    # Consider market trend by adding a trend-following factor with an adaptive window
+    trend_factor = df['close'].pct_change(periods=adaptive_window, fill_method=None).rolling(window=10, min_periods=1).mean()
+    
+    # Additional factor: Volume-adjusted momentum
+    volume_adjusted_momentum = momentum_factor * (df['volume'] / df['volume'].rolling(window=10, min_periods=1).mean())
+    
+    # Calculate the relative strength index (RSI) for overbought/oversold conditions with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=adaptive_window, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=adaptive_window, min_periods=1).mean().replace(0, 1e-7)
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Incorporate macroeconomic indicators (assuming they are available in the DataFrame)
+    if 'macro_indicator' in df.columns:
+        macro_indicator = df['macro_indicator']
+    else:
+        macro_indicator = 1.0
+    
+    # Refine factor weighting
+    alpha_factor = (
+        (weighted_close * 0.3) +
+        (money_flow_ratio * 0.2) +
+        (volatility_factor * 0.1) +
+        (volume_adjusted_momentum * 0.2) +
+        (trend_factor * 0.1) +
+        ((1 - (rsi / 100)) * 0.1) +
+        (macro_indicator * 0.1)
+    ).fillna(0)
+    
+    return alpha_factor
+```

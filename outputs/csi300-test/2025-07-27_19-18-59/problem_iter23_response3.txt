@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_momentum'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend and accumulated volume
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined intraday and closing price momentum with volume
+    df['adjusted_momentum'] = df['weighted_momentum'] * (df['volume_trend'] ** 0.75) * (df['accumulated_volume'] / 5)
+    
+    # Volume-Adjusted True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1)
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # High-Low Range Stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=10).std()
+    
+    # Exponential Moving Average (EMA) on the combined momentum
+    df['ema_momentum'] = df['adjusted_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Directional Bias using 5-day ADX
+    df['dm_plus'] = np.where(df['high'] > df['high'].shift(1), df['high'] - df['high'].shift(1), 0)
+    df['dm_minus'] = np.where(df['low'].shift(1) > df['low'], df['low'].shift(1) - df['low'], 0)
+    df['smoothed_dm_plus'] = df['dm_plus'].ewm(span=14, adjust=False).mean()
+    df['smoothed_dm_minus'] = df['dm_minus'].ewm(span=14, adjust=False).mean()
+    df['smoothed_tr'] = df['true_range'].ewm(span=14, adjust=False).mean()
+    df['di_plus'] = 100 * (df['smoothed_dm_plus'] / df['smoothed_tr'])
+    df['di_minus'] = 100 * (df['smoothed_dm_minus'] / df['smoothed_tr'])
+    df['adx'] = 100 * (abs(df['di_plus'] - df['di_minus']) / (df['di_plus'] + df['di_minus'])).ewm(span=14, adjust=False).mean()
+    df['directional_bias'] = df['range_stability'] * df['adx']
+    
+    # Combine adjusted momentum and volume-weighted true range
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_adjusted_true_range']
+    
+    # Smooth combined factors
+    df['sma_combined_factors'] = df['combined_factors'].rolling(window=3).mean()
+    
+    # Final alpha factor with weighted sum
+    final_alpha_factor = 0.7 * df['sma_combined_factors'] + 0.3 * df['directional_bias']
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Volume-Weighted Average Price (VWAP) over a Lookback Period (e.g., 20 days)
+    vwap = ((df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).rolling(window=20).sum() / 
+            df['volume'].rolling(window=20).sum())
+    
+    # Integrate Intraday Price Range and VWAP
+    integrated_intraday_dynamics = intraday_range * vwap
+    
+    # Calculate Daily Momentum
+    daily_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate Intraday Momentum
+    intraday_price_change = df['high'] - df['low']
+    intraday_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Integrate Intraday and Daily Momentum with VWAP
+    integrated_momentum = (intraday_momentum + daily_momentum) * vwap
+    
+    # Combine Integrated Intraday Dynamics and Momentum
+    combined_integrated_factors = integrated_intraday_dynamics * integrated_momentum
+    
+    # Calculate Volume Surge
+    median_volume = df['volume'].rolling(window=20).median()
+    volume_surge = (df['volume'] > 2 * median_volume).astype(int)
+    
+    # Calculate Volume and Price Shocks
+    average_volume = df['volume'].rolling(window=20).mean()
+    volume_shock = (df['volume'] > 1.5 * average_volume).astype(int)
+    
+    average_close = df['close'].rolling(window=20).mean()
+    price_shock = (df['close'] > 1.5 * average_close).astype(int)
+    
+    # Calculate Price Breakout
+    highest_high = df['high'].rolling(window=20).max()
+    price_breakout = (df['high'] > highest_high).astype(int)
+    
+    # Add a new factor: Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=20).std()
+    
+    # Combine Integrated Factors, Surges, Shocks, and Breakouts
+    alpha_factor = (combined_integrated_factors * volume_surge * volume_shock * 
+                    price_shock * price_breakout * intraday_volatility)
+    
+    return alpha_factor
+```

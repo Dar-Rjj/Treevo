@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the Exponentially Weighted Moving Average of close prices with a span of 10 days for short-term trend
+    ewma_10_close = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 30-day moving average of close prices for medium-term trend
+    ma_30_close = df['close'].rolling(window=30).mean()
+    
+    # Calculate the 90-day moving average of close prices for long-term trend
+    ma_90_close = df['close'].rolling(window=90).mean()
+    
+    # Compute the difference between EWMA and simple moving averages to gauge momentum
+    short_term_momentum = ewma_10_close - ma_30_close
+    long_term_momentum = ma_30_close - ma_90_close
+    
+    # Calculate the 10-day standard deviation of close prices to represent recent volatility
+    recent_volatility = df['close'].rolling(window=10).std()
+    
+    # Calculate the 60-day standard deviation of close prices to represent longer-term volatility
+    long_term_volatility = df['close'].rolling(window=60).std()
+    
+    # Volatility factor as the ratio of recent to long-term volatility
+    volatility_factor = recent_volatility / (long_term_volatility + 1e-6)
+    
+    # Calculate the 10-day average volume to measure liquidity
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the 30-day average volume to measure longer-term liquidity
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    
+    # Calculate a liquidity factor as the ratio of current volume to the 10-day and 30-day average volumes
+    liquidity_factor = (df['volume'] / (avg_volume_10 + 1e-6)) * (avg_volume_10 / (avg_volume_30 + 1e-6))
+    
+    # Incorporate high/low price differences to capture intraday dynamics
+    price_diff = df['high'] - df['low']
+    normalized_price_diff = price_diff / (df['close'] + 1e-6)
+    
+    # Calculate the 5-day and 20-day average amount to measure transaction activity
+    avg_amount_5 = df['amount'].rolling(window=5).mean()
+    avg_amount_20 = df['amount'].rolling(window=20).mean()
+    
+    # Transaction activity factor as the ratio of 5-day average amount to 20-day average amount
+    transaction_activity_factor = avg_amount_5 / (avg_amount_20 + 1e-6)
+    
+    # Combine the factors: momentum, adjusted by volatility, liquidity, price difference, and transaction activity
+    factor_value = (short_term_momentum * long_term_momentum * liquidity_factor * (1 + normalized_price_diff) * transaction_activity_factor) / (volatility_factor + 1e-6)
+    
+    return factor_value
+```

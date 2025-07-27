@@ -1,0 +1,26 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for EMA based on volatility
+    volatility = df['close'].rolling(window=20).std()
+    ema_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    df['ema_close'] = df['close'].ewm(span=ema_window, adjust=False).mean()
+    
+    # RSI calculation with adaptive window
+    rsi_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Momentum with adaptive window
+    momentum_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    df['momentum'] = df['close'] / df['close'].shift(momentum_window) - 1
+    
+    # Volume-weighted measures
+    df['volume_weighted_price'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Combine factors
+    factor_value = (df['momentum'] + (df['rsi'] - 50) / 50) * (df['volume_weighted_price'] - df['ema_close']) / (volatility + 1e-7)
+    return factor_value
+```

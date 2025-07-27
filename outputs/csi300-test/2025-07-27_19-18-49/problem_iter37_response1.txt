@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Momentum Components
+    df['ClosePriceMomentum'] = df['close'] / df['close'].shift(10)
+    df['OpenPriceMomentum'] = df['open'] / df['open'].shift(10)
+    
+    # Calculate Daily Log Return
+    df['LogReturn'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Adjust Log Return by Open Price
+    df['AdjustedLogReturn'] = (np.log(df['close']) - np.log(df['open'])) + np.log(df['close'].shift(1))
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    df['VolumeAdjustedLogReturn'] = df['AdjustedLogReturn'] * df['volume']
+    
+    # Weight by Recent Trading Activity: Average Volume for the last 20 days
+    df['AvgVolume20D'] = df['volume'].rolling(window=20).mean()
+    df['WeightedVolumeAdjLogReturn'] = df['VolumeAdjustedLogReturn'] / df['AvgVolume20D']
+    
+    # Incorporate Price Range Momentum
+    df['PriceRangeMomentum'] = (df['high'] - df['low']) / (df['high'].shift(10) - df['low'].shift(10))
+    
+    # Calculate 10-Day Price Oscillation
+    df['DailyPriceRange'] = df['high'] - df['low']
+    df['10DayPriceOscillation'] = df['DailyPriceRange'].rolling(window=10).sum() / 10
+    
+    # Calculate 10-Day Volume Trend
+    df['10DayVolumeTrend'] = (df['volume'] - df['volume'].shift(10)) / df['volume'].shift(10)
+    
+    # Integrate Price, Volume, and Close Momentum with Open-Price Integration
+    df['IntegratedMomentum'] = (df['close'] - df['open']) / df['open'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Indicators
+    weight = 1  # Assuming equal weighting for simplicity
+    df['CombinedFactor'] = (
+        weight * df['ClosePriceMomentum'] * 
+        weight * df['OpenPriceMomentum'] * 
+        weight * df['PriceRangeMomentum'] * 
+        weight * df['10DayPriceOscillation'] * 
+        weight * df['10DayVolumeTrend']
+    )
+    
+    # Final Alpha Factor: Cumulative Sum of Volume-Weighted Adjusted Returns
+    df['AlphaFactor'] = df['WeightedVolumeAdjLogReturn'].cumsum() * df['CombinedFactor']
+    
+    return df['AlphaFactor'].dropna()
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

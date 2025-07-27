@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    import talib
+
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the difference between close and open prices, then divide by average volume
+    price_diff_to_volume = (df['close'] - df['open']) / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the Relative Strength Index (RSI) with a 14-day window
+    df['rsi'] = talib.RSI(df['close'], timeperiod=14)
+    
+    # Calculate the MACD (Moving Average Convergence Divergence)
+    macd, signal, _ = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['macd_signal_diff'] = macd - signal
+    
+    # Incorporate sector data if available (Assuming 'sector' column is present in the DataFrame)
+    if 'sector' in df.columns:
+        sector_dummies = pd.get_dummies(df['sector'], prefix='sector')
+        df = pd.concat([df, sector_dummies], axis=1)
+    
+    # Combine the momentum, volatility, price difference to volume, volume ratio, RSI, and MACD factors
+    alpha_factor = (df['daily_return'] / (df['volatility'] + 1e-7)) + 0.5 * price_diff_to_volume + 0.3 * volume_ratio + 0.1 * df['rsi'] + 0.1 * df['macd_signal_diff']
+    
+    # If sector data is available, add it to the alpha factor
+    if 'sector' in df.columns:
+        for col in sector_dummies.columns:
+            alpha_factor += 0.01 * df[col]
+    
+    return alpha_factor
+```

@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Range
+    df['High_Low_Range'] = (df['high'] - df['low']) * df['volume']
+    
+    # Incorporate Historical Price Change
+    df['Close_to_Close_Return'] = df['close'].pct_change()
+    df['Volume_Weighted_High_Low_Range_Adjusted'] = df['High_Low_Range'] * df['Close_to_Close_Return']
+    
+    # Adjust for Volume and Amount Trend
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Amount_Change'] = df['amount'].pct_change()
+    
+    def adjust_factor(row):
+        if row['Volume_Change'] > 0 and row['Amount_Change'] > 0:
+            return row['Volume_Weighted_High_Low_Range_Adjusted'] * 1.5
+        elif row['Volume_Change'] > 0 or row['Amount_Change'] > 0:
+            return row['Volume_Weighted_High_Low_Range_Adjusted'] * 1.2
+        else:
+            return row['Volume_Weighted_High_Low_Range_Adjusted'] * 0.8
+    
+    df['Adjusted_Factor'] = df.apply(adjust_factor, axis=1)
+    
+    # Smooth the Resulting Series
+    df['EMA_Adjusted_Factor'] = df['Adjusted_Factor'].ewm(span=10).mean()
+    df['SMA_Adjusted_Factor'] = df['Adjusted_Factor'].rolling(window=20).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['Open_to_Close_Return'] = df['open'] - df['close']
+    
+    # Compute Short-Term Volume Trend
+    df['Short_Term_Volume_Trend'] = df['volume'].rolling(window=5).mean()
+    
+    # Calculate Long-Term Volume Trend
+    df['Long_Term_Volume_Trend'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    df['Volume_Trend_Ratio'] = df['Short_Term_Volume_Trend'] / df['Long_Term_Volume_Trend']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    df['Intraday_Momentum'] = df['Intraday_Return'] + df['Open_to_Close_Return']
+    df['Long_Term_Momentum'] = df['close'].pct_change() * df['Volume_Trend_Ratio']
+    
+    # Compute Volatility Component
+    df['Intraday_Volatility'] = df['Intraday_Return'].rolling(window=20).std()
+    df['Open_to_Close_Volatility'] = df['Open_to_Close_Return'].rolling(window=20).std()
+    
+    # Combine Momentum and Volatility
+    df['Combined_Momentum'] = df['Intraday_Momentum'] + df['Long_Term_Momentum']
+    df['Weighted_Volatility'] = (df['Intraday_Volatility'] + df['Open_to_Close_Volatility']) / 2
+    df['Combined_Momentum_Adjusted'] = df['Combined_Momentum'] - df['Weighted_Volatility']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Combined_Momentum_Adjusted'] * df['VWAP'] 
+                                + df['High_Low_Range'] 
+                                + df['SMA_Adjusted_Factor'])
+    
+    return df['Final_Alpha_Factor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(data, N=5):
+    # Calculate Intraday Return
+    intraday_return = (data['high'] - data['low']) / data['close'].shift(1)
+    
+    # Calculate Raw Price Momentum
+    close_to_close_return = (data['close'] / data['close'].shift(1)) - 1
+    log_return = np.log(data['close'] / data['close'].shift(1))
+    
+    # Calculate Intraday Volatility
+    intraday_volatility_1 = (data['high'] - data['low']) / data['close']
+    intraday_volatility_2 = (data['high'] - data['close'].shift(1)) / data['close'].shift(1)
+    intraday_volatility = (intraday_volatility_1 + intraday_volatility_2) / 2
+    
+    # Determine Volume Change
+    volume_change = data['volume'] - data['volume'].shift(1)
+    
+    # Calculate Volume Ratio
+    volume_ratio = data['volume'] / data['volume'].shift(1)
+    
+    # Adjust for Volume Impact
+    average_volume_N_days = data['volume'].rolling(window=N).mean()
+    adjusted_intraday_return = intraday_return / average_volume_N_days
+    
+    # Weighted Intraday Return
+    weighted_intraday_return = adjusted_intraday_return * volume_change
+    
+    # Combine Factors
+    combined_factor = weighted_intraday_return + intraday_volatility + log_return + volume_ratio
+    
+    # Incorporate Trading Amount
+    amount_change = data['amount'] - data['amount'].shift(1)
+    amount_ratio = data['amount'] / data['amount'].shift(1)
+    combined_factor *= amount_ratio
+    
+    # Integrate Past Movements
+    moving_sum_adjusted_intraday = weighted_intraday_return.rolling(window=N).sum()
+    average_close_N_days = data['close'].rolling(window=N).mean()
+    ratio_adjusted_movements = moving_sum_adjusted_intraday / average_close_N_days
+    combined_factor += ratio_adjusted_movements
+    
+    # Aggregate Past Movements
+    exp_moving_sum_adjusted_intraday = weighted_intraday_return.ewm(span=N).sum()
+    combined_factor += exp_moving_sum_adjusted_intraday
+    
+    # Calculate Open-Close Price Movement
+    open_close_movement = (data['close'] - data['open']) / data['open']
+    
+    # Calculate High-Low Range
+    high_low_range = (data['high'] - data['low']) / data['low']
+    
+    # Combine Additional Factors
+    combined_factor += open_close_movement
+    combined_factor += high_low_range
+    combined_factor -= log_return * volume_ratio
+    
+    # Interpretable Adjustment
+    open_to_close_return = (data['close'] - data['open']) / data['open']
+    combined_factor = np.where(combined_factor > 0, 
+                               combined_factor * (1 + open_to_close_return), 
+                               combined_factor * (1 - np.abs(open_to_close_return)))
+    
+    return combined_factor
+
+# Example usage:
+# factor_values = heuristics_v2(data)
+```

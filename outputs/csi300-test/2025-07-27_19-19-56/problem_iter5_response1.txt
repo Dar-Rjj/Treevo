@@ -1,0 +1,31 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Smooth the log returns with a 20-day EMA
+    df['ema_log_return_20'] = df['log_return'].ewm(span=20, adjust=False).mean()
+    
+    # Short-term (5 days) and long-term (50 days) close price EMAs
+    df['ema_close_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_close_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 20-day standard deviation of the log returns
+    df['std_log_return_20'] = df['log_return'].rolling(window=20).std()
+    
+    # 5-day moving average of volume
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Factor value combining all components
+    factor_value = (df['ema_log_return_20'] + (df['ema_close_5'] - df['ema_close_50']) + df['rsi']/100) * df['volume_ma_5'] / (df['std_log_return_20'] + 1e-7)
+    return factor_value
+```

@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Parameters
+    sma_period = 10
+    ema_period = 10
+    n_periods = 10
+    
+    # Calculate Enhanced High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Smoothing High-Low Spread with SMA
+    df['SMA_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=sma_period).mean()
+    df['Smoothed_High_Low_Spread'] = df['High_Low_Spread'] - df['SMA_High_Low_Spread']
+    
+    # Volume-Adjusted High-Low Range
+    df['Volume_Adjusted_High_Low_Range'] = (
+        (df['high'] - df['low']) * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Adjust for Market Sentiment
+    df['Close_Open_Return'] = df['close'] - df['open']
+    df['Volume_Adjusted_High_Low_Range_Adjusted'] = df['Volume_Adjusted_High_Low_Range'] + df['Close_Open_Return']
+    
+    # Calculate Composite Momentum Indicator
+    df['Close_to_Close_Return'] = df['close'] - df['close'].shift(n_periods)
+    df['Composite_Momentum'] = df['Close_to_Close_Return'].rolling(window=n_periods).sum()
+    
+    # Confirm with Trading Volume Increase
+    df['Volume_Change'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['Volume_Filter'] = df['Volume_Change']
+    
+    # Integrate with Enhanced Convergence Divergence of High-Low Prices
+    df['Daily_Average_High_Low'] = (df['high'] + df['low']) / 2
+    df['Short_Term_MA_High_Low'] = df['Daily_Average_High_Low'].rolling(window=5).mean()
+    df['Long_Term_MA_High_Low'] = df['Daily_Average_High_Low'].rolling(window=20).mean()
+    df['Enhanced_Convergence_Divergence'] = df['Short_Term_MA_High_Low'] - df['Long_Term_MA_High_Low']
+    
+    # Smoothed High-Low Spread with EMA
+    df['EMA_High_Low_Spread'] = df['High_Low_Spread'].ewm(span=ema_period, adjust=False).mean()
+    df['Smoothed_High_Low_Spread_EMA'] = df['High_Low_Spread'] - df['EMA_High_Low_Spread']
+    
+    # Price Momentum
+    df['Price_Momentum'] = df['Close_to_Close_Return'].rolling(window=n_periods).sum()
+    
+    # Trend Confirmation
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Trend_Confirmation'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Filter by Volume Change
+    df['Filtered_Composite_Momentum'] = df['Composite_Momentum'] * df['Volume_Filter']
+    
+    # Combine Indicators
+    df['Combined_Factors'] = (
+        df['Filtered_Composite_Momentum'] +
+        df['Enhanced_Convergence_Divergence'] +
+        df['Volume_Adjusted_High_Low_Range_Adjusted'] +
+        df['Smoothed_High_Low_Spread_EMA'] +
+        df['Price_Momentum']
+    ) * df['Trend_Confirmation']
+    
+    # Final Alpha Factor
+    alpha_factor = df['Combined_Factors']
+    
+    return alpha_factor
+```

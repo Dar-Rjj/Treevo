@@ -1,0 +1,34 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate log returns and its EMA
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['ema_log_return_9'] = df['log_return'].ewm(span=9, adjust=False).mean()
+    
+    # Estimate volatility as standard deviation of log returns over 20 days
+    df['std_log_return_20'] = df['log_return'].rolling(window=20).std()
+    
+    # Calculate the volume-weighted RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    RS = gain / loss
+    df['vrsi'] = 100 - (100 / (1 + RS * (df['volume'] / df['volume'].rolling(window=14).mean())))
+    
+    # Momentum using 5-day return
+    df['momentum_5d'] = df['close'].pct_change(periods=5)
+    
+    # Trend strength, using SMA/EMA ratio
+    df['sma_close_20'] = df['close'].rolling(window=20).mean()
+    df['ema_close_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['trend_strength'] = df['sma_close_20'] / df['ema_close_20']
+    
+    # Calculate the 5-day moving average of volume for weighting
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Factor value computation, incorporating smoothed log return, normalized by volatility,
+    # and also weighted by momentum, trend strength, and volume
+    factor_value = ((df['ema_log_return_9'] / (df['std_log_return_20'] + 1e-7)) 
+                    * df['momentum_5d'] * df['vrsi'] * df['trend_strength'] * df['volume_ma_5'])
+    
+    return factor_value
+```

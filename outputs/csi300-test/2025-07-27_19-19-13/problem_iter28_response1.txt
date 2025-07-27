@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=10):
+    # Calculate Intraday Price Volatility
+    df['PrevClose'] = df['close'].shift(1)
+    df['IntradayVolatility'] = (df['high'] - df['low']) / df['PrevClose']
+    
+    # Volume-Weighted Momentum
+    df['VolumeWeightedMomentum'] = df['open'] * df['volume']
+    
+    # Adjusted Intraday Return
+    df['IntradayReturn'] = (df['high'] + df['low']) / 2 / df['volume'].rolling(window=n_days).mean()
+    
+    # Aggregate Past Movements
+    df['ExpMovingSum_IntradayReturn'] = df['IntradayReturn'].ewm(span=n_days, adjust=False).sum()
+    
+    # Combine Factors
+    df['OpenCloseMovement'] = np.where(
+        df['close'] > df['open'], 
+        1 + (df['close'] - df['open']), 
+        1 - abs(df['close'] - df['open'])
+    )
+    
+    df['CombinedFactor'] = (
+        df['IntradayVolatility'] - 
+        df['VolumeWeightedMomentum'] * df['ExpMovingSum_IntradayReturn'] * 
+        df['OpenCloseMovement']
+    )
+    
+    # Volume Change Adjustment
+    df['VolumeRatio'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['VolumeAdjustment'] = np.where(
+        df['VolumeRatio'] > 0,
+        1 + df['VolumeRatio'],
+        1 - abs(df['VolumeRatio'])
+    )
+    
+    df['FinalFactor'] = df['CombinedFactor'] * df['VolumeAdjustment']
+    
+    return df['FinalFactor']
+```

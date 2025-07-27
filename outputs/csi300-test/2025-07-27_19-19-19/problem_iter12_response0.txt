@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['HLR'] = df['high'] - df['low']
+    
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['Daily_Price_Change_Percentage'] = df['Daily_Price_Change'] / df['close'].shift(1)
+    
+    # Aggregate Price Change Over a Period (Last 10 Days)
+    df['Sum_Daily_Price_Changes'] = df['Daily_Price_Change'].rolling(window=10).sum()
+    df['Avg_Price_Change'] = df['Sum_Daily_Price_Changes'] / 10
+    
+    # Calculate Volume-Adjusted Close-Open Difference
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Average_Volume_10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Adjusted_Close_Open'] = df['Close_Open_Diff'] * (df['volume'] / df['Average_Volume_10'])
+    
+    # Combine High-Low Range and Volume-Adjusted Close-Open Difference
+    df['Combined_HLR_VA'] = df['HLR'] * df['Volume_Adjusted_Close_Open']
+    df['Sum_Combined_HLR_VA_5'] = df['Combined_HLR_VA'].rolling(window=5).sum()
+    
+    # Compute Short-Term Price Direction (SPDI)
+    df['MA_5'] = df['close'].rolling(window=5).mean()
+    df['SPDI'] = (df['close'] > df['MA_5']).astype(int)
+    
+    # Compute Medium-Term Price Range (MPR)
+    df['MH_20'] = df['high'].rolling(window=20).max()
+    df['ML_20'] = df['low'].rolling(window=20).min()
+    df['Mid_Range_20'] = (df['MH_20'] + df['ML_20']) / 2
+    df['MPR'] = (df['close'] > df['Mid_Range_20']).astype(int)
+    
+    # Calculate Volume Growth (VGF)
+    df['MA_Volume_3'] = df['volume'].rolling(window=3).mean()
+    df['VGF'] = (df['volume'] > df['MA_Volume_3']).astype(int)
+    
+    # Integrate Indicators
+    df['IMVTI'] = (df['SPDI'] + df['MPR'] + df['VGF']) / 3
+    
+    # Calculate Volume-Weighted Close Price (VWCP)
+    df['Volume_Price_Product'] = df['volume'] * df['close']
+    df['VWCP'] = df['Volume_Price_Product'].rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Generate Intermediate Alpha Scores
+    df['HL_Momentum_Score'] = df['Sum_Combined_HLR_VA_5'] * 1.0
+    df['Volume_Weighted_Score'] = df['VWCP'] * 0.5
+    
+    # Incorporate Trading Volume Ratio (TVR)
+    df['Average_Volume_10'] = df['volume'].rolling(window=10).mean()
+    df['TVR'] = (df['volume'] > df['Average_Volume_10']).astype(int)
+    
+    # Combine Price and Volume Factors
+    df['Momentum_Score'] = df['Avg_Price_Change'] * 1.5
+    df['Combined_Momentum_Volume_Score'] = df['Momentum_Score'] + df['Volume_Weighted_Score']
+    
+    # Generate Final Alpha Factor
+    df['Intermediate_Alpha_Scores'] = df['HL_Momentum_Score'] + df['Combined_Momentum_Volume_Score']
+    df['Final_Alpha_Factor'] = df['Intermediate_Alpha_Scores'] + df['TVR'] * 0.2
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(alpha=0.3).mean()
+    
+    return df['Final_Alpha_Factor']
+```

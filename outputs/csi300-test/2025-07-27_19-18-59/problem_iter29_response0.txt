@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = df['close'].pct_change(5)
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Combine 5-day and 20-day returns
+    df['combined_returns'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Compute intraday price range and return
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and return
+    df['intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Determine volume trends
+    df['volume_trend_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_5d_sum'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust combined intraday and closing price momentum by volume trends
+    df['volume_adjusted_momentum'] = df['combined_returns'] * df['volume_trend_ratio']
+    
+    # Measure high-low range volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['daily_range'].rolling(window=20).var()
+    
+    # Calculate volume-adjusted momentum
+    N = 20
+    df['sma_close'] = df['close'].rolling(window=N).mean()
+    df['sma_volume'] = df['volume'].rolling(window=N).mean()
+    df['volume_adjusted_momentum_2'] = (df['close'] - df['sma_close']) * df['sma_volume']
+    
+    # Combine factors
+    df['combined_momentum'] = df['volume_adjusted_momentum'] + df['volume_adjusted_momentum_2']
+    
+    # Smooth combined momentum
+    df['smoothed_momentum'] = df['combined_momentum'].rolling(window=3).mean()
+    
+    # Incorporate weighted sum with predefined weights
+    weight_momentum = 0.7
+    weight_volatility = 0.3
+    df['alpha_factor'] = (weight_momentum * df['smoothed_momentum'] + 
+                          weight_volatility * df['range_volatility'])
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily return and logarithmic return
+    df['daily_return'] = df['close'].pct_change()
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate volume ratio and volume-weighted log momentum
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_weighted_log_momentum'] = df['log_return'] * df['volume_ratio']
+    
+    # Calculate intraday return and intraday volatility
+    df['intraday_return'] = (df['high'] - df['low']) / df['close'].shift(1)
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight intraday return by volume change
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume_ratio']
+    
+    # Integrate intraday volatility and weighted intraday return
+    df['combined_intraday_factor'] = df['intraday_volatility'] + df['weighted_intraday_return']
+    
+    # Calculate amount change and amount-adjusted momentum
+    df['amount_change'] = df['amount'] / df['amount'].shift(1)
+    df['amount_adjusted_momentum'] = df['volume_weighted_log_momentum'] * df['amount_change']
+    
+    # Aggregate past movements (N days)
+    N = 30
+    df['aggregated_movements'] = df['combined_intraday_factor'].rolling(window=N).sum()
+    
+    # Compute the ratio of aggregated movements to average close over N days
+    df['sma_30_close'] = df['close'].rolling(window=N).mean()
+    df['movement_ratio'] = df['aggregated_movements'] / df['sma_30_close']
+    
+    # Calculate open-to-close return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Conditionally adjust alpha factor
+    df['adjusted_factor'] = df.apply(
+        lambda row: (row['movement_ratio'] * (1 + 0.7 * row['open_to_close_return'])) if row['open_to_close_return'] > 0 else 
+                    (row['movement_ratio'] * (1 - 0.7 * abs(row['open_to_close_return'])),
+                     axis=1
+    )
+    
+    # Return the adjusted factor as a pandas Series
+    return df['adjusted_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': ...,
+#     'high': ...,
+#     'low': ...,
+#     'close': ...,
+#     'amount': ...,
+#     'volume': ...
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+```

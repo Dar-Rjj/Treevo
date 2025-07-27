@@ -1,0 +1,28 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the adaptive exponential moving average (EMA)
+    ema_short = df['close'].ewm(span=10, adjust=False).mean()
+    ema_long = df['close'].ewm(span=50, adjust=False).mean()
+
+    # GARCH(1,1) volatility
+    import arch
+    garch_model = arch.arch_model(df['close'].pct_change().dropna(), vol='Garch', p=1, q=1, dist='Normal')
+    garch_volatility = garch_model.fit(disp='off').conditional_volatility
+
+    # Calculate the difference between today's and yesterday's close price for momentum
+    momentum = df['close'].diff(1)
+
+    # Calculate the total range of the day (high - low) to capture volatility
+    daily_range = (df['high'] - df['low']).fillna(1e-7)
+
+    # Calculate the money flow ratio by dividing the amount by volume to gauge market sentiment
+    money_flow_ratio = df['amount'] / df['volume']
+
+    # Relative positioning of the close price with respect to EMAs
+    relative_positioning = (df['close'] - ema_short) / (ema_long - ema_short)
+
+    # Combine momentum, money flow ratio, GARCH volatility, and relative positioning
+    factor_values = (momentum * money_flow_ratio * relative_positioning) / garch_volatility
+
+    return factor_values
+```

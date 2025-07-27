@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = df['close'].pct_change(5)
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (2 * df['5_day_return'] + df['20_day_return']) / 3
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday_momentum'] = df['intraday_range'] * df['intraday_return']
+    
+    # Integrate volume activity
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    df['adjusted_momentum'] = df['weighted_returns'] * np.sqrt(df['volume_trend'])
+    
+    # Volume-Weighted True Range
+    df['true_range'] = np.maximum(
+        df['high'] - df['low'],
+        np.abs(df['high'] - df['close'].shift(1)),
+        np.abs(df['low'] - df['close'].shift(1))
+    )
+    df['volume_weighted_true_range'] = df['true_range'] * df['volume_trend']
+    
+    # High-Low Range Stability
+    M = 20
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=M).std()
+    
+    # Directional Bias
+    df['adx_5_day'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=5)
+    df['stability_with_bias'] = df['range_stability'] * df['adx_5_day']
+    
+    # Combine factors
+    df['combined_factors'] = df['adjusted_momentum'] + df['volume_weighted_true_range']
+    
+    # Smooth combined momentum with 3-day EMA
+    df['smoothed_combined_factors'] = df['combined_factors'].ewm(span=3, adjust=False).mean()
+    
+    # Final weighted sum
+    weight_momentum = 0.7
+    weight_stability = 0.3
+    df['final_alpha_factor'] = (weight_momentum * df['smoothed_combined_factors'] +
+                                weight_stability * df['stability_with_bias'])
+    
+    return df['final_alpha_factor']
+```

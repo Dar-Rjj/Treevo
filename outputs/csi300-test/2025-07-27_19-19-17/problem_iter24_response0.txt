@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Return
+    close_open_return = df['close'] - df['open']
+    
+    # Integrate Returns
+    integrated_returns = intraday_high_low_spread + close_open_return
+    
+    # Adjust for Volume and Amount Confirmation
+    volume_factor = (df['volume'] / df['volume'].shift(1)) * (df['amount'] / df['amount'].shift(1))
+    adjusted_integrated_returns = integrated_returns * volume_factor
+    
+    # Calculate True Range (TR) for each day
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Incorporate ATR in Integrated Returns
+    atr_adjusted_returns = atr * adjusted_integrated_returns
+    
+    # Adjust with Volume Factor
+    volume_diff = df['volume'] - df['volume'].shift(1)
+    avg_volume_20d = df['volume'].rolling(window=20).mean()
+    normalized_volume_diff = volume_diff / avg_volume_20d
+    final_atr_adjusted_returns = atr_adjusted_returns + normalized_volume_diff
+    
+    # Calculate Price Momentum
+    sma_short = df['close'].rolling(window=10).mean()
+    sma_long = df['close'].rolling(window=50).mean()
+    price_momentum = sma_short - sma_long
+    price_momentum_adjusted = price_momentum * final_atr_adjusted_returns
+    
+    # Integrate High-Low and Close-Open for Additional Momentum
+    high_low_close_open_momentum = intraday_high_low_spread * close_open_return
+    smoothed_momentum = high_low_close_open_momentum.ewm(span=7).mean()
+    
+    # Final Alpha Factor
+    combined_factor = (final_atr_adjusted_returns + 
+                       price_momentum_adjusted + 
+                       smoothed_momentum)
+    
+    # Confirm with Volume
+    volume_adj_factor = (df['volume'] / df['volume'].shift(1)) * (df['volume'] / df['volume'].rolling(window=15).max())
+    combined_factor = combined_factor / np.sqrt(df['volume']) * volume_adj_factor
+    
+    # Enhanced Final Alpha Factor
+    open_trend = df['open'] - df['open'].rolling(window=10).mean()
+    combined_factor += open_trend
+    
+    # Introduce Volatility Factor
+    historical_volatility = df['close'].rolling(window=20).std()
+    final_alpha_factor = combined_factor * (1 / historical_volatility)
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, N=50, volume_shock_days=30):
+    """
+    Generate a novel and interpretable alpha factor based on momentum and volume.
+    
+    Parameters:
+    - df (pd.DataFrame): DataFrame with columns (open, high, low, close, amount, volume)
+    - n (int): Number of days back for momentum calculations
+    - N (int): Number of days to sum over for the final alpha factor
+    - volume_shock_days (int): Number of days to calculate average volume change for detecting volume shocks
+    
+    Returns:
+    - pd.Series: Series indexed by date representing the factor values
+    """
+    # Calculate Momentum Components
+    close_momentum = df['close'] / df['close'].shift(n) - 1
+    open_momentum = df['open'] / df['open'].shift(n) - 1
+    volume_momentum = df['volume'] / df['volume'].shift(n) - 1
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Adjust Log Return by Open Price
+    open_adjusted_log_return = (np.log(df['close']) - np.log(df['open'])) + np.log(df['close'].shift(1)) - np.log(df['open'])
+    
+    # Multiply Open-Adjusted Log Return by Volume
+    volume_adjusted_log_return = open_adjusted_log_return * df['volume']
+    
+    # Sum Over N Days
+    cumulative_volume_adjusted_log_return = volume_adjusted_log_return.rolling(window=N).sum()
+    
+    # Detect Volume Shocks
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_volume_change = volume_change.rolling(window=volume_shock_days).mean()
+    volume_shock_threshold = 2 * avg_volume_change
+    volume_shock = (volume_change > volume_shock_threshold).astype(int)
+    
+    # Combine Indicators
+    combined_momentum = (close_momentum + open_momentum + volume_momentum) * volume_shock
+    final_alpha_factor = combined_momentum.rolling(window=N).sum()
+    
+    return final_alpha_factor
+```

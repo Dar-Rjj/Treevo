@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the difference between close and open prices, then divide by average volume
+    price_diff_to_volume = (df['close'] - df['open']) / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the 30-day and 90-day moving averages of the closing price
+    df['ma_30'] = df['close'].rolling(window=30).mean()
+    df['ma_90'] = df['close'].rolling(window=90).mean()
+    
+    # Calculate the distance between the 30-day and 90-day moving averages
+    ma_distance = df['ma_30'] - df['ma_90']
+    
+    # Determine the trend based on the moving average distance
+    trend = ma_distance.apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate the liquidity measure as the ratio of amount to volume
+    liquidity_measure = df['amount'] / (df['volume'] + 1e-7)
+    
+    # Dynamic factor weighting based on the trend and liquidity
+    alpha_factor = (df['daily_return'] / (df['volatility'] + 1e-7)) * (0.5 + 0.5 * trend) + \
+                   0.6 * price_diff_to_volume * (0.5 + 0.5 * trend) + \
+                   0.3 * volume_ratio * (0.5 + 0.5 * trend) + \
+                   0.2 * liquidity_measure * (0.5 + 0.5 * trend)
+    
+    return alpha_factor
+```

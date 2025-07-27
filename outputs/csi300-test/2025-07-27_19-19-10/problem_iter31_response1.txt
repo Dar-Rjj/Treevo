@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Volume-to-Range Ratio and adjust intraday range
+    volume_to_range_ratio = df['volume'] / intraday_range
+    adjusted_intraday_range = intraday_range * (1 / volume_to_range_ratio)
+    
+    # Incorporate Price Momentum
+    price_change = df['close'].diff()
+    abs_price_changes_last_5_days = price_change.rolling(window=5).apply(np.abs).sum()
+    momentum_factor = price_change / abs_price_changes_last_5_days
+    
+    # Combine with Adjusted Intraday Volatility
+    combined_factor = adjusted_intraday_range + momentum_factor
+    
+    # Calculate Previous Day Return
+    prev_day_return = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Detect Volume Spike
+    volume_spike = (df['volume'] - df['volume'].shift(1)).apply(lambda x: 1 if x > 0 else 0)
+    
+    # Weighted Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    weighted_intraday_return = intraday_return * volume_spike
+    
+    # Compute Price Difference Momentum
+    price_diff_momentum = df['close'].diff().rolling(window=5).sum()
+    
+    # Calculate Exponential Moving Average (EMA) of Price Difference
+    ema_alpha = 0.2
+    ema_price_diff = df['close'].diff().ewm(alpha=ema_alpha, adjust=False).mean()
+    
+    # Introduce Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Combine all factors into a final alpha factor
+    alpha_factor = (
+        combined_factor +
+        prev_day_return +
+        weighted_intraday_return +
+        price_diff_momentum +
+        ema_price_diff +
+        rsi
+    )
+    
+    return alpha_factor
+```

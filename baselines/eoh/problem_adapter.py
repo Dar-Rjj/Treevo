@@ -18,7 +18,7 @@ class Prompts:
 
         self.seed_func = file_to_string(f'{problem_prompt_path}/seed_func.txt')
         self.func_signature = file_to_string(f'{problem_prompt_path}/func_signature.txt').format(version=2).strip()
-        self.func_desc = file_to_string(f'{problem_prompt_path}/func_desc.txt')
+        self.func_desc = file_to_string(f'{problem_prompt_path}/func_desc_eoh.txt')
 
         match = re.match(r'^def +(.+?_v2)\((.*)\) *-> *(.*?) *:', self.func_signature)
         assert match is not None

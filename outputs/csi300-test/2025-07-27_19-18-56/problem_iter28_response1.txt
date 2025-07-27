@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close-to-Close Return and sum over n periods
+    n = 5
+    close_returns = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    momentum = close_returns.rolling(window=n).sum()
+
+    # Confirm with Trading Volume Increase
+    volume_increase = (df['volume'] > df['volume'].shift(1)).astype(int)
+    momentum_volume = momentum * volume_increase
+
+    # Calculate Volume-Weighted High-Low Range
+    high_low_range = (df['high'] - df['low']).rolling(window=10).apply(
+        lambda x: np.sum(x * df['volume']) / np.sum(df['volume']), raw=False)
+
+    # Adjust for Market Sentiment
+    close_to_open_return = df['close'] - df['open']
+    sentiment_adjustment = high_low_range + close_to_open_return / df['close'].shift(1)
+    sentiment_adjusted_high_low = sentiment_adjustment * volume_increase
+
+    # Smoothed High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    ema_high_low = high_low_spread.ewm(span=10, adjust=False).mean()
+    smoothed_high_low = high_low_spread - ema_high_low
+
+    # Integrate with Convergence-Divergence of High-Low Prices
+    short_term_sma_high = df['high'].rolling(window=5).mean()
+    long_term_sma_high = df['high'].rolling(window=20).mean()
+    short_term_sma_low = df['low'].rolling(window=5).mean()
+    long_term_sma_low = df['low'].rolling(window=20).mean()
+    convergence_divergence = (short_term_sma_high - long_term_sma_high) - (short_term_sma_low - long_term_sma_low)
+
+    # Filter by Volume Change
+    filtered_convergence_divergence = convergence_divergence * volume_increase
+
+    # Trend Confirmation
+    trend_confirmation = (short_term_sma_high > long_term_sma_high).astype(int)
+
+    # Final Alpha Factor Construction
+    combined_factors = (
+        (sentiment_adjusted_high_low * volume_increase) +
+        (smoothed_high_low * volume_increase) +
+        (momentum_volume * volume_increase)
+    ) * trend_confirmation
+
+    return combined_factors
+```

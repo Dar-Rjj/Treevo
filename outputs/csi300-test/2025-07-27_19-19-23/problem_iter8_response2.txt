@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, threshold=2.0, ema_span=10, lookback_period=10):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Volume Spikes
+    df['volume_z_score'] = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / df['volume'].rolling(window=lookback_period).std()
+    df['spike'] = df['volume_z_score'] > threshold
+    
+    # Adjust Momentum for Volume Spikes
+    weight = 0.5  # Example weight, can be adjusted
+    df['adjusted_log_return'] = df['log_return'] * (1 - df['spike'] * (1 - weight)) + df['spike'] * (weight * df['log_return'])
+    
+    # Smooth the Adjusted Returns
+    df['smoothed_returns'] = df['adjusted_log_return'].ewm(span=ema_span).mean()
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine High-Low Difference and Volume Spikes
+    df['high_low_spike'] = df['high_low_diff'] * df['spike'].astype(int)
+    df['sum_high_low_spike'] = df['high_low_spike'].rolling(window=lookback_period).sum()
+    
+    # Cumulative Momentum Factor
+    df['cumulative_momentum'] = (df['smoothed_returns'] + df['sum_high_low_spike'] / lookback_period + 1).cumprod()
+    
+    return df['cumulative_momentum']
+
+# Example usage
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# })
+# factor = heuristics_v2(df)
+```

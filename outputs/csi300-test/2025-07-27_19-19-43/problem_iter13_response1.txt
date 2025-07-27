@@ -1,0 +1,34 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the difference between close and open prices, then divide by average volume
+    price_diff_to_volume = (df['close'] - df['open']) / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the 14-day Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+    df['rsi'] = rsi
+    
+    # Calculate the 12-day and 26-day Exponential Moving Averages (EMA) for MACD
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = macd_line - signal_line
+    
+    # Integrate RSI, MACD, and sector data with dynamic weights
+    alpha_factor = (df['daily_return'] / (df['volatility'] + 1e-7)) + 0.5 * price_diff_to_volume + 0.2 * volume_ratio + 0.2 * df['rsi'] + 0.1 * df['macd_histogram']
+    
+    return alpha_factor
+```

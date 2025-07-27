@@ -1,0 +1,32 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day exponential moving average (EMA) of daily returns for responsiveness
+    df['ema_daily_return'] = df['daily_return'].ewm(span=30, adjust=False).mean()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the difference between close and open prices, then divide by average volume
+    price_diff_to_volume = (df['close'] - df['open']) / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the 30-day EMA of the volume
+    df['ema_volume'] = df['volume'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the 60-day simple moving average to integrate long-term trends
+    df['sma_60'] = df['close'].rolling(window=60).mean()
+    
+    # Calculate the 10-day exponential moving average to consider intraday movements
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Combine the momentum, EMA of daily returns, volatility, price difference to volume, volume ratio, and long-term trend factors
+    alpha_factor = (df['ema_daily_return'] / (df['volatility'] + 1e-7)) + 0.5 * price_diff_to_volume + 0.3 * volume_ratio + \
+                   0.2 * (df['close'] - df['sma_60']) / (df['volatility'] + 1e-7) + 0.1 * (df['close'] - df['ema_10']) / (df['volatility'] + 1e-7)
+    
+    return alpha_factor
+```

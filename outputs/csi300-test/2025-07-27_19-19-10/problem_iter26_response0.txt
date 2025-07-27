@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+
+    # Compute Volume Adjusted Daily Range
+    df['Avg_Volume_5D'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Adjusted_Daily_Range'] = df['Daily_Range'] * df['Avg_Volume_5D']
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Previous Day Return
+    df['Prev_Day_Return'] = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Volume Spike Detection
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Spike'] = (df['Volume_Change'] > 0).astype(int)
+
+    # Adjust Intraday High-Low Range by Inverse of Volume-to-Range Ratio
+    df['Volume_to_Range_Ratio'] = df['volume'] / df['Daily_Range']
+    df['Inverse_Volume_to_Range_Ratio'] = 1 / df['Volume_to_Range_Ratio']
+    df['Adjusted_Intraday_High_Low_Range'] = df['Daily_Range'] * df['Inverse_Volume_to_Range_Ratio']
+
+    # Weighted Intraday Return
+    df['Weighted_Intraday_Return'] = df['Intraday_Return'] * df['Volume_Spike']
+
+    # Incorporate Price Momentum
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Sum_Abs_Price_Changes_5D'] = df['Price_Change'].abs().rolling(window=5).sum()
+    df['Momentum_Factor'] = df['Price_Change'] / df['Sum_Abs_Price_Changes_5D']
+    df['Combined_Momentum_Factor'] = df['Momentum_Factor'] + df['Adjusted_Intraday_High_Low_Range']
+
+    # Apply Moving Average Trend Adjustment
+    df['10D_EMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Trend_Adjustment'] = np.where(df['close'] > df['10D_EMA'], 1.2, 0.8)
+    df['Final_Alpha_Factor'] = df['Combined_Momentum_Factor'] * df['Trend_Adjustment']
+
+    # Compute Price Difference Momentum
+    df['Price_Difference'] = df['close'] - df['close'].shift(1)
+    df['Sum_Price_Differences_5D'] = df['Price_Difference'].rolling(window=5).sum()
+    df['EMA_Price_Difference'] = df['Price_Difference'].ewm(alpha=0.2, adjust=False).mean()
+
+    # Combine Factors
+    df['Combined_Factors'] = (
+        df['Daily_Range'] +
+        df['Volume_Adjusted_Daily_Range'] +
+        df['Weighted_Intraday_Return'] +
+        df['Sum_Price_Differences_5D'] +
+        df['EMA_Price_Difference'] +
+        df['Prev_Day_Return'] +
+        df['Adjusted_Intraday_High_Low_Range']
+    )
+
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Combined_Factors'] * df['Trend_Adjustment']
+
+    return df['Final_Alpha_Factor']
+```

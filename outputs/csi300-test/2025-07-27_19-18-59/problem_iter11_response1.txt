@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine 5-day and 20-day returns
+    df['combined_returns'] = (df['5_day_return'] + df['20_day_return']) / 2
+    
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Price Range and Intraday Return
+    df['intraday_combined'] = df['intraday_range'] * df['intraday_return']
+    
+    # Integrate Volume Activity
+    # Determine Volume Trends
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust Combined Intraday and Closing Price Momentum by Volume Trends
+    df['volume_adjusted_momentum'] = df['combined_returns'] * df['volume_ratio']
+    
+    # Calculate True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], 
+                                                                 abs(x[0] - df['close'].shift(1)), 
+                                                                 abs(x[1] - df['close'].shift(1))), axis=1)
+    
+    # Average the True Ranges
+    df['avg_true_range'] = df['true_range'].rolling(window=5).mean()
+    
+    # Measure and Integrate High-Low Range Stability
+    df['daily_range'] = df['high'] - df['low']
+    df['range_stability'] = 1 / df['daily_range'].rolling(window=5).std()
+    
+    # Apply a 3-day Simple Moving Average (SMA) to the combined momentum
+    df['sma_combined_momentum'] = df['volume_adjusted_momentum'].rolling(window=3).mean()
+    
+    # Combine All Components
+    weights = {'combined_returns': 0.4, 'avg_true_range': 0.3, 'range_stability': 0.3}
+    df['alpha_factor'] = (df['combined_returns'] * weights['combined_returns'] +
+                          df['avg_true_range'] * weights['avg_true_range'] +
+                          df['range_stability'] * weights['range_stability'])
+    
+    return df['alpha_factor'].dropna()
+```

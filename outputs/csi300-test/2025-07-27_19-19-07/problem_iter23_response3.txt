@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Realized Volatility over 20 days
+    df['log_returns'] = np.log(df['close']).diff()
+    df['realized_volatility'] = df['log_returns'].rolling(window=20).std() * np.sqrt(252)
+    
+    # Volume-Weighted High-Low Range
+    df['vol_weighted_high_low'] = (df['high'] - df['low']) * df['volume']
+    
+    # Simple Moving Averages
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # Simple Moving Average Crossover
+    df['SMA_crossover'] = (df['SMA_50'] - df['SMA_200']) / df['SMA_200']
+    
+    # Price Relative to SMA
+    df['price_relative_to_SMA'] = (df['close'] - df['SMA_20']) / df['SMA_20']
+    
+    # Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = df['vol_weighted_high_low'] * df['daily_return']
+    df['smoothed_volume_adjusted_momentum'] = df['volume_adjusted_momentum'].ewm(alpha=0.1).mean()
+    
+    # Adjust for Volume Trend
+    df['volume_change'] = df['volume'].pct_change()
+    df['adjusted_smoothed_volume_adjusted_momentum'] = df['smoothed_volume_adjusted_momentum'] * (1 + df['volume_change'])
+    
+    # Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Open-to-Close Return
+    df['open_to_close_return'] = df['open'] - df['close']
+    
+    # Short-Term and Long-Term Volume Trends
+    df['short_term_volume_trend'] = df['volume'].rolling(window=5).mean()
+    df['long_term_volume_trend'] = df['volume'].rolling(window=20).mean()
+    
+    # Volume Trend Ratio
+    df['volume_trend_ratio'] = df['short_term_volume_trend'] / df['long_term_volume_trend']
+    
+    # Combined Momentum and Volatility
+    df['combined_momentum'] = df['intraday_return'] + df['adjusted_smoothed_volume_adjusted_momentum']
+    df['intraday_volatility'] = df['intraday_return'].rolling(window=20).std()
+    df['open_to_close_volatility'] = df['open_to_close_return'].rolling(window=20).std()
+    df['weighted_volatility'] = 0.5 * df['intraday_volatility'] + 0.5 * df['open_to_close_volatility']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['combined_momentum'] - df['weighted_volatility']
+    df['final_alpha_factor'] = df['final_alpha_factor'].rolling(window=10).mean()
+    
+    # Incorporate Intraday Price Reversal
+    df['intraday_price_reversal'] = df['high'] - df['low'] - df['intraday_return']
+    
+    # Add Aggregated High-Low Price Bandwidth
+    df['high_low_bandwidth'] = df['high'] - df['low']
+    df['aggregated_bandwidth'] = df['high_low_bandwidth'].rolling(window=5).sum()
+    
+    # VWAP
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume'] / df['volume'].rolling(window=5).sum()
+    
+    # Final Alpha Factor with VWAP
+    df['final_alpha_factor_with_VWAP'] = df['final_alpha_factor'] + df['VWAP']
+    
+    return df['final_alpha_factor_with_VWAP']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

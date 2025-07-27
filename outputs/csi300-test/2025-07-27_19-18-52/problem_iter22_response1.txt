@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_price_range'] = df['high'] - df['low']
+    
+    # Compute Volume-Weighted Average Price (VWAP) over a Lookback Period (e.g., 20 days)
+    df['vwap'] = (df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Integrate Intraday Price Range and VWAP
+    df['integrated_intraday_dynamics'] = df['intraday_price_range'] * df['vwap']
+    
+    # Calculate Daily Momentum
+    df['daily_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Integrate Intraday and Daily Momentum with VWAP
+    df['integrated_momentum'] = (df['intraday_momentum'] + df['daily_momentum']) * df['vwap']
+    
+    # Combine Integrated Intraday Dynamics and Momentum
+    df['combined_dynamics_momentum'] = df['integrated_intraday_dynamics'] * df['integrated_momentum']
+    
+    # Calculate Volume Surge
+    df['volume_surge'] = (df['volume'] > 2 * df['volume'].median()).astype(int)
+    
+    # Determine if Today's Volume is a Shock
+    df['volume_shock'] = (df['volume'] > 1.5 * df['volume'].rolling(window=20).mean()).astype(int)
+    
+    # Determine if Today's Close Price is a Shock
+    df['price_shock'] = (df['close'] > 1.5 * df['close'].rolling(window=20).mean()).astype(int)
+    
+    # Introduce Trend Reversal Indicator
+    df['trend_reversal'] = 0
+    df.loc[df['close'] < df['close'].rolling(window=20).mean(), 'trend_reversal'] = -1
+    df.loc[df['close'] > df['close'].rolling(window=20).mean(), 'trend_reversal'] = 1
+    
+    # Calculate Price Breakout
+    df['price_breakout'] = (df['high'] > df['high'].rolling(window=20).max()).astype(int)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).rolling(window=20).std()
+    
+    # Combine All Integrated Factors and Shocks
+    df['alpha_factor'] = (
+        df['combined_dynamics_momentum'] * 
+        df['volume_surge'] * 
+        df['volume_shock'] * 
+        df['price_shock'] * 
+        df['trend_reversal'] * 
+        df['price_breakout'] * 
+        df['intraday_volatility']
+    )
+    
+    return df['alpha_factor']
+```

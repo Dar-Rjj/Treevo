@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to capture volatility
+    daily_range = df['high'] - df['low']
+    
+    # Calculate a weighted close based on volume for a more accurate price movement indicator
+    weighted_close = (df['close'] * df['volume']) / df['volume'].rolling(window=10).mean()
+    
+    # Calculate typical price for money flow analysis
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Calculate money flow
+    money_flow = typical_price * df['volume']
+    
+    # Calculate positive and negative money flow
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    
+    # Calculate the money flow ratio for buying and selling pressure with a fixed window
+    money_flow_ratio = (positive_money_flow.rolling(window=20).sum() / 
+                        negative_money_flow.rolling(window=20).sum().fillna(1))
+    
+    # Incorporate the daily range as a measure of volatility
+    volatility_factor = 1 / (daily_range + 1e-7)
+    
+    # Calculate a momentum factor using the difference between the current close and the moving average
+    momentum_factor = df['close'] - df['close'].rolling(window=50).mean()
+    
+    # Consider market trend by adding a trend-following factor
+    trend_factor = df['close'].pct_change(periods=20).rolling(window=10).mean()
+    
+    # Additional factor: Volume-adjusted momentum
+    volume_adjusted_momentum = momentum_factor * (df['volume'] / df['volume'].rolling(window=10).mean())
+    
+    # Adaptive window for momentum and trend factors
+    adaptive_window = (df['close'].rolling(window=20).std() / df['close']).clip(lower=1, upper=10).astype(int)
+    adaptive_momentum = df['close'] - df['close'].rolling(window=adaptive_window).mean()
+    adaptive_trend_factor = df['close'].pct_change(periods=adaptive_window).rolling(window=adaptive_window).mean()
+    
+    # Combine these factors in a heuristic way to create a novel alpha factor
+    alpha_factor = (weighted_close * money_flow_ratio * volatility_factor * volume_adjusted_momentum * trend_factor * adaptive_momentum * adaptive_trend_factor).fillna(0)
+    
+    return alpha_factor
+```

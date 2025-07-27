@@ -1,0 +1,60 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day exponentially weighted moving average of close prices to capture momentum
+    ewma_10_close = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 30-day exponentially weighted moving average of close prices for longer-term trend
+    ewma_30_close = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Compute the difference between the two EWMA to gauge momentum
+    momentum_factor = ewma_10_close - ewma_30_close
+    
+    # Calculate the 10-day exponentially weighted standard deviation of close prices to represent volatility
+    volatility_factor = df['close'].ewm(span=10, adjust=False).std()
+    
+    # Calculate the 10-day exponentially weighted average volume to measure liquidity
+    ewma_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate a liquidity factor as the ratio of current volume to the 10-day EWMA volume
+    liquidity_factor = df['volume'] / ewma_volume
+    
+    # Integrate market capitalization (assuming 'amount' is the market cap)
+    market_cap = df['amount']
+    
+    # Calculate the 10-day exponentially weighted moving average of high and low prices
+    ewma_10_high = df['high'].ewm(span=10, adjust=False).mean()
+    ewma_10_low = df['low'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 10-day exponentially weighted range
+    ewma_range = ewma_10_high - ewma_10_low
+    
+    # Calculate the dynamic weight for each factor based on their recent performance
+    momentum_weight = (momentum_factor.rolling(window=5).mean().abs() / 
+                       momentum_factor.rolling(window=5).std())
+    volatility_weight = (volatility_factor.rolling(window=5).mean().abs() / 
+                         volatility_factor.rolling(window=5).std())
+    liquidity_weight = (liquidity_factor.rolling(window=5).mean().abs() / 
+                        liquidity_factor.rolling(window=5).std())
+    market_cap_weight = (market_cap.rolling(window=5).mean().abs() / 
+                         market_cap.rolling(window=5).std())
+    range_weight = (ewma_range.rolling(window=5).mean().abs() / 
+                    ewma_range.rolling(window=5).std())
+    
+    # Normalize the weights
+    total_weight = (momentum_weight + volatility_weight + liquidity_weight + 
+                    market_cap_weight + range_weight)
+    momentum_weight = momentum_weight / total_weight
+    volatility_weight = volatility_weight / total_weight
+    liquidity_weight = liquidity_weight / total_weight
+    market_cap_weight = market_cap_weight / total_weight
+    range_weight = range_weight / total_weight
+    
+    # Combine the factors: momentum, adjusted by volatility, liquidity, market cap, and price range
+    factor_value = (momentum_factor * momentum_weight +
+                    (1 / volatility_factor) * volatility_weight +
+                    liquidity_factor * liquidity_weight +
+                    market_cap * market_cap_weight +
+                    ewma_range * range_weight)
+    
+    return factor_value
+```

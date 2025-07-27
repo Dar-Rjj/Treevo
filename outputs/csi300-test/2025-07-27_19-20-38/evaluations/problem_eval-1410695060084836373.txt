@@ -1,0 +1,30 @@
+def heuristics_v2(df):
+    def roc(column, n=5):
+        return (column - column.shift(n)) / column.shift(n)
+    
+    def rsi(column, n=14):
+        delta = column.diff(1)
+        gain = delta.where(delta > 0, 0).rolling(window=n).mean()
+        loss = -delta.where(delta < 0, 0).rolling(window=n).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    close_roc = roc(df['close'])
+    volume_rsi = rsi(df['volume'])
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    money_flow_index = raw_money_flow / raw_money_flow.rolling(window=14).sum()
+    
+    # Dynamic weights
+    w1 = (close_roc + 1) / 2
+    w2 = (volume_rsi / 100)
+    w3 = (money_flow_index + 1) / 2
+    
+    # Normalize weights
+    total_weight = w1 + w2 + w3
+    w1 /= total_weight
+    w2 /= total_weight
+    w3 /= total_weight
+    
+    heuristics_matrix = w1*close_roc + w2*volume_rsi + w3*money_flow_index
+    return heuristics_matrix

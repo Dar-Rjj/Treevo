@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Incorporate Historical Price Change
+    price_change = df['close'].pct_change()
+    
+    # Smooth the Resulting Series
+    smoothed_price_change = price_change.ewm(alpha=0.1).mean().rolling(window=5).mean()
+    
+    # Adjust for Volume Trend
+    volume_change = df['volume'].pct_change()
+    adjusted_smoothed_price_change = smoothed_price_change * (1 + 0.5 * volume_change)
+    
+    # Adjust for Amount Trend
+    amount_change = df['amount'].pct_change()
+    final_adjusted_factor = adjusted_smoothed_price_change * (1 + 0.5 * amount_change)
+    
+    # Combine and Smooth Final Factor
+    final_factor = final_adjusted_factor.rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    open_close_return = df['close'] - df['open']
+    
+    # Compute Short-Term Volume Trend
+    short_term_volume_trend = df['volume'].rolling(window=5).mean()
+    
+    # Compute Long-Term Volume Trend
+    long_term_volume_trend = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Trend Ratio
+    volume_trend_ratio = short_term_volume_trend / long_term_volume_trend
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Final Momentum Component
+    intraday_momentum = intraday_return + open_close_return
+    long_term_momentum = price_change * volume_trend_ratio
+    final_momentum = intraday_momentum + long_term_momentum
+    
+    # Combine Momentum and Volatility
+    combined_momentum = final_momentum - high_low_spread.rolling(window=5).std()
+    
+    # Calculate Volume-Weighted High-Low Range
+    volume_weighted_high_low_range = (df['high'] - df['low']) * df['volume']
+    
+    # Multiply Volume-Weighted High-Low Range by Close-to-Previous Close Return
+    close_to_prev_close_return = df['close'].pct_change()
+    volume_adjusted_momentum = volume_weighted_high_low_range * close_to_prev_close_return
+    
+    # Smooth the Resulting Series
+    smoothed_final_factor = volume_adjusted_momentum.ewm(alpha=0.1).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = (combined_momentum * vwap 
+                    + high_low_spread.rolling(window=5).sum() 
+                    + smoothed_final_factor.rolling(window=5).mean())
+    
+    # Introduce a New Intraday Price Reversal Component
+    intraday_price_reversal = (df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)) - intraday_return
+    final_alpha_factor = alpha_factor * (1 + 0.5 * intraday_price_reversal * smoothed_final_factor)
+    
+    return final_alpha_factor
+```

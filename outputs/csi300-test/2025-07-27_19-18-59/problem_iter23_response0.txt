@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Weighted combination of 5-day and 20-day returns
+    df['weighted_returns'] = (3 * df['5_day_return'] + df['20_day_return']) / 4
+    
+    # Intraday return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday price range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine intraday price range and intraday return
+    df['combined_intraday'] = df['intraday_range'] * df['intraday_return']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate volume over multiple days
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust enhanced intraday and closing price momentum by volume trends
+    df['adjusted_momentum'] = df['weighted_returns'] * (df['volume_trend'] ** 0.75)
+    
+    # True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1)
+    
+    # Volume-adjusted true range
+    df['volume_adjusted_true_range'] = df['true_range'] * (df['volume_trend'] ** 0.5)
+    
+    # High-Low range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Rolling standard deviation of daily range over M days (e.g., M=20)
+    m_days = 20
+    df['range_volatility'] = df['daily_range'].rolling(window=m_days).std()
+    
+    # Invert rolling standard deviation to reflect stability
+    df['range_stability'] = 1 / df['range_volatility']
+    
+    # Smooth combined momentum with a 3-day SMA
+    df['smoothed_combined_momentum'] = df['adjusted_momentum'].rolling(window=3).mean()
+    
+    # Apply EMA with a 5-day span to the combined momentum
+    df['ema_combined_momentum'] = df['smoothed_combined_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Compute weighted sum
+    weight_momentum = 0.6
+    weight_stability = 0.4
+    df['final_alpha_factor'] = (df['ema_combined_momentum'] * weight_momentum) + (df['range_stability'] * weight_stability)
+    
+    return df['final_alpha_factor']
+```

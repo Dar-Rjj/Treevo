@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame, macro_data: pd.DataFrame, sentiment_scores: pd.Series) -> pd.Series:
+    # Adaptive window for EMA based on volatility
+    volatility = df['close'].rolling(window=20).std()
+    ema_window = (volatility / volatility.mean() * 20).fillna(20).astype(int)
+    df['ema_close'] = df['close'].ewm(span=ema_window, adjust=False).mean()
+    
+    # RSI calculation
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Momentum with adaptive window
+    momentum_window = (volatility / volatility.mean() * 14).fillna(14).astype(int)
+    df['momentum'] = df['close'] / df['close'].shift(momentum_window) - 1
+    
+    # Volume-weighted measures
+    df['volume_weighted_price'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Average True Range (ATR) as a measure of volatility
+    df['tr'] = df[['high' - 'low', 'high' - df['close'].shift(1), df['close'].shift(1) - 'low']].max(axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Bollinger Bands
+    df['sma_close'] = df['close'].rolling(window=20).mean()
+    df['upper_band'] = df['sma_close'] + 2 * df['close'].rolling(window=20).std()
+    df['lower_band'] = df['sma_close'] - 2 * df['close'].rolling(window=20).std()
+    df['bb_width'] = (df['upper_band'] - df['lower_band']) / df['sma_close']
+    
+    # Chaikin Money Flow (CMF)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['cmf'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Integrate seasonality
+    df['month'] = df.index.month
+    df['day_of_week'] = df.index.dayofweek
+    monthly_seasonality = df.groupby('month')['close'].transform(lambda x: (x - x.mean()) / x.std())
+    daily_seasonality = df.groupby('day_of_week')['close'].transform(lambda x: (x - x.mean()) / x.std())
+    
+    # Integrate macroeconomic data
+    macro_data_aligned = macro_data.reindex(df.index, method='ffill')
+    macro_impact = (macro_data_aligned - macro_data_aligned.mean()) / macro_data_aligned.std()
+    
+    # Integrate sentiment analysis
+    sentiment_scores_aligned = sentiment_scores.reindex(df.index, method='ffill')
+    
+    # Combine factors
+    factor_value = (df['momentum'] + (df['rsi'] - 50) / 50) * (df['volume_weighted_price'] - df['ema_close']) / (volatility + 1e-7)
+    factor_value += df['cmf'] * df['bb_width'] / (df['atr'] + 1e-7)
+    factor_value += monthly_seasonality + daily_seasonality + macro_impact.sum(axis=1) + sentiment_scores_aligned
+    return factor_value
+```

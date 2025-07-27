@@ -1,0 +1,31 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate rolling mean and standard deviation for close prices over 10 periods
+    window = 10
+    df['rolling_mean_close'] = df['close'].rolling(window=window).mean()
+    df['rolling_std_close'] = df['close'].rolling(window=window).std()
+    
+    # Z-score for closing price to normalize the trend information
+    df['z_score_close'] = (df['close'] - df['rolling_mean_close']) / df['rolling_std_close']
+    
+    # Calculate RSI (Relative Strength Index) with a 14-day window
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate MACD (Moving Average Convergence Divergence)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = ema_12 - ema_26
+    df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # Volume-weighted momentum factor
+    df['volume_weighted_momentum'] = (df['close'] - df['rolling_mean_close']) * df['volume']
+    
+    # Combine factors using dynamic weights
+    df['alpha_factor'] = 0.5 * df['z_score_close'] + 0.3 * (df['rsi'] - 50) + 0.2 * (df['macd'] - df['signal'])
+    
+    return df['alpha_factor']
+```

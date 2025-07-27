@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Intraday Trading Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Volume Intensity Score
+    df['volume_intensity'] = df['volume'] / (df['high'] - df['low']).replace(0, np.nan)
+    
+    # Composite Momentum Factor
+    df['composite_momentum'] = (df['intraday_return'] * df['volume_intensity']).fillna(0) + 1e-6
+    
+    # Compute Volume-Weighted Moving Average (VWMA) of Close Prices
+    lookback_period_vwma = 20
+    df['vwma'] = (df['close'] * df['volume']).rolling(window=lookback_period_vwma).sum() / \
+                 df['volume'].rolling(window=lookback_period_vwma).sum()
+    
+    # Trend Strength Indicator
+    lookback_period_sma = 50
+    df['sma'] = df['close'].rolling(window=lookback_period_sma).mean()
+    df['trend_strength'] = df['sma'] - df['vwma']
+    
+    # Weighted Momentum-VWMA Difference
+    df['weighted_momentum_vwma_diff'] = df['composite_momentum'] - df['vwma']
+    
+    # Integrated Short-Term Price Trend
+    df['short_term_ma'] = df['close'].rolling(window=5).mean()
+    df['integrated_short_term_trend'] = df['composite_momentum'] - df['short_term_ma']
+    
+    # Adjusted Composite Momentum Factor
+    df['adjusted_composite_momentum'] = (df['intraday_return'] + df['intraday_range']) * df['volume_intensity']
+    
+    # Integrate Adjusted Composite Momentum Factor with VWMA
+    df['integrated_adjusted_momentum'] = df['adjusted_composite_momentum'] * df['vwma'] - df['vwma']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].diff().fillna(0)
+    
+    # Final Integrated Alpha Factor
+    weighting_factor = 0.5
+    df['final_alpha'] = (weighting_factor * df['daily_return'] + df['composite_momentum']) + \
+                       df['trend_strength'] + df['integrated_short_term_trend'] + df['integrated_adjusted_momentum']
+    
+    return df['final_alpha']
+```

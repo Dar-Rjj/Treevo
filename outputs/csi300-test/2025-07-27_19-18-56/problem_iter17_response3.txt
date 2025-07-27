@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    n = 10  # number of periods for momentum
+    short_term_ma = 5
+    long_term_ma = 20
+    ema_period = 10
+
+    # Calculate Composite Price-Volume Momentum
+    df['close_to_close_return'] = df['close'].pct_change()
+    df['momentum'] = df['close_to_close_return'].rolling(window=n).sum()
+
+    # Confirm with Trading Volume Increase
+    df['volume_change'] = df['volume'].diff()
+    df['volume_indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['momentum_with_volume'] = df['momentum'] * df['volume_indicator']
+
+    # Calculate Volume-Weighted High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['volume_weighted_high_low_range'] = (df['high_low_range'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+
+    # Adjust for Market Sentiment
+    df['close_open_return'] = df['close'] - df['open']
+    sentiment_multiplier = 1 + df['close_open_return'] / df['open']
+    df['adjusted_volume_weighted_high_low_range'] = df['volume_weighted_high_low_range'] * sentiment_multiplier
+
+    # Smoothed High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['ema_high_low_spread'] = df['high_low_spread'].ewm(span=ema_period, adjust=False).mean()
+    df['smoothed_high_low_spread'] = df['high_low_spread'] - df['ema_high_low_spread']
+
+    # Integrate with Convergence-Divergence of High-Low Prices
+    df['avg_high_low'] = (df['high'] + df['low']) / 2
+    df['short_term_ma_avg_high_low'] = df['avg_high_low'].rolling(window=short_term_ma).mean()
+    df['long_term_ma_avg_high_low'] = df['avg_high_low'].rolling(window=long_term_ma).mean()
+    df['convergence_divergence_high_low'] = df['short_term_ma_avg_high_low'] - df['long_term_ma_avg_high_low']
+
+    # Combine Indicators
+    df['composite_momentum_and_convergence'] = df['momentum_with_volume'] + df['convergence_divergence_high_low']
+
+    # Filter by Volume Change
+    df['filtered_composite_momentum_and_convergence'] = df['composite_momentum_and_convergence'] * (df['volume_change'] > 0)
+
+    # Trend Confirmation
+    df['sma_5'] = df['close'].rolling(window=short_term_ma).mean()
+    df['sma_20'] = df['close'].rolling(window=long_term_ma).mean()
+    df['trend_confirmation'] = (df['sma_5'] > df['sma_20']).astype(int)
+
+    # Final Alpha Factor Construction
+    df['combined_factors'] = (df['adjusted_volume_weighted_high_low_range'] + df['smoothed_high_low_spread']) * df['volume_indicator']
+    df['final_alpha_factor'] = df['combined_factors'] * df['trend_confirmation'] * df['filtered_composite_momentum_and_convergence']
+
+    return df['final_alpha_factor']
+```

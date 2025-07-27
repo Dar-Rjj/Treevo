@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return to capture the momentum
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute the 30-day rolling standard deviation of daily returns as a measure of volatility
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Calculate the Relative Strength Index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the MACD line and signal line
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd_line'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd_line'] - df['signal_line']
+    
+    # Calculate the difference between close and open prices, then divide by average volume
+    price_diff_to_volume = (df['close'] - df['open']) / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the ratio of the current day's volume to the 30-day average volume, which reflects relative trading activity
+    volume_ratio = df['volume'] / (df['volume'].rolling(window=30).mean() + 1e-7)
+    
+    # Calculate the seasonal trend using a 20-day rolling mean
+    df['seasonal_trend'] = df['close'].rolling(window=20).mean()
+    
+    # Integrate external data (e.g., sentiment analysis, economic indicators) into the factor
+    # For this example, we'll use a placeholder for external data
+    df['external_data'] = 0.5  # Placeholder for external data, replace with actual data
+    
+    # Incorporate sector-specific metrics
+    if 'sector_metric' in df.columns:
+        sector_factor = (df['sector_metric'] - df['sector_metric'].mean()) / (df['sector_metric'].std() + 1e-7)
+    else:
+        sector_factor = 0
+    
+    # Combine the factors
+    features = pd.DataFrame({
+        'momentum': df['daily_return'] / (df['volatility'] + 1e-7),
+        'rsi': 100 - df['rsi'],
+        'macd_histogram': df['macd_histogram'],
+        'price_diff_to_volume': price_diff_to_volume,
+        'volume_ratio': volume_ratio,
+        'seasonal_trend': df['seasonal_trend'],
+        'external_data': df['external_data'],
+        'sector_factor': sector_factor
+    }).dropna()
+    
+    # Use machine learning for dynamic weighting
+    model = LinearRegression()
+    X = features.iloc[:, :-1]
+    y = df['close'].pct_change().shift(-1).loc[features.index]  # Predict future return
+    model.fit(X, y)
+    alpha_factors = pd.Series(model.predict(X), index=features.index)
+    
+    return alpha_factors
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume-Adjusted High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Volume_Adjusted_HL'] = (df['High_Low_Range'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+
+    # Adjust for Market Sentiment
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+    df['Market_Sentiment_Adjustment'] = np.where(df['Close_to_Open_Return'] > 0, 
+                                                 df['Volume_Adjusted_HL'] * 1.1, 
+                                                 df['Volume_Adjusted_Hl'] * 0.9)
+
+    # Smoothed High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['EMA_High_Low_Spread'] = df['High_Low_Spread'].ewm(span=10, adjust=False).mean()
+    df['Smoothed_High_Low_Spread'] = df['High_Low_Spread'] - df['EMA_High_Low_Spread']
+
+    # Price Momentum
+    n = 5
+    df['Price_Momentum'] = df['close'] - df['close'].shift(n)
+    df['Price_Momentum'] = df['Price_Momentum'].rolling(window=n).sum()
+
+    # Trading Volume Increase Indicator
+    df['Volume_Increase'] = np.where(df['volume'] > df['volume'].shift(1), 1, 0)
+
+    # Trend Confirmation
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Trend_Confirmation'] = np.where(df['SMA_5'] > df['SMA_20'], 1, 0)
+
+    # Final Alpha Factor Construction
+    df['Combined_Factor'] = (df['Market_Sentiment_Adjustment'] + 
+                             df['Smoothed_High_Low_Spread'] + 
+                             df['Price_Momentum']) * df['Trend_Confirmation']
+
+    return df['Combined_Factor']
+```

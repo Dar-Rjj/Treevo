@@ -70,7 +70,6 @@ class TreEvo:
         # Problem-specific prompt components
         prompt_path_suffix = "_black_box" if self.problem_type == "black_box" else ""
         problem_prompt_path = f'{self.prompt_dir}/{self.problem}{prompt_path_suffix}'
-        self.seed_func = file_to_string(f'{problem_prompt_path}/seed_func.txt')
         self.func_signature = file_to_string(f'{problem_prompt_path}/func_signature.txt')
         self.func_desc = file_to_string(f'{problem_prompt_path}/func_desc.txt')
         self.seed_tree = file_to_string(f'{problem_prompt_path}/seed_tree.txt')
@@ -131,16 +130,12 @@ class TreEvo:
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         logging.info("Seed Code Prompt: \nSystem Prompt: \n" + system + "\nUser Prompt: \n" + user)
 
-
         responses = self.generator_llm.multi_chat_completion([messages]) # Increase the temperature for diverse initial population
         population = [self.response_to_individual(response, response_id) for response_id, response in enumerate(responses)]
 
-        # Run code and evaluate population
-        population = self.evaluate_population(population)
-
-        # Evaluate the seed function, and set it as Elite
+        # Evaluate the seed function, and set it as Elite(tree)
         logging.info("Evaluating seed function...")
-        code = extract_code_from_generator(self.seed_func).replace("v1", "v2")
+        code = population[0]["code"]
         logging.info("Seed function code: \n" + code)
         seed_ind = {
             "stdout_filepath": f"problem_iter{self.iteration}_stdout0.txt",
@@ -496,7 +491,6 @@ class TreEvo:
                 worse_tree = worse_tree,
                 better_tree = better_tree,
                 reflection = reflection,
-                func_name = self.func_name,
             )
             messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
             messages_lst.append(messages)
@@ -530,7 +524,6 @@ class TreEvo:
             user_generator = self.user_generator_prompt,
             reflection = self.long_term_reflection_str + self.external_knowledge,
             elitist_tree = self.elitist["tree"],
-            func_name = self.func_name,
         )
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         if self.print_mutate_prompt:
@@ -557,7 +550,7 @@ class TreEvo:
                 raise RuntimeError(f"All individuals are invalid. Please check the stdout files in {os.getcwd()}.")
             # Select
             population_to_select = self.population if (self.elitist is None or self.elitist in self.population) else [self.elitist] + self.population # add elitist to population for selection
-            selected_population = self.random_select(population_to_select)
+            selected_population = self.rank_select(population_to_select)
             if selected_population is None:
                 raise RuntimeError("Selection failed. Please check the population.")
             # Short-term reflection

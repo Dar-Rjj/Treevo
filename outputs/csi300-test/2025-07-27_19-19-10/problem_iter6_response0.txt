@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Weighted Moving Average of Close Prices
+    n = 5
+    weights = np.arange(1, n+1)
+    df['Short_Term_WMA'] = (df['close'].rolling(window=n).apply(lambda x: np.sum(weights * x) / np.sum(weights), raw=True))
+    
+    # Calculate Long-Term Simple Moving Average of Close Prices
+    m = 20
+    df['Long_Term_SMA'] = df['close'].rolling(window=m).mean()
+    
+    # Calculate the Difference between Short-Term WMA and Long-Term SMA
+    df['Price_Momentum'] = df['Short_Term_WMA'] - df['Long_Term_SMA']
+    
+    # Calculate Volume Rate of Change (VROC) Indicator
+    period = 14
+    df['Volume_ROC'] = df['volume'].pct_change(period)
+    
+    # Calculate the Exponential Moving Average (EMA) of VROC
+    alpha = 0.1
+    df['VROC_EMA'] = df['Volume_ROC'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Combine Adjusted Price Momentum and VROC Indicators
+    df['Combined_Indicator'] = df['Price_Momentum'] * df['VROC_EMA']
+    
+    # Assign Dynamic Weights to Each Indicator based on Volatility
+    volatility = df['close'].rolling(window=10).std()
+    df['Weighted_Combined_Indicator'] = df['Combined_Indicator'] * (volatility / volatility.mean())
+    
+    # Apply a Dynamic Threshold to Select Significant Values
+    market_return = 0.01  # Example market return, can be replaced with actual market return
+    threshold = market_return * 2  # Example threshold, can be adjusted
+    df['Filtered_Indicator'] = df['Weighted_Combined_Indicator'].where(df['Weighted_Combined_Indicator'].abs() > threshold, 0)
+    
+    # Rank the Selected Values
+    df['Log_Returns'] = np.log(df['close'] / df['close'].shift(1))
+    market_log_returns = df['Log_Returns'].mean()  # Example market log returns, can be replaced with actual market log returns
+    df['Correlation_with_Market'] = df['Log_Returns'].rolling(window=period).corr(market_log_returns)
+    df['Ranked_Indicator'] = df.groupby('date')['Filtered_Indicator'].rank(ascending=False, method='first')
+    
+    return df['Ranked_Indicator']
+```

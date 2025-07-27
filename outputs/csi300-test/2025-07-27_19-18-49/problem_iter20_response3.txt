@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=5, L=30, N=20):
+    # Calculate Momentum Components
+    df['Close_Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    df['Open_Momentum'] = (df['open'] - df['open'].shift(n)) / df['open'].shift(n)
+    df['Integrated_Momentum'] = (df['close'] - df['open']) / df['open'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Calculate Daily Log Return
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+
+    # Calculate Open-Adjusted Daily Log Return
+    df['Open_Adjusted_Log_Return'] = df['Log_Return'] - np.log(df['open']) + np.log(df['close'].shift(1))
+
+    # Multiply Open-Adjusted Log Return by Volume
+    df['Volume_Adjusted_Log_Return'] = df['Open_Adjusted_Log_Return'] * df['volume']
+
+    # Sum Over N Days
+    df['Sum_Volume_Adjusted_Log_Return'] = df['Volume_Adjusted_Log_Return'].rolling(window=N).sum()
+
+    # Weight by Recent Trading Activity
+    df['Avg_Volume_m'] = df['volume'].rolling(window=m).mean()
+    df['Avg_Volume_L'] = df['volume'].rolling(window=L).mean()
+    df['Volume_Weight'] = df['Avg_Volume_m'] / df['Avg_Volume_L']
+
+    # Detect Volume Shocks
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Shock'] = (df['Volume_Change'] > 2 * df['Volume_Change'].rolling(window=30).mean()).astype(int)
+
+    # Combine Indicators
+    df['Momentum_Weighted'] = (df['Close_Momentum'] + df['Open_Momentum']) * df['Volume_Weight']
+    df['Momentum_Weighted_Sum'] = df['Momentum_Weighted'] + df['Integrated_Momentum']
+    df['Volume_Shock_Factor'] = df['Momentum_Weighted_Sum'] * df['Volume_Shock']
+    
+    # Additional Momentum Factors
+    df['5D_Price_Momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['5D_Volume_Momentum'] = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    df['5D_Price_Oscillation'] = df['high'] - df['low']
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Volume_Shock_Factor'] 
+                          * df['5D_Price_Momentum'] 
+                          * df['5D_Volume_Momentum'] 
+                          * df['5D_Price_Oscillation'])
+
+    return df['Alpha_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

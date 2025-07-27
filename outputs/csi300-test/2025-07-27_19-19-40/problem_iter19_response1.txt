@@ -1,0 +1,29 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-period and 30-period Exponential Moving Averages (EMA) of the close prices
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+
+    # Relative Strength Index (RSI) over 14 periods
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Moving Average Convergence Divergence (MACD)
+    df['macd_line'] = df['ema_10'] - df['ema_30']
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd_line'] - df['signal_line']
+
+    # Adaptive window for EMA based on volume volatility
+    vol_volatility = df['volume'].rolling(window=10).std()
+    adaptive_window = (vol_volatility * 10).astype(int).clip(lower=10, upper=60)
+    df['adaptive_ema'] = df['close'].ewm(span=adaptive_window, adjust=False).mean()
+
+    # Calculate the alpha factor using the difference between the current close and the adaptive EMA, 
+    # scaled by the RSI and MACD histogram
+    alpha_factor = (df['close'] - df['adaptive_ema']) * df['rsi'] * df['macd_histogram']
+
+    return alpha_factor
+```

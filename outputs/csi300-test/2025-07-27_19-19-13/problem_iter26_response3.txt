@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term (10 days) and Long-Term (50 days) Moving Averages
+    df['MA_10'] = df['close'].rolling(window=10).mean()
+    df['MA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Compute the Difference Between Short-Term and Long-Term MAs
+    df['MA_Diff'] = df['MA_10'] - df['MA_50']
+    
+    # Calculate On-Balance Volume (OBV)
+    df['OBV'] = 0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] + df.loc[df.index[i], 'volume']
+        elif df.loc[df.index[i], 'close'] < df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] - df.loc[df.index[i], 'volume']
+        else:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV']
+    
+    # Measure the Rate of Change in OBV
+    df['ROC_OBV'] = df['OBV'].pct_change()
+    
+    # Compute the Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the Average True Range (ATR)
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift()).abs()
+    tr3 = (df['low'] - df['close'].shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df['ATR'] = tr.rolling(window=14).mean()
+    
+    # Calculate William's %R
+    hh = df['high'].rolling(window=14).max()
+    ll = df['low'].rolling(window=14).min()
+    df['Williams_%R'] = -100 * ((hh - df['close']) / (hh - ll))
+    
+    # Calculate the Money Flow Index (MFI)
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    rmf = tp * df['volume']
+    pmf = rmf.where(tp > tp.shift(1), 0)
+    nmf = rmf.where(tp < tp.shift(1), 0)
+    mfr = pmf.rolling(window=14).sum() / nmf.rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + mfr))
+    
+    # Create a Composite Score
+    df['Composite_Score'] = 0.3 * df['MA_Diff'] + 0.2 * df['ROC_OBV'] + 0.2 * df['RSI'] + 0.1 * df['ATR'] + 0.1 * df['Williams_%R'] + 0.1 * df['MFI']
+    
+    return df['Composite_Score']
+
+# Example usage:
+# df = pd.read_csv('your_market_data.csv', index_col='date')
+# composite_score = heuristics_v2(df)
+```

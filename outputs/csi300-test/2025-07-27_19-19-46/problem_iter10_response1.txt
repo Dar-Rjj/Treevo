@@ -1,0 +1,59 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's and yesterday's close price for momentum
+    momentum = df['close'].diff(1).fillna(0)
+    
+    # Calculate the total range of the day (high - low) to capture volatility
+    daily_range = (df['high'] - df['low']).fillna(1e-7)
+    
+    # Calculate the money flow ratio by dividing the amount by volume to gauge market sentiment
+    money_flow_ratio = df['amount'] / (df['volume'] + 1e-7)
+    
+    # Calculate the 50-day simple moving average as a trend-following indicator
+    sma_50 = df['close'].rolling(window=50).mean().fillna(df['close'])
+    
+    # Calculate the 200-day simple moving average as an even longer-term trend-following indicator
+    sma_200 = df['close'].rolling(window=200).mean().fillna(df['close'])
+    
+    # Calculate the relative position of the close price with respect to the 50-day and 200-day SMAs
+    rel_pos_sma_50 = (df['close'] - sma_50) / (sma_50 + 1e-7)
+    rel_pos_sma_200 = (df['close'] - sma_200) / (sma_200 + 1e-7)
+    
+    # Calculate the 20-day Bollinger Bands percentage to capture volatility and trend
+    std_20 = df['close'].rolling(window=20).std().fillna(0)
+    bollinger_high = sma_50 + 2 * std_20
+    bollinger_low = sma_50 - 2 * std_20
+    bollinger_pct = (df['close'] - bollinger_low) / (bollinger_high - bollinger_low + 1e-7)
+    
+    # Calculate the RSI (Relative Strength Index) over the last 14 days
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean().fillna(0)
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().fillna(0)
+    rs = gain / (loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the 20-day Aroon Oscillator to identify the trend
+    aroon_up = df['close'].rolling(window=20).apply(lambda x: (x.argmax() + 1) / 20, raw=True).fillna(0)
+    aroon_down = df['close'].rolling(window=20).apply(lambda x: (x.argmin() + 1) / 20, raw=True).fillna(0)
+    aroon_oscillator = aroon_up - aroon_down
+    
+    # Calculate the 14-day Chaikin Money Flow to capture buying and selling pressure
+    mfv = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mfv *= df['volume']
+    cmf = mfv.rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    
+    # Non-linear combination of factors
+    factor_values = (
+        (momentum ** 2) * 
+        (money_flow_ratio ** 1.5) * 
+        (daily_range ** 0.5) * 
+        (rel_pos_sma_50 ** 1.2) * 
+        (rel_pos_sma_200 ** 1.3) * 
+        (bollinger_pct ** 1.1) * 
+        (rsi ** 0.8) * 
+        (aroon_oscillator ** 1.4) * 
+        (cmf ** 1.6)
+    ) ** 0.5
+    
+    return factor_values
+```

@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Volatility
+    daily_volatility = (df['high'] - df['low']).rolling(window=20).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Adjust for Volume Impact
+    adjusted_intraday_return = intraday_return / df['volume']
+    
+    # Aggregate Past Movements
+    moving_sum = adjusted_intraday_return.rolling(window=20).sum()
+    avg_close = df['close'].rolling(window=20).mean()
+    relative_strength = moving_sum / avg_close
+    
+    # Calculate Volume-Weighted Momentum
+    close_shifted = df['close'].shift(20)
+    volume_weighted_momentum = (close_shifted * df['volume']) / df['volume'].rolling(window=20).max()
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) + (df['high'] - df['close'].shift(1))
+    
+    # Calculate Open-Close Price Movement
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    
+    # Combine Factors
+    alpha_factor = (
+        daily_volatility
+        - volume_weighted_momentum
+        + adjusted_intraday_return
+        + intraday_volatility
+        + open_close_movement
+    )
+    
+    # Interpretable Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Conditionally Adjust Alpha Factor
+    alpha_factor = alpha_factor.multiply(
+        1 + 2 * open_to_close_return.where(open_to_close_return > 0, other=-2 * open_to_close_return.abs())
+    )
+    
+    return alpha_factor
+```
