@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=20):
+    # Calculate Log Returns
+    log_returns = np.log(df['close']).diff().fillna(0)
+    
+    # Compute Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = cum_log_returns.quantile(0.95)
+    lower_threshold = cum_log_returns.quantile(0.05)
+    
+    # Clip Log Returns to Thresholds
+    clipped_cum_log_returns = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volume_mean = df['volume'].mean()
+    volume_adjusted_momentum = clipped_cum_log_returns * (df['volume'] / volume_mean)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = df['close'].diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Final Factor Calculation
+    weights = [0.4, 0.3, 0.2, 0.1]  # Weights for momentum, volume, standard deviation, and IQR
+    factor = (weights[0] * volume_adjusted_momentum +
+              weights[1] * (df['volume'] / volume_mean) +
+              weights[2] * std_abs_price_changes +
+              weights[3] * iqr_abs_price_changes)
+    
+    return factor
+```

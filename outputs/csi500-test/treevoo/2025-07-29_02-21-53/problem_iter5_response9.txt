@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Signed Transaction Volume
+    df['signed_volume'] = df['volume'] * ((df['high'] - df['low']) > 0).astype(int)
+    
+    # Calculate Accumulated Buy-Sell Imbalance
+    df['positive_signed_volume'] = df['signed_volume'].apply(lambda x: x if x > 0 else 0)
+    df['negative_signed_volume'] = df['signed_volume'].apply(lambda x: abs(x) if x < 0 else 0)
+    
+    # Compute Order Imbalance Score
+    total_abs_volume = df['volume'].abs().sum()
+    positive_ratio = df['positive_signed_volume'].sum() / total_abs_volume
+    negative_ratio = df['negative_signed_volume'].sum() / total_abs_volume
+    df['order_imbalance_score'] = positive_ratio - negative_ratio
+    
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low', 'prev_close']].max(axis=1) - df[['high', 'low', 'prev_close']].min(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    n_days = 14
+    df['atr'] = df['true_range'].rolling(window=n_days).mean()
+    
+    # Calculate Intraday Price Movement
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Aggregate Price Movements
+    period = 5
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=period).sum()
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=period).sum()
+    
+    # Combine Adjusted High-Low Spread and Intraday Price Movement
+    weight_high_low = 0.6
+    weight_close_open = 0.4
+    df['combined_price_factor'] = weight_high_low * df['sum_high_low_diff'] + weight_close_open * df['sum_close_open_diff']
+    
+    # Calculate Cumulative Return over N Days
+    n_days_return = 5
+    df['cumulative_return'] = df['close'] / df['close'].shift(n_days_return) - 1
+    
+    # Measure Volume Trend
+    m_days = 30
+    df['moving_avg_volume'] = df['volume'].rolling(window=m_days).mean()
+    df['volume_trend'] = df['volume'] / df['moving_avg_volume']
+    
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=m_days).mean()
+    threshold = 1.5
+    df['high_volume'] = (df['volume'] > avg_volume * threshold).astype(int)
+    
+    # Integrate Combined Factors and Volume Activity
+    df['integrated_factor'] = (df['combined_price_factor'] * df['high_volume'] + 
+                               df['cumulative_return'] * df['high_volume']) / df['atr'] * df['order_imbalance_score']
+    
+    # Generate Final Alpha Factor
+    weight_price = 0.5
+    weight_volume = 0.3
+    weight_atr = 0.2
+    df['alpha_factor'] = (weight_price * df['integrated_factor'] + 
+                          weight_volume * df['volume_trend'] + 
+                          weight_atr * df['atr'])
+    
+    return df['alpha_factor']
+```

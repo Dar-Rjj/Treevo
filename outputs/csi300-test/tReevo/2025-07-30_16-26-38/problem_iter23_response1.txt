@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, fixed_window=30, high_vol_threshold=0.05, low_vol_threshold=0.01):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['vol_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility using High, Low, and Close prices
+    df['daily_range'] = df['high'] - df['low']
+    df['volatility'] = df['daily_range'].rolling(window=fixed_window).std()
+    
+    # Adjust Window Size based on Volatility
+    def adjust_window(vol):
+        if vol > high_vol_threshold:
+            return max(1, fixed_window // 2)
+        elif vol < low_vol_threshold:
+            return fixed_window * 2
+        else:
+            return fixed_window
+    
+    df['adaptive_window'] = df['volatility'].apply(adjust_window)
+    
+    # Liquidity Consideration
+    df['avg_volume'] = df['volume'].rolling(window=fixed_window).mean()
+    
+    # Momentum Factor
+    df['momentum_factor'] = df['close'].rolling(window=df['adaptive_window']).mean()
+    
+    # Cross-Asset Correlation (assuming multiple assets in the DataFrame)
+    # This part is not implemented here as it requires a multi-asset DataFrame
+    # df['cross_asset_corr'] = df['close'].rolling(window=df['adaptive_window']).corr(other_asset_close_prices)
+    
+    # Rolling Statistics
+    df['rolling_mean_vol_weighted_return'] = df['vol_weighted_return'].rolling(window=df['adaptive_window']).mean()
+    df['rolling_std_vol_weighted_return'] = df['vol_weighted_return'].rolling(window=df['adaptive_window']).std()
+    df['rolling_mean_momentum_factor'] = df['momentum_factor'].rolling(window=df['adaptive_window']).mean()
+    df['rolling_std_momentum_factor'] = df['momentum_factor'].rolling(window=df['adaptive_window']).std()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['rolling_mean_vol_weighted_return'] / df['rolling_std_vol_weighted_return']) + \
+                         (df['rolling_mean_momentum_factor'] / df['rolling_std_momentum_factor'])
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

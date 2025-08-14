@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Opening Price Trend
+    df['opening_price_trend'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Intraday Movement (VWIM)
+    df['vwim'] = df['intraday_high_low_spread'] * df['volume']
+    df['vwim_10_day_ma'] = df['vwim'].rolling(window=10).mean()
+    
+    # Calculate Amount-Weighted Opening Trend (AWOT)
+    df['awot'] = df['opening_price_trend'] * df['amount']
+    df['awot_10_day_ma'] = df['awot'].rolling(window=10).mean()
+    
+    # Combine Adjusted Movements and Trends (AMT)
+    df['amt'] = df['vwim'] + df['awot'] - df['vwim_10_day_ma'] - df['awot_10_day_ma']
+    
+    # Adjust by Cumulative Volume (CV)
+    n_days = 10
+    df['cv'] = df['volume'].rolling(window=n_days).sum()
+    df['adjusted_amt'] = df['amt'] / df['cv']
+    
+    # Generate Factor 1
+    volume_impact_score = (df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()) / df['volume'].rolling(window=10).sum()
+    df['factor_1'] = df['intraday_return'] * volume_impact_score
+    
+    # Calculate Price and Intraday Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(10)
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Confirm with Volume Trend
+    df['av_20_day'] = df['volume'].rolling(window=20).mean()
+    df['vr'] = df['volume'] / df['av_20_day']
+    
+    # Volume Impact Score
+    volume_impact_score = (df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()) / df['volume'].rolling(window=10).sum()
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    m_days = 25
+    df['cvwm'] = (df['intraday_momentum'] * df['volume']).rolling(window=m_days).sum()
+    
+    # Adjusted Momentum
+    df['adjusted_momentum'] = df['price_momentum'] + df['intraday_momentum']
+    
+    # Final Factor Calculation
+    def final_factor(row):
+        if row['vr'] > 1.4:
+            return row['adjusted_momentum'] * row['adjusted_amt']
+        else:
+            return 0.7 * (row['adjusted_momentum'] + row['adjusted_amt'])
+    
+    df['final_factor'] = df.apply(final_factor, axis=1)
+    
+    # Calculate Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=10).std() / df['close'].rolling(window=10).mean()
+    
+    # Integrate Price Volatility into Final Factor
+    df['final_factor'] = df.apply(lambda row: row['final_factor'] * 1.2 if row['price_volatility'] > 0.05 else row['final_factor'], axis=1)
+    
+    return df['final_factor']
+```

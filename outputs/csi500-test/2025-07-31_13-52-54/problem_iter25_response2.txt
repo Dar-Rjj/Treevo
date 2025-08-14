@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Daily VWAP Change
+    df['VWAP_Change'] = df['VWAP'].diff()
+    
+    # Separate Positive and Negative Changes
+    positive_changes = df['VWAP_Change'].where(df['VWAP_Change'] > 0, 0)
+    negative_changes = -df['VWAP_Change'].where(df['VWAP_Change'] < 0, 0)
+    
+    # 14-Day Averages for RSI
+    avg_positive_changes = positive_changes.rolling(window=14).mean()
+    avg_negative_changes = negative_changes.rolling(window=14).mean()
+    
+    # Calculate RSI
+    relative_strength = avg_positive_changes / avg_negative_changes
+    rsi = 100 - (100 / (1 + relative_strength))
+    df['RSI'] = rsi
+    
+    # Intraday Range Growth
+    df['Today_High_Low_Range'] = df['high'] - df['low']
+    df['Prev_Day_High_Low_Range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_High_Low_Range'] - df['Prev_Day_High_Low_Range']) / df['Prev_Day_High_Low_Range']
+    
+    # Daily Returns
+    df['Daily_Returns'] = df['close'].pct_change()
+    
+    # Long-Term VW-Return (Momentum Component)
+    df['Long_Term_VW_Return'] = (df['Daily_Returns'] * df['volume']).rolling(window=90).sum() / df['volume'].rolling(window=90).sum()
+    
+    # Short-Term VW-Return (Reversal Component)
+    df['Short_Term_VW_Return'] = (df['Daily_Returns'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Adjusted VW-Return
+    df['Adjusted_VW_Return'] = df['Long_Term_VW_Return'] - df['Short_Term_VW_Return']
+    
+    # Volatility
+    df['Volatility'] = df['Daily_Returns'].rolling(window=30).std()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['RSI'] + df['Intraday_Range_Growth'] + df['Adjusted_VW_Return']) / df['Volatility']
+    
+    return df['Alpha_Factor']
+```

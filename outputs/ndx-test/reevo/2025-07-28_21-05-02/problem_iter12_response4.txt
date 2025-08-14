@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 200-day and 400-day exponential moving averages of the closing price for longer-term trend analysis
+    df['close_200_ema'] = df['close'].ewm(span=200, adjust=False).mean()
+    df['close_400_ema'] = df['close'].ewm(span=400, adjust=False).mean()
+    
+    # Compute the 100-day standard deviation of the closing price to capture mid-term volatility
+    df['close_100_std'] = df['close'].rolling(window=100).std()
+    
+    # Calculate the 200-day standard deviation of the volume to measure long-term volume variability
+    df['volume_200_std'] = df['volume'].rolling(window=200).std()
+    
+    # Non-linear transformation: Logarithm of the ratio between the closing price and the 200-day EMA
+    factor_1 = ((df['close'] / df['close_200_ema']) - 1).apply(np.log1p)
+    
+    # Non-linear transformation: Square of the standardized difference between the 200-day EMA and the 400-day EMA
+    factor_2 = (((df['close_200_ema'] - df['close_400_ema']) / df['close_100_std']) ** 2).apply(np.sign) * np.abs(((df['close_200_ema'] - df['close_400_ema']) / df['close_100_std']))
+    
+    # Non-linear transformation: Fourth root of the volume divided by its 200-day standard deviation for long-term volume momentum
+    factor_3 = (df['volume'] / df['volume_200_std']).apply(lambda x: np.sign(x) * np.abs(x) ** (1/4))
+    
+    # Calculate the 10-day rate of change for the 200-day EMA to capture recent trend acceleration
+    factor_4 = df['close_200_ema'].pct_change(periods=10)
+    
+    # Market sentiment as the ratio between the 200-day EMA and the 400-day EMA, with a non-linear adjustment
+    market_sentiment = ((df['close_200_ema'] / df['close_400_ema']) - 1).apply(np.sign) * np.abs((df['close_200_ema'] / df['close_400_ema']) - 1) ** 0.5
+    
+    # Include the 5-day rate of change in volume to incorporate short-term volume momentum
+    factor_5 = df['volume'].pct_change(periods=5)
+    
+    # Combine the factors into a single factor value with weighted contributions, emphasizing longer-term EMAs and both price and volume momentum
+    factor_values = 0.4 * factor_1 + 0.3 * factor_2 + 0.2 * factor_3 + 0.05 * factor_4 + 0.05 * market_sentiment
+    
+    return factor_values
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, rsi_n=14, sma_n=20):
+    # Intraday Range Percentage
+    df['intraday_range'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Close-to-Open Momentum Shift
+    df['close_open_momentum'] = (df['close'] - df['open']) / df['close'].shift(1)
+    
+    # Volume Activity Ratio
+    df['vol_sum'] = df['volume'].rolling(n).sum()
+    df['vol_ema'] = df['volume'].ewm(span=n, adjust=False).mean()
+    df['vol_activity_ratio'] = df['vol_sum'] / df['vol_ema']
+    
+    # Price Volatility Factor
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['log_return'].rolling(n).std()
+    
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=rsi_n).mean()
+    avg_loss = loss.rolling(window=rsi_n).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Closing Position in Intraday Range
+    df['closing_position'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Intraday Volume Intensity
+    df['past_vol_sum'] = df['volume'].rolling(window=10).sum()
+    df['intraday_vol_intensity'] = df['volume'] / df['past_vol_sum']
+    
+    # Intraday Range Percentage Enhanced
+    df['intraday_range_enhanced'] = (df['high'] - df['low']) / df['open']
+    
+    # Close-to-Open Momentum Shift Enhanced
+    df['close_open_mom_enhanced'] = (df['close'] - df['open']) / df['close']
+    
+    # Combine Factors
+    df['closing_position_adjusted'] = df['intraday_vol_intensity'] * df['closing_position']
+    df['sma_close'] = df['close'].rolling(window=sma_n).mean()
+    df['recent_trend'] = df['close'] - df['sma_close']
+    df['factor'] = df['intraday_range_enhanced'] + df['close_open_mom_enhanced'] + df['recent_trend'] + df['closing_position_adjusted']
+    
+    return df['factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [1, 2, 3, 4, 5],
+#     'high': [2, 3, 4, 5, 6],
+#     'low': [1, 2, 3, 4, 5],
+#     'close': [2, 3, 4, 5, 6],
+#     'volume': [100, 200, 300, 400, 500]
+# })
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

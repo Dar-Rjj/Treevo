@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price inefficiency
+    price_diff = (df['close'] - (df['high'] + df['low']) / 2)
+    
+    # Scale the price difference by volume to incorporate liquidity
+    scaled_price_diff = price_diff * df['volume']
+    
+    # Calculate the exponential moving average of the close price to capture the trend
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the deviation from the trend
+    trend_deviation = df['close'] - ema_10
+    
+    # Calculate the true range for robust volatility
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Incorporate ATR as a measure of volatility
+    volatility_factor = atr * scaled_price_diff
+    
+    # Calculate momentum factor
+    momentum_factor = (df['close'] - df['close'].shift(1)) / (df['high'].rolling(window=5).mean() + 1e-7)
+    
+    # Calculate volume change factor
+    volume_change = (df['volume'] - df['volume'].rolling(window=5).mean()) / (df['volume'].rolling(window=5).std() + 1e-7)
+    
+    # Adaptive weights based on recent performance
+    adaptive_weight_momentum = (momentum_factor > 0).rolling(window=5).mean()
+    adaptive_weight_volume = (volume_change > 0).rolling(window=5).mean()
+    
+    # Combine the factors with adaptive weights
+    alpha_factor = (adaptive_weight_momentum * momentum_factor +
+                    adaptive_weight_volume * volume_change +
+                    trend_deviation +
+                    volatility_factor) / (adaptive_weight_momentum + adaptive_weight_volume + 1e-7)
+    
+    return alpha_factor.dropna()
+```

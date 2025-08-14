@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    df['volume_adjusted_momentum'] = (df['high_low_range'] + df['close_open_diff']) * df['volume']
+    df['volume_adjusted_momentum_ema'] = df['volume_adjusted_momentum'].ewm(span=10).mean()
+    
+    # Adjust for Market Volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['abs_daily_return'] = df['daily_return'].abs()
+    df['market_volatility'] = df['daily_return'].rolling(window=30).std()
+    df['modified_volume_adjusted_momentum'] = df['volume_adjusted_momentum_ema'] - df['market_volatility']
+    
+    # Integrate Trend Reversal Signal
+    df['short_term_momentum'] = df['close'].ewm(span=5).mean()
+    df['long_term_momentum'] = df['close'].ewm(span=20).mean()
+    df['momentum_reversal'] = df['short_term_momentum'] - df['long_term_momentum']
+    df['reversal_signal'] = np.sign(df['momentum_reversal'])
+    
+    # Combine Modified Momentum with Reversal Signal
+    df['combined_alpha_factor'] = df['modified_volume_adjusted_momentum'] + df['reversal_signal']
+    
+    # Integrate Non-Linear Transformation
+    df['sqrt_transformed_alpha'] = np.sqrt(np.abs(df['combined_alpha_factor']))
+    df['log_transformed_alpha'] = np.log1p(np.abs(df['combined_alpha_factor']))
+    
+    # Refine Final Alpha Factor
+    df['final_alpha_factor'] = (df['sqrt_transformed_alpha'] + df['log_transformed_alpha']) * df['reversal_signal']
+    df['final_alpha_factor_smoothed'] = df['final_alpha_factor'].ewm(span=5).mean()
+    
+    return df['final_alpha_factor_smoothed']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': np.random.rand(100) * 100,
+#     'high': np.random.rand(100) * 100,
+#     'low': np.random.rand(100) * 100,
+#     'close': np.random.rand(100) * 100,
+#     'amount': np.random.rand(100) * 1000000,
+#     'volume': np.random.rand(100) * 10000
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

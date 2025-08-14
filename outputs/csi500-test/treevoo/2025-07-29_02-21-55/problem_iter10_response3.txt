@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 20-day Return
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Compute Intraday High-to-Low Momentum
+    df['intraday_momentum'] = (df['high'] / df['low']) - 1
+    
+    # Apply Moving Averages to Intraday Momentum
+    fast_ema_span = 7
+    slow_ema_span = 20
+    df['fast_ema_intraday_mom'] = df['intraday_momentum'].ewm(span=fast_ema_span, adjust=False).mean()
+    df['slow_ema_intraday_mom'] = df['intraday_momentum'].ewm(span=slow_ema_span, adjust=False).mean()
+    
+    # Calculate Volume Confirmation and Long-Term Volume Trend
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = np.where(df['volume'] > df['avg_volume_20'], 1, 
+                                  np.where(df['volume'] < df['avg_volume_20'], -1, 0))
+    df['20_day_ema_volume'] = df['volume'].ewm(alpha=0.1, adjust=False).mean()
+    
+    # Incorporate Long-Term Price Trend
+    df['log_returns'] = np.log(df['close']).diff()
+    df['20_day_ma_log_returns'] = df['log_returns'].rolling(window=20).mean()
+    
+    # Adjust Combined Momentum by Volume and Long-Term Trends
+    df['adjusted_momentum'] = (
+        (df['fast_ema_intraday_mom'] * df['20_day_ma_log_returns']) / df['20_day_ema_volume']
+    ) - df['slow_ema_intraday_mom']
+    
+    # Smooth the Adjusted Combined Momentum
+    df['final_alpha_factor'] = df['adjusted_momentum'].rolling(window=5).mean()
+    
+    return df['final_alpha_factor'].dropna()
+```

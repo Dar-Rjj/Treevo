@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily price changes
+    df['close_change'] = df['close'].diff()
+    df['high_low_diff'] = df['high'] - df.shift(1)['low']
+    
+    # Identify consecutive days with increasing or decreasing prices
+    df['consecutive_increasing'] = (df['close'] > df.shift(1)['close']).astype(int).cumsum()
+    df['consecutive_decreasing'] = (df['close'] < df.shift(1)['close']).astype(int).cumsum()
+    
+    # Measure volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_range_10d'] = df['daily_range'].rolling(window=10).mean()
+    
+    # Analyze volume patterns
+    df['volume_ratio'] = df['volume'] / df.shift(1)['volume']
+    avg_volume = df['volume'].rolling(window=10).mean()
+    df['volume_above_avg'] = (df['volume'] > 2 * avg_volume).astype(int)
+    
+    # Examine Trading Volume and Amount
+    df['volume_amount_corr'] = df['volume'].rolling(window=10).corr(df['amount'])
+    avg_amount = df['amount'].rolling(window=10).mean()
+    df['amount_above_avg'] = (df['amount'] > 2 * avg_amount).astype(int)
+    df['trading_intensity'] = df['amount'] / df['volume']
+    df['trading_intensity_trend'] = df['trading_intensity'].rolling(window=10).apply(lambda x: x[-1] - x[0])
+    
+    # Investigate Opening and Closing Gaps
+    df['open_gap'] = df['open'] - df.shift(1)['close']
+    df['positive_open_gap_freq'] = df['open_gap'].gt(0).rolling(window=10).sum()
+    df['negative_open_gap_freq'] = df['open_gap'].lt(0).rolling(window=10).sum()
+    
+    df['close_gap'] = df.shift(-1)['open'] - df['close']
+    df['positive_close_gap_freq'] = df['close_gap'].gt(0).rolling(window=10).sum()
+    df['negative_close_gap_freq'] = df['close_gap'].lt(0).rolling(window=10).sum()
+    
+    # Evaluate Momentum and Reversal Signals
+    df['short_term_momentum'] = df['close'].pct_change().rolling(window=5).mean()
+    df['long_term_momentum'] = df['close'].pct_change().rolling(window=20).mean()
+    df['reversal_signal'] = (df['close'] < df['close'].rolling(window=10).mean()).astype(int)
+    
+    df['relative_strength_high'] = df['close'] / df['close'].rolling(window=20).max()
+    df['relative_strength_low'] = df['close'] / df['close'].rolling(window=20).min()
+    
+    # Generate the alpha factor
+    alpha_factor = (
+        0.2 * df['close_change'] +
+        0.1 * df['high_low_diff'] +
+        0.1 * (df['consecutive_increasing'] - df['consecutive_decreasing']) +
+        0.1 * (df['daily_range'] / df['avg_range_10d']) +
+        0.1 * df['volume_ratio'] +
+        0.1 * df['volume_above_avg'] +
+        0.1 * df['volume_amount_corr'] +
+        0.1 * df['amount_above_avg'] +
+        0.1 * df['trading_intensity_trend'] +
+        0.05 * (df['positive_open_gap_freq'] - df['negative_open_gap_freq']) +
+        0.05 * (df['positive_close_gap_freq'] - df['negative_close_gap_freq']) +
+        0.1 * df['short_term_momentum'] +
+        0.1 * df['long_term_momentum'] +
+        0.1 * df['reversal_signal'] +
+        0.1 * (df['relative_strength_high'] - df['relative_strength_low'])
+    )
+    
+    return alpha_factor
+```

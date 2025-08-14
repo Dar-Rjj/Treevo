@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Calculate Price Momentum over a Lookback Period (e.g., 10 days)
+    lookback_period = 10
+    df['price_momentum'] = df['close'].pct_change().rolling(window=lookback_period).sum()
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Calculate Mid-Term Return
+    df['mid_term_return'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Short-Term Return
+    df['volume_weighted_short_term_return'] = df['short_term_return'] * df['volume']
+    
+    # Volume-Weighted Mid-Term Return
+    df['volume_weighted_mid_term_return'] = df['mid_term_return'] * df['volume']
+    
+    # Volume-Weighted Long-Term Return
+    df['volume_weighted_long_term_return'] = df['long_term_return'] * df['volume']
+    
+    # Adjust Momentum by Intraday Volatility
+    df['adjusted_price_momentum'] = df['price_momentum'] / df['intraday_volatility']
+    df['adjusted_volume_weighted_short_term_return'] = df['volume_weighted_short_term_return'] / df['intraday_volatility']
+    df['adjusted_volume_weighted_mid_term_return'] = df['volume_weighted_mid_term_return'] / df['intraday_volatility']
+    df['adjusted_volume_weighted_long_term_return'] = df['volume_weighted_long_term_return'] / df['intraday_volatility']
+    
+    # Reversal Indicator
+    df['reversal_indicator_short_term'] = -df['adjusted_volume_weighted_short_term_return']
+    df['reversal_indicator_long_term'] = -df['adjusted_volume_weighted_long_term_return']
+    
+    # Calculate Price Change
+    df['price_change'] = df['high'] - df['low']
+    
+    # Volume Adjusted Price Change
+    df['volume_adjusted_price_change'] = df['price_change'] * df['volume']
+    
+    # Smoothed Momentum Calculation
+    smoothing_window = 10
+    df['smoothed_price_change'] = df['volume_adjusted_price_change'].rolling(window=smoothing_window).mean()
+    df['smoothed_momentum'] = df['smoothed_price_change'].diff()
+    
+    # Momentum Trend Indicator
+    trend_window = 20
+    df['moving_average_adjusted_short_term_return'] = df['adjusted_volume_weighted_short_term_return'].rolling(window=trend_window).mean()
+    df['momentum_trend_indicator'] = (df['adjusted_volume_weighted_short_term_return'] > df['moving_average_adjusted_short_term_return']).astype(int) - \
+                                     (df['adjusted_volume_weighted_short_term_return'] < df['moving_average_adjusted_short_term_return']).astype(int)
+    
+    # Enhanced Volume-Weighted Momentum
+    fixed_weights = {'short': 0.5, 'mid': 0.3, 'long': 0.2}
+    df['enhanced_volume_weighted_momentum'] = (fixed_weights['short'] * df['adjusted_volume_weighted_short_term_return'] +
+                                               fixed_weights['mid'] * df['adjusted_volume_weighted_mid_term_return'] +
+                                               fixed_weights['long'] * df['adjusted_volume_weighted_long_term_return'])
+    
+    # Volume-Adjusted Reversal Signal
+    df['volume_adjusted_reversal_signal'] = (fixed_weights['short'] * df['reversal_indicator_short_term'] +
+                                             fixed_weights['long'] * df['reversal_indicator_long_term'])
+    
+    # Combined Alpha Factor
+    alpha_factor_weights = {'adjusted_momentum': 0.4, 'enhanced_momentum': 0.4, 'reversal_signal': 0.2}
+    df['alpha_factor'] = (alpha_factor_weights['adjusted_momentum'] * df['adjusted_price_momentum'] +
+                          alpha_factor_weights['enhanced_momentum'] * df['enhanced_volume_weighted_momentum'] +
+                          alpha_factor_weights['reversal_signal'] * df['volume_adjusted_reversal_signal'])
+    
+    return df['alpha_factor']
+```

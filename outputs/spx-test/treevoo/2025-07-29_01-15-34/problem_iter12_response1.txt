@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Range Intensity
+    intraday_range = df['high'] - df['low']
+    intraday_range_intensity = intraday_range / ((df['high'] + df['low']) / 2)
+    
+    # Open-to-Close Momentum Shift
+    open_to_close_momentum = (df['close'] - df['open']) / df['close'].shift(1)
+    
+    # Volume Spike Ratio
+    n_periods = 5  # You can adjust the number of periods as needed
+    volume_sum = df['volume'].rolling(window=n_periods).sum()
+    volume_max = df['volume'].rolling(window=n_periods).max()
+    volume_spike_ratio = volume_sum / volume_max
+    
+    # Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # N-period Average True Range
+    true_range = df[['high', 'low']].assign(
+        close_shifted=df['close'].shift(1),
+        tr_high_low=lambda x: x['high'] - x['low'],
+        tr_high_close=lambda x: (x['high'] - x['close_shifted']).abs(),
+        tr_low_close=lambda x: (x['low'] - x['close_shifted']).abs()
+    ).apply(lambda x: max(x['tr_high_low'], x['tr_high_close'], x['tr_low_close']), axis=1)
+    
+    atr = true_range.rolling(window=n_periods).mean()
+    volatility_adjusted_return = daily_log_return / atr
+    
+    # Combine all indicators into a single alpha factor
+    alpha_factor = (
+        intraday_range_intensity +
+        open_to_close_momentum +
+        volume_spike_ratio +
+        volatility_adjusted_return
+    )
+    
+    return alpha_factor
+```

@@ -1,0 +1,36 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    upward_volume = df[df['close'] > df['open']]['volume'].sum()
+    downward_volume = df[df['close'] < df['open']]['volume'].sum()
+    volume_influence_ratio = (upward_volume / downward_volume).fillna(1)
+    
+    # Multiply High-Low Difference with Volume Influence Ratio
+    high_low_vol_influence = high_low_diff * volume_influence_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Low Difference, Volume Influence, and Intraday Return
+    combined_factor = high_low_vol_influence * intraday_return
+    
+    # Calculate Daily Price Reversal
+    daily_price_reversal = df['close'].diff().apply(lambda x: -x if (df['close'].shift(1) > df['close'].shift(2)) else x)
+    
+    # Integrate Short-Term Price Volatility
+    short_term_volatility = df['close'].rolling(window=5).std().fillna(0)
+    adjusted_combined_factor = (combined_factor * daily_price_reversal) / short_term_volatility
+    
+    # Incorporate Trend Strength
+    sma_10 = df['close'].rolling(window=10).mean().fillna(method='bfill')
+    sma_30 = df['close'].rolling(window=30).mean().fillna(method='bfill')
+    
+    trend_adjustment = (sma_10 > sma_30).astype(int) * 1.1 - (sma_10 < sma_30).astype(int) * 0.9
+    final_alpha_factor = adjusted_combined_factor * trend_adjustment
+    
+    return final_alpha_factor

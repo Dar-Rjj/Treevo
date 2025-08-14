@@ -1,0 +1,33 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute exponential moving averages for close price
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the difference between EMAs
+    df['ema_diff'] = df['ema_10'] - df['ema_30']
+    
+    # Calculate the Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Historical volatility
+    df['volatility_ema_diff'] = df['ema_diff'].rolling(window=50).std()
+    df['volatility_rsi'] = df['rsi'].rolling(window=50).std()
+    
+    # Historical return correlations
+    corr_with_returns = {'ema_diff': df['ema_diff'].corr(df['daily_return'].shift(-1)), 
+                         'rsi': df['rsi'].corr(df['daily_return'].shift(-1))}
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['ema_diff'] * (1 / df['volatility_ema_diff']) * corr_with_returns['ema_diff'] +
+                         df['rsi'] * (1 / df['volatility_rsi']) * corr_with_returns['rsi'])
+    
+    return heuristics_matrix

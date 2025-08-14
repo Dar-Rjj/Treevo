@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate short-term and long-term momentum
+    df['short_momentum'] = df['close'].pct_change(5)
+    df['long_momentum'] = df['close'].pct_change(20)
+    
+    # Calculate short-term and long-term reversal
+    df['short_reversal'] = df['close'].pct_change().rolling(window=5).sum()
+    df['long_reversal'] = df['close'].pct_change().rolling(window=20).sum()
+    
+    # Calculate the correlation between daily change in close price and volume
+    df['price_volume_corr'] = df['close'].diff().rolling(window=10).corr(df['volume'].diff())
+    
+    # Detect unusual volume spikes
+    mean_vol = df['volume'].rolling(window=30).mean()
+    std_vol = df['volume'].rolling(window=30).std()
+    df['vol_spike'] = (df['volume'] > mean_vol + 2 * std_vol).astype(int)
+    
+    # Analyze the impact of volume on price
+    high_vol_days = df[df['vol_spike'] == 1]
+    low_vol_days = df[df['vol_spike'] == 0]
+    df['avg_close_high_vol'] = high_vol_days['close'].rolling(window=60).mean()
+    df['avg_close_low_vol'] = low_vol_days['close'].rolling(window=60).mean()
+    
+    # Measure short-term and long-term volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['short_volatility'] = df['daily_return'].rolling(window=5).std()
+    df['long_volatility'] = df['daily_return'].rolling(window=20).std()
+    
+    # Compute the ratio of short-term volatility to long-term volatility
+    df['vol_ratio'] = df['short_volatility'] / df['long_volatility']
+    
+    # Detect upward and downward price gaps
+    df['upward_gap'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['downward_gap'] = (df['open'] < df['close'].shift(1)).astype(int)
+    
+    # Calculate the average return following a price gap over the next 10 days
+    df['gap_return'] = df['close'].pct_change(10)
+    
+    # Calculate the range of each day
+    df['range'] = df['high'] - df['low']
+    
+    # Calculate the average true range
+    df['true_range'] = df[['high' - 'low', 
+                           'high' - df['close'].shift(1), 
+                           df['close'].shift(1) - 'low']].max(axis=1)
+    df['avg_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Compute the correlation between the daily range and the daily return
+    df['range_return_corr'] = df['range'].rolling(window=30).corr(df['daily_return'])
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['short_momentum'] + 
+        df['long_momentum'] + 
+        df['short_reversal'] + 
+        df['long_reversal'] + 
+        df['price_volume_corr'] + 
+        df['avg_close_high_vol'] - 
+        df['avg_close_low_vol'] + 
+        df['vol_ratio'] + 
+        df['gap_return'] + 
+        df['range_return_corr']
+    )
+    
+    return alpha_factor
+```

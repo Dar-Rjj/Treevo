@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Short-Term and Long-Term EMA of Close Prices
+    short_ema = df['close'].ewm(span=10, adjust=False).mean()
+    long_ema = df['close'].ewm(span=50, adjust=False).mean()
+
+    # Calculate Intraday Metrics
+    intraday_price_range = df['high'] - df['low']
+    intraday_return = df['close'] - df['open']
+
+    # Volume-Adjusted Intraday Return
+    volume_adjusted_intraday_return = df['volume'] * intraday_return
+
+    # Proportional Movement Index
+    proportional_movement_index = (intraday_price_range / df['close']) * intraday_return
+
+    # Volume-Adjusted High-Low Spread
+    volume_adjusted_high_low_spread = (df['high'] - df['low']) * df['volume']
+
+    # 10-Day Moving Average of Volume-Adjusted High-Low Spread
+    ma_volume_adjusted_high_low_spread = volume_adjusted_high_low_spread.rolling(window=10).mean()
+
+    # Price Momentum
+    price_momentum = short_ema - long_ema
+
+    # Weighted Intraday Adjustment
+    weighted_intraday_adjustment = volume_adjusted_intraday_return * np.log(df['volume'])
+
+    # Combined Volume-Adjusted High-Low Spread and Price Momentum
+    combined_volume_adjusted_high_low_spread_and_price_momentum = volume_adjusted_high_low_spread + price_momentum
+
+    # Daily Price Change
+    daily_price_change = df['close'].diff()
+
+    # Momentum Calculation
+    momentum_calculation = daily_price_change.rolling(window=10).sum()
+
+    # Volume Confirmation
+    daily_volume_change = df['volume'].diff()
+    average_volume_increase = (daily_volume_change[daily_volume_change > 0].rolling(window=10).sum()) / (daily_volume_change > 0).rolling(window=10).sum()
+
+    # Volume-Weighted Adjusted Return
+    volume_weighted_adjusted_return = df['volume'] * intraday_return
+
+    # Calculate Volume Reversal Indicator
+    volume_rate_of_change = df['volume'].pct_change()
+    smoothed_volume_rate_of_change = volume_rate_of_change.rolling(window=10).mean()
+    volume_reversal_indicator = price_momentum * (1 / smoothed_volume_rate_of_change)
+
+    # Cumulative Price Change
+    cumulative_price_change = daily_price_change.rolling(window=10).sum()
+
+    # Average Volume
+    average_volume = df['volume'].rolling(window=10).mean()
+
+    # Weighted Cumulative Momentum
+    weighted_cumulative_momentum = cumulative_price_change * average_volume
+
+    # Final Alpha Factor
+    alpha_factor = (
+        price_momentum
+        + proportional_movement_index
+        + weighted_intraday_adjustment
+        + combined_volume_adjusted_high_low_spread_and_price_momentum
+        + volume_weighted_adjusted_return
+        + momentum_calculation
+        + volume_reversal_indicator
+        + average_volume_increase * momentum_calculation
+        + weighted_cumulative_momentum
+    )
+
+    return alpha_factor
+```

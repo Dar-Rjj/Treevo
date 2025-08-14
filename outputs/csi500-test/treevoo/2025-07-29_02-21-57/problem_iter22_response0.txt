@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Volume Weighted Moving Averages (VWMA)
+    short_window = 10
+    long_window = 30
+    df['VWMA_Short'] = (df['close'] * df['volume']).rolling(window=short_window).sum() / df['volume'].rolling(window=short_window).sum()
+    df['VWMA_Long'] = (df['close'] * df['volume']).rolling(window=long_window).sum() / df['volume'].rolling(window=long_window).sum()
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['Close_Return_5D'] = df['close'].pct_change(periods=5)
+    df['Volume_Ratio_5D'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['Volume_Adjusted_Momentum_5D'] = df['Close_Return_5D'] * df['Volume_Ratio_5D']
+
+    # Combined Crossover and Momentum Signal
+    df['Crossover_Buy'] = (df['VWMA_Short'] > df['VWMA_Long']).astype(int)
+    df['Crossover_Sell'] = (df['VWMA_Short'] < df['VWMA_Long']).astype(int)
+    df['Momentum_Buy'] = (df['Volume_Adjusted_Momentum_5D'] > 0).astype(int)
+    df['Momentum_Sell'] = (df['Volume_Adjusted_Momentum_5D'] < 0).astype(int)
+
+    # Combine Signals
+    df['Signal'] = 0
+    df.loc[(df['Crossover_Buy'] == 1) & (df['Momentum_Buy'] == 1), 'Signal'] = 2  # Strong Buy
+    df.loc[(df['Crossover_Sell'] == 1) & (df['Momentum_Sell'] == 1), 'Signal'] = -2  # Strong Sell
+    df.loc[(df['Crossover_Buy'] == 1) & (df['Momentum_Buy'] == 0), 'Signal'] = 1  # Moderate Buy
+    df.loc[(df['Crossover_Sell'] == 1) & (df['Momentum_Sell'] == 0), 'Signal'] = -1  # Moderate Sell
+
+    # Calculate True Range and 14-Period Average True Range (ATR)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1))
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['ATR_14'] = df['TrueRange'].rolling(window=14).mean()
+
+    # Calculate Intraday High-Low Spread and Close-to-Open Return
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Close_Open_Return'] = df['close'] - df['open']
+
+    # Calculate Price Momentum
+    df['Price_Momentum_14D'] = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    df['Weighted_Momentum'] = df['Price_Momentum_14D'] * df['volume']
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['open'] * df['volume'] + df['high'] * df['volume'] + df['low'] * df['volume'] + df['close'] * df['volume']) / (4 * df['volume'])
+
+    # Adjust Momentum by ATR
+    df['ATR_Adjusted_Momentum'] = df['Weighted_Momentum'] / df['ATR_14']
+
+    # Generate Alpha Factor
+    df['Alpha_Factor'] = df['ATR_Adjusted_Momentum'] + df['VWAP'] + df['Intraday_High_Low_Spread']
+    df['Alpha_Factor'] += df['Signal'] * 10  # Adjust based on the signal
+
+    return df['Alpha_Factor']
+```

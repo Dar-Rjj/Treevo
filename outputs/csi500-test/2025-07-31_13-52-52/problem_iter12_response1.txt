@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Compute Volume Change Indicator
+    df['volume_change'] = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    
+    # Combine Intraday Return and Volume Change
+    df['intraday_vol_adjusted'] = df['intraday_return'] * df['volume_change']
+    
+    # Smooth the Result with Simple Moving Average
+    short_period = 5
+    df['intraday_sma'] = df['intraday_vol_adjusted'].rolling(window=short_period).mean()
+    
+    # Smooth the Result with Exponential Moving Average
+    smoothing_factor = 0.2
+    df['intraday_ema'] = df['intraday_vol_adjusted'].ewm(alpha=smoothing_factor).mean()
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Calculate 7-Day Momentum
+    df['7_day_momentum'] = df['close'].diff().rolling(window=7).sum()
+    
+    # Calculate 14-Day Momentum
+    df['14_day_momentum'] = df['close'].diff().rolling(window=14).sum()
+    
+    # Combine and Adjust Factors
+    df['close_to_open_adj'] = (df['close_to_open_return'] * df['volume']) / df['daily_volatility']
+    df['combined_momentum'] = df['7_day_momentum'] + df['14_day_momentum']
+    
+    # Integrate Both Metrics
+    weight_intraday = 0.6
+    weight_close_to_open = 0.4
+    df['integrated_metrics'] = (weight_intraday * df['intraday_ema'] + 
+                                weight_close_to_open * df['close_to_open_adj'])
+    
+    # Final Alpha Factor Adjustment
+    df['final_alpha_factor'] = df['integrated_metrics'] - df['combined_momentum']
+    
+    return df['final_alpha_factor']
+```

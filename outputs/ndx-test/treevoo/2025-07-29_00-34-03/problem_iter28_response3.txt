@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = df['close'] * df['volume']
+    
+    # Calculate Exponential Moving Average (EMA) of Volume-Weighted Prices
+    ema_window = 10
+    df['ema_volume_weighted'] = df['volume_weighted_price'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Intraday Volatility Adjustment Factor
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['adjusted_ema'] = df['ema_volume_weighted'] + df['intraday_volatility']
+    
+    # Volume Spike Indicator
+    df['volume_spike'] = (df['volume'] - df['volume'].shift(1)) > (1.5 * df['volume'].rolling(window=20).std())
+    df['alpha_adjustment'] = df['volume_spike'].astype(int) * 0.1  # Increase Alpha Factor if Volume Spike is detected
+    
+    # Short-Term and Long-Term Momentum
+    short_term_days = 5
+    long_term_days = 20
+    df['short_momentum'] = df['close'].rolling(window=short_term_days).sum()
+    df['long_momentum'] = df['close'].rolling(window=long_term_days).sum()
+    df['momentum_diff'] = df['short_momentum'] - df['long_momentum']
+    
+    # Incorporate Volume Trend
+    df['short_volume_sum'] = df['volume'].rolling(window=short_term_days).sum()
+    df['long_volume_sum'] = df['volume'].rolling(window=long_term_days).sum()
+    df['volume_trend_diff'] = df['short_volume_sum'] - df['long_volume_sum']
+    
+    # Adjusted High-Low Range
+    df['scaled_high_low_range'] = (df['high'] - df['low']) * (df['volume'] / df['volume'].rolling(window=long_term_days).sum())
+    
+    # Previous Day's Return
+    df['prev_day_return'] = df['close'] - df['open'].shift(1)
+    
+    # Adjust Momentum by Volatility
+    df['adj_momentum_by_volatility'] = df['prev_day_return'] / df['intraday_volatility']
+    
+    # Combine Factors
+    df['combined_factors'] = (
+        df['scaled_high_low_range'] * (1 / (df['high'] - df['low'])) +
+        df['prev_day_return'] +
+        df['momentum_diff'] / df['volume_trend_diff'] +
+        df['adj_momentum_by_volatility']
+    ) * (df['volume'] / df['volume'].rolling(window=long_term_days).sum())  # Weight by Volume
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        (df['momentum_diff'] / df['volume_trend_diff']) +
+        df['scaled_high_low_range'] +
+        df['combined_factors']
+    ) * (df['volume'] / df['volume'].rolling(window=long_term_days).sum())  # Weight by Volume
+    
+    return df['alpha_factor']
+```

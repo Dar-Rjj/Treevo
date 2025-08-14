@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Adjust for Volatility
+    df['Rolling_Volatility'] = df['close'].rolling(window=20).std()
+    df['Volatility_Adjusted_Return'] = df['Volume_Weighted_Return'] / df['Rolling_Volatility']
+    
+    # Incorporate High-Frequency Data
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Adjusted_Alpha_Factor'] = df['Volatility_Adjusted_Return'] * df['Intraday_Range']
+    
+    # Dynamic Window Sizing
+    def dynamic_window_size(volatility, high_threshold, low_threshold):
+        if volatility > high_threshold:
+            return 5
+        elif volatility < low_threshold:
+            return 60
+        else:
+            return 20
+    
+    df['Dynamic_Window_Size'] = df['Rolling_Volatility'].apply(
+        lambda x: dynamic_window_size(x, df['Rolling_Volatility'].quantile(0.75), df['Rolling_Volatility'].quantile(0.25))
+    )
+    
+    # Rolling Statistics with Adaptive Window
+    df['Rolling_Mean'] = df['Adjusted_Alpha_Factor'].rolling(window=df['Dynamic_Window_Size'], min_periods=1).mean()
+    df['Rolling_Std'] = df['Adjusted_Alpha_Factor'].rolling(window=df['Dynamic_Window_Size'], min_periods=1).std()
+    
+    # Combine Factors
+    df['Alpha_Factor'] = df['Adjusted_Alpha_Factor'] + df['Rolling_Mean'] + df['Rolling_Std']
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

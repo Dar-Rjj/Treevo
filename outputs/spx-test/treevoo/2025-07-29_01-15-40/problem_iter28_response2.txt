@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=5, M=5, K=5, coeff_high_low=0.3, coeff_price_momentum=0.2, coeff_range_momentum=0.2, coeff_open_close=0.1, coeff_volatility=0.2):
+    # Calculate High-Low Momentum
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=N).mean()
+    df['high_low_momentum'] = np.where(df['intraday_high_low_spread'] > df['avg_intraday_high_low_spread'], 1, -1)
+    df['high_low_momentum'] *= df['volume']
+
+    # Calculate Price Momentum
+    df['price_change'] = df['close'].diff(periods=1)
+    df['price_momentum'] = df['price_change'].rolling(window=N).sum()
+
+    # Enhance Market Sentiment Analysis
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_daily_range'] = df['daily_range'].rolling(window=M).mean()
+    df['range_momentum'] = np.where(df['daily_range'] > df['avg_daily_range'], 1, -1)
+
+    df['open_close_difference'] = df['close'] - df['open']
+    df['open_close_movement'] = df['open_close_difference'].rolling(window=N).sum()
+
+    # Incorporate Intraday Volatility
+    df['intraday_volatility'] = 0.5 * (np.log(df['high']) - np.log(df['low']))**2 - (2 * np.log(2) - 1) * (np.log(df['close']) - np.log(df['open']))**2
+    df['avg_intraday_volatility'] = df['intraday_volatility'].rolling(window=K).mean()
+    df['volatility_score'] = np.where(df['intraday_volatility'] > df['avg_intraday_volatility'], 1, -1)
+
+    # Combine Factors
+    df['alpha_factor'] = (
+        coeff_high_low * df['high_low_momentum'] +
+        coeff_price_momentum * df['price_momentum'] +
+        coeff_range_momentum * df['range_momentum'] +
+        coeff_open_close * df['open_close_movement'] +
+        coeff_volatility * df['volatility_score']
+    )
+
+    return df['alpha_factor'].dropna()
+```

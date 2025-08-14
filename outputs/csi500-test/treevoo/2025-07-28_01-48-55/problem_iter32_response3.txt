@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 5-day Simple Moving Average (SMA) of the closing prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    
+    # Generate a Momentum Factor using the close price
+    df['Momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate the percentage change in volume from one day to the next
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Compute the average daily range over the past 5 days
+    df['Range'] = df['high'] - df['low']
+    df['Average_Range_5'] = df['Range'].rolling(window=5).mean()
+    
+    # Define the composite factor as (Momentum / Average 5-Day Range) * Volume Change
+    df['Composite_Factor'] = (df['Momentum'] / df['Average_Range_5']) * df['Volume_Change']
+    
+    # Calculate the total number of transactions per day
+    df['Transaction_Count'] = df['amount'] / df['volume']
+    
+    # Measure the difference between the current day's open and the previous day's close
+    df['Price_Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate the weighted average price using volume as the weight
+    df['Volume_Weighted_Price'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Use the ratio of the number of upward movements to the number of downward movements in the stock price
+    df['Upward_Movement'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['Downward_Movement'] = (df['close'] < df['close'].shift(1)).astype(int)
+    df['Sentiment_Indicator'] = df['Upward_Movement'].rolling(window=5).sum() / df['Downward_Movement'].rolling(window=5).sum()
+    
+    # Calculate the percentage change in the closing price from one day to the next
+    df['Daily_Return'] = df['close'].pct_change()
+    
+    # Compute the standard deviation of the intraday price changes over the past 5 days
+    df['Intraday_Volatility'] = df[['open', 'high', 'low', 'close']].std(axis=1).rolling(window=5).std()
+    
+    # Calculate the sum of the product of the daily close and the daily volume
+    df['Accumulation_Distribution'] = (df['close'] - df['low'] - df['high'] + df['close']) * df['volume']
+    df['Accumulation_Distribution'] = df['Accumulation_Distribution'].cumsum()
+    
+    # Identify days where the high is significantly higher than the average high and the low is significantly lower than the average low over the last 5 days
+    df['Average_High_5'] = df['high'].rolling(window=5).mean()
+    df['Average_Low_5'] = df['low'].rolling(window=5).mean()
+    df['High_Breakout'] = (df['high'] > df['Average_High_5'] * 1.05).astype(int)
+    df['Low_Breakout'] = (df['low'] < df['Average_Low_5'] * 0.95).astype(int)
+    df['High_Low_Breakout'] = df['High_Breakout'] + df['Low_Breakout']
+    
+    # Return the Composite Factor as the final alpha factor
+    return df['Composite_Factor']
+```

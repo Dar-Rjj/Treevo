@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) with a 10-day window
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Weighted Moving Average (WMA) over a 15-day window
+    weights = np.arange(1, 16)
+    df['WMA_15'] = df['close'].rolling(window=15).apply(lambda prices: np.dot(prices, weights)/weights.sum(), raw=True)
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['EMA_10']
+    
+    # Calculate Integrated Momentum
+    df['Integrated_Momentum'] = df['close'] - df['WMA_15'] + df['Price_Momentum'].shift(1)
+    
+    # Calculate Intraday Reversal
+    df['Intraday_Reversal'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Volume Momentum
+    df['Volume_Momentum'] = df['volume'] - df['volume'].shift(1)
+    
+    # Composite Factor
+    df['Composite_Factor'] = (df['Intraday_Reversal'] * df['Volume_Momentum']) + (df['close'] - df['close'].shift(1))
+    
+    # Volume Adjusted High-Low Range
+    df['Vol_Adjusted_Range'] = (df['high'] - df['low']) * np.sqrt(np.log(df['volume']))
+    
+    # Volume Adjusted Spread
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Relative_Volume'] = df['volume'] / df['Avg_Volume_20']
+    df['Spread'] = df['high'] - df['low']
+    df['Vol_Adjusted_Spread'] = df['Spread'] * np.sqrt(df['Relative_Volume'])
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Log Return with Volume Change
+    df['Log_Return_Volume_Integrated'] = (df['Daily_Log_Return'] * df['Volume_Change']).rolling(window=10).sum()
+    
+    # Enhance with Moving Average Crossover
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Crossover_Signal'] = np.where(df['EMA_5'] > df['EMA_20'], 1, -1)
+    
+    # Calculate Enhanced Volume Thrust
+    df['Upward_Thrust'] = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    df['Downward_Thrust'] = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    df['Price_Range_Factor'] = (df['high'] - df['low']) / df['open']
+    df['Enhanced_Volume_Thrust'] = df['Upward_Thrust'] - df['Downward_Thrust'] + df['Price_Range_Factor']
+    
+    # Rolling Average of Daily Log Return
+    df['Rolling_Avg_Log_Return'] = df['Daily_Log_Return'].rolling(window=20).mean()
+    
+    # Enhanced Momentum Factor
+    df['Enhanced_Momentum_Factor'] = (df['Vol_Adjusted_Range'] * np.arange(1, 6)).rolling(window=5).sum() / 15
+    
+    # Final Integration
+    df['Final_Alpha_Factor'] = (
+        df['Price_Momentum'] +
+        df['Integrated_Momentum'] +
+        df['Composite_Factor'] -
+        df['Vol_Adjusted_Range'] -
+        df['Vol_Adjusted_Spread'] +
+        df['Log_Return_Volume_Integrated'] +
+        df['Crossover_Signal'] +
+        df['Enhanced_Volume_Thrust'] -
+        df['Rolling_Avg_Log_Return'] +
+        df['Enhanced_Momentum_Factor']
+    )
+    
+    return df['Final_Alpha_Factor']
+```

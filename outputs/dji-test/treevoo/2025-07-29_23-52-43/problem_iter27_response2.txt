@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    df['combined_metrics'] = df['intraday_return'] + df['close_to_prev_close_return'] + df['breakout_intensity']
+    
+    # Weight by Volume
+    df['weighted_combined_metrics'] = df['combined_metrics'] * df['volume']
+    
+    # Adjust for Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['rolling_volatility'] = df['daily_range'].rolling(window=20).std()
+    df['adjusted_metrics'] = df['weighted_combined_metrics'] / df['rolling_volatility']
+    
+    # Incorporate Momentum Factor
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    long_term_momentum = df['close'].rolling(window=20).mean()
+    df['momentum_difference'] = short_term_momentum - long_term_momentum
+    
+    # Adjust Combined Metrics by Momentum Difference
+    def adjust_by_momentum(row):
+        if row['momentum_difference'] > 0:
+            return row['adjusted_metrics'] * 1.1
+        elif row['momentum_difference'] < 0:
+            return row['adjusted_metrics'] * 0.9
+        else:
+            return row['adjusted_metrics']
+    
+    df['final_factor'] = df.apply(adjust_by_momentum, axis=1)
+    
+    return df['final_factor']
+```

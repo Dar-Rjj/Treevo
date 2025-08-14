@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between close and open prices
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Calculate the average daily trading range (high-low)
+    df['avg_daily_range'] = df['high'] - df['low']
+    
+    # Introduce a factor that measures the strength of market sentiment
+    df['sentiment_strength'] = df['close_open_diff'].abs() / df['avg_daily_range']
+    
+    # Enhance this factor by integrating the volume
+    df['sentiment_intensity'] = df['sentiment_strength'] / df['volume'].rolling(window=20).mean()
+    
+    # Create a factor based on the proportion of days where the closing price is outside the previous day's high-low range
+    df['breakout'] = 0
+    df.loc[(df['close'] > df['high'].shift(1)) | (df['close'] < df['low'].shift(1)), 'breakout'] = 1
+    
+    # Further refine this factor by considering the direction of the breakout and the associated volume
+    df['breakout_volume'] = df['breakout'] * df['volume']
+    
+    # Design a factor that evaluates whether the stock is consolidating or trending
+    df['trend_consolidation'] = (df['high'] - df['low']) / (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Add a sub-factor that checks if the consolidation or trend is accompanied by a decrease in volume
+    df['trend_consolidation_volume'] = df['trend_consolidation'] * (df['volume'] / df['volume'].shift(1))
+    
+    # Construct a factor that measures the ratio of the amount of money flowing into the stock (buying) versus out (selling)
+    df['amount_flow_ratio'] = (df['amount'] * (df['close'] - df['open']).clip(lower=0)) / (df['amount'] * (df['open'] - df['close']).clip(lower=0))
+    
+    # For a more nuanced measure, calculate the difference between the buying and selling pressure on days when the stock closes above its opening price compared to days it closes below
+    df['buy_sell_pressure'] = (df['amount'] * (df['close'] - df['open']).clip(lower=0)).rolling(window=20).sum() - (df['amount'] * (df['open'] - df['close']).clip(lower=0)).rolling(window=20).sum()
+    
+    # Integrate this measure with the overall trend of the stock using a moving average of the close price
+    df['ma_close'] = df['close'].rolling(window=20).mean()
+    df['momentum_factor'] = df['buy_sell_pressure'] * (df['close'] - df['ma_close'])
+    
+    # Develop a factor that flags significant changes in volume relative to the price movement
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    df['abnormal_activity'] = (df['close'] - df['close'].shift(1)).abs() / df['volume_change']
+    
+    # Enhance this by categorizing the abnormal volume-price actions into different classes
+    df['activity_class'] = 0
+    df.loc[(df['volume_change'] > 2) & (df['abnormal_activity'] < 0.5), 'activity_class'] = 1  # High volume with minimal price change
+    df.loc[(df['volume_change'] > 2) & (df['abnormal_activity'] > 2), 'activity_class'] = 2  # Sudden spikes in both volume and price
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['sentiment_intensity'] + 
+                          df['breakout_volume'] + 
+                          df['trend_consolidation_volume'] + 
+                          df['momentum_factor'] + 
+                          df['activity_class']) / 5
+    
+    return df['alpha_factor']
+```

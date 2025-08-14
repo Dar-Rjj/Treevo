@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day, 10-Day, and 20-Day Simple Moving Averages (SMA) of Close Prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Compute the difference between 10-Day SMA and 20-Day SMA as a Momentum Indicator
+    df['Momentum'] = df['SMA_10'] - df['SMA_20']
+    
+    # Identify Days Where Close Price Exceeds Highest High or Lowest Low over Last 30 Days
+    df['Highest_High_30'] = df['high'].rolling(window=30).max()
+    df['Lowest_Low_30'] = df['low'].rolling(window=30).min()
+    df['Breakout_Up'] = df['close'] > df['Highest_High_30']
+    df['Breakout_Down'] = df['close'] < df['Lowest_Low_30']
+    
+    # Assign a Score Based on Number of Consecutive Days of Breakout
+    df['Breakout_Score'] = 0
+    breakout_up_count = 0
+    breakout_down_count = 0
+    for i in range(1, len(df)):
+        if df.at[df.index[i], 'Breakout_Up']:
+            breakout_up_count += 1
+            df.at[df.index[i], 'Breakout_Score'] = breakout_up_count
+        elif df.at[df.index[i], 'Breakout_Down']:
+            breakout_down_count += 1
+            df.at[df.index[i], 'Breakout_Score'] = -breakout_down_count
+        else:
+            breakout_up_count = 0
+            breakout_down_count = 0
+    
+    # Calculate the Percentage Change in Volume from Previous Day
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Mark Days with Large Volume Increase (>10%) and Associated Price Movement (>2%)
+    df['Volume_Price_Spike'] = (df['Volume_Change'] > 0.1) & (df['close'].pct_change() > 0.02)
+    
+    # Determine if the Stock Opened Higher but Closed Lower (Bearish Signal)
+    df['Bearish_Day'] = (df['open'] > df['close'])
+    
+    # Determine if the Stock Opened Lower but Closed Higher (Bullish Signal)
+    df['Bullish_Day'] = (df['open'] < df['close'])
+    
+    # Calculate the Ratio of Amount to Volume (Price Weighted Volume)
+    df['Amount_Volume_Ratio'] = df['amount'] / df['volume']
+    
+    # Measure the Difference Between Today’s Open and Yesterday’s Close
+    df['Gap_Opening'] = df['open'] - df['close'].shift(1)
+    
+    # Categorize Gaps as Up-Gap (Open > Yesterday's Close) or Down-Gap (Open < Yesterday's Close)
+    df['Up_Gap'] = (df['open'] > df['close'].shift(1))
+    df['Down_Gap'] = (df['open'] < df['close'].shift(1))
+    
+    # Compute the Range (High - Low) for Each Day
+    df['Range'] = df['high'] - df['low']
+    
+    # Track Moving Average of Daily Ranges to Assess Volatility Trends
+    df['Range_MA_10'] = df['Range'].rolling(window=10).mean()
+    
+    # Create a Composite Score by Summing the Scores from Different Sub-Thoughts
+    df['Composite_Score'] = (
+        df['Momentum'] + 
+        2 * df['Breakout_Score'] + 
+        1 * df['Volume_Price_Spike'].astype(int) + 
+        1 * df['Bullish_Day'].astype(int) - 
+        1 * df['Bearish_Day'].astype(int) + 
+        0.5 * (df['Amount_Volume_Ratio'] - df['Amount_Volume_Ratio'].mean()) + 
+        1 * df['Up_Gap'].astype(int) - 
+        1 * df['Down_Gap'].astype(int) + 
+        0.5 * (df['Range'] - df['Range_MA_10'])
+    )
+    
+    # Use the Composite Score to Rank Stocks and Predict Future Returns
+    return df['Composite_Score']
+```

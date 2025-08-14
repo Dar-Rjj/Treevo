@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10):
+    # Compute Volume Momentum
+    df['V_sum'] = df['volume'].rolling(window=n).sum()
+    df['V_change'] = df['V_sum'] - df['V_sum'].shift(n)
+
+    # Measure High-Low Range and Adjustments
+    df['ATR'] = df['high'] - df['low']
+    df['H/L'] = df['high'] / df['low']
+    df['Volume_Adjusted_HL'] = (df['high'] - df['low']) * df['volume']
+
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    df['Cum_Volume_Adjusted_HL'] = df['Volume_Adjusted_HL'].rolling(window=n).sum()
+    df['High_to_Low_Ratio'] = df['high'] / df['low']
+
+    # Analyze Volume Trends and Momentum
+    df['Volume_MA'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = (df['volume'] > df['Volume_MA']).astype(int) * 2 - 1
+    df['Volume_Momentum'] = df['V_sum'].shift(1) - df['V_sum'].shift(n)
+
+    # Integrate Open-Close Momentum and Volatility
+    df['Open_Close_Change'] = df['close'] - df['open']
+    df['Cum_Open_Close_Change'] = df['Open_Close_Change'].rolling(window=n).sum()
+
+    # Synthesize Components into Composite Alpha Factors
+    df['Adjusted_Volume_Momentum'] = df['V_change'] * df['H/L']
+    df['Inverted_Volume_Momentum'] = -1 * df['V_change']
+    df['Composite_Alpha'] = df['Inverted_Volume_Momentum'] + df['ATR'] + df['Adjusted_Volume_Momentum']
+    df['Combined_Volume_Trend'] = df['High_to_Low_Ratio'] * df['Volume_Trend']
+    df['Incorporation'] = (df['high'] - df['low']) * df['volume'] * df['Volume_Momentum']
+    df['Momentum_and_Range_Expansion'] = (df['high'] - df['low']) * df['Volume_Momentum']
+
+    # Weighted and Integrated Alpha Factor
+    df['Weighted_Adjusted_Volume_Momentum'] = 0.4 * df['Adjusted_Volume_Momentum']
+    df['Weighted_Inverted_Volume_Momentum'] = 0.3 * df['Inverted_Volume_Momentum']
+    df['Weighted_Composite_Alpha'] = 0.3 * df['Composite_Alpha']
+    df['Weighted_Combined_Volume_Trend'] = 0.2 * df['Combined_Volume_Trend']
+    df['Weighted_Incorporation'] = 0.2 * df['Incorporation']
+    
+    df['Final_Alpha'] = (df['Weighted_Adjusted_Volume_Momentum'] + 
+                         df['Weighted_Inverted_Volume_Momentum'] + 
+                         df['Weighted_Composite_Alpha'] + 
+                         df['Weighted_Combined_Volume_Trend'] + 
+                         df['Weighted_Incorporation'])
+
+    return df['Final_Alpha'].dropna()
+```

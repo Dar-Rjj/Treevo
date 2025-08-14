@@ -1,0 +1,83 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].pct_change()
+
+    # Sum of Daily Price Changes over 20 days
+    df['sum_daily_price_changes'] = df['daily_price_change'].rolling(window=20).sum()
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['vwap'] = df.groupby(df.index.date)['vwap'].transform('sum') / df.groupby(df.index.date)['volume'].transform('sum')
+
+    # PMI Score
+    df['pmi_score'] = df['sum_daily_price_changes'] * df['vwap']
+
+    # Calculate Intraday High-Low Movement
+    df['intraday_high_low_movement'] = df['high'] - df['low']
+
+    # Calculate Intraday High-Low Ratio
+    df['intraday_high_low_ratio'] = df['intraday_high_low_movement'] / df['close']
+
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+
+    # Calculate Volume and Amount Change
+    df['volume_change'] = df['volume'].pct_change()
+    df['amount_change'] = df['amount'].pct_change()
+
+    # Adjust Intraday Return
+    df['adjusted_intraday_return'] = df['intraday_return'] * (df['volume_change'] + df['amount_change'] + df['intraday_volatility'])
+
+    # Calculate Volume Weighted Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+
+    # Integrate Intraday High-Low Movement
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume_change'] + df['volume_weighted_close_to_open_return']
+
+    # Calculate Daily Log Return
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Smoothing Logarithmic Returns with EMA
+    df['smoothed_log_returns'] = df['daily_log_return'].ewm(span=5, adjust=False).mean()
+
+    # Volume Shock Indicator
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    std_volume = df['volume_change'].rolling(window=7).std()
+    df['volume_shock'] = (np.abs(df['volume_change']) > 2 * std_volume).astype(int)
+
+    # Calculate Price Volatility (ATR)
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df['atr_7'] = true_range.rolling(window=7).mean()
+
+    # Combine Volume and Volatility
+    df['combined_weight'] = df['volume'] * df['atr_7']
+
+    # Weighted Smoothed Returns
+    df['weighted_smoothed_returns'] = df['smoothed_log_returns'] * df['combined_weight']
+    df['weighted_smoothed_returns'] = df['weighted_smoothed_returns'] * df['volume_shock']
+
+    # Cumulative Sum of Daily Log Returns over 20 days
+    df['cumulative_log_returns'] = df['daily_log_return'].rolling(window=20).sum()
+
+    # Calculate 20-Day Moving Average VWAP
+    df['ma_vwap_20'] = df['vwap'].rolling(window=20).mean()
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['pmi_score'] * df['cumulative_log_returns'] +
+                          df['adjusted_intraday_return'] +
+                          df['volume_weighted_close_to_open_return'] +
+                          df['weighted_smoothed_returns'])
+
+    return df['alpha_factor']
+```

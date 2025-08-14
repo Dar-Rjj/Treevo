@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Open-Close Log Return Ratio
+    df['open_close_log_return_ratio'] = (np.log(df['close']) - np.log(df['open'])) / df['log_return']
+    
+    # High-Low Log Return Difference
+    df['high_low_log_return_diff'] = np.log(df['high']) - np.log(df['low'])
+    
+    # Simple Moving Averages (SMA)
+    df['5_day_sma'] = df['close'].rolling(window=5).mean()
+    df['20_day_sma'] = df['close'].rolling(window=20).mean()
+    
+    # Exponential Moving Averages (EMA)
+    df['12_day_ema'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['26_day_ema'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Moving Average Convergence Divergence (MACD)
+    df['macd_line'] = df['12_day_ema'] - df['26_day_ema']
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    
+    # True Range and Average True Range (ATR)
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # 30-day Historical Volatility of Close Prices
+    df['log_returns_30'] = np.log(df['close'] / df['close'].shift(1)).rolling(window=30).std() * np.sqrt(252)
+    
+    # Relative Strength Index (RSI)
+    def rsi(data, window=14):
+        delta = data.diff(1)
+        up, down = delta.copy(), delta.copy()
+        up[up < 0] = 0
+        down[down > 0] = 0
+        average_gain = up.rolling(window).mean()
+        average_loss = abs(down.rolling(window).mean())
+        rs = average_gain / average_loss
+        return 100 - (100 / (1 + rs))
+    
+    df['rsi_14'] = rsi(df['close'], window=14)
+    
+    # Stochastic Oscillator
+    def stochastic_oscillator(data, k_period=14, d_period=3):
+        lowest_low = data['low'].rolling(window=k_period).min()
+        highest_high = data['high'].rolling(window=k_period).max()
+        k = 100 * ((data['close'] - lowest_low) / (highest_high - lowest_low))
+        d = k.rolling(window=d_period).mean()
+        return k, d
+    
+    df['k'], df['d'] = stochastic_oscillator(df, k_period=14, d_period=3)
+    
+    # Commodity Channel Index (CCI)
+    def cci(data, n=14):
+        typical_price = (data['high'] + data['low'] + data['close']) / 3
+        mean_deviation = typical_price.rolling(window=n).apply(lambda x: np.fabs(x - x.mean()).mean(), raw=True)
+        cci = (typical_price - typical_price.rolling(window=n).mean()) / (0.015 * mean_deviation)
+        return cci
+    
+    df['cci_14'] = cci(df, n=14)
+    
+    # On-Balance Volume (OBV)
+    def obv(data):
+        obv = pd.Series(0.0, index=data.index)
+        for i in range(1, len(data)):
+            if data['close'][i] > data['close'][i-1]:
+                obv[i] = obv[i-1] + data['volume'][i]
+            elif data['close'][i] < data['close'][i-1]:
+                obv[i] = obv[i-1] - data['volume'][i]
+            else:
+                obv[i] = obv[i-1]
+        return obv
+    
+    df['obv'] = obv(df)
+    
+    # Chaikin Money Flow (CMF)
+    def cmf(data, n=20):
+        mfm = (data['close'] - data['low']) -

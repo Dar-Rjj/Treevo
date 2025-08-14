@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum indicators
+    df['5_day_SMA'] = df['close'].rolling(window=5).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+    df['momentum'] = df['5_day_SMA'] - df['20_day_SMA']
+
+    # Volatility indicators
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))),
+        axis=1
+    )
+    df['14_day_ATR'] = df['true_range'].rolling(window=14).mean()
+    df['7_day_ATR'] = df['true_range'].rolling(window=7).mean()
+    df['volatility_ratio'] = df['7_day_ATR'] / df['14_day_ATR']
+
+    # Volume indicators
+    df['volume_change'] = df['volume'].pct_change()
+    df['5_day_avg_volume_change'] = df['volume_change'].rolling(window=5).mean()
+    df['above_avg_volume'] = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+
+    # Trading range analysis
+    df['daily_trading_range'] = df['high'] - df['low']
+    df['10_day_trading_range_MA'] = df['daily_trading_range'].rolling(window=10).mean()
+    df['trading_range_breakout'] = (df['daily_trading_range'] > df['10_day_trading_range_MA']).astype(int)
+
+    # Open and close prices impact
+    df['overnight_return'] = df['open'].pct_change()
+    df['intraday_return'] = (df['close'] / df['open']) - 1
+    df['combined_return'] = df['overnight_return'] + df['intraday_return']
+
+    # Composite alpha signal
+    df['composite_alpha'] = (
+        0.3 * df['momentum'] +
+        0.3 * df['volatility_ratio'] +
+        0.2 * df['above_avg_volume'] +
+        0.1 * df['trading_range_breakout'] +
+        0.1 * df['combined_return']
+    )
+
+    return df['composite_alpha']
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=10, K=1.5, lookback=20):
+    # Calculate N-day Price Momentum
+    df['N_day_return'] = df['close'].pct_change(N)
+    
+    # Identify Volume Spike
+    df['volume_ma'] = df['volume'].rolling(window=M).mean()
+    df['volume_std'] = df['volume'].rolling(window=M).std()
+    df['volume_spike'] = (df['volume'] > (df['volume_ma'] + 2 * df['volume_std'])).astype(int)
+    
+    # Adjust N-day Return for Volume Spikes
+    df['adjusted_return'] = df['N_day_return'] * (K * df['volume_spike'] + (1 - df['volume_spike']))
+    
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    high_low_range_mean = df['high_low_range'].mean()
+    df['normalized_high_low_range'] = df['high_low_range'] / high_low_range_mean
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = (df['close'] - df['open']) / df['open']
+    close_open_return_mean = df['close_open_return'].mean()
+    df['normalized_close_open_return'] = df['close_open_return'] / close_open_return_mean
+    
+    # Combine Intraday Volatility and Close-Open Return
+    df['combined_intraday_volatility'] = df['normalized_high_low_range'] * df['normalized_close_open_return']
+    
+    # Combine Price Momentum and Intraday Volatility
+    df['combined_return'] = df['adjusted_return'] * df['combined_intraday_volatility']
+    
+    # Calculate Volume Weighted Adjusted Return
+    df['volume_weighted_return'] = df['combined_return'] * df['volume']
+    
+    # Calculate Moving Average of Volume Weighted Adjusted Return
+    df['moving_avg_volume_weighted_return'] = df['volume_weighted_return'].rolling(window=lookback).mean()
+    
+    # Calculate Final Alpha Factor
+    df['alpha_factor'] = df['volume_weighted_return'] / df['moving_avg_volume_weighted_return']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# data = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(data)
+```

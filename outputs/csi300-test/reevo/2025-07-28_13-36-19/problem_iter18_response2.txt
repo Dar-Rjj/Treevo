@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices with adaptive window
+    def adaptive_rsi(prices, short_window=10, long_window=20):
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=short_window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=short_window).mean()
+        rs = gain / loss
+        rsi_short = 100 - (100 / (1 + rs))
+        
+        gain = (delta.where(delta > 0, 0)).rolling(window=long_window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=long_window).mean()
+        rs = gain / loss
+        rsi_long = 100 - (100 / (1 + rs))
+        
+        if prices.std() > prices.mean():
+            return rsi_short
+        else:
+            return rsi_long
+    
+    rsi_adaptive = adaptive_rsi(df['close'])
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Calculate the dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Dynamic weighting based on volatility
+    volatility = df['close'].pct_change().rolling(window=14).std()
+    weight_volatility = 1 / (1 + np.exp(-volatility))
+    weight_stability = 1 - weight_volatility
+
+    # Machine learning for adaptive weights
+    X = np.column_stack((ema_price_movement, rsi_adaptive, volume_trend, dynamic_indicator, seasonal_adj_price_movement))
+    y = df['close'].pct_change().shift(-1).dropna()
+    X_train = X[~np.isnan(y)]
+    y_train = y.dropna()
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    ml_weights = model.coef_
+
+    # Incorporate macroeconomic indicators (e.g., GDP growth, interest rates, etc.)
+    # For simplicity, assume a hypothetical macroeconomic indicator is available in the DataFrame
+    macro_indicator = df.get('macro_indicator', 0)
+
+    # Use transactional data (e.g., trade size, trade frequency, etc.)
+    # For simplicity, assume a hypothetical transactional indicator is available in the DataFrame
+    transactional_indicator = df.get('transactional_indicator', 0)
+
+    # Calculate the weighted average of the factors with adaptive weights and market sentiment
+    factor = (
+        ml_weights[0] * ema_price_movement +
+        ml_weights[1] * rsi_adaptive +
+        ml_weights[2] * volume_trend +
+        ml_weights[3] * dynamic_indicator +
+        ml_weights[4] * seasonal_adj_price_movement
+    )
+
+    # Adjust the factor based on macroeconomic and transactional indicators
+    factor = factor * (1 + macro_indicator / 100) * (1 + transactional_indicator / 100)
+
+    return factor
+```

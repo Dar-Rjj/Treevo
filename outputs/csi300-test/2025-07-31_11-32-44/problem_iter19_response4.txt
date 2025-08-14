@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = (df['high'] - df['low']) / df['low']
+    
+    # Determine Intraday Volatility
+    intraday_volatility = abs(df['close'] - df['open']) / ((df['high'] + df['low']) / 2)
+    
+    # Weight by Volume
+    max_volume = df['volume'].rolling(window=20, min_periods=1).max()
+    volume_weight = df['volume'] / max_volume
+    weighted_intraday = intraday_range * volume_weight * np.sign(df['close'] - df['close'].shift(1))
+    
+    # Calculate 1-Period Return
+    one_period_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 5-Period Moving Average of Returns
+    five_period_momentum = one_period_return.rolling(window=5, min_periods=1).mean()
+    
+    # Combine Intraday and Multi-Period Momentum
+    combined_momentum = weighted_intraday * five_period_momentum
+    
+    # Generate Alpha Factor Component
+    volume_change = df['volume'] - df['volume'].shift(1)
+    amount_change = df['amount'] - df['amount'].shift(1)
+    alpha_factor_component = five_period_momentum * np.sign(volume_change + amount_change)
+    
+    # VWAP Calculation
+    vwap = (0.5 * (df['high'] + df['low']) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # VWAP to Close Difference
+    vwap_close_diff = df['close'] - vwap
+    
+    # Volume Reversal Z-score
+    volume_change_mean = volume_change.rolling(window=20, min_periods=1).mean()
+    volume_change_std = volume_change.rolling(window=20, min_periods=1).std(ddof=0)
+    volume_reversal_z_score = (volume_change - volume_change_mean) / volume_change_std
+    
+    # Apply Final Combination and Confirmation
+    final_factor = (combined_momentum * vwap_close_diff) * volume_reversal_z_score
+    
+    # Add Intraday Momentum
+    high_low_spread = df['high'] - df['low']
+    intraday_momentum = high_low_spread - high_low_spread.shift(1)
+    final_factor += intraday_momentum
+    
+    return final_factor
+```

@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate moving averages
+    short_term_ma = df['close'].rolling(window=5).mean()
+    medium_term_ma = df['close'].rolling(window=20).mean()
+    long_term_ma = df['close'].rolling(window=100).mean()
+    
+    # Compute the difference between short-term and long-term moving averages
+    ma_diff = short_term_ma - long_term_ma
+    
+    # Calculate the rate of change (ROC) for close prices
+    roc_14 = df['close'].pct_change(periods=14)
+    roc_28 = df['close'].pct_change(periods=28)
+    
+    # Analyze the trend in high and low prices
+    true_range = df['high'] - df['low']
+    atr = true_range.rolling(window=14).mean()
+    
+    # Calculate on-balance volume (OBV)
+    obv = (df['close'].diff() > 0).astype(int) * df['volume'] - (df['close'].diff() < 0).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Compute the money flow index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Calculate standard deviation of daily returns over a period
+    daily_returns = df['close'].pct_change()
+    std_dev = daily_returns.rolling(window=30).std()
+    
+    # Analyze the spread between high and low prices
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=20).mean()
+    
+    # Calculate the relative strength index (RSI)
+    gain = daily_returns.where(daily_returns > 0, 0)
+    loss = -daily_returns.where(daily_returns < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Compute the Chande momentum oscillator (CMO)
+    cmo = ((gain.rolling(window=14).sum() - loss.rolling(window=14).sum()) / (gain.rolling(window=14).sum() + loss.rolling(window=14).sum())) * 100
+    
+    # Use the Bollinger Bands to assess volatility and potential breakout points
+    bb_middle_band = medium_term_ma
+    bb_std_dev = daily_returns.rolling(window=20).std()
+    bb_upper_band = bb_middle_band + 2 * bb_std_dev * df['close']
+    bb_lower_band = bb_middle_band - 2 * bb_std_dev * df['close']
+    
+    # Apply the MACD (Moving Average Convergence Divergence)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+    
+    # Combine factors into a single alpha factor
+    factor = (ma_diff + roc_14 + roc_28 + atr + obv + mfi + std_dev + avg_daily_range + rsi + cmo + bb_upper_band + bb_lower_band + macd_line + signal_line + macd_histogram).dropna()
+    
+    return factor
+```

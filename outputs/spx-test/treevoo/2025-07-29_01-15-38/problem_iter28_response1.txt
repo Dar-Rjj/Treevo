@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5, p=30, q=14):
+    # Calculate daily return
+    df['daily_return'] = df['close'] - df['close'].shift(1)
+    
+    # Develop factors based on trading volume
+    df['avg_volume_n_days'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_n_days']
+    
+    # Analyze intraday price movements
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['pct_change_open_close'] = (df['close'] - df['open']) / df['open']
+    
+    # Investigate price patterns
+    df['consecutive_up_closing'] = (df['close'] > df['open']).rolling(window=m).sum()
+    df['positive_returns_last_m_days'] = (df['daily_return'] > 0).rolling(window=m).sum()
+    
+    # Explore relationship between volume and price
+    df['return_volume_corr'] = df['daily_return'].rolling(window=p).corr(df['volume'])
+    df['cumulative_volume_up'] = df['volume'].where(df['daily_return'] > 0, 0).cumsum()
+    df['cumulative_volume_down'] = df['volume'].where(df['daily_return'] < 0, 0).cumsum()
+    
+    # Analyze momentum
+    df['moving_avg_p_days'] = df['daily_return'].rolling(window=p).mean()
+    df['trend_strength'] = df['close'] - df['moving_avg_p_days']
+    
+    # Evaluate market sentiment
+    df['gain'] = df['daily_return'].apply(lambda x: max(x, 0))
+    df['loss'] = df['daily_return'].apply(lambda x: abs(min(x, 0)))
+    df['avg_gain'] = df['gain'].rolling(window=q).mean()
+    df['avg_loss'] = df['loss'].rolling(window=q).mean()
+    df['rsi'] = 100 - (100 / (1 + (df['avg_gain'] / df['avg_loss'])))
+    
+    # Track the number of days since the last significant price drop or rise
+    df['last_sig_drop'] = (df['daily_return'] <= -0.05).rolling(window=p, min_periods=1).apply(
+        lambda x: x[::-1].idxmax() if x.any() else float('nan'), raw=False
+    )
+    df['last_sig_rise'] = (df['daily_return'] >= 0.05).rolling(window=p, min_periods=1).apply(
+        lambda x: x[::-1].idxmax() if x.any() else float('nan'), raw=False
+    )
+    df['days_since_last_sig_drop'] = (df.index.to_series() - df['last_sig_drop']).dt.days
+    df['days_since_last_sig_rise'] = (df.index.to_series() - df['last_sig_rise']).dt.days
+    
+    # Construct the final factor
+    factor = (
+        df['daily_return'] * 0.2 +
+        df['volume_ratio'] * 0.1 +
+        df['pct_change_open_close'] * 0.1 +
+        (df['consecutive_up_closing'] / m) * 0.1 +
+        (df['positive_returns_last_m_days'] / m) * 0.1 +
+        df['return_volume_corr'] * 0.1 +
+        (df['cumulative_volume_up'] - df['cumulative_volume_down']) * 0.05 +
+        df['trend_strength'] * 0.1 +
+        (50 - df['rsi']) * 0.05 +
+        (df['days_since_last_sig_drop'] / p) * 0.05 +
+        (df['days_since_last_sig_rise'] / p) * 0.05
+    )
+    
+    return factor.dropna()
+```

@@ -1,0 +1,62 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Adaptive Window Calculation
+    initial_window = 20
+    df['high_low_close_std'] = df[['high', 'low', 'close']].rolling(window=initial_window).std().mean(axis=1)
+    median_volatility = df['high_low_close_std'].median()
+    
+    def adjust_window(volatility, median_volatility, window):
+        if volatility > 1.5 * median_volatility:
+            return max(5, int(window * 0.7))
+        elif volatility < 0.75 * median_volatility:
+            return min(50, int(window * 1.3))
+        else:
+            return window
+    
+    df['adaptive_window'] = df['high_low_close_std'].apply(adjust_window, args=(median_volatility, initial_window))
+    
+    # Multi-Period Returns
+    df['2_day_return'] = df['close'].shift(-2) - df['close']
+    df['5_day_return'] = df['close'].shift(-5) - df['close']
+    df['10_day_return'] = df['close'].shift(-10) - df['close']
+    
+    # Volume Weighted Multi-Period Returns
+    df['volume_weighted_2_day_return'] = df['2_day_return'] * df['volume']
+    df['volume_weighted_5_day_return'] = df['5_day_return'] * df['volume']
+    df['volume_weighted_10_day_return'] = df['10_day_return'] * df['volume']
+    
+    # Adaptive Thresholds
+    sma_window = 20
+    df['sma'] = df['close'].rolling(window=sma_window).mean()
+    df['threshold'] = df.apply(lambda row: row['sma'] * 1.05 if row['close'] > row['sma'] else row['sma'] * 0.95, axis=1)
+    
+    # Rolling Statistics
+    df['rolling_mean_vwcto'] = df.groupby(df.index)['volume_weighted_close_to_open_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).mean())
+    df['rolling_std_vwcto'] = df.groupby(df.index)['volume_weighted_close_to_open_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).std())
+    
+    df['rolling_mean_vw2d'] = df.groupby(df.index)['volume_weighted_2_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).mean())
+    df['rolling_std_vw2d'] = df.groupby(df.index)['volume_weighted_2_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).std())
+    
+    df['rolling_mean_vw5d'] = df.groupby(df.index)['volume_weighted_5_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).mean())
+    df['rolling_std_vw5d'] = df.groupby(df.index)['volume_weighted_5_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).std())
+    
+    df['rolling_mean_vw10d'] = df.groupby(df.index)['volume_weighted_10_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).mean())
+    df['rolling_std_vw10d'] = df.groupby(df.index)['volume_weighted_10_day_return'].transform(lambda x: x.rolling(window=x.name['adaptive_window']).std())
+    
+    # Final Alpha Factor
+    alpha_factor = (df['rolling_mean_vwcto'] / df['rolling_std_vwcto']) + \
+                   (df['rolling_mean_vw2d'] / df['rolling_std_vw2d']) + \
+                   (df['rolling_mean_vw5d'] / df['rolling_std_vw5d']) + \
+                   (df['rolling_mean_vw10d'] / df['rolling_std_vw10d'])
+    
+    return alpha_factor

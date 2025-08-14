@@ -1,0 +1,77 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Typical Price
+    df['Typical_Price'] = (df['High'] + df['Low'] + df['Close']) / 3
+    
+    # Weight Typical Price by Volume to get Volume-Adjusted Price (VAP)
+    df['VAP'] = df['Typical_Price'] * df['Volume']
+    
+    # Calculate 20-day EMA of VAP
+    df['VAP_20_EMA'] = df['VAP'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Volume-Adjusted Momentum
+    df['Momentum'] = df['VAP'] - df['VAP_20_EMA']
+    
+    # Calculate Daily Returns
+    df['Daily_Returns'] = df['Close'].pct_change()
+    
+    # Calculate 10-day Standard Deviation of daily returns
+    df['Volatility_10'] = df['Daily_Returns'].rolling(window=10).std()
+    
+    # Multiply Momentum by Inverse of Volatility
+    df['Momentum_Adjusted'] = df['Momentum'] / df['Volatility_10']
+    
+    # Calculate Daily High-Low Range
+    df['High_Low_Range'] = df['High'] - df['Low']
+    
+    # Calculate 20-Day Moving Standard Deviation of High-Low Ranges
+    df['High_Low_Volatility'] = df['High_Low_Range'].rolling(window=20).std()
+    
+    # Calculate Daily Open-Close Range
+    df['Open_Close_Range'] = df['Open'] - df['Close']
+    
+    # Calculate 20-Day Moving Standard Deviation of Open-Close Ranges
+    df['Open_Close_Volatility'] = df['Open_Close_Range'].rolling(window=20).std()
+    
+    # Combine Volume-Adjusted Momentum and Composite Volatility
+    df['Composite_Volatility'] = (df['High_Low_Volatility'] + df['Open_Close_Volatility']) / 2
+    df['Momentum_Composite'] = df['Momentum_Adjusted'] - df['Composite_Volatility']
+    
+    # Calculate High-to-Low Range
+    df['High_Low_Daily_Range'] = df['High'] - df['Low']
+    
+    # Calculate 20-day Rolling Average of High-to-Low Range
+    df['High_Low_Rolling_Avg'] = df['High_Low_Daily_Range'].rolling(window=20).mean()
+    
+    # Calculate Daily Price Change
+    df['Price_Change'] = df['Close'] - df['Open']
+    
+    # Compute 5-Day Moving Average of Volume-Weighted Price Change
+    df['Volume_Weighted_Price_Change_5'] = (df['Price_Change'] * df['Volume']).rolling(window=5).sum() / df['Volume'].rolling(window=5).sum()
+    
+    # Compute 15-Day Moving Average of Volume-Weighted Price Change
+    df['Volume_Weighted_Price_Change_15'] = (df['Price_Change'] * df['Volume']).rolling(window=15).sum() / df['Volume'].rolling(window=15).sum()
+    
+    # Determine Reversal Signal
+    df['Reversal_Signal'] = 0
+    df.loc[df['Volume_Weighted_Price_Change_5'] > df['Volume_Weighted_Price_Change_15'], 'Reversal_Signal'] = 1
+    df.loc[df['Volume_Weighted_Price_Change_5'] < df['Volume_Weighted_Price_Change_15'], 'Reversal_Signal'] = -1
+    
+    # Amplify or Dampen the reversal signal based on 20-day Rolling Average of High-to-Low Range
+    df['Reversal_Signal_Adjusted'] = df['Reversal_Signal'] * (df['High_Low_Rolling_Avg'] / df['High_Low_Rolling_Avg'].mean())
+    
+    # Filter by Volume
+    volume_threshold = df['Volume'].mean()  # Define a threshold as the mean volume
+    df['Alpha_Factor'] = df['Momentum_Composite'] * df['Reversal_Signal_Adjusted']
+    df['Alpha_Factor'] = df['Alpha_Fctor'].where(df['Volume'] > volume_threshold, 0)
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_adj_lookback=10, price_momentum_n=5, pct_change_lookback=10, long_sma_lookback=60, turnover_lookback=20):
+    # Simple Moving Average (SMA) of Close Prices
+    sma = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Volume-Adjusted Volatility
+    high_low_diff = df['high'] - df['low']
+    volume_weighted_high_low = high_low_diff * df['volume']
+    vol_adj_volatility = volume_weighted_high_low.rolling(window=vol_adj_lookback).mean()
+    
+    # Price Momentum
+    price_momentum = (df['close'] - sma) / df['close'].rolling(window=price_momentum_n).mean()
+    
+    # Additional Price Change Metrics
+    pct_change = df['close'].pct_change(periods=pct_change_lookback)
+    high_low_range = df['high'] - df['low']
+    
+    # Market Trend Alignment
+    long_sma = df['close'].rolling(window=long_sma_lookback).mean()
+    trend_indicator = (sma > long_sma).astype(int)  # 1 if Bullish, 0 if Bearish
+    
+    # Dynamic Liquidity Measures
+    daily_turnover = df['volume'] * df['close']
+    avg_daily_turnover = daily_turnover.rolling(window=turnover_lookback).mean()
+    
+    # Weights for each component
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adj_volatility': -0.3,  # negative weight to penalize high volatility
+        'pct_change': 0.2,
+        'high_low_range': 0.1
+    }
+    
+    # Adjust weights based on trend and liquidity
+    adjusted_weights = {}
+    for key, value in weights.items():
+        if key == 'pct_change' or key == 'high_low_range':
+            adjusted_weights[key] = value * (1 + 0.1 * trend_indicator) * (1 + 0.1 * (daily_turnover / avg_daily_turnover))
+        else:
+            adjusted_weights[key] = value * (1 + 0.1 * trend_indicator) * (1 - 0.1 * (daily_turnover / avg_daily_turnover))
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        price_momentum * adjusted_weights['price_momentum'] +
+        vol_adj_volatility * adjusted_weights['vol_adj_volatility'] +
+        pct_change * adjusted_weights['pct_change'] +
+        high_low_range * adjusted_weights['high_low_range']
+    )
+    
+    return alpha_factor
+```

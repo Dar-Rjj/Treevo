@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    df['combined_factor'] = df['intraday_return'] * df['high_low_range']
+    
+    # Smooth using Exponential Moving Average (EMA) with a period of 14 days
+    df['ema_smoothed'] = df['combined_factor'].ewm(span=14, adjust=False).mean()
+    
+    # Apply Volume Weighting
+    df['volume_weighted'] = df['ema_smoothed'] * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    df['prev_close_gap'] = df['open'] - df['close'].shift(1)
+    df['gap_adjusted'] = df['volume_weighted'] + df['prev_close_gap']
+    
+    # Integrate Long-Term Momentum
+    df['long_term_return'] = df['close'] - df['close'].shift(50)
+    df['normalized_long_term_return'] = df['long_term_return'] / df['high_low_range']
+    
+    # Include Volatility Component
+    df['rolling_std'] = df['intraday_return'].rolling(window=20).std()
+    df['volatility_adjusted'] = df['rolling_std'] * df['volume']
+    
+    # Final Factor Calculation
+    df['final_factor'] = (
+        df['volume_weighted'] +
+        df['prev_close_gap'] +
+        df['normalized_long_term_return'] +
+        df['volatility_adjusted']
+    )
+    
+    # Apply Non-Linear Transformation
+    df['final_factor'] = np.log1p(df['final_factor'])
+    
+    return df['final_factor']
+```

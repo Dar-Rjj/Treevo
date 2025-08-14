@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum and Trend Analysis
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ROC_5'] = (df['close'].pct_change(5) * df['volume']).rolling(window=5).mean()
+    
+    # Volume Anomaly and Surge Detection
+    df['vol_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['vol_ratio_max_30'] = df['volume'] / df['volume'].rolling(window=30).max()
+    
+    # Price Volatility and Stability
+    df['std_close_7'] = df['close'].rolling(window=7).std()
+    df['atr_14'] = df[['high', 'low', 'close']].apply(lambda x: x.max() - x.min(), axis=1).rolling(window=14).mean()
+    df['atr_14_10_ago'] = df['atr_14'].shift(10)
+    
+    # Reversal and Continuation Patterns
+    def engulfing(df):
+        return ((df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))) | \
+               ((df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1)))
+    df['engulfing'] = engulfing(df)
+    
+    def morning_star(df):
+        return (df['close'].shift(2) > df['open'].shift(2)) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'])
+    df['morning_star'] = morning_star(df)
+    
+    def evening_star(df):
+        return (df['close'].shift(2) < df['open'].shift(2)) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'])
+    df['evening_star'] = evening_star(df)
+    
+    # Liquidity and Trading Activity
+    df['vol_amount_ratio'] = df['volume'] / df['amount']
+    df['vol_amount_ratio_ma_10'] = df['vol_amount_ratio'].rolling(window=10).mean()
+    
+    def up_down_vol_ratio(df):
+        up_days = df['close'] > df['close'].shift(1)
+        down_days = df['close'] < df['close'].shift(1)
+        up_vol = df[up_days]['volume']
+        down_vol = df[down_days]['volume']
+        up_vol.fillna(method='ffill', inplace=True)
+        down_vol.fillna(method='ffill', inplace=True)
+        return up_vol / down_vol
+    df['up_down_vol_ratio'] = up_down_vol_ratio(df)
+    df['up_down_vol_ratio_ma_10'] = df['up_down_vol_ratio'].rolling(window=10).mean()
+    
+    # Intraday Volatility
+    df['high_low_spread'] = df['high'] - df['low']
+    df['open_close_spread'] = df['close'] - df['open']
+    df['intraday_volatility'] = (df['high_low_spread'] + df['open_close_spread']) * df['volume']
+    
+    # Volume-Weighted Close
+    df['vol_weighted_close'] = df['close'] * df['volume']
+    
+    # EMA of Volume-Weighted Close (21 Days)
+    df['ema_vwc_21'] = df['vol_weighted_close'].ewm(span=21, adjust=False).mean()
+    
+    # Composite Alpha Factor
+    df['alpha_factor'] = (df['vol_weighted_close'] - df['ema_vwc_21']) + df['intraday_volatility'] + df['roc_5'] + df['std_close_7']
+    
+    return df['alpha_factor']
+```

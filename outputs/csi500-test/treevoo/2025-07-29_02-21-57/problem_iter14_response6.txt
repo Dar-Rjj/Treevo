@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Price Momentum Factors
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_Crossover'] = (df['SMA_5'] > df['SMA_20']).astype(int) * 2 - 1
+    
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Return_Momentum'] = df['Daily_Return'].rolling(window=5).sum()
+
+    # Volume and Amount Factors
+    df['VWAP'] = (df['volume'] * df['close']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['VWAP_Signal'] = (df['close'] > df['VWAP']).astype(int) * 2 - 1
+
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Volume_Momentum'] = df['Volume_Change'].rolling(window=5).sum()
+
+    # Volatility Factors
+    df['True_Range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['ATR_Signal'] = (df['ATR_14'] > df['ATR_14'].expanding().mean()).astype(int) * 2 - 1
+
+    df['Daily_Return_STD_20'] = df['Daily_Return'].rolling(window=20).std()
+    df['Volatility_Signal'] = (df['Daily_Return_STD_20'] > df['Daily_Return_STD_20'].expanding().mean()).astype(int) * 2 - 1
+
+    # Pattern Recognition
+    df['Bullish_Engulfing'] = ((df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))).astype(int) * 2 - 1
+    df['Bearish_Engulfing'] = ((df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))).astype(int) * 2 - 1
+
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Trend_Signal'] = (df['close'] > df['SMA_50']).astype(int) * 2 - 1
+
+    # Alpha Factor
+    df['Alpha_Factor'] = (df['SMA_Crossover'] + df['Return_Momentum'] + df['VWAP_Signal'] + df['Volume_Momentum'] + df['ATR_Signal'] + df['Volatility_Signal'] + df['Bullish_Engulfing'] + df['Bearish_Engulfing'] + df['Trend_Signal'])
+    return df['Alpha_Factor']
+```

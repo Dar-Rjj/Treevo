@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Ratio
+    df['High_Low_Ratio'] = df['high'] / df['low']
+    
+    # Calculate Rolling Median of High-Low Ratios (10 days)
+    df['Rolling_Median_High_Low_Ratio'] = df['High_Low_Ratio'].rolling(window=10).median()
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Median Intraday High-Low Spread (10 days)
+    df['Median_Intraday_High_Low_Spread'] = df['Intraday_High_Low_Spread'].rolling(window=10).median()
+    
+    # Compute High-Low Momentum Score
+    df['High_Low_Momentum_Score'] = 0
+    df.loc[df['Intraday_High_Low_Spread'] > df['Median_Intraday_High_Low_Spread'], 'High_Low_Momentum_Score'] = 1
+    df.loc[df['Intraday_High_Low_Spread'] < df['Median_Intraday_High_Low_Spread'], 'High_Low_Momentum_Score'] = -1
+    df['High_Low_Momentum_Score'] *= df['volume']
+    
+    # Calculate Price Momentum (5 days)
+    df['Price_Change'] = df['close'].diff(5)
+    df['Price_Momentum'] = df['Price_Change'].rolling(window=5).sum()
+    
+    # Calculate Volume Trend (5 days)
+    df['Volume_Change'] = df['volume'].diff(5)
+    df['Volume_Trend'] = df['Volume_Change'].rolling(window=5).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Median_Daily_Range'] = df['Daily_Range'].rolling(window=10).median()
+    df['Range_Momentum'] = 0
+    df.loc[df['Daily_Range'] > df['Median_Daily_Range'], 'Range_Momentum'] = 1
+    df.loc[df['Daily_Range'] < df['Median_Daily_Range'], 'Range_Momentum'] = -1
+    
+    # Integrate Open-Price and Close-Price Movement
+    df['Open_Close_Price_Diff'] = df['close'] - df['open']
+    df['Open_Price_Movement'] = df['Open_Close_Price_Diff'].rolling(window=5).sum()
+    
+    # Incorporate Open-Price Change (7 days)
+    df['Open_Price_Change'] = df['open'].diff(7)
+    df['Avg_Open_Price_Change'] = df['Open_Price_Change'].rolling(window=7).mean()
+    
+    # Combine all factors with weighted sum
+    alpha_factor = (
+        0.3 * df['High_Low_Momentum_Score'] +
+        0.2 * df['Price_Momentum'] +
+        0.15 * df['Volume_Trend'] +
+        0.15 * df['Range_Momentum'] +
+        0.2 * df['Open_Price_Movement'] +
+        0.1 * df['Avg_Open_Price_Change']
+    )
+    
+    return alpha_factor
+```

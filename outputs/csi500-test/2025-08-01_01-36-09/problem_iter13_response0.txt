@@ -1,0 +1,85 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_avg = df['close'].rolling(window=10).mean()
+    short_term_momentum = df['close'] - short_term_avg
+    
+    # Calculate Medium-Term Price Momentum
+    medium_term_avg = df['close'].rolling(window=30).mean()
+    medium_term_momentum = df['close'] - medium_term_avg
+    
+    # Calculate Long-Term Price Momentum
+    long_term_avg = df['close'].rolling(window=50).mean()
+    long_term_momentum = df['close'] - long_term_avg
+    
+    # Combine Multi-Period Momenta
+    combined_momentum = (short_term_momentum + medium_term_momentum + long_term_momentum) / 3
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Combined Momentum by Volume-Weighted Average Return
+    adjusted_combined_momentum = combined_momentum * volume_weighted_returns
+    
+    # Assess Trend Following Potential
+    trend_following_component = 0
+    if long_term_avg.iloc[-1] > df['close'].iloc[-1]:
+        trend_following_component = 0.5
+    else:
+        trend_following_component = 1.0
+    
+    # Determine Final Factor Value
+    final_factor_value = adjusted_combined_momentum + trend_following_component
+    
+    # Additional Enhancements
+    # Calculate Short-Term Volatility
+    short_term_volatility = (df['high'] - df['low']).rolling(window=10).mean()
+    
+    # Calculate Medium-Term Volatility
+    medium_term_volatility = (df['high'] - df['low']).rolling(window=30).mean()
+    
+    # Calculate Long-Term Volatility
+    long_term_volatility = (df['high'] - df['low']).rolling(window=50).mean()
+    
+    # Combine Multi-Period Volatilities
+    combined_volatility = (short_term_volatility + medium_term_volatility + long_term_volatility) / 3
+    
+    # Adjust Combined Momentum by Combined Volatility
+    adjusted_combined_momentum_volatility = adjusted_combined_momentum / combined_volatility
+    
+    # Re-evaluate Final Factor Value
+    final_factor_value = adjusted_combined_momentum_volatility + trend_following_component
+    
+    # Integrate Market Signals and RSI
+    # Calculate RSI for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Adjust Final Factor Value by RSI
+    rsi_adjustment = 0
+    if rsi.iloc[-1] > 70:
+        rsi_adjustment = -1
+    elif rsi.iloc[-1] < 30:
+        rsi_adjustment = 1
+    
+    final_factor_value = final_factor_value + rsi_adjustment
+    
+    # Incorporate Microstructure
+    spread = (df['high'] - df['low']).rolling(window=10).mean().iloc[-1]
+    spread_adjustment = 0
+    if spread > df['close'].iloc[-1] * 0.01:  # Threshold for high spread
+        spread_adjustment = -1
+    else:
+        spread_adjustment = 1
+    
+    final_factor_value = final_factor_value + spread_adjustment
+    
+    return final_factor_value
+```

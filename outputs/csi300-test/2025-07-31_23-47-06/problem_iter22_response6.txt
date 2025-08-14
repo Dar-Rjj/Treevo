@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    high_low_range = df['high'] - df['low']
+    close_open_diff = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    volume_adjusted_momentum = (close_open_diff * df['volume']).rolling(window=10).mean()
+    
+    # Adjust for Dynamic Market Volatility
+    daily_return = df['close'].pct_change()
+    abs_daily_return = daily_return.abs()
+    dynamic_market_volatility = abs_daily_return.rolling(window=5).std()
+    modified_volume_adjusted_momentum = volume_adjusted_momentum / dynamic_market_volatility
+    
+    # Integrate Non-Linear Transformation
+    sqrt_transformed_momentum = np.sqrt(modified_volume_adjusted_momentum)
+    log_transformed_momentum = np.log(modified_volume_adjusted_momentum + 1)  # Add 1 to avoid log(0)
+    
+    # Incorporate Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_signal = momentum_reversal.apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    smoothed_reversal_5d = reversal_signal.ewm(span=5, adjust=False).mean()
+    smoothed_reversal_10d = reversal_signal.ewm(span=10, adjust=False).mean()
+    combined_smoothed_reversal = (smoothed_reversal_5d + smoothed_reversal_10d) / 2
+    
+    # Combine Smoothed Reversal Signal with Non-Linearly Transformed Momentum
+    interim_alpha_factor = log_transformed_momentum + combined_smoothed_reversal
+    
+    # Final Advanced Adaptive Smoothing
+    final_alpha_5d = interim_alpha_factor.ewm(span=5, adjust=False).mean()
+    final_alpha_10d = interim_alpha_factor.ewm(span=10, adjust=False).mean()
+    final_alpha_factor = (final_alpha_5d + final_alpha_10d) / 2
+    
+    return final_alpha_factor
+```

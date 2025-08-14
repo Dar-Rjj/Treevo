@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Returns
+    intraday_high_return = df['high'] - df['open']
+    intraday_low_return = df['low'] - df['open']
+    intraday_returns = (intraday_high_return + intraday_low_return) / 2
+    
+    # Compute Intraday Return Volatility
+    intraday_volatility = intraday_returns.rolling(window=10).std()
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Adjust for Volume
+    volume_adjusted_range = high_low_range * df['volume']
+    
+    # Compute Momentum
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Combine Momentum and Volume-Adjusted Range
+    combined_signal = momentum / volume_adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    enhanced_signal = combined_signal.ewm(span=5).mean()
+    
+    # Generate Factor Value
+    factor_value = enhanced_signal / df['close']
+    
+    # Compute Intraday Reversal Score
+    intraday_reversal_score = (df['high'] - df['low']).apply(lambda x: 1 / x if x != 0 else 0)
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Calculate High-Low Range Momentum
+    high_low_range_momentum = (high_low_range - high_low_range.shift(1)).rolling(window=5).sum()
+    
+    # Adjust for Volume (Revised)
+    weighted_momentum = (price_change * df['volume']).rolling(window=10).sum()
+    adjusted_weighted_momentum = weighted_momentum * open_close_spread.abs()
+    normalized_high_low_momentum = high_low_range_momentum / volume_adjusted_range
+    
+    # Integrate Momentum, Reversal, and Volume-Adjusted Components
+    integrated_factor = (normalized_high_low_momentum * intraday_reversal_score) * open_close_spread
+    
+    # Combine All Factors
+    final_factor = (intraday_volatility * 0.3) + (factor_value * 0.7)
+    
+    # Apply Moving Average Smoothing
+    final_alpha_factor = final_factor.rolling(window=10).mean()
+    
+    return final_alpha_factor
+```

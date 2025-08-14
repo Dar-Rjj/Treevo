@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['High_to_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Rolling Average of High-to-Low Range (20-day window)
+    df['Rolling_Avg_High_to_Low_Range'] = df['High_to_Low_Range'].rolling(window=20).mean()
+    
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['open']
+    
+    # Compute Volume-Weighted Price Change
+    df['Volume_Weighted_Price_Change'] = df['Daily_Price_Change'] * df['volume']
+    
+    # Compute 5-Day Moving Average of Volume-Weighted Price Change
+    df['5_Day_VWPC_Sum'] = df['Volume_Weighted_Price_Change'].rolling(window=5).sum()
+    df['5_Day_Volume_Sum'] = df['volume'].rolling(window=5).sum()
+    df['5_Day_VWMA'] = df['5_Day_VWPC_Sum'] / df['5_Day_Volume_Sum']
+    
+    # Compute 15-Day Moving Average of Volume-Weighted Price Change
+    df['15_Day_VWPC_Sum'] = df['Volume_Weighted_Price_Change'].rolling(window=15).sum()
+    df['15_Day_Volume_Sum'] = df['volume'].rolling(window=15).sum()
+    df['15_Day_VWMA'] = df['15_Day_VWPC_Sum'] / df['15_Day_Volume_Sum']
+    
+    # Determine Reversal Signal
+    df['Reversal_Signal'] = 0
+    df.loc[df['5_Day_VWMA'] > df['15_Day_VWMA'], 'Reversal_Signal'] = 1  # Bullish trend
+    df.loc[df['5_Day_VWMA'] < df['15_Day_VWMA'], 'Reversal_Signal'] = -1  # Bearish trend
+    
+    # Amplify or Dampen the Reversal Signal based on High-to-Low Range
+    df['Amplified_Reversal_Signal'] = df['Reversal_Signal'] * df['Rolling_Avg_High_to_Low_Range']
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)  # Example: 75th percentile as a threshold
+    df['Filtered_Signal'] = df['Amplified_Reversal_Signal']
+    df.loc[df['volume'] < volume_threshold, 'Filtered_Signal'] = 0
+    
+    return df['Filtered_Signal']
+```

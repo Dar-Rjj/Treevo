@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum and Volume-Weighted Close-Open Difference Integration
+    df['14_day_SMA'] = df['close'].rolling(window=14).mean()
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+    df['momentum_factor'] = df['14_day_SMA'] - df['50_day_SMA']
+    
+    df['volume_weighted_close_open_diff'] = (df['close'] - df['open']) * df['volume']
+    
+    # Integrated Momentum and Volume-Weighted Close-Open Difference
+    df['integrated_momentum'] = df['momentum_factor'] + df['volume_weighted_close_open_diff']
+
+    # Composite Alpha Factor with Intraday Volatility and Medium-Term Reversal
+    df['21_day_EMA'] = df['close'].ewm(span=21, adjust=False).mean()
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    df['ema_subtraction'] = df['volume_weighted_close'] - df['21_day_EMA']
+    
+    df['daily_returns'] = df['close'] / df['open'] - 1
+    df['medium_term_reversal'] = df['daily_returns'].rolling(window=10).sum()
+    
+    df['intraday_log_return'] = (df['close'] / df['open']).apply(np.log)
+    df['true_range'] = df[['high' - 'low', 
+                           'high' - df['close'].shift(1), 
+                           'low' - df['close'].shift(1)]].max(axis=1)
+    df['adjusted_return'] = df['intraday_log_return'] * df['true_range']
+    
+    df['average_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_impact'] = df['volume_change'] * df['adjusted_return']
+    
+    # Money Flow Index and Relative Strength Analysis
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df[df['typical_price'] > df['typical_price'].shift(1)]['raw_money_flow'].fillna(0)
+    df['negative_money_flow'] = df[df['typical_price'] < df['typical_price'].shift(1)]['raw_money_flow'].fillna(0)
+    df['money_flow_ratio'] = df['positive_money_flow'].rolling(window=14).sum() / df['negative_money_flow'].rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + df['money_flow_ratio']))
+    
+    df['14_day_EMA'] = df['close'].ewm(span=14, adjust=False).mean()
+    df['200_day_EMA'] = df['close'].ewm(span=200, adjust=False).mean()
+    df['relative_strength'] = df['14_day_EMA'] / df['200_day_EMA']
+    
+    # Final Integration
+    df['composite_alpha'] = (df['integrated_momentum'] + 
+                             df['ema_subtraction'] + 
+                             df['medium_term_reversal'] + 
+                             df['adjusted_return'] + 
+                             df['MFI'] + 
+                             df['relative_strength'])
+    
+    return df['composite_alpha']
+```

@@ -1,0 +1,56 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Volatility factor: Standard deviation of closing prices with a medium-term window
+    volatility = df['close'].rolling(window=10).std()
+
+    # VWAP (Volume-Weighted Average Price) with a medium-term window
+    vwap = (df['amount'] / df['volume']).rolling(window=10).mean()
+
+    # Momentum factor: 10-day return
+    momentum = df['close'].pct_change(periods=10)
+
+    # Mean reversion factor: Difference between current close and 10-day moving average
+    mean_reversion = df['close'] - df['close'].rolling(window=10).mean()
+
+    # Exponential smoothing of the mean reversion factor with a longer span for more recent data
+    mean_reversion_smoothed = mean_reversion.ewm(span=14, adjust=False).mean()
+
+    # Factor: ratio of positive sum to absolute negative sum with a medium-term window
+    pos_sum = df['positive_amount_vol'].rolling(window=10).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=10).sum()
+    liquidity_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Adaptive trend component using the difference between 10-day and 20-day SMAs
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    adaptive_trend = (sma_10 - sma_20) / (volatility + 1e-7)
+
+    # Relative strength using the ratio of 10-day SMA to 20-day SMA
+    relative_strength = sma_10 / sma_20
+
+    # Adaptive relative strength
+    adaptive_relative_strength = relative_strength / (volatility + 1e-7)
+
+    # Exponential smoothing of the factors
+    volatility_smoothed = volatility.ewm(span=14, adjust=False).mean()
+    vwap_smoothed = vwap.ewm(span=14, adjust=False).mean()
+    momentum_smoothed = momentum.ewm(span=14, adjust=False).mean()
+    liquidity_factor_smoothed = liquidity_factor.ewm(span=14, adjust=False).mean()
+    adaptive_trend_smoothed = adaptive_trend.ewm(span=14, adjust=False).mean()
+    adaptive_relative_strength_smoothed = adaptive_relative_strength.ewm(span=14, adjust=False).mean()
+
+    # Combine factors with optimized weights
+    combined_factor = (volatility_smoothed * 0.3 +
+                       vwap_smoothed * 0.2 +
+                       momentum_smoothed * 0.2 +
+                       mean_reversion_smoothed * 0.1 +
+                       liquidity_factor_smoothed * 0.1 +
+                       adaptive_trend_smoothed * 0.05 +
+                       adaptive_relative_strength_smoothed * 0.05)
+
+    return combined_factor
+```

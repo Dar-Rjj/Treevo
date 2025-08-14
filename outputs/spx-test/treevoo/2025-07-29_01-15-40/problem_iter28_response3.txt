@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Sub-Thought 1: High-Low Price Momentum with Volume-Weighted Component
+    df['High_Low_Ratio'] = df['high'] / df['low']
+    df['Volume_Weighted_HL'] = (df['High_Low_Ratio'] * df['volume']).rolling(window=10).mean() / df['volume'].rolling(window=10).mean()
+    df['Smoothed_Volume_Weighted_HL'] = df['Volume_Weighted_HL'].ewm(alpha=0.2).mean()
+
+    # Sub-Thought 2: Simple Moving Averages and Momentum
+    df['5_day_SMA'] = df['close'].rolling(window=5).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+    df['SMA_Momentum'] = df['5_day_SMA'] - df['20_day_SMA']
+
+    # Sub-Thought 3: Price Volatility Analysis
+    df['True_Range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['True_Range_Shift'] = df['True_Range'].shift(1)
+    df['ATR_14'] = df['True_Range_Shift'].rolling(window=14).mean()
+    df['ATR_7'] = df['True_Range_Shift'].rolling(window=7).mean()
+    df['Volatility_Ratio'] = df['ATR_7'] / df['ATR_14']
+
+    # Sub-Thought 4: Evaluate Volume Changes for Market Sentiment
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Smoothed_Volume_Change'] = df['Volume_Change'].rolling(window=5).mean()
+    df['Above_Avg_Volume'] = df['volume'] > df['volume'].rolling(window=5).mean()
+    df['Volume_Price_Trend'] = (df['close'].pct_change() > 0) & df['Above_Avg_Volume']
+
+    # Sub-Thought 5: Trading Range Analysis
+    df['Daily_Trading_Range'] = df['high'] - df['low']
+    df['Avg_Daily_Trading_Range_10'] = df['Daily_Trading_Range'].rolling(window=10).mean()
+    df['Trading_Range_Factor'] = df['Daily_Trading_Range'] / df['Avg_Daily_Trading_Range_10']
+
+    # Sub-Thought 6: Open and Close Prices Impact on Next Day's Return
+    df['Overnight_Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Return_Factor'] = df['Overnight_Return'] + df['Intraday_Return']
+
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['Smoothed_Volume_Weighted_HL'] +
+        df['SMA_Momentum'] +
+        df['Volatility_Ratio'] +
+        df['Volume_Price_Trend'] +
+        df['Trading_Range_Factor'] +
+        df['Return_Factor']
+    )
+
+    return df['Alpha_Factor']
+```

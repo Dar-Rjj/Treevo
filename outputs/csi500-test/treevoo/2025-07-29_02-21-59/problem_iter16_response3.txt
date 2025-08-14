@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Intraday Momentum
+    df['Close_to_Open_Return'] = df['open'] - df['close'].shift(1)
+    df['Volume_Adjusted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Integrate Intraday High-Low Movement
+    df['Intraday_High_Low_Ratio'] = (df['high'] - df['low']) / df['close']
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Intraday_Adjusted_by_Volume_Change'] = df['Intraday_High_Low_Ratio'] * df['Volume_Change']
+
+    # Adjust for Volume Volatility
+    df['Volume_MA_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_STD_20'] = df['volume'].rolling(window=20).std()
+    df['Volume_Volatility'] = (df['volume'] - df['Volume_MA_20']) / df['Volume_STD_20']
+
+    # Cumulative Momentum with VWAP Integration
+    df['Log_Return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+    df['Cumulative_Log_Return'] = df['Log_Return'].rolling(window=20).sum()
+    
+    # Weight by Volume Change
+    df['Volume_Change_Ratio'] = (df['volume'] / df['volume'].shift(1)) * ((df['open'] + df['close']) / 2)
+    
+    # Calculate Daily Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # 20-Day Moving Average VWAP
+    df['VWAP_MA_20'] = df['VWAP'].rolling(window=20).mean()
+
+    # Combined Alpha Factor
+    df['Cumulative_Momentum_with_VWAP'] = df['Cumulative_Log_Return'] * df['VWAP_MA_20']
+    df['Weighted_Intraday_Momentum'] = df['Volume_Adjusted_Return'] + df['Intraday_Adjusted_by_Volume_Change']
+    df['Final_Alpha_Factor'] = df['Cumulative_Momentum_with_VWAP'] + df['Weighted_Intraday_Momentum'] / (1 + df['Volume_Volatility'])
+
+    return df['Final_Alpha_Factor']
+```

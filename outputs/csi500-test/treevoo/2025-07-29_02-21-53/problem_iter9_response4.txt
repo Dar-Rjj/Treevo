@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['prev_close']).abs()
+    df['tr3'] = (df['prev_close'] - df['low']).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    n_days = 14
+    df['atr'] = df['true_range'].rolling(window=n_days).mean()
+
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Calculate Exponential Moving Average of Returns
+    short_term_ema = df['daily_return'].ewm(span=12, adjust=False).mean()
+    long_term_ema = df['daily_return'].ewm(span=26, adjust=False).mean()
+
+    # Calculate MACD (Moving Average Convergence Divergence)
+    df['macd'] = short_term_ema - long_term_ema
+
+    # Calculate Volume Adjusted Momentum
+    raw_momentum = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['volume_adjusted_momentum'] = raw_momentum * df['volume']
+
+    # Normalize Volume Adjusted Momentum by ATR
+    df['normalized_momentum'] = df['volume_adjusted_momentum'] / df['atr']
+
+    # Calculate Intraday Price Movement
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_diff'] = df['open'] - df['close']
+
+    # Aggregate Price Movements
+    agg_high_low_diff = df['high_low_diff'].rolling(window=5).sum()
+    agg_open_close_diff = df['open_close_diff'].rolling(window=5).sum()
+
+    # Calculate Price Momentum Score
+    recent_volatility = df['close'].rolling(window=5).std()
+    price_momentum_score = (agg_high_low_diff + agg_open_close_diff) * recent_volatility
+
+    # Evaluate Volume Activity
+    average_volume = df['volume'].rolling(window=50).mean()
+    high_volume_indicator = (df['volume'] > average_volume * 1.5).astype(int)
+
+    # Integrate Combined Factors
+    max_macd_last_50 = df['macd'].rolling(window=50).max()
+    normalized_macd = df['macd'] / max_macd_last_50
+    integrated_factors = normalized_macd + df['normalized_momentum']
+    final_factor = integrated_factors * high_volume_indicator * price_momentum_score
+
+    return final_factor
+```

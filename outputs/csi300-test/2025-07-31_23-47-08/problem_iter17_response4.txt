@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_range = df['high'] - df['low']
+    intraday_return = intraday_range / df['close']
+
+    # Calculate Overnight Return
+    overnight_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    combined_return = intraday_return + overnight_return
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    reversal_indicator = (vwap > df['close']).astype(int) - (vwap < df['close']).astype(int)
+
+    # Integrate Reversal Indicator with Combined Return
+    integrated_reversal_return = combined_return * reversal_indicator
+
+    # Calculate Volume-Weighted Return
+    volume_weighted_return = ((df['close'] - df['open']) / df['open']) * df['volume']
+    volume_weighted_return = volume_weighted_return.sum() / df['volume'].sum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    initial_alpha_factor = integrated_reversal_return + volume_weighted_return
+
+    # Calculate Rolling Averages
+    rolling_avg_5 = df['close'].rolling(window=5).mean()
+    rolling_avg_20 = df['close'].rolling(window=20).mean()
+
+    # Calculate Volatility
+    daily_returns = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    volatility = daily_returns.rolling(window=20).std()
+
+    # Adjust for Volatility
+    volatility_adjusted_alpha_factor = initial_alpha_factor / volatility
+
+    # Incorporate Transaction Amount
+    amount_weighted_return = ((df['close'] - df['open']) / df['open']) * df['amount']
+    amount_weighted_return = amount_weighted_return.sum() / df['amount'].sum()
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    final_alpha_factor = volatility_adjusted_alpha_factor + amount_weighted_return
+
+    return final_alpha_factor
+```

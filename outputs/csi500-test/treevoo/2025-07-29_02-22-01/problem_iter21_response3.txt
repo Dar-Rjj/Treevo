@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Intraday Price Movement
+    intraday_price_movement = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Weighted Volume Trend
+    ma_volume_10 = df['volume'].rolling(window=10).mean()
+    weighted_volume_trend = (ma_volume_10 - df['volume']).abs()
+    
+    # Assess Intraday Volume Impact
+    volume_impact = df['volume'] / ma_volume_10
+    
+    # Combine Metrics for Volatility
+    volatility_metric = (high_low_spread * weighted_volume_trend + daily_return).rolling(window=5).mean()
+    
+    # Measure Sequential Momentum
+    sequential_momentum = (intraday_price_movement + volume_impact).rolling(window=5).sum()
+    sequential_momentum = sequential_momentum.ewm(span=3, adjust=False).mean()
+    
+    # Integrate Intraday and Historical Effects
+    integrated_effect = (intraday_price_movement * volume_impact) * volatility_metric
+    
+    # Final Alpha Factor: Integrate Price Momentum and Volume Confirmation
+    price_momentum = df['close'].pct_change().rolling(window=5).sum()
+    positive_vol_diff = (df['volume'] > df['volume'].shift(1)).rolling(window=5).sum()
+    volume_confirmation = positive_vol_diff / 5
+    final_factor = sequential_momentum * integrated_effect
+    final_factor = final_factor.where(volume_confirmation > 0, final_factor * 0.9)
+    
+    # Incorporate Trade Amount Analysis
+    ma_amount_10 = df['amount'].rolling(window=10).mean()
+    amount_trend = (ma_amount_10 - df['amount']).abs()
+    
+    # Assess Intraday Amount Impact
+    amount_impact = df['amount'] / ma_amount_10
+    
+    # Combine Metrics for Liquidity
+    liquidity_metric = (high_low_spread * amount_trend + daily_return).rolling(window=5).mean()
+    
+    # Analyze Price and Volume Correlation
+    corr_pv = df['close'].pct_change().rolling(window=10).corr(df['volume'].pct_change())
+    final_factor = final_factor * (1 + corr_pv)
+    
+    # Evaluate Price and Amount Correlation
+    corr_pa = df['close'].pct_change().rolling(window=10).corr(df['amount'].pct_change())
+    final_factor = final_factor * (1 + corr_pa)
+    
+    # Incorporate Market Sentiment
+    ma_close_10 = df['close'].rolling(window=10).mean()
+    sentiment = (df['close'] > ma_close_10).astype(int) * 2 - 1
+    final_factor = final_factor * sentiment
+    
+    return final_factor
+```

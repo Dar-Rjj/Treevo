@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open'] - 1
+
+    # Calculate Reversal Signal
+    reversal_signal = np.where(intraday_return > 0, -1, 1)
+
+    # Calculate Daily Price Return
+    daily_price_return = df['close'].pct_change()
+
+    # Calculate 20-Day Weighted Moving Average of Returns
+    weighted_returns = daily_price_return * df['volume']
+    sum_weighted_returns = weighted_returns.rolling(window=22).sum()
+    sum_volumes = df['volume'].rolling(window=22).sum()
+    wma_returns = sum_weighted_returns / sum_volumes
+
+    # Calculate 20-Day Average Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range = daily_price_range.rolling(window=22).mean()
+
+    # Final Factor Value
+    final_factor_value = wma_returns - avg_daily_price_range
+
+    # Volume-Weighted Price Change
+    vw_price = (df['close'] * df['volume']).rolling(window=22).sum() / sum_volumes
+    vw_price_change = df['close'] - vw_price
+
+    # 5-Day Volume-Weighted Momentum
+    vw_price_5 = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    vw_momentum_5 = vw_price_5 - vw_price_5.shift(5)
+
+    # Compute Average True Range (ATR)
+    tr = pd.DataFrame({
+        'h-l': df['high'] - df['low'],
+        'h-pc': abs(df['high'] - df['close'].shift()),
+        'l-pc': abs(df['low'] - df['close'].shift())
+    }).max(axis=1)
+    atr = tr.rolling(window=22).mean()
+
+    # Combine Factors
+    combined_factor = (
+        wma_returns +
+        final_factor_value +
+        vw_price_change +
+        vw_momentum_5 +
+        (atr * reversal_signal)
+    ).ewm(span=7).mean()
+
+    return combined_factor
+```

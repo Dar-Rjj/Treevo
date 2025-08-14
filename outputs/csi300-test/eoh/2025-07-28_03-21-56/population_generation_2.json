@@ -1,0 +1,62 @@
+[
+     {
+          "algorithm": "The new algorithm calculates a factor by combining the relative strength index (RSI) of closing prices over 14 days with the average true range (ATR) over 10 days, aiming to integrate momentum and volatility.",
+          "code": "def heuristics_v2(df):\n    def compute_rsi(series, period=14):\n        delta = series.diff()\n        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()\n        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()\n        rs = gain / loss\n        return 100 - (100 / (1 + rs))\n\n    def compute_atr(df, period=10):\n        high_low = df['high'] - df['low']\n        high_close = (df['high'] - df['close'].shift()).abs()\n        low_close = (df['low'] - df['close'].shift()).abs()\n        ranges = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)\n        return ranges.rolling(window=period).mean()\n\n    df['rsi'] = compute_rsi(df['close'])\n    df['atr'] = compute_atr(df)\n    heuristics_matrix = df['rsi'] + df['atr']\n    return heuristics_matrix",
+          "objective": -0.0999,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a factor by combining the percentage price oscillator (PPO) with the accumulation/distribution line (ADL), aiming to integrate momentum and money flow.",
+          "code": "def heuristics_v2(df):\n    def compute_ppo(series, short_window=12, long_window=26, signal_window=9):\n        ema_short = series.ewm(span=short_window, adjust=False).mean()\n        ema_long = series.ewm(span=long_window, adjust=False).mean()\n        ppo_line = (ema_short - ema_long) / ema_long * 100\n        return ppo_line\n\n    def compute_adl(high, low, close, volume):\n        money_flow_multiplier = ((close - low) - (high - close)) / (high - low)\n        money_flow_volume = money_flow_multiplier * volume\n        adl = money_flow_volume.cumsum()\n        return adl\n\n    df['ppo'] = compute_ppo(df['close'])\n    df['adl'] = compute_adl(df['high'], df['low'], df['close'], df['volume'])\n    heuristics_matrix = df['ppo'] + df['adl']\n    return heuristics_matrix",
+          "objective": -0.09358,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a momentum-based alpha factor by combining the rate of change (ROC) of the closing price over a 10-day period with the ratio of the current volume to the 30-day minimum volume, to reflect both trend strength and relative trading activity.",
+          "code": "def heuristics_v2(df):\n    # Calculate the 10-day rate of change (ROC) of the close price\n    roc_close = df['close'].pct_change(periods=10)\n    \n    # Compute the 30-day minimum volume\n    min_vol_30d = df['volume'].rolling(window=30).min()\n    \n    # Calculate the ratio of current volume to the 30-day minimum volume\n    vol_ratio = df['volume'] / min_vol_30d\n    \n    # Generate the heuristic factor by combining ROC and volume ratio\n    heuristics_matrix = roc_close * vol_ratio\n    \n    return heuristics_matrix",
+          "objective": -0.03905,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by combining the rate of change of the high-low price range with the accumulation distribution line, aiming to capture both volatility and money flow trends.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    high_low_range = df['high'] - df['low']\n    roc_high_low = high_low_range / high_low_range.shift(1) - 1\n    adl = (df['close'] - df['low']) - (df['high'] - df['close']) / (df['high'] - df['low']) * df['volume']\n    adl_change = adl.diff()\n    heuristics_matrix = roc_high_low + adl_change\n    return heuristics_matrix",
+          "objective": -0.03619,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The algorithm calculates a composite factor by combining moving averages and volatility measures, then applies a heuristic adjustment based on price momentum to generate the final alpha factor.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    close = df['close']\n    ma_short = close.rolling(window=10).mean()\n    ma_long = close.rolling(window=50).mean()\n    std_dev = close.rolling(window=30).std()\n    momentum = close / close.shift(1) - 1\n    heuristics_matrix = (ma_short - ma_long) / std_dev + momentum\n    return heuristics_matrix",
+          "objective": -0.03593,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The algorithm involves calculating a novel heuristic factor for each date by taking the difference between the highest high and lowest low over a rolling 7-day window, then dividing this by the average volume over the same period.",
+          "code": "def heuristics_v2(df):\n    df['high_rolling_max'] = df['high'].rolling(window=7).max()\n    df['low_rolling_min'] = df['low'].rolling(window=7).min()\n    df['volume_rolling_mean'] = df['volume'].rolling(window=7).mean()\n    heuristics_matrix = (df['high_rolling_max'] - df['low_rolling_min']) / df['volume_rolling_mean']\n    return heuristics_matrix",
+          "objective": -0.03584,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The algorithm involves calculating a weighted sum of logarithmic returns, volume changes, and the ratio of closing to opening prices, then applying a momentum-indicating transformation to generate alpha factors.",
+          "code": "def heuristics_v2(df):\n    log_returns = np.log(df['close'] / df['close'].shift(1))\n    volume_change = df['volume'].pct_change()\n    close_open_ratio = df['close'] / df['open']\n    weighted_sum = (log_returns * 0.5) + (volume_change * 0.3) + (close_open_ratio * 0.2)\n    heuristics_matrix = (weighted_sum - weighted_sum.rolling(window=20).mean()) / weighted_sum.rolling(window=20).std()\n    return heuristics_matrix",
+          "objective": -0.03581,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The algorithm extracts alpha factors by computing the rolling mean of the difference between the daily high and low prices, then applying a weighted sum with the volume, to generate a series that reflects the relationship between price volatility and trading volume.",
+          "code": "def heuristics_v2(df):\n    # Calculate the daily range\n    daily_range = df['high'] - df['low']\n    \n    # Compute the rolling mean of the daily range\n    rolling_mean_range = daily_range.rolling(window=20).mean()\n    \n    # Generate the heuristic factor by incorporating the volume\n    heuristics_matrix = rolling_mean_range * df['volume']\n    \n    return heuristics_matrix",
+          "objective": -0.03494,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates the rolling standard deviation of the daily range, then applies an exponential moving average to the volume, and finally generates a score by multiplying these two metrics.",
+          "code": "def heuristics_v2(df):\n    # Calculate the daily range\n    daily_range = df['high'] - df['low']\n    \n    # Compute the rolling standard deviation of the daily range\n    rolling_std_range = daily_range.rolling(window=20).std()\n    \n    # Compute the exponential moving average of the volume\n    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()\n    \n    # Generate the heuristic factor by multiplying the rolling std with EMA volume\n    heuristics_matrix = rolling_std_range * ema_volume\n    \n    return heuristics_matrix",
+          "objective": -0.03469,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a weighted sum of the rolling standard deviation of the daily high and low prices, combined with the square root of the volume, to generate an alpha factor reflecting a combination of volatility and trading activity.",
+          "code": "def heuristics_v2(df):\n    # Calculate the daily range\n    daily_range = df['high'] - df['low']\n    \n    # Compute the rolling standard deviation of the daily range\n    rolling_std_range = daily_range.rolling(window=30).std()\n    \n    # Generate the heuristic factor by incorporating the square root of the volume\n    heuristics_matrix = rolling_std_range * df['volume']**0.5\n    \n    return heuristics_matrix",
+          "objective": -0.0302,
+          "other_inf": null
+     }
+]

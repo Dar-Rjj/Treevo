@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate adaptive volatility using a 10-day and 30-day window for low and high volatility periods
+    df['volatility_10'] = (df['high'] - df['low']).rolling(window=10).mean()
+    df['volatility_30'] = (df['high'] - df['low']).rolling(window=30).mean()
+    df['adaptive_volatility'] = df['volatility_10'].where(df['volatility_10'] < df['volatility_30'], df['volatility_30'])
+
+    # Calculate adaptive momentum with a 10-day and 30-day moving average
+    df['close_ma_10'] = df['close'].rolling(window=10).mean()
+    df['close_ma_30'] = df['close'].rolling(window=30).mean()
+    df['momentum_10'] = df['close'] - df['close_ma_10']
+    df['momentum_30'] = df['close'] - df['close_ma_30']
+    df['adaptive_momentum'] = df['momentum_10'].where(df['close_ma_10'] > df['close_ma_30'], df['momentum_30'])
+
+    # Volume adjustment factor using a 20-day rolling mean
+    df['volume_adjustment'] = df['volume'] / df['volume'].rolling(window=20).mean()
+
+    # Calculate the 50-day and 200-day moving averages for longer-term context
+    df['close_ma_50'] = df['close'].rolling(window=50).mean()
+    df['close_ma_200'] = df['close'].rolling(window=200).mean()
+
+    # Long-term momentum using the 200-day moving average
+    df['long_term_momentum'] = df['close'] - df['close_ma_200']
+
+    # Market context: Relative strength index (RSI) for 14 days
+    df['price_change'] = df['close'].diff(1)
+    df['gain'] = df['price_change'].apply(lambda x: max(x, 0))
+    df['loss'] = abs(df['price_change'].apply(lambda x: min(x, 0)))
+    df['avg_gain'] = df['gain'].rolling(window=14).mean()
+    df['avg_loss'] = df['loss'].rolling(window=14).mean()
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+
+    # Create a factor that combines adaptive volatility, adaptive momentum, volume adjustment, long-term momentum, and RSI
+    factor = (df['adaptive_momentum'] / (df['adaptive_volatility'] + 1e-7)) * df['volume_adjustment'] + df['long_term_momentum'] - (df['rsi'] / 100)
+
+    # Apply advanced smoothing using a double exponential moving average
+    smoothed_factor = factor.ewm(span=10, adjust=False).mean().ewm(span=5, adjust=False).mean()
+
+    return smoothed_factor
+```

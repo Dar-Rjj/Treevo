@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Compute Close-Open Change
+    df['close_open_change'] = df['close'] - df['open']
+    
+    # Sum of High-Low Differences over a Period (e.g., 20 days)
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=20).sum()
+    
+    # Sum of Close-Open Changes over a Period (e.g., 20 days)
+    df['sum_close_open_change'] = df['close_open_change'].rolling(window=20).sum()
+    
+    # Smooth High-Low Range with Exponential Moving Average (e.g., 20-day)
+    df['smoothed_high_low_range'] = df['high_low_diff'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Long-Term High-Low Range (e.g., 50-day)
+    df['long_term_high_low_range'] = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Compute Momentum of High-Low Ranges
+    df['hl_range_momentum'] = df['long_term_high_low_range'] - df['smoothed_high_low_range']
+    
+    # Calculate True Range
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    
+    # Calculate Rolling Average True Range (ATR) (e.g., 14-day)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Adjust Price Momentum by ATR
+    df['adjusted_price_momentum'] = (df['sum_high_low_diff'] + df['sum_close_open_change']) / df['atr']
+    
+    # Compute Average Volume (e.g., 20-day)
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Identify High Volume Days
+    df['is_high_volume'] = df['volume'] > df['avg_volume'] * 1.5
+    
+    # Detect Volume Spike (e.g., 5-day)
+    df['volume_spike'] = df['volume'] > df['volume'].rolling(window=5).mean() * 2
+    
+    # Dampen Momentum if Spike Detected
+    df['adjusted_price_momentum'] = df.apply(lambda x: x['adjusted_price_momentum'] * 0.75 if x['volume_spike'] else x['adjusted_price_momentum'], axis=1)
+    
+    # Integrate Combined Factors
+    df['interim_alpha_factor'] = df['adjusted_price_momentum'] * df['is_high_volume']
+    
+    # Combine ATR and Price Momentum
+    df['combined_alpha_factor'] = df['interim_alpha_factor'] + df['hl_range_momentum']
+    
+    # Incorporate Recent Price Trend (e.g., 50-day)
+    df['recent_price_trend'] = df['close'].rolling(window=50).mean()
+    df['trend_multiplier'] = df['close'] > df['recent_price_trend']
+    df['final_alpha_factor'] = df['combined_alpha_factor'] * (1 + df['trend_multiplier'])
+    
+    # Introduce New Factor: Volume-Weighted ATR
+    high_volume_days = df[df['is_high_volume']]
+    if not high_volume_days.empty:
+        high_volume_days['tr'] = high_volume_days.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+        high_volume_days['vw_atr'] = high_volume_days['tr'].rolling(window=14).mean()
+        df = df.merge(high_volume_days[['date', 'vw_atr']], on='date', how='left')
+        df['vw_atr'].fillna(method='ffill', inplace=True)
+        df['final_alpha_factor'] = df['final_alpha_factor'] / df['vw_atr']
+    
+    return df['final_alpha_factor']
+```

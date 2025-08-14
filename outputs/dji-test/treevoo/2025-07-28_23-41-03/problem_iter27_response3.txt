@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate short-term (5-day) and long-term (20-day) moving averages
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate deviations from moving averages
+    df['short_term_deviation'] = df['close'] - df['5_day_MA']
+    df['long_term_deviation'] = df['close'] - df['20_day_MA']
+    
+    # Calculate volatility (20-day standard deviation of daily returns)
+    df['volatility'] = df['daily_return'].rolling(window=20).std()
+    
+    # Calculate percentage change in volume
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Calculate high/close ratio multiplied by volume
+    df['high_close_vol'] = (df['high'] / df['close'].shift(1)) * df['volume']
+    
+    # Calculate low/close ratio multiplied by volume
+    df['low_close_vol'] = (df['low'] / df['close'].shift(1)) * df['volume']
+    
+    # Calculate the average amount traded over a fixed period (20 days)
+    df['avg_amount_traded'] = df['amount'].rolling(window=20).mean()
+    
+    # Calculate the Pearson correlation coefficient between daily amount traded and daily returns
+    df['corr_amount_return'] = df['amount'].rolling(window=20).corr(df['daily_return'])
+    
+    # Calculate the range (high - low)
+    df['range'] = df['high'] - df['low']
+    
+    # Calculate the true range (TR)
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)[x.name]), abs(df['close'].shift(1)[x.name] - x['low'])), axis=1)
+    
+    # Calculate intraday momentum factors
+    df['open_close_diff'] = df['open'] - df['close']
+    df['close_close_diff'] = df['close'] - df['close'].shift(1)
+    
+    # Combine multiple factors into a single alpha factor
+    df['alpha_factor'] = (
+        0.3 * df['daily_return'] + 
+        0.2 * df['short_term_deviation'] + 
+        0.2 * df['long_term_deviation'] + 
+        0.1 * df['volatility'] + 
+        0.1 * df['volume_change'] + 
+        0.1 * (df['high_close_vol'] - df['low_close_vol']) + 
+        0.1 * df['corr_amount_return'] + 
+        0.1 * df['range'] + 
+        0.1 * df['true_range'] + 
+        0.1 * df['open_close_diff'] + 
+        0.1 * df['close_close_diff']
+    )
+    
+    return df['alpha_factor']
+```

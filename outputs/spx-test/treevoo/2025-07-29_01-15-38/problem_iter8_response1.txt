@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    long_term_momentum = df['close'].rolling(window=20).mean()
+    
+    # Calculate Price Momentum Oscillator
+    price_momentum_oscillator = short_term_momentum - long_term_momentum
+    
+    # Weight by Volume Surge
+    current_vol_avg = df['volume'].rolling(window=10).mean()
+    previous_vol_avg = df['volume'].shift(1).rolling(window=10).mean()
+    volume_weight = pd.Series(index=df.index, data=1.0)
+    volume_weight[current_vol_avg > 1.5 * previous_vol_avg] = 1.5
+    volume_weight[(current_vol_avg > previous_vol_avg) & (current_vol_avg <= 1.5 * previous_vol_avg)] = 1.2
+    
+    # Integrate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    open_to_close_returns = (df['close'] - df['open']) / df['open']
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Classify Volume Trend
+    volume_trend = pd.Series(index=df.index, data=0.0)
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    volume_trend[volume_ratio > 1.5] = 2
+    volume_trend[(volume_ratio > 0.5) & (volume_ratio <= 1.5)] = 0
+    volume_trend[volume_ratio <= 0.5] = -2
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_adjustment = df['volume'] / df['volume'].shift(1)
+    
+    # Calculate Weighted High-Low Spread
+    weighted_high_low_spread = intraday_momentum * volume_adjustment
+    
+    # Integrate Price Range
+    average_price_range = ((df['high'] - df['low']).rolling(window=5).mean()) / df['close']
+    
+    # Combine Indicators
+    adjusted_price_momentum_oscillator = price_momentum_oscillator * volume_weight
+    combined_indicators = (adjusted_price_momentum_oscillator * volume_trend * average_price_range)
+    
+    # Compute Hybrid Factor
+    hybrid_factor = adjusted_combined_returns + weighted_high_low_spread + combined_indicators
+    
+    # Apply Cumulative Movement
+    hybrid_factor = hybrid_factor.cumsum()
+    
+    return hybrid_factor
+```

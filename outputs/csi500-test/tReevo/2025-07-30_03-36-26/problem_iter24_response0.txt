@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['Total Volume'] = df['volume']
+    df['Total Dollar Value'] = df['volume'] * df['close']
+    df['VWAP'] = df['Total Dollar Value'].cumsum() / df['Total Volume'].cumsum()
+    
+    # Calculate VWAP Deviation
+    df['VWAP Deviation'] = df['close'] - df['VWAP']
+    
+    # Calculate Cumulative VWAP Deviation
+    df['Cumulative VWAP Deviation'] = df['VWAP Deviation'].cumsum()
+    
+    # Integrate Adaptive Short-Term Momentum
+    short_term_period = 5 + int(np.floor((df['VWAP'].std() / df['VWAP'].mean()) * 10))
+    short_term_period = max(5, min(10, short_term_period))
+    df['Short-Term Momentum'] = df['VWAP Deviation'].rolling(window=short_term_period).sum()
+    df['Cumulative VWAP Deviation'] += df['Short-Term Momentum']
+    
+    # Integrate Adaptive Medium-Term Momentum
+    medium_term_period = 10 + int(np.floor((df['VWAP'].std() / df['VWAP'].mean()) * 10))
+    medium_term_period = max(10, min(20, medium_term_period))
+    df['Medium-Term Momentum'] = df['VWAP Deviation'].rolling(window=medium_term_period).sum()
+    df['Cumulative VWAP Deviation'] += df['Medium-Term Momentum']
+    
+    # Integrate Adaptive Long-Term Momentum
+    long_term_period = 20 + int(np.floor((df['VWAP'].std() / df['VWAP'].mean()) * 10))
+    long_term_period = max(20, min(40, long_term_period))
+    df['Long-Term Momentum'] = df['VWAP Deviation'].rolling(window=long_term_period).sum()
+    df['Cumulative VWAP Deviation'] += df['Long-Term Momentum']
+    
+    # Calculate VWAP Deviation Volatility
+    df['VWAP Deviation Volatility'] = df['VWAP Deviation'].rolling(window=short_term_period).std()
+    
+    # Calculate Intraday Volatility
+    df['High-Low Range'] = df['high'] - df['low']
+    df['Absolute VWAP Deviation'] = df['VWAP Deviation'].abs()
+    df['Intraday Volatility'] = df['High-Low Range'] + df['Absolute VWAP Deviation']
+    
+    # Adjust Intraday Volatility
+    adjustment_factor = 1 + (df['VWAP Deviation Volatility'].mean() / df['VWAP Deviation Volatility'].std())
+    df['Adjusted Intraday Volatility'] = df['Intraday Volatility'] * adjustment_factor
+    
+    # Final Alpha Factor
+    df['Alpha Factor'] = (df['Cumulative VWAP Deviation'] 
+                          + df['VWAP Deviation Volatility'] 
+                          + df['Adjusted Intraday Volatility'])
+    
+    return df['Alpha Factor']
+```

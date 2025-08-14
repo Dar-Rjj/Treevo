@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Compute the 5-day and 20-day moving averages of daily returns
+    df['5_day_momentum'] = df['daily_return'].rolling(window=5).mean()
+    df['20_day_momentum'] = df['daily_return'].rolling(window=20).mean()
+    
+    # Determine the intraday range and its ratio to the previous day's close
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_range_ratio'] = df['intraday_range'] / df['close'].shift(1)
+    
+    # Measure the upper and lower shadow lengths and their ratio
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['shadow_ratio'] = df['upper_shadow'] / df['lower_shadow']
+    
+    # Assess the change in volume from the previous day
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_change_direction'] = df['volume_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Compute the ratio of volume to the 20-day moving average of volume
+    df['20_day_avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['20_day_avg_volume']
+    
+    # Composite factor by combining the 20-day momentum of daily returns with the 20-day moving average volume ratio
+    df['composite_factor'] = 0.7 * df['20_day_momentum'] + 0.3 * df['volume_ratio']
+    
+    # Calculate the correlation between 5-day and 20-day moving averages of daily returns and volume
+    df['5_day_return_vol_corr'] = df['daily_return'].rolling(window=5).corr(df['volume'])
+    df['20_day_return_vol_corr'] = df['daily_return'].rolling(window=20).corr(df['volume'])
+    
+    # Develop a combined price-volume factor
+    df['combined_price_volume_factor'] = (
+        0.4 * df['20_day_momentum'] 
+        + 0.3 * df['volume_ratio'] 
+        + 0.15 * df['5_day_return_vol_corr'] 
+        + 0.15 * df['20_day_return_vol_corr']
+    )
+    
+    return df['combined_price_volume_factor']
+```

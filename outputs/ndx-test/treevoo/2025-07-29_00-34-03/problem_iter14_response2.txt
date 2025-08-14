@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Weighted Close Price
+    df['Weighted_Close'] = df['volume'] * df['close']
+    
+    # Calculate Adjusted SMA of Weighted Close Prices
+    window_sma = 20
+    df['SMA_Weighted_Close'] = df['Weighted_Close'].rolling(window=window_sma).mean()
+    
+    # Smooth Realized Volatility
+    log_returns = np.log(df['high'] / df['low'])
+    df['Realized_Volatility'] = log_returns.rolling(window=window_sma).std()
+    df['Smoothed_Volatility'] = df['Realized_Volatility'].ewm(span=window_sma, adjust=False).mean()
+    
+    df['Adjusted_SMA'] = df['SMA_Weighted_Close'] - df['Smoothed_Volatility']
+    
+    # Calculate Short-Term Price Momentum
+    window_st_mom = 5
+    df['Short_Term_Momentum'] = df['close'].rolling(window=window_st_mom).mean()
+    
+    # Calculate Long-Term Price Momentum
+    window_lt_mom = 20
+    df['Long_Term_Momentum'] = df['close'].rolling(window=window_lt_mom).mean()
+    
+    # Determine the Difference between Short and Long-Term Momentum
+    df['Momentum_Diff'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    
+    # Incorporate Volume Trend
+    df['Short_Term_Volume'] = df['volume'].rolling(window=window_st_mom).mean()
+    df['Long_Term_Volume'] = df['volume'].rolling(window=window_lt_mom).mean()
+    df['Volume_Trend'] = df['Short_Term_Volume'] - df['Long_Term_Volume']
+    
+    # Combine Momentum and Volume-Weighted Return
+    df['Combined_Momentum'] = df['Momentum_Diff'] + df['Adjusted_SMA']
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Previous Day's Return
+    df['Prev_Day_Return'] = df['close'].shift(1) / df['close'].shift(2) - 1
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate Rolling Average Daily Return
+    window_rolling_return = 21
+    df['Rolling_Avg_Return'] = df['Daily_Return'].rolling(window=window_rolling_return).mean()
+    
+    # Calculate Rolling Volatility of Daily Returns
+    window_rolling_vol = 20
+    df['Rolling_Volatility'] = df['Daily_Return'].rolling(window=window_rolling_vol).std()
+    
+    # Adjust Momentum by Volatility
+    df['Momentum_Adjustment'] = df['Rolling_Avg_Return'] / df['Rolling_Volatility']
+    
+    # Combine Factors
+    df['Inverse_Intraday_Range'] = 1 / df['Intraday_Range']
+    df['Momentum_Adjusted'] = df['Prev_Day_Return'] * df['Inverse_Intraday_Range']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'] / df['open'] - 1
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Combined_Momentum'] + df['Momentum_Adjustment']) * df['Volume_Trend'] * df['amount'] * df['Close_to_Open_Return']
+    
+    return df['Alpha_Factor']
+```

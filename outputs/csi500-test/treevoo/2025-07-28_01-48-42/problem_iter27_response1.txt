@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=10, m_days=5):
+    # Calculate the ratio of closing price to average volume over the past n days
+    df['close_to_avg_volume'] = df['close'] / df['volume'].rolling(window=n_days).mean()
+    
+    # Measure the change in volume compared to the previous day
+    df['volume_change'] = df['volume'].diff()
+    
+    # Compute the percentage change in closing price from the previous day
+    df['close_return_pct'] = ((df['close'] - df['close'].shift(1)) / df['close'].shift(1)) * 100
+    
+    # Determine the upper shadow length
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    
+    # Determine the lower shadow length
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    
+    # Calculate the difference between the high and low prices
+    df['price_range'] = df['high'] - df['low']
+    
+    # Evaluate the true range
+    df['true_range'] = df[['high' - 'low', 
+                           (df['high'] - df['close'].shift(1)).abs(), 
+                           (df['low'] - df['close'].shift(1)).abs()]].max(axis=1)
+    
+    # Create a composite factor by combining the daily return with the volume change
+    df['composite_factor'] = df['close_return_pct'] + df['volume_change']
+    
+    # Formulate a new factor using the upper shadow, lower shadow, and volume
+    df['shadow_volume_factor'] = (df['upper_shadow'] + df['lower_shadow']) / df['volume']
+    
+    # Develop a momentum factor based on the average of the past m days' returns
+    df['momentum_factor'] = df['close_return_pct'].rolling(window=m_days).mean()
+    
+    # Design a reversal signal by identifying days where the stock closes below its opening
+    df['reversal_signal'] = (df['open'] - df['close']).apply(lambda x: 1 if x > 0 else 0)
+    
+    # Final alpha factor
+    df['alpha_factor'] = (df['composite_factor'] + df['shadow_volume_factor'] + 
+                          df['momentum_factor'] + df['reversal_signal'])
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor_series = heuristics_v2(df)
+```

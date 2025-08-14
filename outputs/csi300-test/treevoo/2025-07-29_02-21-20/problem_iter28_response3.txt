@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Price Movement
+    intraday_price_movement = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    enhanced_intraday_momentum = (high_price_indicator + low_price_indicator) / 2
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    volume_ratio_10 = df['volume'] / df['volume'].ewm(span=10).mean()
+    volume_impacted_intraday_momentum = enhanced_intraday_momentum * volume_ratio_10
+    
+    # Weighted Intraday Momentum
+    weighted_intraday_momentum = (intraday_price_movement * df['volume']).ewm(span=12).mean()
+    
+    # Adjusted High-Low Breakout Potential
+    high_low_breakout_potential = (df['high'] - df['low']) * df['volume']
+    adjusted_high_low_breakout_potential = high_low_breakout_potential.ewm(span=25).mean()
+    
+    # Volume-Adjusted Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    volume_ratio_20 = df['volume'] / df['volume'].shift(20)
+    volume_adjusted_long_term_momentum = long_term_momentum + (long_term_momentum * volume_ratio_20)
+    
+    # Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Significant Price Increase
+    significant_price_increase = (daily_price_return > 0).astype(int)
+    
+    # Volume Spike Indicator
+    volume_spike_indicator = (df['volume'] > df['volume'].rolling(window=7).mean()).astype(int)
+    
+    # Weighted Price Momentum
+    weighted_price_momentum = (daily_price_return * significant_price_increase).cumsum()
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = weighted_price_momentum * volume_spike_indicator
+    
+    # Consolidate All Factors
+    total_factor = (
+        intraday_price_movement +
+        volume_impacted_intraday_momentum +
+        volume_adjusted_long_term_momentum +
+        filtered_momentum
+    )
+    
+    # Adjust for Open Price
+    final_factor = total_factor / df['open']
+    
+    return final_factor
+```

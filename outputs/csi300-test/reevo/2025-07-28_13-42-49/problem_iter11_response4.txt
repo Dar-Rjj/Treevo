@@ -1,0 +1,25 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log returns
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate the exponential moving average (EMA) of the log returns over the past 3 days
+    df['ema_3d'] = df['log_return'].ewm(span=3, adjust=False).mean()
+    
+    # Calculate the adaptive window for volume based on the recent volatility
+    volatility_window = 5
+    df['volatility'] = df['log_return'].rolling(window=volatility_window).std()
+    df['adaptive_vol_window'] = (df['volatility'] * 3).astype(int)
+    df['avg_volume'] = df.apply(lambda row: df.loc[row.name - pd.Timedelta(days=row['adaptive_vol_window']):row.name, 'volume'].mean(), axis=1)
+    
+    # Calculate the ratio of today's volume to the adaptive average volume
+    df['vol_ratio'] = df['volume'] / df['avg_volume']
+    
+    # Calculate the trend component by taking the difference between the current close and the EMA
+    df['trend'] = df['close'] - df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Combine the log return, volume ratio, and trend into a single factor with dynamic weights
+    df['factor'] = (df['log_return'] + (0.5 * df['amount'] * df['vol_ratio']) - (0.3 * df['trend'])) * df['vol_ratio']
+    
+    return df['factor'].dropna()
+```

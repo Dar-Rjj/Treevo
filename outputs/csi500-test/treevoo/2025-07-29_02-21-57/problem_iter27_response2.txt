@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-Day Close Price Return
+    close_t = df['close']
+    close_t_minus_5 = df['close'].shift(5)
+    close_return = (close_t - close_t_minus_5) / close_t_minus_5
+
+    # Calculate 5-Day Volume Ratio
+    volume_5_days = df['volume'].rolling(window=5).sum()
+    avg_volume_5_days = df['volume'].rolling(window=5).mean() * 5
+    volume_ratio = volume_5_days / avg_volume_5_days
+    
+    # 5-Day Volume Adjusted Momentum
+    vol_adj_momentum = close_return * volume_ratio
+
+    # High-Low Price Oscillation
+    high_low_range = df['high'] - df['low']
+    std_high_low_range = high_low_range.rolling(window=10).std()
+    mean_high_low_range = high_low_range.rolling(window=10).mean()
+    adj_price_oscillation = (high_low_range - mean_high_low_range) / std_high_low_range
+
+    # Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Short-Term and Long-Term Moving Averages of Intraday Returns
+    short_term_ma = intraday_return.rolling(window=5).mean()
+    long_term_ma = intraday_return.rolling(window=20).mean()
+
+    # Intraday Return Difference
+    intraday_return_diff = short_term_ma - long_term_ma
+
+    # Filter by Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    intraday_return_diff_filtered = intraday_return_diff.where(volume_change > 0, 0)
+
+    # Short-Term and Long-Term Volume Weighted Moving Average (VWMA)
+    short_term_vwma = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    long_term_vwma = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Generate Combined Signal
+    vwma_signal = (short_term_vwma > long_term_vwma).astype(int) - (short_term_vwma < long_term_vwma).astype(int)
+    momentum_signal = (vol_adj_momentum > 0).astype(int) - (vol_adj_momentum < 0).astype(int)
+    price_oscillation_signal = (adj_price_oscillation > 0).astype(int) - (adj_price_oscillation < 0).astype(int)
+
+    combined_signal = pd.Series(0, index=df.index)
+    combined_signal[(vwma_signal == 1) & (momentum_signal == 1) & (price_oscillation_signal == 1)] = 1  # Strong Buy
+    combined_signal[(vwma_signal == -1) & (momentum_signal == -1) & (price_oscillation_signal == -1)] = -1  # Strong Sell
+    combined_signal[((vwma_signal == 1) & (momentum_signal == 1)) | ((vwma_signal == 1) & (price_oscillation_signal == 1)) | ((momentum_signal == 1) & (price_oscillation_signal == 1))] = 0.5  # Moderate Buy
+    combined_signal[((vwma_signal == -1) & (momentum_signal == -1)) | ((vwma_signal == -1) & (price_oscillation_signal == -1)) | ((momentum_signal == -1) & (price_oscillation_signal == -1))] = -0.5  # Moderate Sell
+
+    return combined_signal
+```

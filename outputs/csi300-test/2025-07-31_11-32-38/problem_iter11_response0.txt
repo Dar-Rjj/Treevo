@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate 10-Day Moving Average of Daily Price Changes
+    df['ma_10_price_change'] = df['price_change'].rolling(window=10).mean()
+    
+    # Calculate Volume and Amount Weighted Daily Return
+    df['daily_return'] = df['close'] / df['open']
+    df['volume_amount_weighted_return'] = df['daily_return'] * df['volume'] * df['amount']
+    
+    # Compute 20-Day Moving Average of Volume and Amount Weighted Returns
+    df['ma_20_weighted_return'] = df['volume_amount_weighted_return'].rolling(window=20).mean()
+    
+    # Calculate Volume-Weighted Momentum
+    df['raw_momentum'] = df['close'] / df['close'].shift(20) - 1
+    cumulative_volume = df['volume'].rolling(window=20).sum()
+    df['volume_weighted_momentum'] = df['raw_momentum'] * (df['volume'] / cumulative_volume)
+    
+    # Incorporate Price Range Factor
+    df['price_range'] = df['high'] - df['low']
+    df['combined_momentum'] = df['volume_weighted_momentum'] + df['price_range']
+    
+    # Weigh by Intraday Volume Activity
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_ma_20']
+    df['weighted_combined_momentum'] = df['combined_momentum'] * df['volume_ratio']
+    
+    # Combine Signals
+    df['signal'] = df['ma_10_price_change'] - df['ma_20_weighted_return']
+    df['smoothed_signal'] = df['signal'].rolling(window=5).mean()
+    
+    # Momentum Enhanced Reversal Factor
+    df['raw_returns'] = df['close'].pct_change()
+    df['momentum_component'] = df['raw_returns'].ewm(span=10, adjust=False).mean() - df['raw_returns'].ewm(span=5, adjust=False).mean()
+    df['reversal_component'] = -df['raw_returns'].ewm(span=21, adjust=False).mean()
+    df['combined_momentum_reversal'] = (df['momentum_component'] + df['reversal_component']) * np.sqrt(df['volume'])
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_signal'] + df['combined_momentum_reversal']
+    df['final_smoothed_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=0.2, adjust=False).mean()
+    
+    return df['final_smoothed_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

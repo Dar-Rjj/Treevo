@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=20, m_days=5, upper_bound=0.05, lower_bound=-0.05, skewness_adjust=1.0, kurtosis_adjust=1.0):
+    # Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    avg_intraday_volatility = intraday_volatility.rolling(window=n_days).mean()
+    
+    # Momentum
+    log_return = np.log(df['close']) - np.log(df['close'].shift(m_days))
+    sum_log_returns = log_return.rolling(window=m_days).sum()
+    momentum = sum_log_returns / avg_intraday_volatility
+    
+    # Intraday Return
+    intraday_return = np.log(df['close']) - np.log(df['open'])
+    winsorized_intraday_return = np.clip(intraday_return, lower_bound, upper_bound)
+    
+    # Volume-Weighted (Exponential Smoothing)
+    alpha = 0.95
+    volume_weighted_momentum = momentum * df['volume']
+    ewm_momentum = volume_weighted_momentum.ewm(alpha=alpha).mean() / df['volume'].ewm(alpha=alpha).mean()
+    
+    volume_weighted_intraday_return = winsorized_intraday_return * df['volume']
+    ewm_intraday_return = volume_weighted_intraday_return.ewm(alpha=alpha).mean() / df['volume'].ewm(alpha=alpha).mean()
+    
+    # Combine
+    weighted_sum = 0.7 * ewm_momentum + 0.3 * ewm_intraday_return
+    
+    # Adjust for Skewness and Kurtosis
+    skew_adj_factor = (weighted_sum - weighted_sum.mean()) / weighted_sum.std()
+    kurtosis_adj_factor = skew_adj_factor ** skewness_adjust
+    final_factor = kurtosis_adj_factor ** kurtosis_adjust
+    
+    return final_factor
+```

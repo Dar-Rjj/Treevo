@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, M=14, L=20, P=5, Q=10, R=10, S=10, threshold=0.05):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Sum of returns over a lookback window of N days
+    df['N_day_return_sum'] = df['daily_return'].rolling(window=N).sum()
+    
+    # True range
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    
+    # Average true range (ATR) over M days
+    df['ATR_M'] = df['true_range'].rolling(window=M).mean()
+    
+    # Relative ATR over 2M days
+    df['ATR_2M'] = df['true_range'].rolling(window=2 * M).mean()
+    df['relative_ATR'] = df['ATR_M'] / df['ATR_2M']
+    
+    # Volume intensity
+    df['volume_intensity'] = df['volume'] / df['volume'].rolling(window=L).mean()
+    
+    # Money flow
+    df['money_flow'] = df['volume'] * (2 * df['close'] - df['high'] - df['low'])
+    df['P_day_money_flow_sum'] = df['money_flow'].rolling(window=P).sum() * df['daily_return'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Composite factor
+    df['composite_factor'] = 0.5 * df['N_day_return_sum'] + 0.3 * df['relative_ATR'] + 0.2 * df['volume_intensity']
+    
+    # Trend strength
+    df['cumulative_high_close_diff'] = (df['high'] - df['close']).rolling(window=Q).sum()
+    df['cumulative_low_close_diff'] = (df['low'] - df['close']).rolling(window=Q).sum()
+    df['trend_strength'] = df['cumulative_high_close_diff'] - df['cumulative_low_close_diff']
+    
+    # Volume divergence
+    df['volume_change'] = df['volume'].pct_change()
+    df['price_volume_divergence'] = (df['close'].pct_change() * df['volume_change']).abs()
+    df['divergence_factor'] = df['price_volume_divergence'].rolling(window=R).sum()
+    
+    # Large price movement impact
+    large_move_mask = (df['daily_return'].abs() > threshold)
+    df['large_move_following_return'] = df.loc[large_move_mask, 'daily_return'].shift(-1)
+    df['S_day_large_move_avg_return'] = df['large_move_following_return'].rolling(window=S).mean()
+    
+    # Final alpha factor
+    df['alpha_factor'] = (
+        0.4 * df['N_day_return_sum'] +
+        0.3 * df['relative_ATR'] +
+        0.1 * df['volume_intensity'] +
+        0.1 * df['P_day_money_flow_sum'] +
+        0.1 * df['trend_strength'] -
+        0.05 * df['divergence_factor'] +
+        0.05 * df['S_day_large_move_avg_return']
+    )
+    
+    return df['alpha_factor']
+```

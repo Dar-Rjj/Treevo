@@ -1,0 +1,84 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Weighted Ratio of High-Low to Open-Close
+    weighted_ratio = high_low_range / open_close_movement
+    
+    # Identify Trend Strength and Reversal Signals
+    positive_momentum = (high_low_range > open_close_movement).astype(int)
+    potential_reversal = (open_close_movement > 0.6 * high_low_range).astype(int)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Combine Price Momentum and Volume Change
+    combined_factor = daily_log_return * volume_change
+    
+    # Compute Average of Combined Factor over 10 Days
+    avg_combined_factor = combined_factor.rolling(window=10).mean()
+    
+    # Intraday Range Percentage
+    intraday_range_percentage = (df['high'] - df['low']) / ((df['high'] + df['low']) / 2)
+    
+    # Close-to-Open Momentum Shift
+    close_to_open_momentum_shift = (df['close'] - df['open']) / df['close'].shift(1)
+    
+    # Volume Activity Ratio
+    n_period_sum_volume = df['volume'].rolling(window=10).sum()
+    n_period_ema_volume = df['volume'].ewm(span=10).mean()
+    volume_activity_ratio = n_period_sum_volume / n_period_ema_volume
+    
+    # Price Volatility Factor
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    std_log_return = log_return.rolling(window=10).std()
+    gain = (df['close'] - df['close'].shift(1)).clip(lower=0)
+    loss = (df['close'].shift(1) - df['close']).clip(lower=0)
+    avg_gain = gain.rolling(window=10).mean()
+    avg_loss = loss.rolling(window=10).mean()
+    rsi = 100 - (100 / (1 + (avg_gain / avg_loss)))
+    
+    # Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Intraday Volume Intensity
+    past_10_day_volume_sum = df['volume'].rolling(window=10).sum()
+    intraday_volume_intensity = df['volume'] / past_10_day_volume_sum
+    
+    # Intraday Range Percentage Enhanced
+    intraday_range_percentage_enhanced = (df['high'] - df['low']) / df['open']
+    
+    # Close-to-Open Momentum Shift Enhanced
+    close_to_open_momentum_shift_enhanced = (df['close'] - df['open']) / df['close']
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20).mean()
+    adjusted_recent_price_trend = df['close'] - ema_20
+    
+    # Composite Alpha Factor
+    short_term_price_movement = daily_log_return.rolling(window=5).sum()
+    long_term_price_movement = np.log(df['close'] / df['close'].shift(5))
+    short_term_volume_change = volume_change.rolling(window=5).mean()
+    long_term_volume_activity = df['volume'].rolling(window=20).sum()
+    
+    price_momentum_score = 0.6 * (short_term_price_movement + long_term_price_movement)
+    volume_activity_score = 0.4 * (short_term_volume_change + long_term_volume_activity)
+    
+    composite_alpha_factor = (price_momentum_score + volume_activity_score) * intraday_volume_intensity * closing_position
+    composite_alpha_factor += intraday_range_percentage_enhanced + close_to_open_momentum_shift_enhanced
+    
+    # Incorporate Daily Return Volatility
+    final_alpha_factor = composite_alpha_factor * std_log_return + adjusted_recent_price_trend
+    
+    return final_alpha_factor
+```

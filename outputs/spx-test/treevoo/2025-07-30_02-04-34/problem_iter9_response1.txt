@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['daily_price_change'].rolling(window=n).mean()
+    
+    # Identify Volume Spikes
+    df['volume_ma'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > 1.5 * df['volume_ma'])
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df['raw_momentum'].where(~df['volume_spike'], df['raw_momentum'] * 0.8)
+    
+    # Calculate Smoothed Price Momentum
+    df['smoothed_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Volume Weight
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['normalized_volume'] = df['volume'] / df['avg_volume']
+    df['volume_weight'] = df['normalized_volume'].rolling(window=n).mean()
+    
+    # Combine Smoothed Price Momentum and Volume Weight
+    df['base_momentum_signal'] = df['smoothed_momentum'] * df['volume_weight']
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['combined_intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['avg_5_day_volume'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['avg_5_day_volume']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['adjusted_momentum'] * df['combined_intraday_factor'] * df['weighted_price_movement_normalized']
+                          + df['base_momentum_signal'])
+    
+    # Adjust for Volatility
+    df['volatility'] = df['close'].rolling(window=10).std()
+    df['alpha_factor'] = df['alpha_factor'] / (1 + df['volatility'])
+    
+    return df['alpha_factor']
+```

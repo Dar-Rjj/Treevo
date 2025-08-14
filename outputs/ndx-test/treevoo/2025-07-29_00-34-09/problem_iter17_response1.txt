@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 10-day SMA of the close price
+    df['SMA_10_close'] = df['close'].rolling(window=10).mean()
+    
+    # Momentum factor based on close price and 10-day SMA
+    df['price_momentum'] = df['close'] - df['SMA_10_close']
+    
+    # 30-day SMA of volume to identify high-activity days
+    df['SMA_30_volume'] = df['volume'].rolling(window=30).mean()
+    df['high_activity'] = df['volume'] > df['SMA_30_volume']
+    
+    # Percentage change in close price from the previous day for high-activity days
+    df['prev_close'] = df['close'].shift(1)
+    df['daily_pct_change'] = (df['close'] - df['prev_close']) / df['prev_close']
+    
+    # Adjust momentum score based on high-activity days
+    df['momentum_adjustment'] = 0
+    df.loc[df['high_activity'], 'momentum_adjustment'] = df.loc[df['high_activity'], 'daily_pct_change']
+    
+    # Intraday sentiment: compare close with midpoint of daily range
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    df['directional_bias'] = (df['close'] - df['midpoint']) / df['midpoint']
+    
+    # Composite sentiment-adjusted momentum signal
+    df['composite_momentum'] = df['price_momentum'] * df['momentum_adjustment'] * df['directional_bias']
+    
+    # Calculate 10-day SMA of the amount
+    df['SMA_10_amount'] = df['amount'].rolling(window=10).mean()
+    
+    # Amount momentum factor
+    df['amount_momentum'] = df['amount'] - df['SMA_10_amount']
+    
+    # Combine price and amount momentum factors
+    df['weighted_momentum'] = 0
+    df.loc[(df['price_momentum'] > 0) & (df['amount_momentum'] > 0), 'weighted_momentum'] = df['composite_momentum'] * 1.5
+    df.loc[(df['price_momentum'] < 0) & (df['amount_momentum'] < 0), 'weighted_momentum'] = df['composite_momentum'] * 1.5
+    df.loc[(df['price_momentum'] > 0) & (df['amount_momentum'] < 0), 'weighted_momentum'] = df['composite_momentum'] * 0.5
+    df.loc[(df['price_momentum'] < 0) & (df['amount_momentum'] > 0), 'weighted_momentum'] = df['composite_momentum'] * 0.5
+    
+    # Final output: weighted momentum score
+    return df['weighted_momentum']
+```

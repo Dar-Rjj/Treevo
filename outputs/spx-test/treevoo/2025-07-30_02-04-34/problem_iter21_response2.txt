@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=20, volume_spike_threshold=1.5):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['daily_price_change'].rolling(window=n).mean()
+    
+    # Identify Volume Spikes
+    df['volume_ma'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > volume_spike_threshold * df['volume_ma']).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df['raw_momentum'] * (1 - df['volume_spike'] * 0.3)
+    
+    # Calculate Smoothed Price Momentum
+    df['smoothed_price_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Volume Weight
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['normalized_volume'] = df['volume'] / df['avg_volume']
+    df['volume_weight'] = df['normalized_volume'].rolling(window=n).mean()
+    
+    # Combine Smoothed Price Momentum and Volume Weight
+    df['combined_momentum'] = df['smoothed_price_momentum'] * df['volume_weight']
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['average_volume_5'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['average_volume_5']
+    
+    # Incorporate Next Day Open to Current Day Close
+    df['next_day_open'] = df['open'].shift(-1)
+    df['next_day_open_close_diff'] = df['next_day_open'] - df['close']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['adjusted_momentum'] * 
+        df['intraday_factor'] * 
+        df['weighted_price_movement_normalized']
+    )
+    
+    # Integrate Volume Intensity
+    df['avg_volume_5'] = df['volume'].rolling(window=5).mean()
+    df['inverse_avg_volume_5'] = 1 / df['avg_volume_5']
+    df['final_alpha_factor'] = df['alpha_factor'] * df['inverse_avg_volume_5']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

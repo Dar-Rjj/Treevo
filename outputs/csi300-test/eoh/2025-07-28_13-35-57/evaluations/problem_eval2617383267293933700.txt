@@ -1,0 +1,27 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 20-period EMA and TR
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    tr = df[['high', 'low', 'close']].shift(1).apply(lambda x: max(x['high'], df['high']) - min(x['low'], df['low']), axis=1)
+    atr = tr.rolling(window=10).mean()
+    norm_tr = tr / atr
+    
+    # Adjusted volume based on the difference between close and 20-EMA
+    vol_adj = df['volume'] * (df['close'] - ema_20)
+    
+    # Calculate the correlation-based weights using rolling window
+    corr_vol = df['close'].pct_change().rolling(window=60).corr(vol_adj.pct_change()).fillna(0)
+    corr_norm_tr = df['close'].pct_change().rolling(window=60).corr(norm_tr.pct_change()).fillna(0)
+    corr_ema = df['close'].pct_change().rolling(window=60).corr((df['close'] - ema_20).pct_change()).fillna(0)
+    
+    # Normalize the weights
+    total_corr = corr_vol + corr_norm_tr + corr_ema
+    weight_vol = corr_vol / total_corr
+    weight_norm_tr = corr_norm_tr / total_corr
+    weight_ema = corr_ema / total_corr
+    
+    # Compute the heuristic factor
+    heuristics_matrix = (vol_adj * weight_vol) + (norm_tr * weight_norm_tr) + ((df['close'] - ema_20) * weight_ema)
+    
+    return heuristics_matrix

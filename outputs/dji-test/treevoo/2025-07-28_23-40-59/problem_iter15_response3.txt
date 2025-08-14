@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Long-Term Moving Average (LMA)
+    lma = df['close'].rolling(window=200).mean()
+    
+    # Calculate Short-Term Moving Average (SMA)
+    sma = df['close'].rolling(window=50).mean()
+    
+    # Calculate Difference Between LMA and SMA
+    diff_lma_sma = lma - sma
+    
+    # Apply Volume Weighted Filter
+    volume_weighted = diff_lma_sma * df['volume']
+    smoothed_volume_weighted = volume_weighted.ewm(span=10, adjust=False).mean()
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Adjust Daily Return by Intraday Volatility
+    daily_return = df['close'].pct_change()
+    adjusted_return = daily_return / intraday_range
+    
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_return.rolling(window=5).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = (np.log(df['close']) - np.log(df['close'].shift(1))).rolling(window=7).sum()
+    
+    # Calculate Medium-Term Momentum
+    medium_term_momentum = (np.log(df['close']) - np.log(df['close'].shift(1))).rolling(window=14).sum()
+    
+    # Combine Short and Medium-Term Momentum
+    combined_momentum = short_term_momentum - medium_term_momentum
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_combined_momentum = combined_momentum / price_volatility
+    
+    # Confirm with Volume Trends
+    average_volume = df['volume'].rolling(window=20).mean()
+    volume_trend_score = np.where(df['volume'] > average_volume, 1, -1)
+    
+    # Final Factor Calculation
+    final_factor = (smoothed_volume_weighted + 
+                    smoothed_adjusted_return + 
+                    adjusted_combined_momentum * volume_trend_score)
+    
+    return final_factor
+```

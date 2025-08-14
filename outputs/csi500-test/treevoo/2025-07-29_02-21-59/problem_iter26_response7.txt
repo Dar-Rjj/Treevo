@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] / df['open'].shift(1) - 1
+    
+    # Weight by Volume
+    volume_weighted_close_to_open_return = close_to_open_return * df['volume']
+    
+    # Integrate Intraday High-Low Movement
+    intraday_high_low_movement = (df['high'] - df['low']) / df['close']
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_adjusted_intraday_momentum = volume_weighted_close_to_open_return + intraday_return * intraday_high_low_movement
+    
+    # Combined Cumulative Log Return with VWAP Integration
+    daily_log_return = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+    cumulative_log_return = daily_log_return.rolling(window=20).sum()
+    vwap = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    vwap = vwap.rolling(window=1).sum() / df['volume'].rolling(window=1).sum()
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    price_oscillator = sma_5 - sma_20
+    
+    # Weight by Volume and Amount Change
+    volume_change = df['volume'].pct_change()
+    amount_change = df['amount'].pct_change()
+    
+    # Adjust Intraday Return
+    adjusted_intraday_return = intraday_return * (intraday_high_low_movement + volume_change + amount_change)
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+    sum_daily_price_changes = daily_price_change.rolling(window=20).sum()
+    
+    # PMI Score
+    pmi_score = sum_daily_price_changes * vwap
+    
+    # Calculate 20-Day Momentum
+    momentum_20_day = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Introduce New Factor: Intraday Range to Volume Ratio
+    intraday_range = df['high'] - df['low']
+    intraday_range_to_volume_ratio = intraday_range / df['volume']
+    
+    # Final Alpha Factor
+    final_alpha_factor = (pmi_score * cumulative_log_return +
+                          adjusted_intraday_return +
+                          volume_adjusted_intraday_momentum +
+                          momentum_20_day +
+                          intraday_range_to_volume_ratio)
+    
+    return final_alpha_factor
+```

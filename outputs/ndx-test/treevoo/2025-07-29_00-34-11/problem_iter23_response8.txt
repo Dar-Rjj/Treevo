@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Gain and Loss
+    df['Gain'] = np.where(df['close'] > df['close'].shift(1), df['close'] - df['close'].shift(1), 0)
+    df['Loss'] = np.where(df['close'] < df['close'].shift(1), df['close'].shift(1) - df['close'], 0)
+
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    gain_sum = df['Gain'].rolling(window=14).sum()
+    loss_sum = df['Loss'].rolling(window=14).sum()
+
+    # Calculate Relative Strength
+    RS = gain_sum / loss_sum
+
+    # Convert to ARSI
+    ARSI = 100 - (100 / (1 + RS))
+    
+    # Adjust for Advanced Features
+    avg_volume = df['volume'].rolling(window=14).mean()
+    ARSI *= avg_volume * (df['close'] / df['open'])
+
+    # Calculate Short-Term Logarithmic Return
+    short_term_return = np.log(df['close'] / df['close'].shift(5))
+
+    # Calculate Long-Term Logarithmic Return
+    long_term_return = np.log(df['close'] / df['close'].shift(20))
+
+    # Calculate Volume-Weighted Short-Term Logarithmic Return
+    volume_weighted_short_term_return = short_term_return * df['volume']
+
+    # Calculate Volume-Weighted Long-Term Logarithmic Return
+    volume_weighted_long_term_return = long_term_return * df['volume']
+
+    # Calculate Short-Term Volatility
+    atr_5 = (df[['high', 'low']].diff().abs().max(axis=1)).rolling(window=5).mean()
+    short_term_volatility = atr_5
+
+    # Adjust for Volatility
+    adjusted_short_term_return = (volume_weighted_short_term_return / short_term_volatility) - volume_weighted_long_term_return
+
+    # Combine Intraday Price Movement Intensity and Momentum Sentiment
+    high_low_spread = df['high'] - df['low']
+    open_close_change = df['close'] - df['open']
+    intraday_price_movement_intensity = high_low_spread + open_close_change
+    intraday_volatility = (df['high'] - df['low']) / df['volume']
+    momentum_sentiment = np.where(intraday_volatility.corr(df['close']) > 0, 1, -1)
+    combined_intraday_intensity = intraday_price_movement_intensity * momentum_sentiment
+
+    # Combine Intraday Price Movement Ratio and Sentiment
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    intraday_price_movement_ratio = (high_low_ratio + open_close_ratio) / 2
+    price_volatility_alignment = (df['high'] - df['low']) * df['volume']
+    sentiment = np.where(price_volatility_alignment.corr(df['close']) > 0, 1, -1)
+    combined_intraday_ratio = intraday_price_movement_ratio * sentiment
+
+    # Combine ARSI, Adjusted Returns, and Intraday Movements
+    final_factor = ARSI * adjusted_short_term_return + combined_intraday_intensity + combined_intraday_ratio
+
+    # Final Adjustment
+    final_factor += adjusted_short_term_return
+
+    return final_factor
+```

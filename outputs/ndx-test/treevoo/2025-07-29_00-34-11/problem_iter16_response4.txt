@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Logarithmic Return
+    df['short_term_log_return'] = np.log(df['close'] / df['close'].shift(5))
+    
+    # Calculate Long-Term Logarithmic Return
+    df['long_term_log_return'] = np.log(df['close'] / df['close'].shift(20))
+    
+    # Calculate Volume-Weighted Short-Term Logarithmic Return
+    df['volume_weighted_short_term_log_return'] = df['volume'] * df['short_term_log_return']
+    
+    # Calculate Volume-Weighted Long-Term Logarithmic Return
+    df['volume_weighted_long_term_log_return'] = df['volume'] * df['long_term_log_return']
+    
+    # Calculate Short-Term Volatility (Average True Range)
+    df['tr'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['atr_5'] = df['tr'].rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    df['adjusted_volatility_factor'] = (df['volume_weighted_short_term_log_return'] / df['atr_5']) - df['volume_weighted_long_term_log_return']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    df['close_to_close_return'] = df['close'] / df['close'].shift(1) - 1
+    df['combined_intraday_volatility'] = df['intraday_volatility'] * df['close_to_close_return']
+    
+    # Calculate Daily Volume Change
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Aggregate Volume Changes over the last M days (M = 5)
+    df['aggregated_volume_changes'] = df['daily_volume_change'].rolling(window=5).sum()
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = df['close'] / df['open'] - 1
+    
+    # Final Adjustment
+    df['final_adjustment'] = (df['adjusted_volatility_factor'] + 
+                              df['combined_intraday_volatility'] * 
+                              df['aggregated_volume_changes'] + 
+                              df['intraday_momentum'])
+    
+    # Synthesize ARSI with Volume-Weighted Returns and Volatility
+    df['gain'] = np.where(df['close'] > df['close'].shift(1), df['close'] - df['close'].shift(1), 0)
+    df['loss'] = np.where(df['close'] < df['close'].shift(1), df['close'].shift(1) - df['close'], 0)
+    df['avg_gain'] = df['gain'].rolling(window=14).sum()
+    df['avg_loss'] = df['loss'].rolling(window=14).sum()
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    df['arsi'] = 100 - (100 / (1 + df['rs'])) * df['volume'].rolling(window=14).mean()
+    df['combined_arsi'] = df['arsi'] * df['volume_weighted_short_term_log_return']
+    df['adjusted_combined_arsi'] = df['combined_arsi'] / df['atr_5'] - df['volume_weighted_long_term_log_return']
+    
+    # Introduce a new factor: Volume-Weighted Intraday Volatility
+    df['volume_weighted_intraday_volatility'] = df['volume'] * df['intraday_volatility']
+    
+    # Final Alpha Factor
+    alpha_factor = (df['final_adjustment'] + 
+                    df['adjusted_combined_arsi'] + 
+                    df['volume_weighted_intraday_volatility'])
+    
+    return alpha_factor
+```

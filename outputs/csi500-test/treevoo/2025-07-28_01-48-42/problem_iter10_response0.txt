@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Momentum
+    df['high_low_range_momentum'] = df['high_low_range'].diff()
+    df['high_low_range_momentum_5d_sum'] = df['high_low_range_momentum'].rolling(window=5).sum()
+    
+    # Adjust for Volume
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['adjusted_momentum'] = df['high_low_range_momentum_5d_sum'] / df['avg_volume_5d']
+    
+    # Apply Moving Average Smoothing
+    df['smoothed_adjusted_momentum'] = df['adjusted_momentum'].rolling(window=10).mean()
+    
+    # Calculate Logarithmic Daily Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Momentum Component
+    df['momentum_21d'] = df['log_returns'].rolling(window=21).mean()
+    df['momentum_60d'] = df['log_returns'].rolling(window=60).mean()
+    df['final_momentum'] = df['momentum_21d'] - df['momentum_60d']
+    
+    # Volatility Component
+    df['abs_log_returns'] = df['log_returns'].abs()
+    df['volatility_21d'] = df['abs_log_returns'].rolling(window=21).sum()
+    df['volatility_60d'] = df['abs_log_returns'].rolling(window=60).sum()
+    df['final_volatility'] = df['volatility_21d'] - df['volatility_60d']
+    
+    # Volume Component
+    df['log_volume_changes'] = np.log(df['volume'] / df['volume'].shift(1))
+    df['volume_momentum_21d'] = df['log_volume_changes'].rolling(window=21).mean()
+    df['volume_momentum_60d'] = df['log_volume_changes'].rolling(window=60).mean()
+    df['final_volume_momentum'] = df['volume_momentum_21d'] - df['volume_momentum_60d']
+    
+    # Combine Components
+    df['combined_alpha_factor'] = df['final_momentum'] + df['final_volatility'] + df['final_volume_momentum']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_adjusted_momentum'] + df['combined_alpha_factor']
+    
+    return df['final_alpha_factor'].dropna()
+```

@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=14):
+    # Daily Price Range
+    df['daily_price_range'] = df['high'] - df['low']
+    
+    # N-Day Avg Price Range
+    df['N_day_avg_price_range'] = df['daily_price_range'].rolling(window=N).mean()
+    
+    # N-Day RSI
+    df['upward_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['downward_change'] = -df['close'].diff().apply(lambda x: x if x < 0 else 0)
+    df['avg_up'] = df['upward_change'].rolling(window=N).mean()
+    df['avg_down'] = df['downward_change'].rolling(window=N).mean()
+    df['rs'] = df['avg_up'] / df['avg_down'].replace(0, 1e-6)  # Avoid division by zero
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Adjusted Intraday Return
+    df['adjusted_intraday_return'] = df['intraday_return'] / df['intraday_volatility'].replace(0, 1e-6)  # Avoid division by zero
+    
+    # Volume and Amount Shock
+    df['volume_change'] = df['volume'].diff()
+    df['amount_change'] = df['amount'].diff()
+    
+    # N-Day Avg Volume
+    df['N_day_avg_volume'] = df['volume'].rolling(window=N).mean()
+    
+    # Volume Trend
+    df['volume_trend'] = (df['volume'] > df['N_day_avg_volume']).astype(int) * 2 - 1
+    
+    # Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = df['volume'] * df['adjusted_intraday_return']
+    
+    # Momentum
+    df['5_day_ma_intraday_return'] = df['intraday_return'].rolling(window=5).mean()
+    df['20_day_ma_intraday_return'] = df['intraday_return'].rolling(window=20).mean()
+    df['momentum'] = df['5_day_ma_intraday_return'] - df['20_day_ma_intraday_return']
+    
+    # Adjusted Factors
+    df['N_day_avg_price_range_adjusted'] = df['N_day_avg_price_range'] * df['volume_change']
+    df['N_day_rsi_adjusted'] = df['rsi'] * df['volume_change']
+    df['intraday_range_adjusted'] = df['intraday_volatility'] * df['volume_change']
+    df['intraday_range_amount_adjusted'] = df['intraday_volatility'] * df['amount_change']
+    
+    # Combined Adjusted Factors
+    df['combined_adjusted_factors'] = (
+        df['N_day_avg_price_range_adjusted'] +
+        df['N_day_rsi_adjusted'] +
+        df['intraday_range_adjusted'] +
+        df['intraday_range_amount_adjusted']
+    )
+    
+    df['final_factor'] = (df['combined_adjusted_factors'] + df['volume_weighted_intraday_return']) * df['volume_trend']
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range('2023-01-01', periods=100),
+#     'open': [random.uniform(1, 100) for _ in range(100)],
+#     'high': [random.uniform(1, 100) for _ in range(100)],
+#     'low': [random.uniform(1, 100) for _ in range(100)],
+#     'close': [random.uniform(1, 100) for _ in range(100)],
+#     'volume': [random.randint(1, 10000) for _ in range(100)],
+#     'amount': [random.uniform(1, 100000) for _ in range(100)]
+# }).set_index('date')
+
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

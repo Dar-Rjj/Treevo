@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, momentum_days=10):
+    # Calculate Daily Price Movement
+    df['PriceRange'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['PriceGap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['RawMomentum'] = df['PriceRange'].rolling(window=momentum_days).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).rolling(window=momentum_days).sum() / df['volume'].rolling(window=momentum_days).sum()
+    
+    # Incorporate Market Depth
+    df['MarketDepth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    df['AdjustedMomentum'] = df['RawMomentum'] * (df['VWAP'] + df['MarketDepth']) / df['IntradayVolatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=n).mean()
+    total_avg_volume = df['volume'].rolling(window=n).mean().mean()
+    df['VolumeAdjustedMomentum'] = df['AdjustedMomentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5DayReturn'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10DayReturn'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['MultiDayMomentum'] = (df['5DayReturn'] + df['10DayReturn']) / 2
+    df['FinalVolumeAdjustedMomentum'] = df['VolumeAdjustedMomentum'] + df['MultiDayMomentum']
+    
+    # Incorporate Liquidity
+    df['AverageVolume'] = df['volume'].rolling(window=n).mean()
+    df['LiquidityAdjustedMomentum'] = df['FinalVolumeAdjustedMomentum'] * (df['AverageVolume'] / total_avg_volume)
+    
+    # Enhance with Dynamic Price and Volume Ratios
+    df['PriceToVolumeRatio'] = df['close'] / df['volume']
+    df['MovingAvgPVRatio'] = df['PriceToVolumeRatio'].rolling(window=n).mean()
+    avg_pvratio = df['PriceToVolumeRatio'].mean()
+    df['DynamicPVMomentum'] = df['LiquidityAdjustedMomentum'] * (df['MovingAvgPVRatio'] / avg_pvratio)
+    
+    # Consider Volatility Clustering
+    df['EMAVolatility'] = df['IntradayVolatility'].ewm(span=n, adjust=False).mean()
+    avg_intraday_volatility = df['IntradayVolatility'].mean()
+    df['FinalAlphaFactor'] = df['DynamicPVMomentum'] * (df['EMAVolatility'] / avg_intraday_volatility)
+    
+    return df['FinalAlphaFactor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

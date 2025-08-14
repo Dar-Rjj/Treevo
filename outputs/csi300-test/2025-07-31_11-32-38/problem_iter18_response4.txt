@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Identify the direction of the close price change (up or down)
+    df['close_direction'] = df['close'].diff().apply(lambda x: 1 if x > 0 else 0)
+    
+    # Calculate the ratio of close price to average volume over a trailing period
+    window = 20
+    df['avg_volume'] = df['volume'].rolling(window=window).mean()
+    df['close_to_avg_volume_ratio'] = df['close'] / df['avg_volume']
+    
+    # Measure the intra-day range (high - low)
+    df['intra_day_range'] = df['high'] - df['low']
+    
+    # Calculate the percentage of the intra-day range that is above the previous close
+    df['prev_close'] = df['close'].shift(1)
+    df['range_above_prev_close'] = (df['high'] - df['prev_close']) / df['intra_day_range']
+    
+    # Compute the difference between open and close prices
+    df['open_close_diff'] = df['close'] - df['open']
+    
+    # Determine if the day's closing price is higher or lower than the opening price
+    df['open_close_direction'] = df['open_close_diff'].apply(lambda x: 1 if x > 0 else 0)
+    
+    # Combine with volume to assess the strength of the move
+    df['move_strength'] = df['open_close_diff'] * df['volume']
+    
+    # Compare the high and low prices with the previous day's high and low
+    df['higher_high'] = df['high'] > df['high'].shift(1)
+    df['lower_low'] = df['low'] < df['low'].shift(1)
+    
+    # Count the number of days in a row where the high is higher than the previous day's high
+    df['consecutive_higher_highs'] = df['higher_high'].groupby((df['higher_high'] != df['higher_high'].shift()).cumsum()).cumsum()
+    
+    # Count the number of days in a row where the low is lower than the previous day's low
+    df['consecutive_lower_lows'] = df['lower_low'].groupby((df['lower_low'] != df['lower_low'].shift()).cumsum()).cumsum()
+    
+    # Calculate the standard deviation of the daily returns over a trailing window
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility'] = df['daily_returns'].rolling(window=window).std()
+    
+    # Generate the alpha factor
+    df['alpha_factor'] = (
+        df['close_direction'] 
+        + df['close_to_avg_volume_ratio'] 
+        + df['range_above_prev_close'] 
+        + df['open_close_direction'] 
+        + df['move_strength'] / df['volatility']
+        + df['consecutive_higher_highs'] 
+        - df['consecutive_lower_lows']
+    )
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

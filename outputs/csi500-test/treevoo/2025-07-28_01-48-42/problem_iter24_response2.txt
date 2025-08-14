@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['low']
+    intraday_reversal_score = 1 / (intraday_return + 1e-8)
+    
+    # Adjust for Volume and Amount
+    volume_amount_adjusted = high_low_range * df['volume'] * df['amount']
+    
+    # Integrate Momentum and Reversal
+    momentum_and_reversal = (high_low_range - high_low_range.shift(1)) * intraday_reversal_score
+    
+    # Integrate Volume-Amount-Adjusted Range with Weighted Price Change
+    integrated_factor = momentum_and_reversal + volume_amount_adjusted
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Price Change Momentum
+    price_momentum = df['close'] - df['open'].shift(1)
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Price Momentum and Volume Delta
+    price_volume_momentum = price_momentum * volume_delta
+    
+    # Confirm with Volume, Amount, and Close-to-Open Movement
+    close_to_open_diff = df['close'] - df['open']
+    confirmed_factor = volume_amount_adjusted * close_to_open_diff
+    
+    # Apply a First Smoothing Layer
+    first_smoothing = confirmed_factor.ewm(span=5).mean()
+    
+    # Introduce a New Volatility Component
+    daily_volatility = np.sqrt(((df['high'] - df['low']) ** 2) / 4 + ((df['close'] - df['open']) ** 2) / 4)
+    volatility_adjusted_factor = first_smoothing * daily_volatility
+    
+    # Introduce a New Trend Strength Component
+    trend_strength = df['close'] - df['close'].rolling(window=20).mean()
+    final_factor = volatility_adjusted_factor * trend_strength
+    
+    # Apply a Second Smoothing Layer
+    smoothed_final_factor = final_factor.rolling(window=10).mean()
+    
+    return smoothed_final_factor
+```

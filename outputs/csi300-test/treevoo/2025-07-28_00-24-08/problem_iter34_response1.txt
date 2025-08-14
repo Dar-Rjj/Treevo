@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return'].shift(1)
+    
+    # Adjust for Volume
+    df['adjusted_returns'] = df['aggregate_returns'] * df['volume']
+    
+    # Weight by Intraday Volatility
+    df['weighted_returns'] = df['intraday_volatility'] * df['adjusted_returns']
+    
+    # Smoothed Moving Average
+    df['sma_5'] = df['weighted_returns'].rolling(window=5).mean()
+    df['smoothed_sma'] = df['sma_5'].ewm(alpha=0.3).mean()
+    
+    # Calculate Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Calculate Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(25)
+    
+    # Compute Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Integrate Intraday and Previous Day's Returns
+    df['integrated_returns'] = df['intraday_return'] * df['overnight_return'].shift(1)
+    
+    # Combine Price Momentum and Intraday Reversal
+    df['combined_momentum_reversal'] = df['price_momentum_ratio'] * df['integrated_returns']
+    
+    # Conditionally Adjust by Volume Surge
+    df['average_volume_7'] = df['volume'].rolling(window=7).mean()
+    df['volume_adjusted_momentum'] = np.where(
+        df['volume'] > df['average_volume_7'],
+        df['combined_momentum_reversal'] * 1.8,
+        df['combined_momentum_reversal'] * 0.7
+    )
+    
+    # Incorporate High-Low Volatility into Final Factor
+    df['high_low_volatility'] = df['intraday_volatility'] * (df['high'] - df['low'])
+    
+    # Generate Final Alpha Factor
+    df['daily_dollar_volume'] = df['volume'] * df['close']
+    df['final_alpha_factor'] = (
+        df['smoothed_sma'] 
+        + df['high_low_volatility'] 
+        + df['volume_adjusted_momentum']
+    ) / df['daily_dollar_volume']
+    
+    return df['final_alpha_factor']
+```

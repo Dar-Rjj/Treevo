@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Compute Average Price Momentum over 5 Days
+    df['price_momentum_5d'] = df['price_change'].rolling(window=n).mean()
+    
+    # Calculate Daily Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Combine Price Momentum and Volume Surge
+    df['price_vol_momentum'] = df['price_momentum_5d'] * (df['volume_change'] / df['volume'].shift(1))
+    
+    # Compute High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['range_change'] = df['high_low_range'].diff()
+    
+    # Calculate Volume Surge Component
+    df['volume_change_pct'] = df['volume_change'] / df['volume'].shift(1)
+    df['volume_surge_5d'] = df['volume_change_pct'].rolling(window=n).mean()
+    
+    # Combine High-Low Range and Volume
+    df['high_low_vol'] = (df['range_change'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+    
+    # Introduce Weighting Factors
+    w1, w2, w3, w4 = 0.3, 0.3, 0.2, 0.2
+    
+    # Combine Weighted Components
+    df['combined_alpha'] = (
+        w1 * df['high_low_vol'] + 
+        w2 * df['price_vol_momentum'] + 
+        w3 * df['volume_surge_5d'] +
+        w4 * df['volume_ratio']
+    )
+    
+    # Final Combined Alpha Factor
+    df['final_alpha'] = (
+        df['combined_alpha'] + 
+        (df['close'].pct_change() * df['volume_ratio'])
+    )
+    
+    return df['final_alpha'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# })
+# alpha_factor = heuristics_v2(df)
+```

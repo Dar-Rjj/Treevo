@@ -1,0 +1,78 @@
+```python
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Price Change
+    daily_price_change = df['close'] - df['open']
+    
+    # Calculate 7-Day and 21-Day Averages of Daily Price Changes
+    avg_7day_price_change = daily_price_change.rolling(window=7).mean()
+    avg_21day_price_change = daily_price_change.rolling(window=21).mean()
+    
+    # Combine Averages to Identify Long-Term Momentum
+    long_term_momentum = avg_21day_price_change - avg_7day_price_change
+    
+    # Measure the Distance Between High and Low
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate 5-Day Average High-Low Range
+    avg_5day_high_low_range = high_low_range.rolling(window=5).mean()
+    
+    # Evaluate the Ratio of Today's Range to its 5-Day Average for Reversal Signal
+    reversal_signal = (high_low_range / avg_5day_high_low_range) - 1
+    
+    # Calculate Moving Average Volume Over 20 Days
+    moving_avg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = daily_price_change / moving_avg_volume
+    
+    # Calculate Realized Volatility Using Close Price with a Rolling Window of 15 Days
+    realized_volatility = (df['close'].pct_change().rolling(window=15).std()) * np.sqrt(252)
+    
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    long_term_price_momentum = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Combine Long-Term and Short-Term Momentum
+    combined_momentum = long_term_price_momentum + short_term_momentum
+    
+    # Adjust High-to-Low Range by Average Volume
+    adjusted_high_low_range = high_low_range / moving_avg_volume
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = 0.5 * intraday_return + 0.5 * open_to_close_return
+    
+    # Weighted Average of Combined Components
+    weighted_average = (
+        0.4 * combined_momentum + 
+        0.3 * high_low_range + 
+        0.2 * open_to_close_return + 
+        0.1 * adjusted_high_low_range
+    )
+    
+    # Calculate Volume Acceleration
+    volume_acceleration = (df['volume'] - df['volume'].shift(15)) / df['volume'].shift(15)
+    
+    # Final Alpha Signal Based on Combined Indicators
+    threshold = 0.01  # Example threshold, can be tuned
+    median_volatility = realized_volatility.median()
+    
+    alpha_factor = pd.Series(index=df.index, dtype='float64')
+    for i in range(len(df)):
+        if (adjusted_price_volume_signal.iloc[i] > threshold) and (realized_volatility.iloc[i] < median_volatility):
+            alpha_factor.iloc[i] = 1
+        elif (adjusted_price_volume_signal.iloc[i] < -threshold) and (realized_volatility.iloc[i] < median_volatility):
+            alpha_factor.iloc[i] = -1
+        else:
+            alpha_factor.iloc[i] = weighted_average.iloc[i] * volume_acceleration.iloc[i]
+    
+    return alpha_factor
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Short-Term Price Momentum
+    df['10_sma'] = df['close'].rolling(window=10).mean()
+    df['short_momentum'] = df['close'] - df['10_sma']
+    df['positive_short_momentum'] = df['short_momentum'].apply(lambda x: x if x > 0 else 0)
+    df['sum_positive_short_momentum'] = df['positive_short_momentum'].rolling(window=5).sum()
+
+    # Long-Term Price Momentum
+    df['30_sma'] = df['close'].rolling(window=30).mean()
+    df['long_momentum'] = df['close'] - df['30_sma']
+    df['positive_long_momentum'] = df['long_momentum'].apply(lambda x: x if x > 0 else 0)
+    df['sum_positive_long_momentum'] = df['positive_long_momentum'].rolling(window=20).sum()
+
+    # Price Breakout Indicator
+    df['20_high'] = df['high'].rolling(window=20).max()
+    df['20_low'] = df['low'].rolling(window=20).min()
+    df['20_range'] = df['20_high'] - df['20_low']
+    df['price_breakout_indicator'] = (df['close'] - df['20_low']) / df['20_range']
+
+    # Volume Adjust Factor
+    df['20_avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjust_factor'] = df['volume'] / df['20_avg_volume']
+
+    # Historical Volatility
+    df['20_std_close'] = df['close'].rolling(window=20).std()
+    df['20_avg_close'] = df['close'].rolling(window=20).mean()
+    df['historical_volatility'] = df['20_std_close'] / df['20_avg_close']
+
+    # Market Sentiment
+    df['20_sum_high_low_diff'] = (df['high'] - df['low']).rolling(window=20).sum()
+    df['market_sentiment'] = df['20_sum_high_low_diff'] / df['20_avg_close']
+
+    # Adaptive Weights
+    df['10_day_corr'] = df[['short_momentum', 'long_momentum']].rolling(window=10).corr().unstack().iloc[::2, :]
+    df['short_momentum_weight'] = df['10_day_corr'].apply(lambda x: 1 - abs(x) if x < 0 else 1)
+    df['long_momentum_weight'] = df['10_day_corr'].apply(lambda x: 1 - abs(x) if x >= 0 else 1)
+    df['weighted_momentum'] = (df['sum_positive_short_momentum'] * df['short_momentum_weight'] + 
+                               df['sum_positive_long_momentum'] * df['long_momentum_weight'])
+
+    # Combined Price and Volume Factors
+    df['combined_price_volume_factors'] = (df['weighted_momentum'] * df['volume_adjust_factor'] + 
+                                           df['price_breakout_indicator'])
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['combined_price_volume_factors'] + 
+                                df['historical_volatility'] + 
+                                df['market_sentiment'])
+
+    return df['final_alpha_factor'].dropna()
+```

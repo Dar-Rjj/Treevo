@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']).diff()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Intraday and Overnight Momentum
+    df['intraday_return'] = np.log(df['close'] / df['open'])
+    df['overnight_return'] = np.log(df['open'] / df['close'].shift(1))
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_weighted_high_low'] = df['high_low_range'] * df['volume'] / df['avg_volume']
+    
+    # Volume Adjusted Reversal Signal
+    df['close_to_next_open_return'] = np.log(df['close'] / df['open'].shift(-1))
+    df['reversal_signal'] = 0 - df['close_to_next_open_return'].shift(1)
+    
+    # Smoothed Moving Average of Composite Factor
+    df['composite_factor'] = df['aggregate_returns'] + df['volume_weighted_high_low'] + df['reversal_signal']
+    df['sma_composite_factor'] = df['composite_factor'].rolling(window=5).mean()
+    df['smoothed_composite_factor'] = df['sma_composite_factor'].ewm(span=5, adjust=False).mean()
+    
+    # Confirm Momentum with Volume
+    df['volume_change'] = df['volume'].diff()
+    df['positive_volume_filter'] = (df['volume_change'] > 0).astype(int)
+    df['final_alpha_factor'] = df['price_momentum'] * df['positive_volume_filter'] * df['smoothed_composite_factor']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Adjust for Opening Gap
+    df['Open_Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['open']
+    
+    # Compute Volume Change Indicator
+    df['Volume_Change'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Calculate Price Movement Ratio
+    df['Price_Movement_Ratio'] = (df['close'] - df['open']) / df['open']
+    
+    # Incorporate Volume Momentum
+    df['Volume_Adjusted_Range'] = df['High_Low_Range'] * df['Volume_Change']
+    
+    # Apply Time Series Momentum
+    lookback_period = 10
+    df['Volume_Adjusted_Range_MA'] = df['Volume_Adjusted_Range'].rolling(window=lookback_period).mean()
+    df['Time_Series_Momentum'] = df['Volume_Adjusted_Range'] - df['Volume_Adjusted_Range_MA']
+    
+    # Calculate 5-Day Rolling Momentum
+    df['5D_Price_Movement_Ratio_Sum'] = df['Price_Movement_Ratio'].rolling(window=5).sum()
+    df['5D_High_Low_Range_Sum'] = df['High_Low_Range'].rolling(window=5).sum()
+    df['5D_Rolling_Momentum'] = df['5D_Price_Movement_Ratio_Sum'] / df['5D_High_Low_Range_Sum']
+    
+    # Combine Momentum, Intraday, and Price Trend Indicators
+    df['Combined_Momentum'] = df['High_Low_Range'] * df['Volume_Change'] * df['Time_Series_Momentum']
+    df['Smoothed_Combined_Momentum'] = df['Combined_Momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Volume
+    df['Volume_Adjusted_Momentum'] = df['Smoothed_Combined_Momentum'] * np.log(df['volume'] + 1)
+    
+    # Integrate Volume-Adjusted Momentum and Volatility into Final Factor
+    df['Daily_Volatility'] = (df['high'] - df['low']).abs()
+    df['Final_Factor_1'] = (df['Volume_Adjusted_Momentum'] * (df['close'] - df['open'])) / df['Daily_Volatility']
+    
+    # Calculate Averaged High-to-Low Volatility
+    df['High_Low_Volatility'] = (df['high'] - df['low'])
+    df['Averaged_High_Low_Volatility'] = df['High_Low_Volatility'].rolling(window=20).mean()
+    
+    # Calculate 5-day Moving Average of Close Prices
+    df['5D_Close_MA'] = df['close'].rolling(window=5).mean()
+    
+    # Calculate Relative Strength
+    df['Relative_Strength'] = (df['close'] - df['5D_Close_MA']) / df['5D_Close_MA']
+    
+    # Final Alpha Factor
+    df['Final_Factor_2'] = df['Final_Factor_1'] + df['5D_Rolling_Momentum'] + df['Relative_Strength']
+    
+    # Calculate 20-day Moving Average of Close Prices
+    df['20D_Close_MA'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate Long-Term Trend Indicator
+    df['Long_Term_Trend'] = df['close'] / df['20D_Close_MA']
+    
+    # Enhance Final Alpha Factor
+    df['Final_Factor_3'] = df['Final_Factor_2'] * df['Long_Term_Trend']
+    
+    # Incorporate Long-Term Volatility
+    df['20D_Volatility'] = df['close'].rolling(window=20).std()
+    df['Final_Factor_4'] = df['Final_Factor_3'] / df['20D_Volatility']
+    
+    # Integrate Recent Volume Trend
+    df['5D_Volume_EMA'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['Final_Factor'] = df['Final_Factor_4'] * df['5D_Volume_EMA']
+    
+    return df['Final_Factor']
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily price range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate the change in daily price range compared to the previous day
+    df['range_change'] = df['price_range'].diff()
+    
+    # Simple candlestick pattern recognition
+    def is_doji(row):
+        return abs(row['open'] - row['close']) / (row['high'] - row['low']) < 0.1
+    
+    def is_hammer(row):
+        return (row['close'] > (row['high'] + row['low']) / 2) and (row['low'] < row['open']) and (row['low'] < row['close'])
+    
+    def is_engulfing(row, prev_row):
+        if prev_row['close'] > prev_row['open']:
+            return (row['open'] < prev_row['close']) and (row['close'] > prev_row['open'])
+        else:
+            return (row['open'] > prev_row['close']) and (row['close'] < prev_row['open'])
+    
+    df['doji'] = df.apply(is_doji, axis=1)
+    df['hammer'] = df.apply(is_hammer, axis=1)
+    df['engulfing'] = [is_engulfing(df.iloc[i], df.iloc[i-1]) for i in range(1, len(df))] + [False]
+    
+    # Volume spike relative to the average of recent volumes
+    df['avg_vol_5d'] = df['volume'].rolling(window=5).mean()
+    df['vol_spike'] = df['volume'] / df['avg_vol_5d']
+    
+    # Indicator for unusually large transactions
+    df['large_transaction'] = (df['amount'] > df['amount'].quantile(0.95)).astype(int)
+    
+    # Composite factor combining price action with transactional signals
+    df['composite_factor'] = (df['doji'] | df['hammer'] | df['engulfing']) * df['vol_spike'] * df['large_transaction']
+    
+    # Return the composite factor as a Series
+    return df['composite_factor']
+```

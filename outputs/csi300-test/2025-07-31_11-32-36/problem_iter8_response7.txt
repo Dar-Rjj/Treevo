@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate 5-Day Price Momentum
+    df['5_day_momentum'] = df['daily_price_change'].rolling(window=5).sum()
+    df['5_day_momentum'] = df['5_day_momentum'].replace(0, np.nan)
+    
+    # Calculate Volume Confirmation
+    df['volume_confirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Adjust for Volatility
+    df['true_range'] = df[['high', 'low']].apply(lambda x: x.high - x.low, axis=1)
+    df['5_day_atr'] = df['true_range'].rolling(window=5).mean()
+    df['adjusted_momentum'] = (df['5_day_momentum'] * df['volume_confirmation']) / df['5_day_atr']
+    
+    # Apply Exponential Moving Average (EMA) to Returns
+    df['returns'] = df['close'].pct_change()
+    df['ema_returns'] = df['returns'].ewm(span=20).mean()
+    
+    # Compute EMA of Squared Returns for Volatility
+    df['squared_returns'] = df['returns'] ** 2
+    df['ema_volatility'] = df['squared_returns'].ewm(span=20).mean()
+    
+    # Calculate Divergence between EMA of Returns and Volatility
+    df['divergence'] = (df['ema_volatility'] - df['ema_returns']).abs()
+    
+    # Volume Trend
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['rolling_avg_volume_diff'] = df['volume_diff'].rolling(window=20).mean()
+    
+    # Integrate and Weight by Volume and High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['divergence_weighted'] = df['divergence'] * df['volume'] / df['high_low_range']
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close to Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Compute Intraday Momentum Score
+    df['intraday_momentum_score'] = (df['intraday_high_low_range'] + df['close_open_diff']) * df['volume']
+    
+    # Calculate Volume Weighted Price
+    df['volume_weighted_price'] = (df['close'] * df['volume'] + df['open'] * df['volume']) / (df['volume'] + df['volume'].shift(1))
+    
+    # Calculate Volume Weighted Price Change
+    df['volume_weighted_price_change'] = df['volume_weighted_price'].diff()
+    
+    # Compute Combined Intraday and Daily Momentum
+    df['combined_momentum'] = df['intraday_momentum_score'] + df['volume_weighted_price_change']
+    
+    # Calculate Intraday Volatility Score
+    df['high_close_delta'] = df['high'] - df['close']
+    df['low_close_delta'] = df['low'] - df['close']
+    df['average_delta'] = (df['high_close_delta'] + df['low_close_delta']) / 2
+    df['intraday_volatility_score'] = df['average_delta'] * df['amount']
+    
+    # Integrate Composite Momentum and Volatility
+    df['30_day_ema_combined_momentum'] = df['combined_momentum'].ewm(span=30).mean()
+    df['alpha_factor'] = df['combined_momentum'] - df['30_day_ema_combined_momentum'] - df['intraday_volatility_score']
+    
+    return df['alpha_factor']
+```

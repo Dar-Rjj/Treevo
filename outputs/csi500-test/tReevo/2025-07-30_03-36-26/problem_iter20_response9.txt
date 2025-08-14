@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['total_dollar_value'] = df['volume'] * df['close']
+    df['vwap'] = df['total_dollar_value'] / df['total_volume']
+
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+
+    # Integrate Dynamic Short-Term Momentum (5-10 days)
+    short_term_period = 5
+    df['short_term_momentum'] = df['vwap_deviation'].rolling(window=short_term_period).sum()
+    df['combined_factor'] = df['cumulative_vwap_deviation'] + df['short_term_momentum']
+
+    # Integrate Dynamic Medium-Term Momentum (10-20 days)
+    medium_term_period = 10
+    df['medium_term_momentum'] = df['vwap_deviation'].rolling(window=medium_term_period).sum()
+    df['combined_factor'] += df['medium_term_momentum']
+
+    # Integrate Dynamic Long-Term Momentum (20-50 days)
+    long_term_period = 20
+    df['long_term_momentum'] = df['vwap_deviation'].rolling(window=long_term_period).sum()
+    df['combined_factor'] += df['long_term_momentum']
+
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['abs_vwap_deviation'] = np.abs(df['close'] - df['vwap'])
+    df['intraday_volatility'] = df['high_low_range'] + df['abs_vwap_deviation']
+
+    # Incorporate Market Sentiment (Using RSI as an example)
+    def compute_rsi(prices, window=14):
+        delta = prices.diff(1)
+        up, down = delta.copy(), delta.copy()
+        up[up < 0] = 0
+        down[down > 0] = 0
+        roll_up = up.rolling(window=window).mean()
+        roll_down = down.abs().rolling(window=window).mean()
+        rs = roll_up / roll_down
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+        return rsi
+
+    df['rsi'] = compute_rsi(df['close'])
+    scaling_factor = 0.1  # Example scaling factor
+    df['scaled_rsi'] = df['rsi'] * scaling_factor
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factor'] + df['intraday_volatility'] + df['scaled_rsi']
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Scale by Volume
+    df['volume_scaled'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Calculate Previous Day's Return
+    df['prev_day_return'] = df['close'].pct_change(1)
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change(1)
+    
+    # Calculate Rolling Average Daily Return
+    df['avg_daily_return'] = df['daily_return'].rolling(window=21).mean()
+    
+    # Calculate Rolling Volatility of Daily Returns
+    df['volatility'] = df['daily_return'].rolling(window=20).std()
+    
+    # Adjust Momentum by Volatility
+    df['momentum_adjusted'] = df['avg_daily_return'] / df['volatility']
+    
+    # Inverse of Intraday Range
+    df['inv_intraday_range'] = 1 / df['intraday_range']
+    
+    # Combine Factors
+    df['combined_factor'] = df['prev_day_return'] * df['inv_intraday_range']
+    
+    # Final Volume and Volatility Adjustment
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['final_factor'] = df['combined_factor'] * df['volume_scaled'] * df['volume_change']
+    
+    # Detect Significant Volume Surge
+    df['significant_volume_surge'] = (df['volume_change'] > df['volume_change'].quantile(0.9))
+    
+    # Increase Alpha Factor if Volume Surge is detected
+    df['alpha_factor'] = df['final_factor'] + df['significant_volume_surge'] * df['final_factor'] * 0.5
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    volume_weighted_close_to_open_return = close_to_open_return * df['volume']
+
+    # Intraday Movement and Volume Change Integration
+    intraday_high_low_spread = df['high'] - df['low']
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_change = df['volume'].pct_change().fillna(0)
+    adjusted_intraday_return = intraday_return * (1 + volume_change)
+
+    # Volume-Weighted Breakout Indicator
+    prev_day_close_to_open_diff = df['close'].shift(1) - df['open']
+    volume_weighted_breakout_signal = (df['volume'] * intraday_high_low_spread) / prev_day_close_to_open_diff
+    smoothed_breakout_signal = volume_weighted_breakout_signal.rolling(window=5).mean()
+
+    # Combine Momentum, Breakout, and Volume Adjustment
+    sma = df['close'].rolling(window=20).mean()
+    ema = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_difference = ema - sma
+    volume_adjusted_momentum = momentum_difference * df['volume']
+    volume_adjusted_momentum_smoothed = volume_adjusted_momentum.rolling(window=5).mean()
+    
+    # Aggregate All Components
+    combined_factor = (
+        volume_weighted_close_to_open_return +
+        adjusted_intraday_return +
+        smoothed_breakout_signal +
+        volume_adjusted_momentum_smoothed
+    )
+
+    # Confirm Trend Consistency
+    current_momentum_direction = volume_adjusted_momentum.apply(lambda x: 1 if x > 0 else -1)
+    volume_acceleration = df['volume'].diff().apply(lambda x: 1 if x > 0 else -1)
+    price_momentum = df['close'].diff().apply(lambda x: 1 if x > 0 else -1)
+    
+    trend_confirmation = (
+        (current_momentum_direction > 0) & (volume_acceleration > 0) & (price_momentum > 0) |
+        (current_momentum_direction < 0) & (volume_acceleration < 0) & (price_momentum < 0)
+    )
+    
+    final_factor = combined_factor * trend_confirmation.astype(int)
+
+    return final_factor
+```

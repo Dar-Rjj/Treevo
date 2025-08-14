@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Weighted Ratio of High-Low to Open-Close
+    weighted_ratio = high_low_range / (open_close_movement + 1e-8)  # add small constant to avoid division by zero
+    
+    # Identify Trend Strength and Reversal Signals
+    positive_momentum = high_low_range > open_close_movement
+    potential_reversal = open_close_movement > 0.6 * high_low_range
+    
+    # Calculate Daily Log Return
+    daily_log_return = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x == 0 else np.log(x))
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Combine Price Momentum and Volume Change
+    combined_factor = daily_log_return * volume_change
+    
+    # Compute Average of Combined Factor over 10 Days
+    average_combined_factor = combined_factor.rolling(window=10).mean()
+    
+    # Calculate Intraday Range Percentage
+    intraday_range_percentage = (high_low_range / df['close'])
+    
+    # Calculate Close-to-Open Momentum Shift
+    close_to_open_momentum = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Volume Activity Ratio
+    volume_trend = df['volume'].rolling(window=10).sum()
+    average_volume = df['volume'].rolling(window=10).mean()
+    volume_activity_ratio = volume_trend / (average_volume + 1e-8)  # add small constant to avoid division by zero
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (high_low_range + 1e-8)  # add small constant to avoid division by zero
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_price_trend = ema_20 - df['close']
+    
+    # Combine all factors
+    alpha_factor = (
+        weighted_ratio * 0.3 +
+        (positive_momentum * 0.2 - potential_reversal * 0.1) +
+        average_combined_factor * 0.2 +
+        intraday_range_percentage * 0.1 +
+        close_to_open_momentum * 0.1 +
+        volume_activity_ratio * 0.1 +
+        closing_position * 0.1 +
+        recent_price_trend * 0.1
+    )
+    
+    return alpha_factor
+```

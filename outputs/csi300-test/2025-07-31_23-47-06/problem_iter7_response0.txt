@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    
+    # Volume-Adjusted Momentum
+    volume_adjusted_momentum = (high_low_range + close_open_diff) * df['volume']
+    
+    # Smoothing via 10-day EMA
+    ema_10_volume_mom = volume_adjusted_momentum.ewm(span=10, adjust=False).mean()
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Absolute Return Difference
+    abs_return_diff = daily_return.abs()
+    
+    # Modify Intraday Momentum with Market Volatility
+    std_dev_30 = daily_return.rolling(window=30).std()
+    volatility_adjusted_mom = ema_10_volume_mom - std_dev_30
+    
+    # Enhance Trend Reversal Signal
+    ema_5_close = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20_close = df['close'].ewm(span=20, adjust=False).mean()
+    short_term_mom = df['close'] - ema_5_close
+    long_term_mom = df['close'] - ema_20_close
+    momentum_reversal = short_term_mom - long_term_mom
+    reversal_signal = np.where(momentum_reversal > 0, 1, -1)
+    
+    # Integrate Reversal Signal into Final Factor
+    interim_alpha_factor = volatility_adjusted_mom + reversal_signal
+    
+    # Refine Final Alpha Factor using 5-day EMA
+    final_alpha_factor = interim_alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return final_alpha_factor
+```

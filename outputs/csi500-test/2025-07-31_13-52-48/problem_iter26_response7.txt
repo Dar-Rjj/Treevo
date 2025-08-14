@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close to High and Low Ratios
+    df['CloseHighRatio'] = df['close'] / df['high']
+    df['CloseLowRatio'] = df['close'] / df['low']
+    
+    # Combine Close to High and Low Ratios
+    df['CombinedRatio'] = 0.7 * df['CloseHighRatio'] + 0.3 * df['CloseLowRatio']
+    
+    # Calculate Intraday Price Movements
+    df['HighLowDiff'] = df['high'] - df['low']
+    df['HighLowPct'] = (df['high'] - df['low']) / df['open']
+    
+    # Smooth Intraday Percentage Movement
+    df['SmoothedPctMove'] = df['HighLowPct'].ewm(span=5).mean()
+    
+    # Calculate Volume-Adjusted Momentum
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    df['VolumeAdjMomentum'] = df['PriceChange'] * np.sqrt(df['volume'])
+    
+    # Calculate Volume Change
+    df['VolChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolChangePct'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Weighted Final Alpha Factor
+    df['WeightedAlpha'] = df['SmoothedPctMove'] * df['VolChangePct']
+    
+    # Apply Volume Shock Filter
+    vol_change_85th = df['VolChangePct'].abs().quantile(0.85)
+    df['WeightedAlphaFiltered'] = df['WeightedAlpha'].where(df['VolChangePct'].abs() < vol_change_85th, np.nan)
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute EMA of Intraday Return
+    df['EMAIntradayReturn'] = df['IntradayReturn'].ewm(span=5).mean()
+    
+    # Incorporate Volatility Component
+    df['IntradayRange'] = df['high'] - df['low']
+    df['VolatilityInverse'] = 1 / df['IntradayRange'].rolling(window=5).std()
+    df['VolatilityAdjustedMomentum'] = df['VolumeAdjMomentum'] * df['VolatilityInverse']
+    
+    # Calculate Price Momentum
+    df['LogReturn'] = np.log(df['close'] / df['close'].shift(1))
+    df['PriceMomentum'] = df['LogReturn'].rolling(window=5).sum() + df['CombinedRatio']
+    
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = df['IntradayRange'] * df['volume']
+    
+    # Interact Intraday Volatility with Volume
+    df['InteractionTerm'] = df['IntradayVolatility'] * df['volume']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (df['WeightedAlphaFiltered'] + df['EMAIntradayReturn'] + 
+                              df['VolatilityAdjustedMomentum'] + df['PriceMomentum'] + 
+                              df['InteractionTerm'])
+    
+    return df['FinalAlphaFactor'].dropna()
+```

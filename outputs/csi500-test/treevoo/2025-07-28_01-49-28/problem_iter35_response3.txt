@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    vol_adj_range = daily_range * df['volume']
+    
+    # Incorporate Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = df['close'] / ten_day_high
+    proximity_to_low = df['close'] / ten_day_low
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    inv_proximity = 1 / min_proximity
+    
+    # Adjust for Volatility
+    daily_returns = df['close'].pct_change()
+    std_dev_20 = daily_returns.rolling(window=20).std()
+    price_reversion = inv_proximity / std_dev_20
+    
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_volatility = (open_high_diff + open_low_diff) * df['volume']
+    
+    # Calculate Moving Sum of High-Low Price Spreads
+    moving_sum_spread = (df['high'] - df['low']).rolling(window=20).sum()
+    
+    # Calculate Spread Momentum
+    spread_momentum = moving_sum_spread - moving_sum_spread.shift(1)
+    
+    # Volume-Adjusted Open-to-Close Movement
+    vol_adj_open_close = (df['close'] - df['open']) * df['volume']
+    
+    # Final Alpha Factor
+    alpha_factor = vol_adj_range * price_reversion * weighted_volatility * spread_momentum + vol_adj_open_close
+    
+    # Filter for Strong Moves
+    threshold = alpha_factor.quantile(0.75)
+    strong_moves = (alpha_factor > threshold).astype(int)
+    
+    return strong_moves
+```

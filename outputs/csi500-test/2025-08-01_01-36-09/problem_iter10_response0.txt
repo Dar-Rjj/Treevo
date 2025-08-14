@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic Price Momentum
+    df['momentum'] = df['close'].diff(10)
+    df['smoothed_momentum'] = df['momentum'].ewm(span=10).mean()
+    
+    # Incorporate Volume Dynamics
+    df['volume_variability'] = df['volume'].rolling(window=10).std()
+    
+    # Evaluate Adaptive Short-Term Trend
+    df['5_day_ema'] = df['close'].ewm(span=5).mean()
+    df['trend_strength'] = 0
+    df.loc[df['close'] > df['5_day_ema'], 'trend_strength'] = 1
+    df['volatility'] = (df['high'] - df['low']).rolling(window=10).mean()
+    df['trend_strength_diff'] = (df['close'] - df['5_day_ema']) / df['volatility']
+    df['trend_strength'] += df['trend_strength_diff'].fillna(0)
+    
+    # Combine Momentum and Volume
+    df['combined_mom_vol'] = df['smoothed_momentum'] * df['volume_variability']
+    
+    # Integrate Short-Term Price Oscillations
+    delta = df['close'].diff()
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    roll_up14 = up.rolling(window=14).mean()
+    roll_down14 = down.abs().rolling(window=14).mean()
+    rs = roll_up14 / roll_down14
+    df['rsi_14'] = 100.0 - (100.0 / (1.0 + rs))
+    
+    # Incorporate Adaptive Market Microstructure
+    df['spread'] = (df['high'] - df['low']).rolling(window=10).mean()
+    df['mid_price'] = (df['high'] + df['low']) / 2
+    df['order_book_imbalance'] = df['mid_price'] - df['close']
+    df['microstructure_factor'] = df['spread'] * df['order_book_imbalance']
+    
+    # Determine Final Factor Value
+    df['final_factor'] = (df['combined_mom_vol'] * df['trend_strength'] 
+                          + df['rsi_14'] 
+                          + df['microstructure_factor'] 
+                          + 0.3)  # Bias Term for Smoothing
+    
+    return df['final_factor']
+```

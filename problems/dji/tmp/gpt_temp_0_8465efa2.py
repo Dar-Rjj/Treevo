@@ -1,0 +1,54 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Breakout Intensity
+    df['Breakout_Intensity'] = (df['High'] - df['Low']) / df['Close']
+    df['Breakout_Intensity'] = df['Breakout_Intensity'].apply(lambda x: max(0, x))
+    
+    # Weight by Volume
+    df['Volume_Weighted_Breakout_Intensity'] = df['Breakout_Intensity'] * df['Volume']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['Close'] - df['Open']) / df['Open']
+    
+    # Identify Volume Spikes
+    df['Volume_Change'] = df['Volume'] - df['Volume'].shift(1)
+    spike_threshold = df['Volume_Change'].rolling(window=21).quantile(0.8) * 1.5
+    df['Spike'] = df['Volume_Change'] > spike_threshold
+    
+    # Filter with Spike Condition
+    df['Filtered_Volume_Weighted_Breakout_Intensity'] = df['Volume_Weighted_Breakout_Intensity'] * df['Spike']
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['Volume_Weighted_Intraday_Return'] = df['Intraday_Return'] * df['Volume']
+    
+    # Calculate Daily High-Low Difference
+    df['Daily_High_Low_Diff'] = df['High'] - df['Low']
+    
+    # Calculate Moving Sum of High-Low Differences
+    df['Moving_Sum_High_Low_Diff'] = df['Daily_High_Low_Diff'].rolling(window=10).sum()
+    
+    # Calculate Volume-Adjusted Momentum (VAM)
+    df['SMA_Close'] = df['Close'].rolling(window=20).mean()
+    df['Momentum'] = df['SMA_Close'] - df['SMA_Close'].shift(5)
+    average_volume = df['Volume'].rolling(window=5).mean()
+    df['Volume_Adjusted_Momentum'] = df['Momentum'] * (df['Volume'] / average_volume)
+    
+    # Calculate Price Volatility Indicator (PVI)
+    df['True_Range'] = df[['High', 'Low', 'Close']].join(df['Close'].shift(1)).apply(
+        lambda x: max(x[0] - x[1], abs(x[0] - x[3]), abs(x[1] - x[3])), axis=1
+    )
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    df['PVI'] = df['True_Range'] / df['ATR']
+    df['Smoothed_PVI'] = df['PVI'].ewm(span=7, adjust=False).mean()
+    
+    # Combine Factors
+    df['Crossover_Momentum_and_Breakout_Intensity'] = (
+        (df['Filtered_Volume_Weighted_Breakout_Intensity'] * df['Volume_Adjusted_Momentum']) 
+        / df['Smoothed_PVI']
+    ) * df['Volume_Weighted_Intraday_Return'] * df['Moving_Sum_High_Low_Diff']
+    
+    return df['Crossover_Momentum_and_Breakout_Intensity']

@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].diff()
+    
+    # Calculate Cumulative Return Over 5 Days
+    df['Cumulative_Return'] = df['Daily_Return'].rolling(window=5).sum()
+    
+    # Adjust by Volume
+    df['Average_Volume_5D'] = df['volume'].rolling(window=5).mean()
+    df['Adjusted_Cumulative_Return'] = df['Cumulative_Return'] * df['Average_Volume_5D']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    df['Avg_Intraday_Volatility_5D'] = df['Intraday_Volatility'].rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Intraday_Return'] = df['Intraday_Return'] * df['volume']
+    
+    # Combine Intraday Momentum and Volatility
+    df['Combined_Intraday_Factor'] = (0.5 * df['Volume_Weighted_Intraday_Return']) + (0.5 * df['Intraday_Volatility'])
+    
+    # Calculate Price Momentum
+    df['Short_Term_MA'] = df['close'].rolling(window=5).mean()
+    df['Long_Term_MA'] = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    df['Trend_Direction'] = np.sign(df['Short_Term_MA'] - df['Long_Term_MA'])
+    df['Trend_Confirmation'] = np.where((df['Trend_Direction'] == df['Trend_Direction'].shift()), 1, 0)
+    
+    # Enhance with Volume Confirmation
+    df['Volume_Change'] = df['volume'].diff()
+    df['Volume_Adjusted_Trend'] = df['Trend_Direction'] * df['Volume_Change']
+    df['Volume_Adjusted_Trend'] = np.where(np.abs(df['Volume_Change']) < 1e-6, 0, df['Volume_Adjusted_Trend'])
+    
+    # Calculate Relative Strength
+    df['Relative_Strength'] = (df['Short_Term_MA'] - df['Long_Term_MA'])
+    df['Volume_Weighted_Price_Movement'] = (df['high'] + df['low'] + 2 * df['close']) * df['volume'] / df['volume']
+    df['Relative_Strength'] /= df['Volume_Weighted_Price_Movement']
+    
+    # Calculate High-to-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Weighted Momentum
+    df['Weighted_Momentum'] = (df['high'] + df['low'] + 2 * df['close']) / 4
+    df['Weighted_Momentum'] *= np.sqrt(df['volume'])
+    df['Weighted_Momentum'] = df['Daily_Return'] / df['Weighted_Momentum']
+    
+    # Adjust for Volatility
+    df['Adjusted_Momentum'] = df['Weighted_Momentum'] / df['High_Low_Range']
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['Integrated_Relative_Strength'] = df['Relative_Strength'] + df['Adjusted_Cumulative_Return']
+    
+    # Combine Factors
+    df['Combined_Factor'] = df['Intraday_Return'] + df['Combined_Intraday_Factor']
+    df['Combined_Factor'] *= df['High_Low_Range']
+    
+    # Confirm with Volume
+    df['Combined_Factor'] *= df['Volume_Adjusted_Trend']
+    
+    # Calculate Intraday Reversal Indicator
+    df['Intraday_Reversal'] = (df['high'].shift() - df['close'].shift()) + (df['close'].shift() - df['low'])
+    
+    # Integrate Intraday Reversal Indicator
+    df['Intraday_Reversal_Adjusted'] = df['Intraday_Reversal'] * df['Avg_Intraday_Volatility_5D']
+    
+    # Adjust by Intraday Volatility and Volume
+    df['Sum_Log_Returns'] = np.log(df['close']).diff().rolling(window=5).sum()
+    df['Volume_Adjusted_Sum_Log_Returns'] = df['Sum_Log_Returns'] * df['volume']
+    df['Final_Adjusted_Momentum'] = df['Volume_Adjusted_Sum_Log_Returns'] / df['Avg_In

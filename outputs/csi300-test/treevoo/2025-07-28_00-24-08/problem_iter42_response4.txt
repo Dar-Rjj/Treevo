@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Moving Averages
+    df['short_ma'] = df['close'].rolling(window=5).mean()
+    df['long_ma'] = df['close'].rolling(window=20).mean()
+    df['ma_diff'] = df['short_ma'] - df['long_ma']
+    
+    # Analyze Price Gaps
+    df['open_gap'] = df['open'] - df['close'].shift(1)
+    df['close_gap'] = df['close'] - df['open']
+    df['abs_open_gap'] = df['open_gap'].abs()
+    df['abs_close_gap'] = df['close_gap'].abs()
+    
+    # Volume Analysis
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_sign'] = np.sign(df['volume_change'])
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Price Range Factors
+    df['daily_range'] = df['high'] - df['low']
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    
+    # Momentum Indicators
+    df['roc_5'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['roc_10'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['roc_20'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # True Range
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Money Flow Factors
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    
+    # Positive and Negative Money Flows
+    df['positive_money_flow'] = df['money_flow'].where((df['typical_price'] > df['typical_price'].shift(1)), 0)
+    df['negative_money_flow'] = df['money_flow'].where((df['typical_price'] < df['typical_price'].shift(1)), 0)
+    df['money_flow_diff'] = df['positive_money_flow'] - df['negative_money_flow']
+    
+    # Volatility Indicators
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Bollinger Bands
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['std_20'] = df['close'].rolling(window=20).std()
+    df['upper_bb'] = df['sma_20'] + 2 * df['std_20']
+    df['lower_bb'] = df['sma_20'] - 2 * df['std_20']
+    df['distance_upper_bb'] = df['close'] - df['upper_bb']
+    df['distance_lower_bb'] = df['close'] - df['lower_bb']
+    
+    # Create a composite factor
+    df['alpha_factor'] = (
+        df['ma_diff'] +
+        df['abs_open_gap'] +
+        df['abs_close_gap'] +
+        df['volume_sign'] +
+        df['volume_ratio'] +
+        df['daily_range'] +
+        df['upper_shadow'] +
+        df['lower_shadow'] +
+        df['roc_5'] +
+        df['roc_10'] +
+        df['roc_20'] +
+        df['true_range'] +
+        df['money_flow_diff'] +
+        df['atr_14'] +
+        df['distance_upper_bb'] +
+        df['distance_lower_bb']
+    )
+    
+    return df['alpha_factor']
+```

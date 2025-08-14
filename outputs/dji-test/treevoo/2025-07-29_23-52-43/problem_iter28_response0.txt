@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range Percentage
+    df['daily_high_low_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Confirm Momentum with Volume-Weighted Difference
+    max_volume = df['volume'].rolling(window=20).max()
+    df['volume_weighted_momentum'] = (df['close'] - df['open']) * (df['volume'] / max_volume)
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Combine Intraday High-Low Range and Volume-Weighted Intraday Momentum
+    df['combined_intraday_indicator'] = df['daily_high_low_range'] * df['volume_weighted_momentum']
+    
+    # Calculate VWAP Difference
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['prev_vwap'] = df['vwap'].shift(1)
+    df['vwap_diff'] = df['vwap'] - df['prev_vwap']
+    
+    # Calculate Open-Close Spread Difference
+    df['open_close_spread'] = df['close'] - df['open']
+    df['prev_open_close_spread'] = df['open_close_spread'].shift(1)
+    df['open_close_spread_diff'] = df['open_close_spread'] - df['prev_open_close_spread']
+    
+    # Final Combined Indicator
+    df['final_combined_indicator'] = df['combined_intraday_indicator'] + df['vwap_diff'] + df['open_close_spread_diff']
+    
+    # Adjust for Price Trend
+    df['short_term_trend'] = df['close'].rolling(window=5).mean()
+    df['long_term_trend'] = df['close'].rolling(window=20).mean()
+    df['trend_adjustment'] = df['short_term_trend'] - df['long_term_trend']
+    df['trend_adjusted_indicator'] = df['final_combined_indicator'] * df['trend_adjustment']
+    
+    # Adjust for Volatility
+    df['rolling_volatility'] = df['intraday_high_low_spread'].rolling(window=20).std()
+    df['volatility_adjusted_indicator'] = df['trend_adjusted_indicator'] / df['rolling_volatility']
+    
+    # Introduce New Factor: Intraday Price Efficiency
+    df['intraday_efficiency_ratio'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['efficiency_adjusted_indicator'] = df['volatility_adjusted_indicator'] * df['intraday_efficiency_ratio']
+    
+    # Introduce New Factor: Money Flow Index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    positive_flow = (df['typical_price'] > df['typical_price'].shift(1)) * df['typical_price'] * df['volume']
+    negative_flow = (df['typical_price'] < df['typical_price'].shift(1)) * df['typical_price'] * df['volume']
+    positive_money_flow = positive_flow.rolling(window=14).sum()
+    negative_money_flow = negative_flow.rolling(window=14).sum()
+    money_flow_ratio = positive_money_flow / negative_money_flow
+    df['mfi'] = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Introduce New Factor: Relative Strength Index (RSI)
+    gain = (df['close'] - df['close'].shift(1)).apply(lambda x: x if x > 0 else 0)
+    loss = (df['close'].shift(1) - df['close']).apply(lambda x: x if x > 0 else 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Combine All Factors
+    df['alpha_factor'] = df['efficiency_adjusted_indicator'] + df['mfi'] + df['rsi']
+    
+    return df['alpha_factor']
+```

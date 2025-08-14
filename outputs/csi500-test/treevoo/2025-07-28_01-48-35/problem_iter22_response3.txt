@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Intraday Return
+    df['Volume_Weighted_Intraday_Return'] = (df['High'] - df['Low']) / df['Low'] * df['Volume']
+
+    # Short-Term Price Change
+    df['Short_Term_Price_Change'] = df['Close'] - df['Close'].shift(5)
+
+    # High-Low Spread
+    df['High_Low_Spread'] = df['High'] - df['Low']
+
+    # Daily Return
+    df['Daily_Return'] = (df['Close'] - df['Open']) / df['Open']
+
+    # Momentum Indicators
+    df['Momentum_ST'] = (df['Close'] - df['Close'].shift(7)) / df['Close'].shift(7)
+    df['Momentum_MT'] = (df['Close'] - df['Close'].shift(21)) / df['Close'].shift(21)
+    df['Momentum_LT'] = (df['Close'] - df['Close'].shift(63)) / df['Close'].shift(63)
+
+    # True Range
+    df['True_Range'] = df.apply(lambda row: max(row['High'] - row['Low'], 
+                                                abs(row['High'] - df['Close'].shift(1).loc[row.name]), 
+                                                abs(row['Low'] - df['Close'].shift(1).loc[row.name])), axis=1)
+
+    # Relative Strength
+    df['Relative_Strength'] = df['Close'] / df['Close'].shift(21)
+
+    # Money Flow
+    df['Money_Flow_Multiplier'] = (df['Close'] - (df['High'] + df['Low']) / 2) / (df['High'] - df['Low'])
+    df['Money_Flow_Volume'] = df['Money_Flow_Multiplier'] * df['Volume']
+    df['Money_Flow_Index'] = df['Money_Flow_Volume'].rolling(window=14).sum() / df['Volume'].rolling(window=14).sum()
+
+    # Trend Direction
+    df['+DM'] = df.apply(lambda row: row['High'] - df['High'].shift(1).loc[row.name] if (row['High'] > df['High'].shift(1).loc[row.name]) and (row['High'] - df['High'].shift(1).loc[row.name] > df['Low'].shift(1).loc[row.name] - row['Low']) else 0, axis=1)
+    df['-DM'] = df.apply(lambda row: df['Low'].shift(1).loc[row.name] - row['Low'] if (df['Low'].shift(1).loc[row.name] > row['Low']) and (df['Low'].shift(1).loc[row.name] - row['Low'] > row['High'] - df['High'].shift(1).loc[row.name]) else 0, axis=1)
+    df['SMA_DMX'] = df['+DM'].rolling(window=14).mean()
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    df['DI'] = df['SMA_DMX'] / df['ATR']
+
+    # Volume Ratio
+    df['Volume_Ratio'] = df['Volume'] / df['Volume'].rolling(window=21).mean()
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Short_Term_Price_Change'] + df['High_Low_Spread'] + df['Daily_Return'] + 
+                          df['Momentum_ST'] + df['Momentum_MT'] + df['Momentum_LT'] + 
+                          df['Relative_Strength'] + df['Money_Flow_Index'] + df['DI']) / 9 * df['Volume_Ratio']
+
+    return df['Alpha_Factor']
+```

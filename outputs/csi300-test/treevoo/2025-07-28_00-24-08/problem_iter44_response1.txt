@@ -1,0 +1,86 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor using price and volume data.
+    
+    Parameters:
+    - df: pandas DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume']
+    
+    Returns:
+    - pandas Series representing the factor values indexed by (date)
+    """
+    
+    # Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # Short-term trend strength
+    df['SMA_Diff_50'] = df['close'] - df['SMA_50']
+    
+    # Weighted Moving Average
+    weights = np.arange(1, 51)  # Weights for the last 50 days
+    df['WMA_50'] = df['close'].rolling(window=50).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    
+    # Daily percentage change in closing prices
+    df['Pct_Change_Close'] = df['close'].pct_change()
+    
+    # Combined Momentum
+    df['Combined_Momentum'] = df['Pct_Change_Close'] + (df['volume'].pct_change())
+    
+    # Average True Range (ATR)
+    df['TR'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'], x['close'].shift(1)) - min(x['low'], x['close'].shift(1)), axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Standard Deviation of daily returns
+    df['Std_Dev_Returns'] = df['Pct_Change_Close'].rolling(window=20).std()
+    
+    # High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Volatility-Adjusted Returns
+    df['Vol_Adj_Returns'] = df['Pct_Change_Close'] / df['High_Low_Range']
+    
+    # Chaikin Money Flow (CMF)
+    df['MF_Multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['MF_Volume'] = df['MF_Multiplier'] * df['volume']
+    df['CMF_20'] = df['MF_Volume'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Price-Volume Correlation
+    df['Price_Vol_Corr'] = df['close'].pct_change().rolling(window=20).corr(df['volume'].pct_change())
+    
+    # Transaction Size Adjusted Volatility
+    df['Trans_Size_Adjusted_Vol'] = df['High_Low_Range'] * (df['amount'] / df['volume'])
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Trend Following Factor
+    df['Trend_Following'] = df['SMA_50'] - df['close']
+    
+    # Breakout Signal
+    df['Breakout_Signal'] = (df['close'] > df['high'].rolling(window=20).max()).astype(int)
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['SMA_Diff_50'] +
+        df['WMA_50'] +
+        df['Combined_Momentum'] +
+        df['ATR_14'] +
+        df['Std_Dev_Returns'] +
+        df['Vol_Adj_Returns'] +
+        df['CMF_20'] +
+        df['OBV'] +
+        df['Price_Vol_Corr

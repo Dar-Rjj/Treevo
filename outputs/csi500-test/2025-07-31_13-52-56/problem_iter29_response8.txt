@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, n_days=50):
+    # Calculate Enhanced High-Low Range and Its Volume-Adjusted Version
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Volume_Adjusted_High_Low_Range'] = df['High_Low_Range'] * np.sqrt(df['volume'])
+
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    df['Cumulative_Volume_Adjusted_High_Low_Range'] = df['Volume_Adjusted_High_Low_Range'].rolling(window=n).sum()
+    df['High_Low_Price_Ratio'] = df['high'] / df['low']
+
+    # Analyze Volume Trends and Momentum
+    df['Volume_MA'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = np.where(df['volume'] > df['Volume_MA'], 1, 0)
+    df['Aggregated_Volume_t_minus_1'] = df['volume'].shift(1).fillna(0)
+    df['Aggregated_Volume_t_minus_n'] = df['volume'].shift(n).fillna(0)
+    df['Volume_Momentum'] = df['Aggregated_Volume_t_minus_1'] - df['Aggregated_Volume_t_minus_n']
+
+    # Integrate Open-Close Momentum with Volatility Indicators
+    df['Open_Close_Price_Change'] = df['close'] - df['open']
+    df['EMA_Close'] = df['close'].ewm(span=10, adjust=False).mean()
+
+    # Combine Volume Trend with High-Low Price Ratio
+    df['Combined_Volume_High_Low_Ratio'] = df['High_Low_Price_Ratio'] * df['Volume_Trend']
+
+    # Incorporate Volume Momentum and Adjusted High-Low Range
+    df['Volume_Momentum_Adjusted_High_Low_Range'] = (df['High_Low_Range'] * np.sqrt(df['volume']) * df['Volume_Momentum'])
+
+    # Integrate Open-Close Momentum with Volume-Adjusted High-Low Range
+    df['Integrated_Open_Close_High_Low_Range'] = (df['Open_Close_Price_Change'] * df['High_Low_Range'] * np.sqrt(df['volume']))
+
+    # Subtract Momentum Signal from Integrated Adjusted High-Low Range
+    df['Momentum_Signal'] = df['Open_Close_Price_Change'] - df['High_Low_Price_Ratio']
+    df['Integrated_Adjusted_High_Low_Range'] = df['Integrated_Open_Close_High_Low_Range'] - df['Momentum_Signal']
+
+    # Calculate Relative Strength
+    df['SMA_Close_50'] = df['close'].rolling(window=n_days).mean()
+    df['Relative_Strength'] = df['close'] / df['SMA_Close_50']
+
+    # Incorporate Relative Strength into Alpha Factor
+    df['Alpha_Factor'] = (df['Combined_Volume_High_Low_Ratio'] + 
+                          df['Volume_Momentum_Adjusted_High_Low_Range'] + 
+                          df['Integrated_Adjusted_High_Low_Range']) * df['Relative_Strength']
+
+    return df['Alpha_Factor']
+```

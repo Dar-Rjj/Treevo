@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'].pct_change()
+    
+    # Moving Average Crossover (50-day MA)
+    df['MA_50'] = df['close'].rolling(window=50).mean()
+    df['MA_Crossover'] = (df['close'] > df['MA_50']).astype(int)
+    
+    # Volume Spike Indicator (Ratio of today's volume to average volume over the past 10 days)
+    df['Volume_Spike'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Volume-Price Confirmation (Significant increase in volume with a price increase)
+    df['Volume_Price_Confirmation'] = (df['close'] > df['close'].shift(1)) & (df['volume'] > df['volume'].shift(1))
+    df['Volume_Price_Confirmation'] = df['Volume_Price_Confirmation'].astype(int)
+    
+    # Gap Analysis (Measure the gap between today's open and yesterday's close)
+    df['Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Gap Fill Indicator (Check if the gap was filled during the day by comparing the open and close prices)
+    df['Gap_Fill'] = (df['open'] > df['close'].shift(1)) & (df['close'] <= df['close'].shift(1)) | (df['open'] < df['close'].shift(1)) & (df['close'] >= df['close'].shift(1))
+    df['Gap_Fill'] = df['Gap_Fill'].astype(int)
+    
+    # 5-Period Moving Average of Price Momentum
+    df['MA_5_Price_Momentum'] = df['Price_Momentum'].rolling(window=5).mean()
+    
+    # Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['high'] + df['low']) / 2 * df['volume']
+    df['VWAP'] = df['VWAP'].cumsum() / df['volume'].cumsum()
+    
+    # Daily Momentum and VWAP-Close Difference
+    df['Momentum_VWAP_Diff'] = df['MA_5_Price_Momentum'] * (df['VWAP'] - df['close'])
+    
+    # Confirm with Volume
+    df['Volume_Change'] = df['volume'].pct_change().fillna(0)
+    df['Confirmed_Factor'] = df['Momentum_VWAP_Diff'] * np.log(df['Volume_Change'] + 1)
+    
+    # Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+    
+    # M-day Average of N-day Close Price Percent Change (N=5, M=21)
+    df['5D_Return'] = df['close'].pct_change(5)
+    df['21D_Avg_5D_Return'] = df['5D_Return'].rolling(window=21).mean()
+    
+    # Adjust with Smoothed Volume (EMA on Volume, span=21)
+    df['Smoothed_Volume'] = df['volume'].ewm(span=21, adjust=False).mean()
+    
+    # Intraday Reversal
+    df['Intraday_Reversal'] = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Intraday Range Volatility (P-day Standard Deviation of (High - Low), P=21)
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Range_Volatility'] = df['Intraday_Range'].rolling(window=21).std()
+    
+    # Synthesize All Factors
+    df['Combined_Factor'] = df['Confirmed_Factor'] * df['Intraday_Reversal'] * df['Intraday_Range_Volatility']
+    
+    # Integrate with Stochastic Oscillator
+    df['Low_14'] = df['low'].rolling(window=14).min()
+    df['High_14'] = df['high'].rolling(window=14).max()
+    df['%K'] = (df['close'] - df['Low_14']) / (df['High_14'] - df['Low_14']) * 100
+    df['%D'] = df['%K'].rolling(window=3).mean()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Combined_Factor'] *

@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['price_spike'] = (np.abs(df['close'] - df['close'].shift(1)) > 0.01 * df['close'].shift(1)).astype(int)
+    df['combined_spike'] = df['volume_spike'] + df['price_spike']
+    
+    # Introduce Volatility Adjustment
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['vol_adj'] = 1 / df['log_return'].rolling(window=20).std()
+    df['adj_intraday_momentum'] = df['intraday_range'] * df['vol_adj']
+    
+    # Scale Intraday Momentum
+    df['scaled_momentum'] = df['adj_intraday_momentum'] / (df['combined_spike'] + 1)  # +1 to avoid division by zero
+    df['scaled_momentum'] = np.clip(df['scaled_momentum'], -5, 5)  # Cap at a threshold
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Combined Intraday Features
+    df['combined_intraday'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Enhanced Intraday Factor
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=10).mean()
+    df['enhanced_intraday_factor'] = df['avg_intraday_range'] * (df['close_to_open_return'] + df['price_change'])
+    df['enhanced_intraday_factor'] += df['combined_intraday']
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = np.abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=5).mean()
+    df['enhanced_intraday_factor'] *= df['avg_abs_price_change']
+    
+    # Weight by Volume
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['adjusted_volume_factor'] = (df['volume'] > df['avg_volume']).astype(float) * 0.5 + 0.5
+    df['enhanced_intraday_factor'] *= df['adjusted_volume_factor']
+    
+    # Incorporate Trading Direction
+    df['net_amount_change'] = df['amount'] - df['amount'].shift(1)
+    df['direction'] = np.sign(df['net_amount_change'])
+    df['final_factor'] = df['enhanced_intraday_factor'] * df['direction']
+    
+    return df['final_factor']
+```

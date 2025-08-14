@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate Previous Day Overnight Return
+    overnight_return = (df['close'] / df['close'].shift(1) - 1).fillna(0)
+
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+
+    # Smoothed Moving Average
+    sma_5_days = volume_adjusted_returns.rolling(window=5).mean()
+    ewma = sma_5_days.ewm(span=5, adjust=False).mean()
+
+    # Compute Price Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(1)).fillna(0)
+    price_momentum = log_returns.rolling(window=20).sum()
+
+    # Generate Final Momentum Factor
+    volume_confirmation = (df['volume'] > df['volume'].shift(1)).astype(int)
+    final_momentum_factor = price_momentum * volume_confirmation
+
+    # Incorporate High-Low Volatility into Final Factor
+    intraday_volatility = high_low_range.rolling(window=5).std().fillna(0)
+    high_low_volatility = high_low_range * intraday_volatility
+
+    # Integrate All Components
+    final_alpha_factor = ewma + final_momentum_factor + high_low_volatility
+
+    return final_alpha_factor
+```

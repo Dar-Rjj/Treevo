@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['returns'] = df['close'].pct_change()
+    
+    # Compute short-term and long-term momentum
+    df['short_term_momentum'] = df['returns'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    df['long_term_momentum'] = df['returns'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Calculate true range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: x['high'] - x['low'], axis=1)
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['true_range', 'high', 'low', 'prev_close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1
+    )
+    
+    # Compute 14-day simple moving average of the true range
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Weighted sum of short-term and long-term momentum
+    df['weighted_momentum'] = (df['short_term_momentum'] * 0.6) + (df['long_term_momentum'] * 0.4)
+    
+    # Multiply by inverse of ATR
+    df['alpha_factor'] = df['weighted_momentum'] / df['atr_14']
+    
+    # Add trend-following component
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['trend_multiplier'] = df.apply(lambda x: 1.5 if x['close'] > x['ema_50'] else 1, axis=1)
+    
+    # Final alpha factor
+    df['final_alpha_factor'] = df['alpha_factor'] * df['trend_multiplier']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

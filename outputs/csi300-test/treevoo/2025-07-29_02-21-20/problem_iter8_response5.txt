@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=10, o=20):
+    # Calculate Intraday Logarithmic Changes
+    log_open_close = (df['close'] - df['open']).apply(lambda x: 0 if x == 0 else x).apply(np.log)
+    log_high_low = (df['high'] - df['low']).apply(lambda x: 0 if x == 0 else x).apply(np.log)
+    
+    # Aggregate Intraday Logarithmic Changes
+    aggregated_log_changes = log_open_close + log_high_low
+    
+    # Volume Synchrony and Impact
+    moving_avg_volume = df['volume'].rolling(window=n).mean()
+    volume_deviation = df['volume'] - moving_avg_volume
+    volume_impact = aggregated_log_changes * volume_deviation
+    
+    # Intraday Momentum Indicators
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    intraday_momentum = high_price_indicator * low_price_indicator
+    
+    # Calculate Momentum
+    momentum = (df['close'].shift(-n) - df['close']) / df['close'].shift(-n)
+    
+    # Adjust for Volume Changes
+    volume_ratio = df['volume'].shift(-n) / df['volume']
+    adjusted_momentum = momentum * volume_ratio + momentum
+    
+    # Volume Adjusted Intraday Factors
+    volume_adjusted_log_change = aggregated_log_changes * df['volume']
+    volume_adjusted_high_low_range = (df['high'] - df['low']) * df['volume']
+    
+    # Smoothed Intraday Momentum
+    smoothed_intraday_momentum = volume_adjusted_log_change.rolling(window=m).mean() * df['volume'].rolling(window=5).mean()
+    
+    # High-Low Breakout Potential
+    breakout_potential = volume_adjusted_high_low_range.rolling(window=o).mean() * df['volume'].rolling(window=10).mean()
+    
+    # Momentum Reversal Indicator
+    momentum_reversal = (aggregated_log_changes - smoothed_intraday_momentum) / breakout_potential
+    
+    # Trading Activity Intensity
+    trading_activity_intensity = df['volume'].rolling(window=5).mean() / df['volume']
+    
+    # Consolidate Factors
+    consolidated_factor = (
+        volume_impact + 
+        volume_adjusted_log_change + 
+        momentum_reversal + 
+        adjusted_momentum + 
+        breakout_potential + 
+        trading_activity_intensity
+    ) / df['open']
+    
+    return consolidated_factor
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) / df['close'] - 1
+    
+    # Weight by Volume
+    df['volume_weighted_return'] = df['volume'] * df['close_to_open_return']
+    
+    # Dynamic Lookback Period
+    short_term_days = 5
+    long_term_days = 20
+    df['short_sma'] = df['volume_weighted_return'].rolling(window=short_term_days).mean()
+    df['long_sma'] = df['volume_weighted_return'].rolling(window=long_term_days).mean()
+    df['short_std'] = df['volume_weighted_return'].rolling(window=short_term_days).std()
+    df['long_std'] = df['volume_weighted_return'].rolling(window=long_term_days).std()
+    
+    # Stabilize with Volatility
+    df['short_vol_adjusted'] = df['short_sma'] / df['short_std']
+    df['long_vol_adjusted'] = df['long_sma'] / df['long_std']
+    
+    # Integrate Momentum
+    df['short_momentum'] = df['close'].pct_change(short_term_days)
+    df['long_momentum'] = df['close'].pct_change(long_term_days)
+    
+    # Adjust for Market Trends
+    trend_days = 50
+    df['trend_indicator'] = df['close'].rolling(window=trend_days).apply(lambda x: (x[-1] - x[0]) / x[0], raw=True)
+    
+    # Adaptive Volatility Scaling
+    df['short_factor'] = df['short_vol_adjusted'] * df['short_momentum']
+    df['long_factor'] = df['long_vol_adjusted'] * df['long_momentum']
+    
+    # Combine factors and adjust by market trend
+    df['factor'] = (df['short_factor'] + df['long_factor']) * df['trend_indicator']
+    
+    return df['factor']
+```

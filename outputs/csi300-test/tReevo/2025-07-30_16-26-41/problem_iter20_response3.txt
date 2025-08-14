@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # 10-Day Metrics
+    df['10_day_weighted_price_diff'] = (df['high'] - df['low']) * df['volume']
+    df['10_day_weighted_price_diff_sum'] = df['10_day_weighted_price_diff'].rolling(window=10).sum()
+    df['10_day_total_volume'] = df['volume'].rolling(window=10).sum()
+    df['10_day_cumulative_weighted_avg'] = df['10_day_weighted_price_diff_sum'] / df['10_day_total_volume']
+    
+    df['10_day_open_to_close_momentum'] = df['close'] - df['open'].shift(10)
+    
+    df['10_day_daily_return'] = df['close'] - df['close'].shift(1)
+    df['10_day_average_daily_return'] = df['10_day_daily_return'].rolling(window=10).mean()
+    
+    df['10_day_daily_return_pct'] = df['10_day_daily_return'] / df['close'].shift(1)
+    df['10_day_volatility'] = df['10_day_daily_return_pct'].rolling(window=10).std()
+    
+    df['10_day_alpha_factor'] = (df['10_day_cumulative_weighted_avg'] - df['10_day_average_daily_return']) / df['10_day_volatility']
+    
+    # 5-Day Metrics
+    df['5_day_weighted_price_diff'] = (df['high'] - df['low']) * df['volume']
+    df['5_day_weighted_price_diff_sum'] = df['5_day_weighted_price_diff'].rolling(window=5).sum()
+    df['5_day_total_volume'] = df['volume'].rolling(window=5).sum()
+    df['5_day_cumulative_weighted_avg'] = df['5_day_weighted_price_diff_sum'] / df['5_day_total_volume']
+    
+    df['5_day_open_to_close_momentum'] = df['close'] - df['open'].shift(5)
+    
+    df['5_day_daily_return'] = df['close'] - df['close'].shift(1)
+    df['5_day_average_daily_return'] = df['5_day_daily_return'].rolling(window=5).mean()
+    
+    df['5_day_daily_return_pct'] = df['5_day_daily_return'] / df['close'].shift(1)
+    df['5_day_volatility'] = df['5_day_daily_return_pct'].rolling(window=5).std()
+    
+    df['5_day_alpha_factor'] = (df['5_day_cumulative_weighted_avg'] - df['5_day_average_daily_return']) / df['5_day_volatility']
+    
+    # Combine 10-Day and 5-Day Metrics
+    df['combined_alpha_factor'] = 0.6 * df['10_day_alpha_factor'] + 0.4 * df['5_day_alpha_factor']
+    
+    # Mean Reversion Indicator
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['mean_reversion_signal'] = (df['ema_20'] - df['sma_20']) / df['sma_20']
+    
+    # Volume Shock Indicator
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['5_day_volume_shock'] = (df['volume'] - df['5_day_avg_volume']) / df['5_day_avg_volume']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['combined_alpha_factor'] * df['5_day_volume_shock']) + df['mean_reversion_signal']
+    
+    return df['final_alpha_factor']
+```

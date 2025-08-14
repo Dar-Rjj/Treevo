@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    change_high_low_range = high_low_range - high_low_range.shift(1)
+    
+    # Calculate Daily Return
+    daily_return = df['close'] - df['close'].shift(1)
+    
+    # Compute Moving Average of Positive Returns
+    positive_returns = daily_return.where(daily_return > 0, 0)
+    ma_positive_returns = positive_returns.rolling(window=21).mean()
+    
+    # Volume Adjusted Momentum
+    cumulative_volume = df['volume'].rolling(window=21).sum()
+    volume_adjusted_momentum = (ma_positive_returns * cumulative_volume) / 21
+    
+    # Calculate 5-Period Price Momentum
+    price_momentum_5 = (df['close'] - df['close'].shift(5))
+    
+    # Combine High-Low Range and Volume
+    high_low_volume = (change_high_low_range * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    average_volume = df['volume'].rolling(window=21).mean()
+    volume_ratio = df['volume'] / average_volume
+    
+    # Adjust by Average Amount
+    average_amount = df['amount'].rolling(window=21).mean()
+    amount_ratio = df['amount'] / average_amount
+    
+    # Price Momentum Component
+    daily_price_change_pct = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    ema_price_momentum = daily_price_change_pct.ewm(span=21, adjust=False).mean()
+    
+    # Volume Surge Component
+    daily_volume_change_pct = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    ema_volume_surge = daily_volume_change_pct.ewm(span=21, adjust=False).mean()
+    
+    # Combine Components
+    combined_momentum = (ema_price_momentum * ema_volume_surge) + high_low_volume
+    combined_momentum *= (price_momentum_5 * volume_ratio * amount_ratio)
+    combined_momentum *= (daily_price_change_pct * volume_ratio * amount_ratio)
+    
+    # Calculate 21-Day Price Volatility
+    price_volatility = df['close'].rolling(window=21).std()
+    
+    # Adjust by Price Volatility
+    volatility_adjustment = 1.5 if price_volatility > 0.05 else 1.0  # Example threshold value 0.05
+    
+    # Final Combined Alpha Factor
+    final_alpha_factor = (volume_adjusted_momentum + combined_momentum) * volatility_adjustment
+    
+    return final_alpha_factor
+```

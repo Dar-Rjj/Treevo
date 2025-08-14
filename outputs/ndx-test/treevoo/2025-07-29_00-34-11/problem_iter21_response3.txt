@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement Intensity
+    high_low_spread = df['high'] - df['low']
+    open_close_change = df['close'] - df['open']
+    intraday_intensity = high_low_spread + open_close_change
+    
+    # Measure Momentum-Volatility Correlation
+    intraday_volatility = (df['high'] - df['low']) / df['volume']
+    momentum_volatility_correlation = (intraday_intensity / intraday_volatility).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Short-Term and Long-Term Logarithmic Returns
+    short_term_return = np.log(df['close'] / df['close'].shift(5))
+    long_term_return = np.log(df['close'] / df['close'].shift(20))
+    
+    # Calculate Volume-Weighted Short-Term and Long-Term Logarithmic Returns
+    volume_weighted_short_term_return = df['volume'] * short_term_return
+    volume_weighted_long_term_return = df['volume'] * long_term_return
+    
+    # Adjust for Volatility
+    short_term_volatility = (df['high'] - df['low']).rolling(window=5).std()
+    adjusted_ratio = (volume_weighted_short_term_return / short_term_volatility) - volume_weighted_long_term_return
+    
+    # Measure Price-Volatility Alignment
+    intraday_volatility_weighted = (df['high'] - df['low']) * df['volume']
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    intraday_movement_ratio = (high_low_ratio + open_close_ratio) / 2
+    price_volatility_alignment = (intraday_movement_ratio / intraday_volatility).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = df['close'] / df['close'].shift(1) - 1
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    combined_intraday_close_return = intraday_volatility * close_to_close_return
+    
+    # Calculate Daily Volume Change
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Aggregate Volume Changes
+    aggregated_volume_changes = daily_volume_change.rolling(window=5).sum()
+    
+    # Incorporate Enhanced Momentum into Adjusted Ratios
+    enhanced_momentum = close_to_close_return * (volume_weighted_short_term_return - volume_weighted_long_term_return)
+    
+    # Final Volume Adjustment
+    final_volume_adjustment = enhanced_momentum / df['volume']
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = df['close'] / df['open'] - 1
+    
+    # Adjust for Intraday Momentum and Sentiment
+    final_factor = (adjusted_ratio + combined_intraday_close_return) * aggregated_volume_changes + intraday_momentum * price_volatility_alignment
+    
+    return final_factor
+```

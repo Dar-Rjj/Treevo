@@ -1,0 +1,40 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between the close and open price
+    diff_close_open = df['close'] - df['open']
+    
+    # Calculate the average true range for a given period
+    period = 14
+    df['true_range'] = df[['high', 'low', 'close']].shift(1).max(axis=1) - df[['high', 'low', 'close']].shift(1).min(axis=1)
+    average_true_range = df['true_range'].rolling(window=period).mean()
+    
+    # Calculate the normalized factor as the ratio of the difference to the ATR
+    factor = diff_close_open / (average_true_range + 1e-7)
+    
+    # Calculate the ratio of today's volume to the average volume over the last 5 days.
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / (avg_5d_volume + 1e-7)
+    
+    # Calculate the simple moving average of the close price over 5 days (Momentum Indicator)
+    sma_5 = df['close'].rolling(window=5).mean()
+    
+    # Calculate the change in close price from the previous day to the current day (Volatility Indicator)
+    close_change = df['close'].diff()
+    
+    # Calculate the change in volume from the previous day to the current day (Volume Indicator)
+    volume_change = df['volume'].diff()
+    
+    # Determine if the change in close price is proportional to the change in volume, adding a small constant (1e-7) to avoid division by zero
+    price_volume_ratio = close_change / (volume_change + 1e-7)
+    
+    # Calculate the rolling mean of the price-volume ratio over 5 days
+    price_volume_ratio_sma_5 = price_volume_ratio.rolling(window=5).mean()
+    
+    # Combine the factors into a single signal with adaptive weights
+    combined_signal = (factor * 0.4 +
+                       (df['close'] - sma_5) * 0.3 +
+                       price_volume_ratio_sma_5 * 0.2 +
+                       volume_ratio * 0.1)
+    
+    return combined_signal
+```

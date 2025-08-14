@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday Range'] = df['high'] - df['low']
+    df['Intraday Return'] = df['Intraday Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+
+    # Combine Intraday and Overnight Returns
+    df['Combined Return'] = df['Intraday Return'] + df['Overnight Return']
+
+    # Incorporate Transaction Amount
+    df['Amount-Weighted Intraday Return'] = df['Intraday Return'] * df['amount']
+    df['Amount-Weighted Overnight Return'] = df['Overnight Return'] * df['amount']
+    total_amount = df['amount'].sum()
+    amount_weighted_intraday_return = df['Amount-Weighted Intraday Return'].sum() / total_amount
+    amount_weighted_overnight_return = df['Amount-Weighted Overnight Return'].sum() / total_amount
+    df['Amount-Weighted Combined Return'] = amount_weighted_intraday_return + amount_weighted_overnight_return
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume-Weighted Typical Price'] = df['Typical Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    vwap = df['Volume-Weighted Typical Price'].sum() / total_volume
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal Indicator'] = df.apply(lambda row: 1 if vwap > row['close'] else -1, axis=1)
+
+    # Integrate Reversal Indicator with Amount-Weighted Combined Return
+    df['Integrated Reversal Return'] = df['Amount-Weighted Combined Return'] * df['Reversal Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume-Weighted Return'] = df['Return'] * df['volume']
+    volume_weighted_return = df['Volume-Weighted Return'].sum() / total_volume
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial Alpha Factor'] = df['Integrated Reversal Return'] + volume_weighted_return
+
+    # Calculate Rolling Averages
+    df['Short-Term Rolling Average'] = df['close'].rolling(window=5).mean()
+    df['Long-Term Rolling Average'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Dynamic Volatility
+    df['Daily Return'] = df['close'].pct_change()
+    df['Short-Term Volatility'] = df['Daily Return'].rolling(window=10).std()
+    df['Medium-Term Volatility'] = df['Daily Return'].rolling(window=20).std()
+    df['Long-Term Volatility'] = df['Daily Return'].rolling(window=50).std()
+
+    # Adjust for Volatility
+    df['Short-Term Volatility-Adjusted Alpha Factor'] = df['Initial Alpha Factor'] / df['Short-Term Volatility']
+    df['Medium-Term Volatility-Adjusted Alpha Factor'] = df['Initial Alpha Factor'] / df['Medium-Term Volatility']
+    df['Long-Term Volatility-Adjusted Alpha Factor'] = df['Initial Alpha Factor'] / df['Long-Term Volatility']
+
+    # Integrate Volatility-Adjusted Alpha Factors
+    df['Final Alpha Factor'] = (df['Short-Term Volatility-Adjusted Alpha Factor'] +
+                                df['Medium-Term Volatility-Adjusted Alpha Factor'] +
+                                df['Long-Term Volatility-Adjusted Alpha Factor'])
+
+    return df['Final Alpha Factor']
+```

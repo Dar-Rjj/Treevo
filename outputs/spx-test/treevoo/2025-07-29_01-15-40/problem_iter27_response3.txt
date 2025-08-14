@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5, M=5, P=5):
+    # Calculate Intraday High-Low Spread
+    df['intraday_hl_spread'] = df['high'] - df['low']
+    
+    # Compute Rolling Average Intraday High-Low Spread
+    df['rolling_avg_hl_spread'] = df['intraday_hl_spread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['hl_momentum_score'] = (df['intraday_hl_spread'] > df['rolling_avg_hl_spread']).astype(int) * 2 - 1
+    df['hl_momentum_score'] *= df['volume']
+    
+    # Calculate Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_momentum'] = df['price_change'].rolling(window=N).sum()
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_trend'] = df['volume_change'].rolling(window=N).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['daily_range'] = df['high'] - df['low']
+    df['rolling_avg_daily_range'] = df['daily_range'].rolling(window=M).mean()
+    
+    # Calculate Range Momentum
+    df['range_momentum_score'] = (df['daily_range'] > df['rolling_avg_daily_range']).astype(int) * 2 - 1
+    
+    # Integrate Open-Price and Close-Price Movement
+    df['open_to_close_diff'] = df['close'] - df['open']
+    df['open_to_close_momentum'] = df['open_to_close_diff'].rolling(window=N).sum()
+    
+    # Calculate Open to Low Price Difference
+    df['open_to_low_diff'] = df['open'] - df['low']
+    df['open_to_low_momentum'] = df['open_to_low_diff'].rolling(window=N).sum()
+    
+    # Calculate Intraday Price Volatility
+    df['intraday_prices'] = (df[['open', 'high', 'low', 'close']].std(axis=1)).rolling(window=P).mean()
+    
+    # Compute Price Volatility Score
+    df['price_volatility_score'] = (df['intraday_prices'] > df['intraday_prices'].rolling(window=P).mean()).astype(int) * 2 - 1
+    df['price_volatility_score'] *= df['volume']
+    
+    # Combine Factors
+    alpha_factor = (
+        0.3 * df['hl_momentum_score'] +
+        0.2 * df['price_momentum'] +
+        0.1 * df['volume_trend'] +
+        0.1 * df['range_momentum_score'] +
+        0.1 * df['open_to_close_momentum'] +
+        0.05 * df['open_to_low_momentum'] +
+        0.15 * df['price_volatility_score']
+    )
+    
+    return alpha_factor
+```

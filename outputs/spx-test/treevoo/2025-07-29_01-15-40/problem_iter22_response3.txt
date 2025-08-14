@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_Diff'] = df['SMA_5'] - df['SMA_10']
+    
+    # Calculate Exponential Moving Averages (EMA)
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_Diff'] = df['EMA_5'] - df['EMA_10']
+    
+    # Analyze Volume Change
+    df['Volume_Change'] = df['volume'].diff()
+    df['Volume_Momentum'] = df['Volume_Change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Check for Volume Spikes
+    df['Mean_Volume_5'] = df['volume'].rolling(window=5).mean()
+    df['Significant_Volume_Spike'] = df.apply(lambda x: 1 if x['volume'] > 1.5 * x['Mean_Volume_5'] else 0, axis=1)
+    
+    # Detect Bullish Engulfing Pattern
+    df['Bullish_Engulfing_Signal'] = ((df['open'].shift(1) > df['close'].shift(1)) & 
+                                      (df['open'] < df['close'].shift(1)) & 
+                                      (df['close'] > df['open'].shift(1))).astype(int)
+    
+    # Detect Bearish Engulfing Pattern
+    df['Bearish_Engulfing_Signal'] = ((df['open'].shift(1) < df['close'].shift(1)) & 
+                                      (df['open'] > df['close'].shift(1)) & 
+                                      (df['close'] < df['open'].shift(1))).astype(int)
+    
+    # High-Low Range Analysis
+    df['True_Range'] = df.apply(lambda x: max(x['high'] - x['low'], 
+                                               abs(x['high'] - x['close'].shift(1)), 
+                                               abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['Average_True_Range_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Daily_Range_Momentum'] = df['Daily_Range'].diff()
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (df['SMA_Diff'] + df['EMA_Diff'] + 
+                          df['Volume_Momentum'] + df['Significant_Volume_Spike'] + 
+                          df['Bullish_Engulfing_Signal'] - df['Bearish_Engulfing_Signal'] + 
+                          df['Average_True_Range_14'] + df['Daily_Range_Momentum'])
+    
+    return df['Alpha_Factor']
+```

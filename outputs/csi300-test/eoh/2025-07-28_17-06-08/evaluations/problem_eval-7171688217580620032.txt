@@ -1,0 +1,22 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    close_ema = df['close'].ewm(span=20, adjust=False).mean()
+    close_momentum_ema = (df['close'] / close_ema) - 1
+    volume_change = df['volume'].pct_change()
+    tr = df['high'] - df['low']
+    
+    # Compute rolling correlations for weighting
+    corr_close_return = df['close'].rolling(window=10).corr(df['close'].shift(-1).fillna(method='ffill'))
+    corr_vol_change = df['volume'].rolling(window=10).corr(df['close'].shift(-1).fillna(method='ffill'))
+    corr_tr = tr.rolling(window=10).corr(df['close'].shift(-1).fillna(method='ffill'))
+    
+    # Adjust NaN values in correlations to 0
+    corr_close_return.fillna(0, inplace=True)
+    corr_vol_change.fillna(0, inplace=True)
+    corr_tr.fillna(0, inplace=True)
+    
+    heuristics_matrix = (corr_close_return * close_momentum_ema + 
+                         corr_vol_change * volume_change + 
+                         corr_tr * tr)
+    return heuristics_matrix

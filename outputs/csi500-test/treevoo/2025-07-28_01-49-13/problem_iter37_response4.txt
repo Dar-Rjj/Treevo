@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Evaluate Intraday Dynamics
+    intraday_range = df['high'] - df['low']
+    intraday_midpoint_to_open_ratio = ((df['high'] + df['low']) / 2) / df['open']
+    close_to_open_adjusted_by_intraday = (df['close'] - df['open']) / intraday_range
+    
+    # Analyze Momentum
+    rate_of_change_5_days = df['close'].pct_change(5)
+    rate_of_change_20_days = df['close'].pct_change(20)
+    
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    sma_50 = df['close'].rolling(window=50).mean()
+    
+    sma_5_vs_20 = sma_5 - sma_20
+    sma_20_vs_50 = sma_20 - sma_50
+    
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+    
+    # Assess Volatility
+    std_dev_20_days = df['close'].pct_change().rolling(window=20).std()
+    daily_volatility = df['close'].pct_change().abs()
+    smooth_volatility = daily_volatility.ewm(span=20, adjust=False).mean()
+    
+    # Combine Metrics
+    daily_price_change = df['close'].diff()
+    cumulative_price_change = daily_price_change.cumsum()
+    
+    weighted_sum_of_returns = (df['close'].shift(-1) - df['open']).shift(1) * df['volume']
+    
+    adjusted_close_to_open_envelope = (df['close'].rolling(window=5).max() - df['open'].rolling(window=5).min())
+    
+    weighted_intraday_range = intraday_midpoint_to_open_ratio * weighted_sum_of_returns
+    
+    # Final Factor Adjustment
+    intraday_range_with_momentum = intraday_range * (sma_5_vs_20 + sma_20_vs_50)
+    adjusted_close_to_open_return = close_to_open_adjusted_by_intraday + weighted_intraday_range
+    final_factor = adjusted_close_to_open_return + cumulative_price_change + daily_price_change.ewm(span=20, adjust=False).mean()
+    
+    return final_factor
+```

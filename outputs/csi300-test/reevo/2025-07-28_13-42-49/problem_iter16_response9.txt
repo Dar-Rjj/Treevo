@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate log returns
+    df['log_returns'] = np.log(df['close']).diff()
+    
+    # Adaptive window for average volume, based on a weighted sum of 3 and 5 days
+    dynamic_window = df['volume'].rolling(window=3).mean() * 0.5 + df['volume'].rolling(window=5).mean() * 0.5
+    df['avg_volume_dynamic'] = dynamic_window
+    
+    # Exponential moving average of the close price over the past 5 days
+    df['ema_5d'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Volume ratio with dynamic window
+    df['vol_ratio_dynamic'] = df['volume'] / df['avg_volume_dynamic']
+    
+    # Trend component
+    df['trend'] = df['close'] - df['ema_5d']
+    
+    # Momentum as the rate of change over the past 3 days
+    df['momentum_3d'] = df['close'].pct_change(periods=3)
+    
+    # Volatility as the exponential weighted standard deviation of the close price over the past 5 days
+    df['volatility_5d'] = df['close'].ewm(span=5, adjust=False).std()
+    
+    # Liquidity as the ratio of amount to volume
+    df['liquidity'] = df['amount'] / df['volume']
+    
+    # Market sentiment (using the difference between high and low prices)
+    df['market_sentiment'] = (df['high'] - df['low']) / df['close']
+    
+    # Mean reversion signal (using the difference between the close price and its 5-day EMA, normalized by the 5-day volatility)
+    df['mean_reversion'] = (df['close'] - df['ema_5d']) / df['volatility_5d']
+    
+    # Incorporate seasonality (e.g., monthly effect)
+    df['month'] = df.index.month
+    df['seasonality'] = df.groupby('month')['log_returns'].transform(lambda x: (x - x.mean()) / x.std())
+    
+    # Macro indicator (e.g., VIX index, here we use a placeholder)
+    df['macro_indicator'] = np.random.randn(len(df))  # Replace with actual macro data
+    
+    # Combine the key indicators into a single factor
+    factor = (
+        df['log_returns'] +
+        (df['amount'] * df['vol_ratio_dynamic']) -
+        df['trend'] +
+        df['momentum_3d'] -
+        df['volatility_5d'] +
+        df['liquidity'] +
+        df['market_sentiment'] -
+        df['mean_reversion'] +
+        df['seasonality'] +
+        df['macro_indicator']
+    )
+    
+    return factor.dropna()
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Gain and Loss
+    df['Gain'] = (df['close'] > df['close'].shift(1)) * (df['close'] - df['close'].shift(1))
+    df['Loss'] = (df['close'] <= df['close'].shift(1)) * (df['close'].shift(1) - df['close'])
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    df['AvgGain'] = df['Gain'].rolling(window=14).mean()
+    df['AvgLoss'] = df['Loss'].rolling(window=14).mean()
+    
+    # Calculate Relative Strength
+    df['RS'] = df['AvgGain'] / df['AvgLoss']
+    
+    # Convert to RSI
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Adjust for Advanced Features: Incorporate Volume and Momentum
+    df['ARSI'] = df['RSI'] * df['volume'].rolling(window=14).mean() * (df['close'] / df['open'] - 1)
+    
+    # Calculate Short-Term and Long-Term Returns
+    df['ShortTermReturn'] = df['close'] / df['close'].shift(5) - 1
+    df['LongTermReturn'] = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Volume-Weighted Returns
+    df['VolumeWeightedShortTermReturn'] = df['volume'] * df['ShortTermReturn']
+    df['VolumeWeightedLongTermReturn'] = df['volume'] * df['LongTermReturn']
+    
+    # Calculate Short-Term Volatility (Average True Range)
+    df['ATR'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Synthesize ARSI with Volume-Weighted Returns and Volatility
+    df['CombinedARSI'] = df['ARSI'] * df['VolumeWeightedShortTermReturn'] / df['ATR'] - df['VolumeWeightedLongTermReturn']
+    
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    df['CloseToCloseReturn'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    df['IntradayAdjustment'] = df['IntradayVolatility'] * df['CloseToCloseReturn']
+    
+    # Final Adjustment
+    df['FinalFactor'] = df['CombinedARSI'] + df['IntradayAdjustment'] + df['volume'] * df['IntradayVolatility']
+    
+    return df['FinalFactor']
+```

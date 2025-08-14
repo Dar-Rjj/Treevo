@@ -1,0 +1,34 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Rate of Change (ROC)
+    df['roc_5'] = df['close'].pct_change(5)
+    df['roc_20'] = df['close'].pct_change(20)
+    
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (df['volume'] * (df['close'].diff() > 0).astype(int) - df['volume'] * (df['close'].diff() < 0).astype(int)).cumsum()
+    df['obv_trend'] = obv.rolling(window=10).mean() / obv.rolling(window=30).mean()
+    
+    # Historical Sharpe ratios
+    sharpe_ratios = {
+        'roc_5': (df['roc_5'] * df['daily_return'].shift(-1)).mean() / df['roc_5'].std(),
+        'roc_20': (df['roc_20'] * df['daily_return'].shift(-1)).mean() / df['roc_20'].std(),
+        'rsi_14': (df['rsi_14'] * df['daily_return'].shift(-1)).mean() / df['rsi_14'].std(),
+        'obv_trend': (df['obv_trend'] * df['daily_return'].shift(-1)).mean() / df['obv_trend'].std()
+    }
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['roc_5'] * sharpe_ratios['roc_5'] +
+                         df['roc_20'] * sharpe_ratios['roc_20'] +
+                         df['rsi_14'] * sharpe_ratios['rsi_14'] +
+                         df['obv_trend'] * sharpe_ratios['obv_trend'])
+    
+    return heuristics_matrix

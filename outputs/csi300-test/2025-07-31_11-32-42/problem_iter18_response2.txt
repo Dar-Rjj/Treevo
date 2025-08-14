@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 20-Day Average Close
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    
+    # Subtract 20-Day Average Close from Today's Close
+    df['daily_momentum'] = df['close'] - df['20_day_avg_close']
+    
+    # Compute 5-day and 20-day Price Returns
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Intraday Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['5_day_intraday_volatility'] = df['high_low_diff'].rolling(window=5).mean()
+    
+    # Combine Momentum and Intraday Volatility
+    df['combined_momentum_volatility'] = -df['daily_momentum'] + df['5_day_intraday_volatility']
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Measure Close Location within Intraday Range
+    df['close_proportional_distance'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Adjust for Volume Intensity
+    df['weighted_intraday_reversal'] = df['volume'] * df['close_proportional_distance']
+    
+    # Calculate Volume Surge
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate Volume Adjusted Momentum
+    df['close_to_close_return'] = df['close'] / df['close'].shift(1) - 1
+    df['volume_adjusted_momentum'] = df['close_to_close_return'] * df['volume']
+    
+    # Synthesize All Factors
+    df['synthesized_factors'] = (
+        df['combined_momentum_volatility'] +
+        df['weighted_intraday_reversal'] +
+        (df['5_day_return'] - df['20_day_return']) +
+        (df['20_day_return'] - (df['close'] / df['close'].shift(50) - 1)) +
+        (df['5_day_return'] - df['20_day_return']) * (df['20_day_return'] - (df['close'] / df['close'].shift(50) - 1)) +
+        df['volume_adjusted_momentum']
+    )
+    
+    # Calculate Intraday High-Low Spread Over Time
+    df['5_day_avg_high'] = df['high'].rolling(window=5).mean()
+    df['5_day_avg_low'] = df['low'].rolling(window=5).mean()
+    
+    # Calculate Intraday High-Low Spread Ratio
+    df['intraday_high_low_ratio'] = df['5_day_avg_high'] / df['5_day_avg_low']
+    
+    # Incorporate Intraday High-Low Spread Ratio
+    df['synthesized_factors'] += df['intraday_high_low_ratio'] * df['5_day_intraday_volatility']
+    
+    # Calculate Price Momentum with Volume
+    df['10_day_price_return'] = (df['close'] / df['close'].shift(10)) - 1
+    df['price_momentum_with_volume'] = df['10_day_price_return'] * df['10_day_avg_volume']
+    
+    # Incorporate Price Momentum with Volume
+    df['synthesized_factors'] += df['price_momentum_with_volume']
+    
+    return df['synthesized_factors'].dropna()
+```

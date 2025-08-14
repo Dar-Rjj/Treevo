@@ -1,0 +1,26 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum with exponential smoothing, considering a blend of short and long-term trends
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_momentum = 0.6 * short_term_momentum + 0.4 * long_term_momentum
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over the last 14 days, smoothed
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Volume relative strength to capture changes in trading volume
+    volume_relative_strength = (df['volume'] - df['volume'].rolling(window=20).min()) / (df['volume'].rolling(window=20).max() - df['volume'].rolling(window=20).min())
+
+    # Market sentiment using the ratio of high to low prices as a proxy, adjusted for average daily range
+    market_sentiment = (df['high'] - df['low']) / df['close'] * (df['high'].rolling(window=20).mean() - df['low'].rolling(window=20).mean()) / df['close']
+
+    # Price-Volume Trend (PVT) to incorporate both price changes and volume
+    pvt = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    pvt = pvt.cumsum()
+
+    # Combining the factors into a single alpha factor with refined weights
+    factor_values = 0.3 * adaptive_momentum - 0.2 * dynamic_volatility + 0.25 * volume_relative_strength + 0.15 * market_sentiment + 0.1 * pvt
+
+    return factor_values
+```

@@ -1,0 +1,30 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log return of the close price
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate the 14-day and 50-day Exponential Moving Averages (EMA) of the log return as a measure of momentum
+    ema_short_period = 14
+    ema_long_period = 50
+    df['momentum_ema_short'] = df['log_return'].ewm(span=ema_short_period, adjust=False).mean()
+    df['momentum_ema_long'] = df['log_return'].ewm(span=ema_long_period, adjust=False).mean()
+    
+    # Calculate the 14-day ATR (Average True Range)
+    period = 14
+    df['true_range'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['average_true_range'] = df['true_range'].rolling(window=period).mean()
+    
+    # Calculate the volume-weighted difference between the close and open price
+    df['volume_weighted_diff'] = (df['close'] - df['open']) * df['volume']
+    
+    # Calculate the factor as a combination of momentum, volatility, and volume-weighted relative strength
+    df['factor_base'] = (df['volume_weighted_diff'] / (df['average_true_range'] + 1e-7)) * (df['momentum_ema_short'] - df['momentum_ema_long'])
+    
+    # Incorporate the ratio of the high to low price as a measure of intraday volatility
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Combine the factor base with the high-low ratio for a more comprehensive factor
+    df['factor'] = df['factor_base'] * df['high_low_ratio']
+    
+    return df['factor']
+```

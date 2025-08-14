@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(data: pd.DataFrame) -> pd.Series:
+    # Momentum factors
+    short_term_momentum = data['close'].pct_change(25)
+    medium_term_momentum = (data['close'] / data['close'].shift(75)).apply(np.log)
+    long_term_momentum = (data['close'] / data['close'].shift(150)) ** (1/150) - 1
+    
+    # Reversal or mean reversion strategies
+    high_14d = data['high'].rolling(window=14).max()
+    reversal_1 = data['close'] - high_14d
+    ma_200 = data['close'].rolling(window=200).mean()
+    reversal_2 = data['close'] - ma_200
+    ema_30 = data['close'].ewm(span=30, adjust=False).mean()
+    reversal_3 = data['close'] / ema_30
+    
+    # Volume integration with price
+    obv = ((data['close'] > data['close'].shift()) * data['volume']).cumsum()
+    volume_delta = ((data['close'] - data['open']) * data['volume']).cumsum()
+    avg_volume_10d = data['volume'].rolling(window=10).mean()
+    volume_surprise = (data['volume'] / avg_volume_10d) - 1
+    
+    # Volatility and trend strength
+    daily_returns = data['close'].pct_change()
+    volatility_20d = daily_returns.rolling(window=20).std()
+    atr_14d = data[['high', 'low', 'close']].rolling(window=14).apply(
+        lambda x: np.max([np.abs(x[0]-x[1]), np.abs(x[0]-x[2]), np.abs(x[1]-x[2])]), raw=True)
+    trend_strength = linregress(range(60), data['close'].tail(60)).slope
+
+    # Composite scores
+    momentum_composite = 0.3*short_term_momentum + 0.3*medium_term_momentum + 0.4*long_term_momentum
+    reversal_composite = 0.3*reversal_1 + 0.3*reversal_2 + 0.4*(1/reversal_3)
+    volume_composite = 0.3*obv + 0.3*volume_delta + 0.4*volume_surprise
+    
+    # Final alpha factor
+    alpha_factor = (momentum_composite 
+                    + reversal_composite 
+                    + volume_composite
+                    - 0.5*volatility_20d 
+                    - 0.5*atr_14d
+                    + 0.5*trend_strength)
+    
+    return alpha_factor
+```

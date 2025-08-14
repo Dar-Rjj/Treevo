@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=20, K=10, L=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices).diff().fillna(0)
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    
+    # Clip Log Returns to Thresholds
+    momentum = momentum.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * (volumes / mean_volume)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev_volatility = abs_price_changes.rolling(window=M).std()
+    ema_volatility = abs_price_changes.ewm(span=K, min_periods=K).mean()
+    iqr_volatility = abs_price_changes.rolling(window=L).quantile(0.75) - abs_price_changes.rolling(window=L).quantile(0.25)
+    
+    # Combine Weighted Components
+    weights = [0.4, 0.3, 0.3]  # Weights for Momentum, Volume, and Volatility
+    combined_factor = (
+        weights[0] * volume_adjusted_momentum +
+        weights[1] * std_dev_volatility +
+        weights[2] * (ema_volatility + iqr_volatility)
+    )
+    
+    # Ensure Weights Sum to 1
+    combined_factor = combined_factor / sum(weights)
+    
+    # Review and Validate Each Component
+    # Integrate Market Breadth Indicators
+    advance_decline_line = (df['close'] > df['open']).astype(int).cumsum()
+    new_highs = (df['high'] == df['close'].rolling(window=20).max()).astype(int)
+    new_lows = (df['low'] == df['close'].rolling(window=20).min()).astype(int)
+    
+    # Incorporate Key Economic Indicators
+    interest_rate = 0.02  # Example interest rate
+    gdp_growth_rate = 0.03  # Example GDP growth rate
+    
+    # Final Factor Calculation
+    final_factor = combined_factor + 0.1 * (advance_decline_line + new_highs - new_lows) + 0.05 * (interest_rate + gdp_growth_rate)
+    
+    return final_factor
+```

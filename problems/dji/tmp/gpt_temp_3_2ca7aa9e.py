@@ -1,0 +1,48 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Opening Price Trend
+    opening_price_trend = df['open'] - df['close'].shift(1)
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Intraday Movement (VWIM)
+    vwim = (intraday_high_low_spread * df['volume']).rolling(window=5).mean()
+    
+    # Calculate Amount-Weighted Opening Trend (AWOT)
+    awot = (opening_price_trend * df['amount']).rolling(window=5).mean()
+    
+    # Combine Adjusted Movements and Trends (AMT)
+    amt = vwim + awot - vwim.rolling(window=5).mean() - awot.rolling(window=5).mean()
+    
+    # Adjust by Cumulative Volume (CV)
+    cv = df['volume'].rolling(window=20).sum()
+    adjusted_amt = amt / cv
+    
+    # Generate Factor 1
+    volume_impact_score = (df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()) / df['volume'].rolling(window=10).sum()
+    factor_1 = intraday_return * volume_impact_score
+    
+    # Calculate Price and Intraday Momentum
+    price_momentum = df['close'] - df['close'].shift(10)
+    intraday_momentum = (df['high'] - df['low']) / df['low']
+    
+    # Confirm with Volume Trend
+    avg_volume_15_days = df['volume'].rolling(window=15).mean()
+    volume_ratio = df['volume'] / avg_volume_15_days
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    cvwm = (intraday_momentum * df['volume']).rolling(window=20).sum()
+    
+    # Final Factor Calculation
+    if volume_ratio > 1.3:
+        final_factor = (price_momentum + intraday_momentum) * adjusted_amt
+    else:
+        final_factor = 0.6 * (price_momentum + intraday_momentum + adjusted_amt)
+    
+    return final_factor

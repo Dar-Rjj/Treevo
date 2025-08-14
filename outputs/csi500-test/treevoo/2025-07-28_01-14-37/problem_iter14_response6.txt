@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    close_price_change = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    weighted_momentum_sum = (df['high'] + df['low'] + 2 * df['close']) / 4
+    weighted_momentum = (close_price_change / (weighted_momentum_sum * df['volume']))
+    
+    # Adjust for Volatility
+    adjusted_volatility_momentum = weighted_momentum / high_to_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume and Range
+    volume_change = df['volume'].diff()
+    avg_daily_range = high_to_low_range.rolling(window=5).mean()
+    final_factor = (adjusted_volatility_momentum * volume_change * trend_direction * avg_daily_range)
+    
+    # Calculate Daily Momentum
+    daily_momentum = df['close'] - df['open']
+    momentum_10_day_ma = daily_momentum.rolling(window=10).mean()
+    momentum_50_day_ma = daily_momentum.rolling(window=50).mean()
+    momentum_shift = ((momentum_10_day_ma - momentum_50_day_ma).apply(np.sign) * momentum_10_day_ma.abs())
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] / df['low']
+    intraday_volatility_20_day_ma = intraday_volatility.rolling(window=20).mean()
+    volatility_above_avg = (intraday_volatility > intraday_volatility_20_day_ma).rolling(window=10).sum()
+    
+    # Calculate Volume Change
+    volume_change_percentage = df['volume'].pct_change()
+    volume_change_10_day_ma = volume_change_percentage.rolling(window=10).mean()
+    volume_change_above_avg = (volume_change_percentage > volume_change_10_day_ma).rolling(window=5).sum()
+    
+    # Combine all factors into the final factor
+    final_factor = (final_factor * momentum_shift * volatility_above_avg * volume_change_above_avg).dropna()
+    
+    return final_factor
+```

@@ -1,0 +1,86 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Calculate Price Change
+    price_change = df['close'].diff()
+    
+    # Compute 5-Day Momentum
+    momentum_5d = price_change.rolling(window=5).sum()
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Adjust Momentum by Open-Close Spread
+    adjusted_momentum = momentum_5d * open_close_spread.abs()
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    combined_signal = adjusted_momentum / adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    ema_span = 5
+    enhanced_combined_signal = combined_signal.ewm(span=ema_span, adjust=False).mean()
+    
+    # Calculate Weighted Price Change
+    weighted_price_change = price_change * df['volume'] * np.sqrt(df['amount'])
+    
+    # Combine Adjusted Range with Weighted Price Change
+    combined_signal_with_weighted_change = enhanced_combined_signal + weighted_price_change
+    
+    # Compute Intraday Return
+    intraday_return_high = df['high'] - df['open']
+    intraday_return_low = df['low'] - df['open']
+    
+    # Compute Intraday Reversal Score
+    intraday_reversal_score = -(intraday_return_high + intraday_return_low)
+    
+    # Integrate Momentum and Reversal
+    high_low_range_diff = high_low_range.diff()
+    integrated_momentum_reversal = high_low_range_diff * intraday_reversal_score
+    
+    # Integrate Volume-Adjusted Reversal with C-O Diff
+    close_open_diff = df['close'] - df['open']
+    volume_adjusted_reversal = (df['volume'] * intraday_reversal_score) * close_open_diff
+    
+    # Generate Factor Value
+    volume_moving_avg_10d = df['volume'].rolling(window=10).mean()
+    high_low_momentum_10d = (df['high'] - df['low']).rolling(window=10).sum()
+    factor_value = (high_low_momentum_10d * volume_moving_avg_10d) / df['close']
+    
+    # Apply a Smoothing Filter to the Combined Signal
+    smoothed_factor_value = factor_value.ewm(span=ema_span, adjust=False).mean()
+    
+    # Introduce a New Volatility Component
+    daily_volatility = np.sqrt(((df['high'] - df['low']) ** 2) / 4 + ((df['close'] - df['open']) ** 2) / 4)
+    integrated_volatility = smoothed_factor_value * daily_volatility
+    
+    # Apply a Second Smoothing Layer
+    sma_span = 10
+    final_smoothed_factor = integrated_volatility.rolling(window=sma_span).mean()
+    
+    # Combine All Factors
+    combined_factors = (intraday_reversal_score * 0.3 +
+                        factor_value * 0.4 +
+                        enhanced_combined_signal * 0.2 +
+                        final_smoothed_factor * 0.1)
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_factors * momentum_5d.ewm(span=20, adjust=False).mean() *
+                          (df['volume'] - df['volume'].shift(1) > 2 * df['volume'].rolling(window=20).std()) *
+                          daily_volatility +
+                          close_open_diff)
+    
+    # Apply Volume Weighting
+    final_alpha_factor = final_alpha_factor * df['volume']
+    
+    return final_alpha_factor
+```

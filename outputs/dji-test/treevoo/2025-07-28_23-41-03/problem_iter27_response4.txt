@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the 10-day and 20-day Simple Moving Average (SMA) of Close Prices
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Determine the percentage difference between the 10-day SMA and 20-day SMA
+    momentum_factor = (sma_10 - sma_20) / sma_20 * 100
+
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    vwap = (df['high'] + df['low'] + 2*df['close']) / 4 * df['volume']
+    
+    # Compute the 10-day and 50-day Exponential Moving Average (EMA) of VWAP
+    ema_10_vwap = vwap.ewm(span=10, adjust=False).mean()
+    ema_50_vwap = vwap.ewm(span=50, adjust=False).mean()
+    
+    # Determine the logarithmic ratio of the 10-day EMA to the 50-day EMA
+    vwap_momentum_factor = np.log(ema_10_vwap / ema_50_vwap)
+
+    # Calculate the average True Range (ATR)
+    atr = df['high'] - df['low']
+    
+    # Compute the 14-day Exponential Moving Average (EMA) of ATR
+    ema_14_atr = atr.ewm(span=14, adjust=False).mean()
+    volatility_factor = ema_14_atr
+
+    # Calculate the daily price change using Close(t) - Close(t-1)
+    daily_change = df['close'].diff()
+    
+    # Separate the gains and losses from the daily price changes
+    gains = daily_change.where(daily_change > 0, 0)
+    losses = -daily_change.where(daily_change < 0, 0)
+    
+    # Compute the 14-day average gain and 14-day average loss
+    avg_gain = gains.rolling(window=14).mean()
+    avg_loss = losses.rolling(window=14).mean()
+    
+    # Calculate the RSI
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Apply a smoothing factor to the RSI using a 3-day EMA
+    smoothed_rsi = rsi.ewm(span=3, adjust=False).mean()
+
+    # Calculate the Typical Price (TP)
+    tp = (df['high'] + df['low'] + 2*df['close']) / 4
+    
+    # Compute the Money Flow (MF)
+    mf = tp * df['volume']
+    
+    # Determine the Positive Money Flow (PMF) and Negative Money Flow (NMF)
+    pmf = mf.where(tp > tp.shift(1), 0)
+    nmf = mf.where(tp < tp.shift(1), 0)
+    
+    # Calculate the 14-day positive money flow and 14-day negative money flow
+    pmf_sum = pmf.rolling(window=14).sum()
+    nmf_sum = nmf.rolling(window=14).sum()
+    
+    # Compute the Money Ratio (MR)
+    mr = pmf_sum / nmf_sum
+    
+    # Calculate the MFI
+    mfi = 100 - (100 / (1 + mr))
+    
+    # Apply a smoothing factor to the MFI using a 3-day EMA
+    smoothed_mfi = mfi.ewm(span=3, adjust=False).mean()
+
+    # Combine all factors
+    alpha_factor = (momentum_factor + vwap_momentum_factor + volatility_factor + smoothed_rsi + smoothed_mfi) / 5
+
+    return alpha_factor
+```

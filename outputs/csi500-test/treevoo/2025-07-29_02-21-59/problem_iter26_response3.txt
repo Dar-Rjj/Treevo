@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Weight by Volume
+    df['volume_weighted_close_to_open'] = df['close_to_open_return'] * df['volume']
+    
+    # Integrate Intraday High-Low Movement
+    df['intraday_high_low_movement'] = (df['high'] - df['low']) / df['open']
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine with Volume Adjusted Close-to-Open Return
+    df['combined_intraday_momentum'] = df['volume_weighted_close_to_open'] + df['intraday_high_low_movement'] + df['intraday_return']
+    
+    # Calculate Daily Log Return
+    df['daily_log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+    
+    # Cumulative Sum of Daily Log Returns
+    df['cumulative_log_return_20d'] = df['daily_log_return'].rolling(window=20).sum()
+    
+    # Calculate Daily Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate 20-Day Moving Average VWAP
+    df['sma_vwap_20d'] = df['vwap'].rolling(window=20).mean()
+    
+    # Price Oscillator: Subtract 20-Day SMA from 5-Day SMA
+    df['sma_5d'] = df['close'].rolling(window=5).mean()
+    df['sma_20d'] = df['close'].rolling(window=20).mean()
+    df['price_oscillator'] = df['sma_5d'] - df['sma_20d']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['combined_intraday_momentum'] +
+        df['cumulative_log_return_20d'] +
+        (df['vwap'] - df['sma_vwap_20d']) +
+        df['price_oscillator']
+    )
+    
+    return df['alpha_factor']
+```

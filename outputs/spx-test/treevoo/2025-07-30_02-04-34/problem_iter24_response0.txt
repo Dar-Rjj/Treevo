@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(df):
+    # Compute the 7-day and 21-day simple moving averages (SMA) for the closing prices
+    df['SMA_7'] = df['close'].rolling(window=7).mean()
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+    
+    # Create an alpha factor as the difference between the 7-day SMA and the 21-day SMA
+    df['alpha_factor_sma_diff'] = df['SMA_7'] - df['SMA_21']
+    
+    # Define a 30-day price return as the percentage change in the closing price from 30 days ago
+    df['alpha_factor_30_day_return'] = df['close'].pct_change(30)
+    
+    # Construct a 5-day average direction index (ADX) using high and low prices to measure trend strength
+    def adx(high, low, close, n=5):
+        tr = pd.DataFrame(index=close.index)
+        tr['h-l'] = high - low
+        tr['h-pc'] = abs(high - close.shift(1))
+        tr['l-pc'] = abs(low - close.shift(1))
+        tr['tr'] = tr.max(axis=1)
+        
+        atr = tr['tr'].rolling(n).mean()
+        
+        up = high.diff()
+        down = -low.diff()
+        up[up < 0] = 0
+        down[down < 0] = 0
+        
+        pos = up.ewm(alpha=1/n, adjust=False).mean()
+        neg = down.ewm(alpha=1/n, adjust=False).mean()
+        
+        rs = pos / neg
+        adx = 100 * (rs / (1 + rs))
+        
+        return adx
+    
+    df['alpha_factor_5_day_adx'] = adx(df['high'], df['low'], df['close'])
+    
+    # Formulate a 10-day average daily trading volume
+    df['avg_volume_10'] = df['volume'].rolling(window=10).mean()
+    
+    # Develop an alpha factor as the ratio of the current day's volume to the 10-day average daily trading volume
+    df['alpha_factor_volume_ratio'] = df['volume'] / df['avg_volume_10']
+    
+    # Calculate the 10-day cumulative volume delta
+    df['volume_delta'] = np.where(df['close'] > df['close'].shift(1), df['volume'], -df['volume'])
+    df['cumulative_volume_delta_10'] = df['volume_delta'].rolling(window=10).sum()
+    
+    # Utilize the 10-day cumulative volume delta as an additional alpha factor
+    df['alpha_factor_cumulative_volume_delta'] = df['cumulative_volume_delta_10']
+    
+    # Generate a 10-day money flow index (MFI) by considering typical price and raw volume
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = np.where(typical_price > typical_price.shift(1), money_flow, 0)
+    negative_flow = np.where(typical_price < typical_price.shift(1), money_flow, 0)
+    positive_flow_sum = positive_flow.rolling(window=10).sum()
+    negative_flow_sum = negative_flow.rolling(window=10).sum()
+    mfi = 100 - (100 / (1 + (positive_flow_sum / negative_flow_sum)))
+    
+    # Introduce the 10-day MFI as an alpha factor
+    df['alpha_factor_mfi'] = mfi
+    
+    # Measure the 10-day accumulation/distribution line (A/D Line) to assess the buying and selling pressure
+    cmf_multiplier = (df['close'] - df['low']) - (df['high'] - df['close']) / (df['high'] - df['low'])
+    cmf = cmf_multiplier * df['volume']
+    ad_line = cmf.rolling(window=10).sum()
+    
+    # Adopt the 10-day A/D Line change as an interpretative alpha factor
+    df['alpha_factor_ad_line'] = ad_line
+    
+    # Calculate the 10-day average of the difference between open and close prices
+    df['open_close_diff'] = df['open'] - df['close']
+    df['alpha_factor_open_close_diff'] = df['open_close_diff'].rolling(window=10).mean()
+    
+    # Determine the 10-day relative strength (RS) of the close price compared to the open price
+    df['alpha_factor_rs']

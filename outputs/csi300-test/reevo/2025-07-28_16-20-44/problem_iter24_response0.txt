@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days) with exponential decay
+    momentum_10 = np.log(df['close']).diff(periods=10).ewm(span=10, adjust=False).mean()
+    momentum_20 = np.log(df['close']).diff(periods=20).ewm(span=20, adjust=False).mean()
+    momentum_30 = np.log(df['close']).diff(periods=30).ewm(span=30, adjust=False).mean()
+    momentum = (momentum_10 * 0.3 + momentum_20 * 0.4 + momentum_30 * 0.3)
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days) with exponential decay
+    liquidity_10 = df['volume'].rolling(window=10).mean().ewm(span=10, adjust=False).mean()
+    liquidity_20 = df['volume'].rolling(window=20).mean().ewm(span=20, adjust=False).mean()
+    liquidity_30 = df['volume'].rolling(window=30).mean().ewm(span=30, adjust=False).mean()
+    liquidity_40 = df['volume'].rolling(window=40).mean().ewm(span=40, adjust=False).mean()
+    liquidity = (liquidity_10 * 0.2 + liquidity_20 * 0.3 + liquidity_30 * 0.3 + liquidity_40 * 0.2)
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days) with exponential decay
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment_5 = money_flow_ratio.rolling(window=5).mean().ewm(span=5, adjust=False).mean()
+    market_sentiment_10 = money_flow_ratio.rolling(window=10).mean().ewm(span=10, adjust=False).mean()
+    market_sentiment_15 = money_flow_ratio.rolling(window=15).mean().ewm(span=15, adjust=False).mean()
+    market_sentiment = (market_sentiment_5 * 0.3 + market_sentiment_10 * 0.4 + market_sentiment_15 * 0.3)
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days) with exponential decay
+    volatility_20 = np.log(df['close']).diff().rolling(window=20).std().ewm(span=20, adjust=False).mean()
+    volatility_40 = np.log(df['close']).diff().rolling(window=40).std().ewm(span=40, adjust=False).mean()
+    volatility_60 = np.log(df['close']).diff().rolling(window=60).std().ewm(span=60, adjust=False).mean()
+    volatility = (volatility_20 * 0.3 + volatility_40 * 0.4 + volatility_60 * 0.3)
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5-10 days with exponential decay
+    intraday_dynamics_5 = (df['high'] / df['low']).rolling(window=5).mean().ewm(span=5, adjust=False).mean()
+    intraday_dynamics_10 = (df['high'] / df['low']).rolling(window=10).mean().ewm(span=10, adjust=False).mean()
+    intraday_dynamics = (intraday_dynamics_5 * 0.5 + intraday_dynamics_10 * 0.5)
+    
+    # Identify market regime changes by calculating the 20-day and 60-day moving averages
+    ma_20 = df['close'].rolling(window=20).mean()
+    ma_60 = df['close'].rolling(window=60).mean()
+    regime_change = (ma_20 > ma_60).astype(int).diff().fillna(0)
+    
+    # Combine the factors without normalization, incorporating market regime changes
+    factor = (momentum * liquidity * market_sentiment * intraday_dynamics) / (volatility + 1e-6)
+    factor += regime_change * 0.1
+    
+    return factor
+```

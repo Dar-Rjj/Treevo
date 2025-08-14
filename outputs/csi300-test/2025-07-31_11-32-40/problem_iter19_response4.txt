@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Intraday Reversal
+    df['Intraday_Reversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    df['Momentum_Adjustment'] = 1 + (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Adjusted_Intraday_Reversal'] = df['Intraday_Reversal'] * df['Momentum_Adjustment']
+
+    # Calculate Close to Midpoint Deviation
+    df['Intraday_Midpoint'] = (df['high'] + df['low']) / 2
+    df['Close_to_Midpoint_Deviation'] = df['close'] - df['Intraday_Midpoint']
+
+    # Generate Preliminary Alpha Factor
+    df['Preliminary_Alpha_Factor'] = (df['Adjusted_Intraday_Reversal'] * 
+                                      df['Close_to_Midpoint_Deviation'] + 
+                                      (df['open'] - df['close'].shift(1)) / df['close'].shift(1))
+
+    # Calculate Daily Volume Surprise
+    df['Volume_MA_10'] = df['volume'].rolling(window=10).mean()
+    df['Daily_Volume_Surprise'] = df['volume'] - df['Volume_MA_10']
+
+    # Combine Price Momentum and Volume Surprise
+    df['Price_Momentum'] = df['close'] - df['close'].shift(10)
+    df['Combined_Price_Momentum_Volume_Surprise'] = df['Price_Momentum'] * df['Daily_Volume_Surprise']
+
+    # Compute Volume Influence Ratio
+    df['Upward_Volume'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else 0, axis=1)
+    df['Downward_Volume'] = df.apply(lambda row: row['volume'] if row['close'] < row['open'] else 0, axis=1)
+    df['Accumulated_Upward_Volume'] = df['Upward_Volume'].cumsum()
+    df['Accumulated_Downward_Volume'] = df['Downward_Volume'].cumsum()
+    df['Volume_Influence_Ratio'] = df['Accumulated_Upward_Volume'] / df['Accumulated_Downward_Volume'].replace(0, 1)  # Avoid division by zero
+
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Preliminary_Alpha_Factor'] * 
+                                df['Combined_Price_Momentum_Volume_Surprise'] * 
+                                df['Volume_Influence_Ratio'])
+
+    return df['Final_Alpha_Factor']
+```

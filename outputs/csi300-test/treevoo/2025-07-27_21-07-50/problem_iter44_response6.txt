@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Calculate Volume-Weighted Close-Open Difference
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+
+    # Integrate Both Factors
+    integrated_factors = high_low_spread_ratio + volume_weighted_close_open_diff
+
+    # Composite Alpha Factor
+    # Subtract EMA from volume-weighted close
+    ema_period = 21
+    ema_close = df['close'].ewm(span=ema_period, adjust=False).mean()
+    volume_weighted_close = df['close'] * df['volume']
+    composite_alpha = volume_weighted_close - ema_close
+
+    # Add medium-term reversal
+    daily_returns = df['close'] / df['open'] - 1
+    m_days = 10
+    medium_term_reversal = daily_returns.rolling(window=m_days).sum()
+    composite_alpha += medium_term_reversal
+
+    # Generate Adjusted Return
+    intraday_log_return = np.log(df['close'] / df['open'])
+    
+    # Incorporate Volume Impact
+    df['prev_volume'] = df['volume'].shift(1)
+    volume_change = (df['volume'] - df['prev_volume']) / df['prev_volume']
+    adjusted_return = intraday_log_return + volume_change
+
+    # Final Integration
+    final_integration = integrated_factors + composite_alpha + adjusted_return
+
+    # Analyze Price Patterns
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Examine Momentum
+    sma_short = df['close'].rolling(window=7).mean()
+    sma_long = df['close'].rolling(window=21).mean()
+    sma_diff = sma_short - sma_long
+
+    # Evaluate Trading Volume
+    volume_price_signal = (df['close'] - df['close'].shift(1)) * volume_change
+
+    # Assess Volatility
+    volatility = df['close'].rolling(window=20).std()
+
+    # Consider Market Depth
+    bid_ask_spread = df['high'] - df['low']
+
+    # Create a Composite Score
+    composite_score = (sma_diff * 0.3) + (volume_price_signal * 0.2) + (volatility * 0.2) + (bid_ask_spread * 0.3)
+
+    # Final Alpha Factor
+    final_alpha_factor = final_integration + composite_score
+
+    return final_alpha_factor
+```

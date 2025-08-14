@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day's Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    df['momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Volume Change Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    df['integrated_factor'] = (df['intraday_return'] * df['overnight_return'] * df['momentum_ratio'])
+    df['integrated_factor'] *= np.where(df['volume'] > df['volume'].rolling(window=5).mean(), 1.5, 0.5)
+    
+    # Weight High-Low Range by Volume
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_high_low_range'] = df['high_low_range'] * df['volume']
+    
+    # Adjust for Combined Volatility
+    df['adjusted_returns'] = df['aggregate_returns'] * df['weighted_high_low_range']
+    
+    # Smoothed Moving Average
+    df['sma_adjusted_returns'] = df['adjusted_returns'].rolling(window=5).mean()
+    df['smoothed_returns'] = df['sma_adjusted_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Volume-Weighted Average Price (VWAP)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['vwap'] = (df['typical_price'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_deviation'] = (df['close'] - df['vwap']) / df['vwap']
+    
+    # Composite Factor
+    w1, w2, w3 = 0.4, 0.3, 0.3
+    df['composite'] = w1 * df['momentum_ratio'] + w2 * df['smoothed_returns'] + w3 * df['vwap_deviation']
+    
+    # Generate Alpha Signals
+    threshold = 0
+    df['alpha_signal'] = np.where(df['composite'] > threshold, 1, -1)
+    
+    # Final Factor
+    df['final_factor'] = df['alpha_signal'] * df['composite']
+    
+    return df['final_factor']
+
+# Example usage
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': [np.random.rand() for _ in range(100)],
+#     'high': [np.random.rand() for _ in range(100)],
+#     'low': [np.random.rand() for _ in range(100)],
+#     'close': [np.random.rand() for _ in range(100)],
+#     'amount': [np.random.rand() for _ in range(100)],
+#     'volume': [np.random.randint(1000, 10000) for _ in range(100)]
+# })
+# df.set_index('date', inplace=True)
+# factor = heuristics_v2(df)
+# print(factor)
+```

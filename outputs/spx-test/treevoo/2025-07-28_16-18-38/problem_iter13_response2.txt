@@ -1,0 +1,83 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Generate binary factor for SMA crossovers
+    df['SMA_Crossover'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Compute Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Generate binary factor for RSI
+    df['RSI_Factor'] = ((df['RSI'] < 30) | (df['RSI'] > 70)).astype(int)
+    
+    # Calculate daily percentage change in volume
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Generate binary factors for volume and price trends
+    df['Volume_Price_Divergence'] = ((df['Volume_Change'] > 0) & (df['close'].pct_change() < 0)).astype(int)
+    df['Volume_Price_Convergence'] = ((df['Volume_Change'] < 0) & (df['close'].pct_change() > 0)).astype(int)
+    
+    # Calculate historical volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Historical_Volatility'] = df['Daily_Return'].rolling(window=20).std()
+    
+    # Generate continuous factor for historical volatility
+    df['Volatility_Factor'] = df['Historical_Volatility']
+    
+    # Calculate intraday range
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Avg_Intraday_Range'] = df['Intraday_Range'].rolling(window=10).mean()
+    
+    # Generate continuous factor for average intraday range
+    df['Intraday_Range_Factor'] = df['Avg_Intraday_Range']
+    
+    # Calculate bid-ask spread
+    df['Bid_Ask_Spread'] = df['high'] - df['low']
+    df['Avg_Bid_Ask_Spread'] = df['Bid_Ask_Spread'].rolling(window=5).mean()
+    
+    # Generate continuous factor for average bid-ask spread
+    df['Bid_Ask_Spread_Factor'] = df['Avg_Bid_Ask_Spread']
+    
+    # Apply Bollinger Bands
+    df['Upper_Band'] = df['SMA_20'] + 2 * df['Historical_Volatility']
+    df['Lower_Band'] = df['SMA_20'] - 2 * df['Historical_Volatility']
+    
+    # Generate binary factor for Bollinger Bands
+    df['Bollinger_Bands_Factor'] = ((df['close'] > df['Upper_Band']) | (df['close'] < df['Lower_Band'])).astype(int)
+    
+    # Implement MACD
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
+    df['Signal_Line'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+    
+    # Generate binary factor for MACD crossover
+    df['MACD_Crossover'] = (df['MACD_Line'] > df['Signal_Line']).astype(int)
+    
+    # Analyze daily returns
+    df['Daily_Return_Factor'] = df['Daily_Return']
+    
+    # Evaluate open and close prices
+    df['Open_Close_Trend'] = (df['close'] > df['open']).astype(int)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['SMA_Crossover'] +
+        df['RSI_Factor'] +
+        df['Volume_Price_Divergence'] +
+        df['Volume_Price_Convergence'] +
+        df['Volatility_Factor'] +
+        df['Intraday_Range_Factor'] +
+        df['Bid_Ask_Spread_Factor'] +
+        df['Bollinger_Bands_Factor'] +
+

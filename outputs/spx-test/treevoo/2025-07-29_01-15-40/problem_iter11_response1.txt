@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Integrated Momentum
+    def integrated_momentum(close, period=5):
+        price_change = close - close.shift(period)
+        return price_change.rolling(window=period).sum()
+
+    # Calculate Intraday Price Movements and Directional Changes
+    def intraday_movements(high, low, open, close):
+        range_ = high - low
+        spread = close - open
+        return range_, spread
+
+    # Integrate Volume into Momentum
+    def volume_weighted_price(open, close, volume):
+        vwap = (open + close) / 2 * volume / volume
+        sma = close.rolling(window=5).mean()
+        return 0.5 * (vwap + sma)
+
+    # Adjust for Volume Activity
+    def adjust_for_volume(volume, combined_momentum):
+        volume_change = volume / volume.shift(1)
+        adjusted_momentum = combined_momentum * volume_change
+        return adjusted_momentum
+
+    # Calculate Net Intraday and Directional Movements
+    def net_intraday_movements(range_, spread, volume):
+        net_movement = (range_ + spread) * (volume / volume.mean())
+        return net_movement
+
+    # Calculate Intraday High-Low Spread
+    def intraday_high_low_spread(high, low):
+        return high - low
+
+    # Calculate Average Intraday High-Low Spread
+    def average_intraday_high_low_spread(high_low_spread, period=5):
+        return high_low_spread.rolling(window=period).mean()
+
+    # Compute High-Low Momentum Score
+    def high_low_momentum_score(high_low_spread, avg_high_low_spread, volume):
+        score = (high_low_spread - avg_high_low_spread) * (volume / volume.mean())
+        return score
+
+    # Calculate Price Reversal Indicator
+    def price_reversal_indicator(high, low, open, close):
+        high_low_spread = high - low
+        open_close_spread = close - open
+        return high_low_spread - open_close_spread
+
+    # Composite Factor Construction
+    def composite_factor(integrated_momentum, adjusted_momentum, high_low_momentum_score, price_reversal):
+        return integrated_momentum + adjusted_momentum * high_low_momentum_score * price_reversal
+
+    # Apply the functions
+    close = df['close']
+    high = df['high']
+    low = df['low']
+    open = df['open']
+    volume = df['volume']
+
+    int_mom = integrated_momentum(close)
+    range_, spread = intraday_movements(high, low, open, close)
+    vwp = volume_weighted_price(open, close, volume)
+    adj_mom = adjust_for_volume(volume, int_mom + vwp)
+    net_movement = net_intraday_movements(range_, spread, volume)
+    high_low_spread = intraday_high_low_spread(high, low)
+    avg_high_low_spread = average_intraday_high_low_spread(high_low_spread)
+    high_low_mom_score = high_low_momentum_score(high_low_spread, avg_high_low_spread, volume)
+    price_rev = price_reversal_indicator(high, low, open, close)
+    factor = composite_factor(int_mom, adj_mom, high_low_mom_score, price_rev)
+
+    return factor
+```

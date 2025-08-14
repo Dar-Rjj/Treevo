@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Sum over a window
+    df['momentum'] = df['aggregate_returns'].rolling(window=20).sum()
+    
+    # Intraday Trend Strength
+    df['daily_range'] = (df['high'] - df['low']) / df['low']
+    df['intraday_pct_change'] = (df['close'] - df['open']) / df['open']
+    
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['vol_weighted_high_low_vol'] = df['high_low_range'] * df['volume'] / df['avg_volume_5d']
+    
+    # Volume Adjusted Reversal Signal
+    df['prev_volume_momentum'] = df['volume'].pct_change()
+    df['close_to_next_open'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['inverse_close_to_next_open'] = -df['close_to_next_open']
+    
+    # Smoothed Moving Average of Composite Factor
+    df['composite_factor'] = df['momentum'] + df['intraday_pct_change'] + df['vol_weighted_high_low_vol'] + df['inverse_close_to_next_open']
+    df['sma_composite_factor'] = df['composite_factor'].rolling(window=5).mean()
+    df['ema_composite_factor'] = df['sma_composite_factor'].ewm(span=5, adjust=False).mean()
+    
+    # Confirm Momentum with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['positive_volume_filter'] = (df['volume_change'] > 0).astype(int)
+    df['ema_volume'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['volume_weighted_smoothed_returns'] = (df['close'] - df['close'].shift(1)) * (df['volume'] / df['ema_volume'])
+    
+    # Final Alpha Factor
+    df['price_intraday_momentum'] = df['momentum'] + (df['high'] - df['low']) / df['low'] + (df['close'] - df['open']) / df['open']
+    df['final_alpha_factor'] = df['price_intraday_momentum'] * df['volume_weighted_smoothed_returns']
+    
+    return df['final_alpha_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

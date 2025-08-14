@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['IntradayRange'] = df['high'] - df['low']
+    df['IntradayReturn'] = df['IntradayRange'] / df['close']
+
+    # Calculate Overnight Return
+    df['OvernightReturn'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    df['CombinedReturn'] = df['IntradayReturn'] + df['OvernightReturn']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['TypicalPrice'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VolumeWeightedPrice'] = df['TypicalPrice'] * df['volume']
+    df['VWAP'] = df['VolumeWeightedPrice'].cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    df['ReversalIndicator'] = np.where(df['VWAP'] > df['close'], 1, -1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['IntegratedReversalReturn'] = df['CombinedReturn'] * df['ReversalIndicator']
+
+    # Calculate Volume-Weighted Return
+    df['VolumeWeightedReturn'] = ((df['close'] - df['open']) / df['open']) * df['volume']
+    df['TotalVolumeWeightedReturn'] = df['VolumeWeightedReturn'].sum() / df['volume'].sum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['InitialAlphaFactor'] = df['IntegratedReversalReturn'] + df['TotalVolumeWeightedReturn']
+
+    # Calculate Volatility
+    df['DailyReturns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility'] = df['DailyReturns'].ewm(span=20).std()
+
+    # Adjust for Volatility
+    df['VolatilityAdjustedAlphaFactor'] = df['InitialAlphaFactor'] / df['Volatility']
+
+    # Incorporate Transaction Amount
+    df['AmountWeightedReturn'] = ((df['close'] - df['open']) / df['open']) * df['amount']
+    df['TotalAmountWeightedReturn'] = df['AmountWeightedReturn'].sum() / df['amount'].sum()
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    df['PreliminaryAlphaFactor'] = df['VolatilityAdjustedAlphaFactor'] + df['TotalAmountWeightedReturn']
+
+    # Incorporate Liquidity Measures
+    # Assuming shares outstanding is a constant value for simplicity
+    SHARES_OUTSTANDING = 1_000_000  # Example value, replace with actual data
+    df['TurnoverRatio'] = df['volume'] / SHARES_OUTSTANDING
+    # Assuming bid and ask prices are available in the DataFrame
+    df['BidAskSpread'] = (df['ask'] - df['bid']) / ((df['bid'] + df['ask']) / 2)
+
+    # Integrate Liquidity Measures with Preliminary Alpha Factor
+    df['FinalAlphaFactor'] = df['PreliminaryAlphaFactor'] * df['TurnoverRatio'] - df['BidAskSpread']
+
+    return df['FinalAlphaFactor']
+```

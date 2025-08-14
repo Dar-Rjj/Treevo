@@ -1,0 +1,29 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_wma10 = df['volume'].rolling(window=10, win_type='linear').mean()
+    daily_volume_trend = df['volume'] - volume_wma10
+    
+    # Determine if the trend is positive or negative
+    volume_trend_adjustment = np.where(daily_volume_trend > 0, 1.5, 0.5)
+    
+    # Calculate Price Momentum (5-day percentage change)
+    price_momentum = df['close'].pct_change(periods=5)
+    
+    # Determine if the momentum is positive or negative
+    price_momentum_adjustment = np.where(price_momentum > 0, 1.2, 0.8)
+    
+    # Combine Spread, Volume Trend, and Price Momentum
+    combined_factor = (high_low_spread 
+                       * daily_volume_trend 
+                       * volume_trend_adjustment 
+                       * price_momentum_adjustment)
+    
+    return combined_factor

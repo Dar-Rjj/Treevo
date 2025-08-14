@@ -1,0 +1,25 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df, n=14, m=50, l=200, alpha=0.1):
+    # Calculate Relative Strength
+    df['n_day_return'] = df['close'].pct_change(n)
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1
+    )
+    df['average_true_range'] = df['true_range'].rolling(window=n).mean()
+    df['relative_strength'] = df['n_day_return'] / df['average_true_range']
+
+    # Incorporate Moving Averages
+    df['sma'] = df['close'].rolling(window=m).mean()
+    df['lma'] = df['close'].rolling(window=l).mean()
+    df['moving_average_crossover'] = (df['sma'] - df['lma']) / df['lma']
+
+    # Combine Relative Strength and Moving Average Crossover
+    df['combined_indicator'] = df['relative_strength'] * df['moving_average_crossover']
+
+    # Apply Exponential Smoothing
+    df['smoothed_indicator'] = df['combined_indicator'].ewm(alpha=alpha, adjust=False).mean()
+
+    # Output the Smoothed Indicator as the Alpha Factor
+    return df['smoothed_indicator']

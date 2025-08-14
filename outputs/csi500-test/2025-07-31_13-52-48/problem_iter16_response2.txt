@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_period=20, range_period=10, net_change_period=10, volume_rising_period=10):
+    # Calculate the simple moving average (SMA) of the close price over a specific period
+    df['SMA'] = df['close'].rolling(window=sma_period).mean()
+    
+    # Subtract the SMA from the current close price to gauge deviation from the average
+    df['Close_SMA_Deviation'] = df['close'] - df['SMA']
+    
+    # Calculate the range as the difference between the day's high and low
+    df['Range'] = df['high'] - df['low']
+    
+    # Sum the daily ranges over a certain period to assess overall volatility
+    df['Total_Range'] = df['Range'].rolling(window=range_period).sum()
+    
+    # Compute the difference between open and close prices to find the day's net change
+    df['Net_Change'] = df['close'] - df['open']
+    
+    # Determine the frequency of positive vs. negative net changes over a period to gauge market direction
+    df['Positive_Net_Change'] = df['Net_Change'].apply(lambda x: 1 if x > 0 else 0)
+    df['Negative_Net_Change'] = df['Net_Change'].apply(lambda x: 1 if x < 0 else 0)
+    df['Positive_Count'] = df['Positive_Net_Change'].rolling(window=net_change_period).sum()
+    df['Negative_Count'] = df['Negative_Net_Change'].rolling(window=net_change_period).sum()
+    df['Net_Change_Frequency'] = df['Positive_Count'] - df['Negative_Count']
+    
+    # Evaluate the correlation between closing price and volume
+    df['Volume_Rising'] = df['close'].diff() > 0
+    df['Volume_Rising_Volume'] = df['volume'] * df['Volume_Rising']
+    df['Volume_Rising_Sum'] = df['Volume_Rising_Volume'].rolling(window=volume_rising_period).sum()
+    
+    # Combine multiple factors to create a composite indicator
+    alpha = (
+        0.4 * df['Close_SMA_Deviation'] + 
+        0.3 * df['Total_Range'] + 
+        0.1 * df['Net_Change_Frequency'] + 
+        0.2 * df['Volume_Rising_Sum']
+    )
+    
+    return alpha.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

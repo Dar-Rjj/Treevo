@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    df['close_pos_in_range'] = (df['close'] - df['open']) / df['high_low_range']
+    
+    # Calculate Intraday Volume Intensity
+    sum_vol_10 = df['volume'].rolling(window=10).sum()
+    median_vol_10 = df['volume'].rolling(window=10).median()
+    df['vol_intensity'] = df['volume'] / ((sum_vol_10 + median_vol_10) / 2)
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Identify Local Peaks and Troughs
+    peak_window = 10
+    trough_window = 10
+    df['peak'] = df['close'].rolling(window=peak_window).max()
+    df['trough'] = df['close'].rolling(window=trough_window).min()
+    
+    # Measure From High Point and Low Point
+    df['from_high'] = df['close'] - df['peak']
+    df['from_low'] = df['close'] - df['trough']
+    
+    # Average Trading Volume
+    avg_vol = df['volume'].rolling(window=10).mean()
+    
+    # Volume Anomaly Factor
+    df['vol_anomaly'] = df['volume'] / avg_vol
+    
+    # Money Flow Analysis
+    positive_flow = (df['daily_return'] * df['volume']).apply(lambda x: x if x > 0 else 0).rolling(window=10).sum()
+    negative_flow = (df['daily_return'] * df['volume']).apply(lambda x: x if x < 0 else 0).rolling(window=10).sum()
+    df['money_flow_ratio'] = positive_flow / negative_flow.abs()
+    
+    # Combine Factors
+    combined_factor = (df['vol_intensity'] * df['close_pos_in_range']) + \
+                      (df['close'] - df['close'].ewm(span=20).mean()) + \
+                      df['daily_return'] + \
+                      df['from_high'] + \
+                      df['from_low'] + \
+                      df['vol_anomaly'] + \
+                      df['money_flow_ratio']
+    
+    # Compound Factor
+    df['momentum_and_volume_anomaly'] = df['daily_return'] * (df['volume'] / avg_vol)
+    df['value_change_peaks_valleys_vol_trend'] = (df['close'] - df['trough']) / (df['peak'] - df['trough']) * (df['volume'] / avg_vol)
+    df['intraday_range_percentage'] = df['high_low_range'] / df['open']
+    df['close_to_open_momentum_shift'] = (df['close'] - df['open']) / df['close']
+    compound_factor = df['intraday_range_percentage'] + df['close_to_open_momentum_shift']
+    
+    df['final_alpha_factor'] = combined_factor + compound_factor
+    
+    return df['final_alpha_factor']
+```

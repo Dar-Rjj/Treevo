@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    breakout_strength = (daily_range * df['volume']) + open_to_close_movement
+    
+    # Dynamic Price Reversion
+    highest_high_10d = df['high'].rolling(window=10).max()
+    lowest_low_10d = df['low'].rolling(window=10).min()
+    proximity_to_10d_high = df['close'] - highest_high_10d
+    proximity_to_10d_low = lowest_low_10d - df['close']
+    min_proximity = pd.concat([proximity_to_10d_high, proximity_to_10d_low], axis=1).min(axis=1)
+    inverted_proximity = 1 / (1 + min_proximity.abs())
+    adjusted_reversion = inverted_proximity / df['close'].rolling(window=20).std()
+    
+    # Enhanced Momentum
+    volume_adjusted_momentum = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_volatility = ((open_high_diff + open_low_diff) / 2) * df['volume']
+    
+    # Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    ma_high_low_spread_20 = high_low_spread.rolling(window=20).mean()
+    spread_momentum = ma_high_low_spread_20 - ma_high_low_spread_20.shift(1)
+    
+    # Trend Component
+    ma_50 = df['close'].rolling(window=50).mean()
+    ma_200 = df['close'].rolling(window=200).mean()
+    trend_score = (ma_50 - ma_200) / ma_200
+    
+    # Final Alpha Factor
+    final_alpha_factor = (breakout_strength * 
+                          adjusted_reversion * 
+                          volume_adjusted_momentum * 
+                          weighted_volatility * 
+                          spread_momentum * 
+                          trend_score)
+    
+    return final_alpha_factor
+```

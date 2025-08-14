@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']).diff()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Confirm Momentum with Volume
+    df['volume_change'] = df['volume'].diff()
+    df['positive_volume'] = (df['volume_change'] > 0).astype(int)
+    
+    # Integrate Amount for Momentum Strengthening
+    df['amount_change'] = df['amount'].diff()
+    df['positive_amount'] = (df['amount_change'] > 0).astype(int)
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] / df['open']) - 1
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Average Volume Over a Period
+    df['average_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Combine High-Low Range and Volume
+    df['volume_weighted_high_low'] = df['high_low_range'] * df['volume']
+    df['normalized_volatility'] = df['volume_weighted_high_low'] / df['average_volume']
+    
+    # Adjust for Combined Volatility
+    df['adjusted_returns'] = df['aggregate_returns'] * df['normalized_volatility']
+    
+    # Introduce Trend Reversal Indicator
+    def calculate_rsi(prices, lookback=14):
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=lookback).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=lookback).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    df['rsi'] = calculate_rsi(df['close'])
+    df['50_day_ma'] = df['close'].rolling(window=50).mean()
+    df['trend_direction'] = (df['close'] > df['50_day_ma']).astype(int)
+    
+    # Apply Trend Reversal Logic
+    df['trend_reversal'] = ((df['rsi'] > 70) | (df['rsi'] < 30)) & (df['trend_direction'].diff() != 0).astype(int)
+    
+    # Smoothed Moving Average
+    df['sma_adjusted_returns'] = df['adjusted_returns'].rolling(window=5).mean()
+    df['ema_smoothed'] = df['sma_adjusted_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Final Factor Calculation
+    df['combined_factor'] = df['ema_smoothed'] * (1 + df['trend_reversal'])
+    df['alpha_signal'] = (df['combined_factor'] > 0).astype(int) - (df['combined_factor'] < 0).astype(int)
+    df['final_alpha_factor'] = df['price_momentum'] * df['positive_volume'] * df['positive_amount'] * df['adjusted_returns'] * df['alpha_signal']
+    
+    # Incorporate Trading Activity
+    df['turnover_ratio'] = df['volume'] / df['share_capital']
+    df['momentum_with_turnover'] = df['price_momentum'] * df['turnover_ratio']
+    
+    # Add Market Sentiment Indicator
+    df['market_sentiment'] = (df['news_sentiment_score'] + df['social_media_sentiment_score']) / 2
+    df['final_alpha_factor'] *= df['market_sentiment']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

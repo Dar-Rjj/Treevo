@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Change
+    price_change = df['close'].diff()
+    
+    # Compute Momentum (sum over the last 10 days)
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'].diff()
+    
+    # Adjust for Volume
+    volume_adjusted_range = high_low_range * volume_delta
+    
+    # Calculate Daily Volatility
+    daily_volatility = df[['high', 'low', 'open']].std(axis=1)
+    
+    # Adjust for Volatility
+    volatility_adjusted = (momentum + volume_adjusted_range) / daily_volatility
+    
+    # Combine Momentum, Volume-Adjusted Range, and Volatility Adjustment (sum over the last 20 days)
+    combined = (volatility_adjusted / volume_adjusted_range).rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum
+    high_low_momentum = high_low_range.diff().rolling(window=5).sum()
+    
+    # Adjust for Volume (scale by 5-day average volume)
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    high_low_momentum_adjusted = high_low_momentum * avg_5d_volume
+    
+    # Apply Exponential Moving Average Smoothing (10-day EMA)
+    smoothed_high_low_momentum = high_low_momentum_adjusted.ewm(span=10).mean()
+    interim_alpha_factor_1 = smoothed_high_low_momentum
+    
+    # Calculate Logarithmic Daily Returns
+    log_daily_returns = np.log(df['close']).diff()
+    
+    # Momentum Component
+    ema_21 = log_daily_returns.ewm(span=21).mean()
+    ema_60 = log_daily_returns.ewm(span=60).mean()
+    final_momentum = ema_21 - ema_60
+    
+    # Volatility Component
+    abs_log_daily_returns = np.abs(log_daily_returns)
+    ema_21_abs = abs_log_daily_returns.ewm(span=21).mean()
+    ema_60_abs = abs_log_daily_returns.ewm(span=60).mean()
+    final_volatility = ema_21_abs - ema_60_abs
+    
+    # Volume Component
+    log_daily_volume_changes = np.log(df['volume']).diff()
+    ema_21_volume = log_daily_volume_changes.ewm(span=21).mean()
+    ema_60_volume = log_daily_volume_changes.ewm(span=60).mean()
+    final_volume_momentum = ema_21_volume - ema_60_volume
+    
+    # Final Alpha Factor 2
+    final_alpha_factor_2 = final_momentum + final_volatility + final_volume_momentum
+    
+    # Final Alpha Factor
+    final_alpha_factor = interim_alpha_factor_1 + final_alpha_factor_2
+    
+    return final_alpha_factor
+```

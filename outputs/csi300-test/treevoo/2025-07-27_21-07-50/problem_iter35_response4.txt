@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Core Intraday Components
+    intraday_return = (df['close'] - df['open']) / df['open']
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    integrated_vol_adj_spread = (high_low_spread + open_close_spread) * np.sqrt(df['volume'])
+
+    # Incorporate Log-Return Scaled by Range
+    log_return = np.log(df['close'] / df['open'])
+    scaled_log_return = log_return / high_low_spread
+
+    # Adjust for Price and Volume Volatility
+    price_volatility = df['close'].pct_change().rolling(window=20).std()
+    volume_volatility = df['volume'].rolling(window=20).std()
+    corrected_intraday_component = (intraday_return * np.sqrt(df['volume'])) - price_volatility - volume_volatility
+
+    # Apply Trend Adjustment
+    long_term_trend = df['close'] * np.sqrt(df['volume']).rolling(window=60).mean()
+    short_term_trend = df['close'].ewm(span=20).mean()
+    trend_difference = short_term_trend - long_term_trend
+    trend_adjusted_factor = trend_difference.apply(lambda x: 1.5 if x > 0 else 0.5)
+
+    # Volume-Weighted Price Movement and Momentum Adjustment
+    daily_price_change = df['close'] - df['open']
+    vol_weighted_price_change = daily_price_change * np.sqrt(df['volume'])
+    sqrt_volume_20_ma = np.sqrt(df['volume']).rolling(window=20).mean()
+    combined_alpha = (log_return / high_low_spread) + (vol_weighted_price_change / sqrt_volume_20_ma)
+
+    # Momentum Components
+    momentum_20 = df['close'] - df['close'].shift(20)
+    volatility_20 = df['close'].rolling(window=20).std()
+    scaled_momentum_20 = momentum_20 / volatility_20
+    momentum_5 = df['close'] - df['close'].shift(5)
+    volatility_5 = df['close'].rolling(window=5).std()
+    scaled_momentum_5 = momentum_5 / volatility_5
+
+    # Intraday Volume-Ratio Factor
+    intraday_volume_ratio = df['volume'] / df['volume'].rolling(window=20).mean()
+    adjusted_intraday_return_by_volume_ratio = intraday_return * intraday_volume_ratio
+
+    # Final Alpha Combination
+    final_alpha = (
+        integrated_vol_adj_spread +
+        scaled_log_return +
+        corrected_intraday_component +
+        trend_adjusted_factor * combined_alpha +
+        scaled_momentum_20 +
+        scaled_momentum_5 +
+        adjusted_intraday_return_by_volume_ratio
+    )
+
+    # Additional Trend Adjustment
+    long_term_trend_100 = df['close'].rolling(window=100).mean()
+    short_term_trend_20_ema = df['close'].ewm(span=20).mean()
+    trend_difference_final = short_term_trend_20_ema - long_term_trend_100
+    final_alpha = final_alpha.apply(lambda x, t: x * 1.5 if t > 0 else x * 0.5, args=(trend_difference_final,))
+
+    return final_alpha
+```

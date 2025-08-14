@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day return as a momentum indicator
+    momentum = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate the volume-weighted average price over the last 10 days
+    vwap_10 = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Calculate the 10-day price volatility
+    volatility = df['close'].pct_change().rolling(window=10).std()
+    
+    # Calculate the 10-day and 30-day moving averages of the close price
+    ma_10 = df['close'].rolling(window=10).mean()
+    ma_30 = df['close'].rolling(window=30).mean()
+    
+    # Calculate the trend strength as the relative position of the 10-day MA to the 30-day MA
+    trend_strength = (ma_10 - ma_30) / df['close']
+    
+    # Calculate the 20-day high-low range to capture short-term price movement
+    range_20 = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    
+    # Calculate the 50-day high-low range to capture longer-term price movement
+    range_50 = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Incorporate volume into the factor using the 50-day volume ratio
+    volume_factor = df['volume'] / df['volume'].rolling(window=50).mean()
+    
+    # Calculate the 20-day Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=20).mean()
+    avg_loss = loss.rolling(window=20).mean()
+    rs = avg_gain / avg_loss
+    rsi_20 = 100 - (100 / (1 + rs))
+    
+    # Calculate the 10-day money flow index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_flow_sum = positive_flow.rolling(window=10).sum()
+    negative_flow_sum = negative_flow.rolling(window=10).sum()
+    mfi = 100 - (100 / (1 + (positive_flow_sum / negative_flow_sum)))
+    
+    # Combine the factors into a single alpha factor
+    factor = (momentum * (vwap_10 + 1e-7)**(-1) * (volatility + 1e-7)**(-1) *
+              trend_strength * (range_20 + 1e-7)**(-1) * (range_50 + 1e-7)**(-1) *
+              (rsi_20 / 100) * (mfi / 100) * volume_factor)
+    
+    # Rank the factor values across all stocks on each date
+    factor_ranked = factor.groupby(level=0).rank(pct=True)
+    
+    return factor_ranked
+```

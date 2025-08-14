@@ -1,0 +1,40 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day simple moving average of the close price
+    sma_5 = df['close'].rolling(window=5).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices
+    weighted_prices = (0.2 * df['open'] + 0.3 * df['high'] + 0.3 * df['low'] + 0.2 * df['close'])
+    
+    # Calculate the ratio of (high - low) to the 5-day simple moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (sma_5 + 1e-7)
+    
+    # Calculate the 5-day exponential moving average of the close price
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the 5-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=5).std()
+    
+    # Calculate the 20-day simple moving average of the close price for longer-term trend
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate the 20-day exponential moving average of the close price for longer-term trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the momentum factor as the change in the 5-day EMA over the past 5 days
+    ema_momentum = ema_5 - ema_5.shift(5)
+    
+    # Calculate liquidity factor as the ratio of volume to amount
+    liquidity_factor = df['volume'] / (df['amount'] + 1e-7)
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (
+        (weighted_prices - sma_5) / (volatility_ratio + 1e-7) +
+        (ema_5 - df['close']) / (realized_volatility + 1e-7) +
+        (sma_20 - ema_20) / (sma_20 + 1e-7) +
+        ema_momentum / (realized_volatility + 1e-7) +
+        liquidity_factor
+    )
+    return alpha_factor
+```

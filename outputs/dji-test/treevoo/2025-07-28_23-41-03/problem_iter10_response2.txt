@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['50_SMA'] = df['close'].rolling(window=50).mean()
+    df['100_SMA'] = df['close'].rolling(window=100).mean()
+    df['200_SMA'] = df['close'].rolling(window=200).mean()
+
+    # Subtract longer SMA from shorter SMA
+    df['SMA_diff_100_200'] = df['100_SMA'] - df['200_SMA']
+    df['SMA_diff_50_100'] = df['50_SMA'] - df['100_SMA']
+
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] / df['open'] - 1
+
+    # Calculate Reversal Signal
+    df['reversal_signal'] = -1 * (df['intraday_return'] > 0) + 1 * (df['intraday_return'] < 0)
+
+    # Calculate ATR (Average True Range)
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 1].abs() + \
+                       (df['high'] - df['low']).abs() + \
+                       (df['close'].shift(1) - df['high']).abs() + \
+                       (df['close'].shift(1) - df['low']).abs()
+    df['ATR'] = df['true_range'].rolling(window=14).mean()
+
+    # Multiply ATR by Reversal Signal and calculate EMA
+    df['ATR_reversal'] = df['ATR'] * df['reversal_signal']
+    df['ATR_reversal_ema'] = df['ATR_reversal'].ewm(span=7, adjust=False).mean()
+
+    # Synthesize the alpha factor
+    df['alpha_factor'] = df['SMA_diff_50_100'] + df['SMA_diff_100_200'] + df['ATR_reversal_ema']
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Enhanced Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    volume_adjusted_range = daily_range * df['volume']
+    open_to_close_movement = df['close'] - df['open']
+    vol_adj_daily_range_with_open_close = volume_adjusted_range + open_to_close_movement
+    
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    
+    proximity_to_high = df['close'] - ten_day_high
+    proximity_to_low = df['close'] - ten_day_low
+    min_proximity = pd.Series([min(proximity_to_high[i], proximity_to_low[i]) for i in range(len(proximity_to_high))])
+    
+    inverted_proximity = -min_proximity
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    adjusted_proximity = inverted_proximity / twenty_day_volatility
+    
+    # Moving Sum of 20-Day High-Low Spreads
+    high_low_spread = df['high'] - df['low']
+    moving_sum_20d_high_low = high_low_spread.rolling(window=20).sum()
+    
+    # Spread Momentum
+    spread_momentum = moving_sum_20d_high_low - moving_sum_20d_high_low.shift(1)
+    
+    # Volume-Adjusted Momentum with Open-to-Close Movement
+    simple_momentum = df['close'] - df['close'].shift(1)
+    avg_volume = (df['volume'] + df['volume'].shift(1)) / 2
+    adjusted_momentum_by_volume = simple_momentum * (df['volume'] / avg_volume)
+    open_to_close = df['close'] - df['open']
+    combined_indicator = 0.6 * adjusted_momentum_by_volume + 0.4 * open_to_close
+    strong_moves = (combined_indicator > 0).astype(int)
+    
+    # Relative Strength
+    twenty_day_avg_close = df['close'].rolling(window=20).mean()
+    relative_strength = df['close'] / twenty_day_avg_close
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    n = 10
+    amount_per_unit_close = df['amount'].rolling(window=n).sum() / df['close']
+    prev_amount_per_unit_close = df['amount'].shift(n+1).rolling(window=n).sum() / df['close'].shift(n+1)
+    differential = amount_per_unit_close - prev_amount_per_unit_close
+    
+    # Final Alpha Factor
+    alpha_factor = adjusted_proximity * spread_momentum * strong_moves * relative_strength * differential
+    return alpha_factor
+```

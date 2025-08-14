@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+
+    # Short-Term Lookback (5 days)
+    df['5_day_SMA'] = df['Close_to_Open_Return'].rolling(window=5).mean()
+    df['5_day_STD'] = df['Close_to_Open_Return'].rolling(window=5).std()
+
+    # Mid-Term Lookback (10 days)
+    df['10_day_SMA'] = df['Close_to_Open_Return'].rolling(window=10).mean()
+    df['10_day_STD'] = df['Close_to_Open_Return'].rolling(window=10).std()
+
+    # Combine Multi-Period Volatilities
+    short_term_volatility_weight = 0.4
+    mid_term_volatility_weight = 0.6
+    df['Combined_Volatility'] = (short_term_volatility_weight * df['5_day_STD']) + (mid_term_volatility_weight * df['10_day_STD'])
+
+    # Calculate Price Trend Indicator
+    df['5_day_MA_close'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA_close'] = df['close'].rolling(window=20).mean()
+    df['Trend'] = (df['5_day_MA_close'] > df['20_day_MA_close']).astype(int)
+
+    # Adjust Combined Factor by Price Trend Indicator
+    def adjust_factor(row):
+        if row['Trend'] == 1:
+            return 1.2 * row['Combined_Volatility']
+        else:
+            return 0.8 * row['Combined_Volatility']
+
+    df['Adjusted_Factor'] = df.apply(adjust_factor, axis=1)
+
+    # Return the adjusted factor as a Series
+    return df['Adjusted_Factor']
+```

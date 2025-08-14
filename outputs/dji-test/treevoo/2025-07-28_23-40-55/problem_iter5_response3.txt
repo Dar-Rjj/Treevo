@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Price Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Evaluate Weighted Average Volume Over Period
+    n_days = 30  # Number of days in the period for averaging
+    df['avg_volume'] = df['volume'].rolling(window=n_days).mean()
+    
+    # Calculate 10-Day and 30-Day Moving Averages of High-Low Spread
+    df['10_day_mavg_high_low'] = df['high_low_spread'].rolling(window=10).mean()
+    df['30_day_mavg_high_low'] = df['high_low_spread'].rolling(window=30).mean()
+    
+    # Derive Momentum by Comparing Averages
+    df['momentum'] = df['10_day_mavg_high_low'] - df['30_day_mavg_high_low']
+    
+    # Apply Volume-Weighted Adjustment to Momentum
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_adjusted_momentum'] = df['momentum'] * (df['volume'] / df['10_day_avg_volume'])
+    
+    # Calculate Short-Term and Long-Term EMA
+    df['short_term_ema'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['long_term_ema'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate EMA Difference
+    df['ema_diff'] = df['short_term_ema'] - df['long_term_ema']
+    
+    # Combine Volume-Adjusted Momentum and EMA Difference
+    df['combined_momentum'] = df['volume_adjusted_momentum'] + df['ema_diff']
+    
+    # Assess Positive vs Negative Momentum Contribution
+    df['close_t_minus_n'] = df['close'].shift(n_days)
+    df['positive_momentum'] = (df['close'] - df['close_t_minus_n']) > 0
+    df['adjusted_combined_momentum'] = df.apply(lambda row: row['combined_momentum'] * 1.5 if row['positive_momentum'] else row['combined_momentum'], axis=1)
+    
+    # Integrate Accumulated Momentum Impact
+    # Assign greater weight to longer time horizons
+    df['weighted_momentum'] = df['adjusted_combined_momentum'] * (np.arange(len(df)) + 1) / len(df)
+    
+    return df['weighted_momentum']
+```

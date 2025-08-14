@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Price Movement
+    high_low_diff = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+
+    # Aggregate and Smooth Price Movements
+    sum_high_low_diff = high_low_diff.rolling(window=20).sum()
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+    smooth_high_low_range = high_low_diff.ewm(span=20, adjust=False).mean()
+    long_term_high_low_range = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+
+    # Compute Momentum of High-Low Ranges
+    momentum_high_low_ranges = long_term_high_low_range - smooth_high_low_range
+
+    # Calculate True Range
+    true_range = (df['high'] - df['low']).combine(df['high'] - df['close'].shift(1), max).combine(df['close'].shift(1) - df['low'], max)
+
+    # Calculate Rolling Average True Range (ATR)
+    atr = true_range.rolling(window=20).mean()
+
+    # Adjust Price Momentum by ATR
+    weighted_high_low_range = sum_high_low_diff / atr
+    weighted_close_open_change = sum_close_open_change / atr
+    adjusted_momentum_score = (weighted_high_low_range + weighted_close_open_change) / 2
+
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = (df['volume'] > avg_volume * 1.5).astype(int)
+    volume_spike = (df['volume'] > 2 * df['volume'].rolling(window=5).mean()).astype(int)
+
+    # Adjust Momentum Based on Volume
+    adjusted_momentum = adjusted_momentum_score * (1 - volume_spike * 0.25)
+
+    # Integrate Combined Factors
+    interim_alpha_factor = adjusted_momentum * high_volume_days
+
+    # Combine ATR and Price Momentum
+    final_alpha_factor = interim_alpha_factor + momentum_high_low_ranges
+
+    # Incorporate Recent Price Trend
+    moving_avg_close = df['close'].rolling(window=20).mean()
+    price_trend_multiplier = np.where(moving_avg_close.diff() > 0, 1.1, 0.9)
+    final_alpha_factor *= price_trend_multiplier
+
+    # Introduce New Factor: Volume-Weighted ATR
+    high_volume_days_tr = true_range[high_volume_days == 1]
+    volume_weighted_atr = high_volume_days_tr.rolling(window=20).mean()
+    adjusted_final_alpha_factor = final_alpha_factor / volume_weighted_atr
+
+    # Market Sentiment Factors
+    open_close_spread = df['open'] - df['close']
+    daily_high_low_range_percentage = (df['high'] - df['low']) / df['low'] * 100
+    combined_sentiment_score = (open_close_spread + daily_high_low_range_percentage) / 2
+
+    # Synthetic Alpha Factor
+    synthetic_alpha_factor = (final_alpha_factor + combined_sentiment_score) / 2
+
+    return synthetic_alpha_factor
+```

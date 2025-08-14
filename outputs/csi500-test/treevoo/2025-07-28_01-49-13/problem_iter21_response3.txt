@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Momentum
+    close_to_next_open_return = (df['open'].shift(-1) - df['close']) / df['close']
+    volume_weighted_momentum = (close_to_next_open_return * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    max_adjusted_close = df['close'].rolling(window=5).max()
+    min_open = df['open'].rolling(window=5).min()
+    
+    # Calculate Intraday Range to Open Ratio
+    intraday_range_to_open_ratio = intraday_range / df['open']
+    
+    # Calculate Volume Momentum
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    volume_momentum = (close_to_close_return * daily_volume_change).rolling(window=5).sum() / daily_volume_change.rolling(window=5).sum()
+    
+    # Combine Intraday Factors
+    combined_intraday_factors = (intraday_range_to_open_ratio * volume_weighted_momentum) * (max_adjusted_close - min_open)
+    
+    # Adjust by Intraday Range to Open Ratio and Volume Momentum
+    high_low_envelope = df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()
+    adjusted_combined_intraday_factors = (intraday_range_to_open_ratio * volume_momentum) * (high_low_envelope)
+    
+    # Calculate Volume Weighted Adjusted Return
+    volume_weighted_adjusted_return = (df['volume'] * combined_intraday_factors).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate Price Change Momentum
+    price_change_momentum = ((df['high'] + df['low']) / 2 - (df['high'].shift(1) + df['low'].shift(1)) / 2) * intraday_range
+    
+    # Detect Volume Spike
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike_indicator = (daily_volume_change > daily_volume_change.quantile(0.9)).astype(int)
+    
+    # Introduce New Factor: Intraday Momentum with Volume Adjustment
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    intraday_momentum_with_volume_adjustment = (close_to_close_return * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Final Factor Calculation
+    final_factor = (volume_weighted_adjusted_return * price_change_momentum * volume_spike_indicator + intraday_momentum_with_volume_adjustment)
+    
+    return final_factor
+```

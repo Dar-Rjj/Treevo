@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Compute Average Price Momentum over 5 Days
+    df['price_momentum_5d'] = df['price_change'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Compute Average Volume Change over 10 Days
+    df['volume_change_10d'] = df['volume_change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['momentum_volume_surge'] = df['price_momentum_5d'] * df['volume_change_10d']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'] - df['open']
+    
+    # Compute Moving Sum of Positive Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: x if x > 0 else 0)
+    df['moving_sum_positive_returns'] = df['positive_returns'].rolling(window=21).sum()
+    
+    # Volume Adjusted Momentum
+    df['cumulative_volume_21d'] = df['volume'].rolling(window=21).sum()
+    df['volume_adjusted_momentum'] = (df['moving_sum_positive_returns'] * df['cumulative_volume_21d']) / 21
+    
+    # Compute High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'].diff()
+    
+    # Calculate Volume Surge Component
+    df['volume_change_pct'] = df['volume'].pct_change()
+    
+    # Combine High-Low Range and Volume
+    df['high_low_volume_combo'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    n = 20
+    df['avg_volume_n'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_n']
+    
+    # Adjust by Average Amount
+    m = 20
+    df['avg_amount_m'] = df['amount'].rolling(window=m).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount_m']
+    
+    # Introduce Weighting Factors
+    w1 = 0.2
+    w2 = 0.3
+    w3 = 0.2
+    w4 = 0.1
+    w5 = 0.2
+    
+    # Combine Weighted Components
+    df['weighted_high_low_volume'] = w1 * df['high_low_volume_combo']
+    df['weighted_price_momentum'] = w2 * df['price_momentum_5d']
+    df['weighted_volume_surge'] = w3 * df['volume_change_10d']
+    df['weighted_volume_ratio'] = w4 * df['volume_ratio']
+    df['weighted_amount_ratio'] = w5 * df['amount_ratio']
+    
+    df['combined_alpha_factor'] = (df['weighted_high_low_volume'] + 
+                                   df['weighted_price_momentum'] + 
+                                   df['weighted_volume_surge'] + 
+                                   df['weighted_volume_ratio'] + 
+                                   df['weighted_amount_ratio'])
+    
+    # Add Volume Adjusted Momentum to Combined Momentum and Volume Adjustment
+    df['final_alpha_factor'] = df['combined_alpha_factor'] + df['volume_adjusted_momentum']
+    
+    return df['final_alpha_factor']
+```

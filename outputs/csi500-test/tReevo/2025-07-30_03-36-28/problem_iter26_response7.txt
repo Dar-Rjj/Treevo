@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_lookback = 50
+    vol_adj_volatility_lookback = 20
+    price_momentum_lookback = 10
+    percentage_change_lookback = 5
+    long_term_sma_lookback = 200
+    daily_turnover_lookback = 30
+    avg_dollar_volume_lookback = 30
+    rolling_vwap_lookback = 30
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_high_low_diff'] = df['high_low_diff'] * df['volume']
+    df['vol_adj_volatility'] = df['vol_weighted_high_low_diff'].rolling(window=vol_adj_volatility_lookback).mean()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=price_momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['percentage_change'] = df['close'].pct_change(periods=percentage_change_lookback)
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['long_term_SMA'] = df['close'].rolling(window=long_term_sma_lookback).mean()
+    df['trend_indicator'] = (df['SMA'] > df['long_term_SMA']).astype(int)
+    
+    # Incorporate Advanced Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['avg_daily_turnover'] = df['daily_turnover'].rolling(window=daily_turnover_lookback).mean()
+    
+    df['avg_dollar_volume'] = df['volume'] * df['close']
+    df['avg_avg_dollar_volume'] = df['avg_dollar_volume'].rolling(window=avg_dollar_volume_lookback).mean()
+    
+    df['vwap'] = (df['volume'] * df['close']).cumsum() / df['volume'].cumsum()
+    df['rolling_vwap'] = df['vwap'].rolling(window=rolling_vwap_lookback).mean()
+    
+    # Adjust Weights Based on Advanced Liquidity
+    df['weight_daily_turnover'] = df['avg_daily_turnover'] / df['avg_daily_turnover'].max()
+    df['weight_avg_dollar_volume'] = df['avg_avg_dollar_volume'] / df['avg_avg_dollar_volume'].max()
+    df['weight_vwap'] = df['rolling_vwap'] / df['rolling_vwap'].max()
+    
+    # Final Alpha Factor
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adj_volatility': -0.2,
+        'percentage_change': 0.1,
+        'high_low_range': -0.1,
+        'trend_indicator': 0.2,
+        'weight_daily_turnover': 0.05,
+        'weight_avg_dollar_volume': 0.05,
+        'weight_vwap': 0.05
+    }
+    
+    df['alpha_factor'] = (
+        weights['price_momentum'] * df['price_momentum'] +
+        weights['vol_adj_volatility'] * df['vol_adj_volatility'] +
+        weights['percentage_change'] * df['percentage_change'] +
+        weights['high_low_range'] * df['high_low_range'] +
+        weights['trend_indicator'] * df['trend_indicator'] +
+        weights['weight_daily_turnover'] * df['weight_daily_turnover'] +
+        weights['weight_avg_dollar_volume'] * df['weight_avg_dollar_volume'] +
+        weights['weight_vwap'] * df['weight_vwap']
+    )
+    
+    # Adjust Weights Dynamically
+    df['alpha_factor'] *= (df['trend_indicator'] + 1)
+    df['alpha_factor'] *= (df['weight_daily_turnover'] + df['weight_avg_dollar_volume'] + df['weight_vwap'])
+    
+    return df['alpha_factor']
+```

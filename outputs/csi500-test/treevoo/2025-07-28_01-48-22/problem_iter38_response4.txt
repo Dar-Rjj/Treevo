@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Daily Log Return
+    df['log_return'] = df['close'].apply(lambda x: np.log(x) if x > 0 else 0).diff()
+    
+    # 20-Day Momentum
+    df['20_day_momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Intraday Momentum Component
+    df['intraday_momentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    
+    # Historical Momentum Component
+    df['historical_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Combine Momentum Components
+    df['combined_momentum'] = df['intraday_momentum'] + df['historical_momentum']
+    
+    # Smooth Combined Momentum
+    df['smoothed_momentum'] = df['combined_momentum'].rolling(window=5).mean()
+    
+    # 20-Day Volume Volatility
+    df['20_day_volume_volatility'] = df['volume'].pct_change().rolling(window=20).std()
+    
+    # Average Volume
+    df['average_volume'] = df['volume'].rolling(window=10).sum() / 10
+    
+    # Average Daily Range
+    df['average_daily_range'] = (df['high'] - df['low']).rolling(window=10).sum() / 10
+    
+    # Volatility Multiplier
+    df['volatility_multiplier'] = 1 / (df['average_daily_range'] + 1)
+    
+    # Adjusted Smoothed Momentum
+    df['adjusted_smoothed_momentum'] = (df['smoothed_momentum'] / df['20_day_volume_volatility'] * df['average_volume']) * df['volatility_multiplier']
+    
+    # Volume-Price Indicator
+    df['volume_difference'] = df['volume'] - df['volume'].shift(1)
+    df['volume_price_indicator'] = (df['volume_difference'] * 0.5) + ((df['high'] - df['low']).rolling(window=10).sum() / 10 * 0.3) + (df['close'] - df['close'].shift(1))
+    
+    # Relative Strength
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # Volume Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].rolling(window=20).mean() + 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Multiply Relative Strength by Volume Spike Indicator
+    df['relative_strength_with_spike'] = df['relative_strength'] * df['volume_spike']
+    
+    # High-Low Range Over Average
+    df['high_low_range_over_average'] = (df['high'] - df['low']) / df['average_daily_range']
+    
+    # Final Factor
+    df['final_factor'] = (df['adjusted_smoothed_momentum'] * 0.4) + (df['volume_price_indicator'] * 0.3) + (df['relative_strength_with_spike'] * 0.2) + (df['high_low_range_over_average'] * 0.1)
+    
+    return df['final_factor']
+```

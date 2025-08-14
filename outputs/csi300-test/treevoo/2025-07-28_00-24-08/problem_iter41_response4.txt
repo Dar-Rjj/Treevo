@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day's Overnight Return
+    overnight_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    aggregate_returns = (intraday_return + overnight_return) / 2
+    
+    # Weight High-Low Range by Volume
+    high_low_weighted = (df['high'] - df['low']) * df['volume']
+    
+    # Adjust for Combined Volatility
+    adjusted_returns = aggregate_returns * high_low_weighted / df['close']
+    
+    # Smoothed Moving Average
+    sma_5 = adjusted_returns.rolling(window=5).mean()
+    ema_sma = sma_5.ewm(span=5, adjust=False).mean()
+    
+    # Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(7)
+    
+    # Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(25)
+    
+    # Price Momentum Ratio
+    momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    integrated_factor = (intraday_return * overnight_return) * momentum_ratio
+    average_volume = df['volume'].rolling(window=7).mean()
+    condition = df['volume'] > average_volume
+    integrated_factor[condition] *= 1.5
+    integrated_factor[~condition] *= 0.5
+    
+    # Final Factor
+    final_factor = integrated_factor + ema_sma
+    
+    # Additional Components
+    # Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+    
+    # Weight by Intraday Volatility
+    weighted_adjusted_returns = intraday_volatility * volume_adjusted_returns
+    
+    # Smoothed Moving Average of Weighted Adjusted Returns
+    sma_5_weighted = weighted_adjusted_returns.rolling(window=5).mean()
+    ema_sma_weighted = sma_5_weighted.ewm(span=5, adjust=False).mean()
+    
+    # Integrate Intraday and Previous Day's Returns
+    integrated_intraday_overnight = intraday_return * overnight_return
+    
+    # Combine Price Momentum and Intraday Reversal
+    combined_price_momentum = momentum_ratio * integrated_intraday_overnight
+    
+    # Conditionally Adjust by Volume Surge
+    condition_volume_surge = df['volume'] > average_volume
+    combined_price_momentum[condition_volume_surge] *= 1.8
+    combined_price_momentum[~condition_volume_surge] *= 0.7
+    
+    # Incorporate High-Low Volatility into Final Factor
+    high_low_volatility = intraday_volatility * (df['high'] - df['low'])
+    
+    # Generate Final Alpha Factor
+    daily_dollar_volume = df['volume'] * df['close']
+    final_alpha_factor = ema_sma_weighted + combined_price_momentum + high_low_volatility
+    final_alpha_factor /= daily_dollar_volume
+    
+    return final_alpha_factor.dropna()
+```

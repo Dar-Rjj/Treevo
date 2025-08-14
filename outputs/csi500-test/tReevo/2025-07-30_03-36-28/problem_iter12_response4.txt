@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short = 20
+    vol_adj_lookback = 10
+    momentum_n = 5
+    pct_change_lookback = 1
+    sma_long = 100
+    turnover_lookback = 30
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adj_Volatility_Rolling'] = df['Volume_Adjusted_Volatility'].rolling(window=vol_adj_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Momentum_Numerator'] = df['close'] - df['SMA_Short']
+    df['Momentum_Denominator'] = df['close'].rolling(window=momentum_n).mean()
+    df['Price_Momentum'] = df['Momentum_Numerator'] / df['Momentum_Denominator']
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change_Close'] = df['close'].pct_change(pct_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['SMA_Long'] = df['close'].rolling(window=sma_long).mean()
+    df['Market_Trend'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+    
+    # Incorporate Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Turnover_Rolling'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Optimize Dynamic Weight Adjustments Based on Market Conditions
+    df['Weight_Price_Momentum'] = 0.4 + 0.1 * (df['Market_Trend'] - 0.5) + 0.1 * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    df['Weight_Vol_Adj_Volatility'] = 0.3 + 0.1 * (df['Market_Trend'] - 0.5) + 0.1 * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    df['Weight_Additional_Prices'] = 0.1 + 0.1 * (df['Market_Trend'] - 0.5) + 0.1 * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    df['Weight_Market_Trend'] = 0.1 + 0.1 * (df['Market_Trend'] - 0.5) + 0.1 * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    df['Weight_Liquidity'] = 0.1 + 0.1 * (df['Market_Trend'] - 0.5) + 0.1 * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    
+    # Ensure the Weights Sum to 1
+    df['Total_Weight'] = df['Weight_Price_Momentum'] + df['Weight_Vol_Adj_Volatility'] + df['Weight_Additional_Prices'] + df['Weight_Market_Trend'] + df['Weight_Liquidity']
+    df['Weight_Price_Momentum'] /= df['Total_Weight']
+    df['Weight_Vol_Adj_Volatility'] /= df['Total_Weight']
+    df['Weight_Additional_Prices'] /= df['Total_Weight']
+    df['Weight_Market_Trend'] /= df['Total_Weight']
+    df['Weight_Liquidity'] /= df['Total_Weight']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Weight_Price_Momentum'] * df['Price_Momentum'] +
+        df['Weight_Vol_Adj_Volatility'] * df['Vol_Adj_Volatility_Rolling'] +
+        df['Weight_Additional_Prices'] * (df['Pct_Change_Close'] + df['High_Low_Range']) +
+        df['Weight_Market_Trend'] * df['Market_Trend'] +
+        df['Weight_Liquidity'] * (df['Turnover_Rolling'] / df['Daily_Turnover'])
+    )
+    
+    return df['Alpha_Factor']
+```

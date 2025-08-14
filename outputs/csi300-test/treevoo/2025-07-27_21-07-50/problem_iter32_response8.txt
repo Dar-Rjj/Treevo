@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Volatility
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    combined_spreads = (high_low_spread + open_close_spread) * df['volume']
+
+    # Volume-Adjusted Momentum (VAMI)
+    daily_price_change = df['close'] - df['open']
+    volume_adjusted_price_change = daily_price_change * df['volume']
+    ema_volume_20 = df['volume'].ewm(span=20, adjust=False).mean()
+    vami = volume_adjusted_price_change / ema_volume_20
+
+    # Volume-Weighted Close
+    volume_weighted_close = df['close'] * df['volume']
+
+    # Simple Moving Average (SMA) of Volume-Weighted Close
+    sma_volume_weighted_close_21 = volume_weighted_close.rolling(window=21).mean()
+
+    # Weighted Moving Average (WMA) of Close
+    wma_close_21 = df['close'].ewm(span=21, adjust=False).mean()
+
+    # Short-Term Reversal
+    short_term_reversal = df['close'].pct_change().rolling(window=5).sum()
+
+    # Long-Term Trend
+    long_term_trend = volume_weighted_close.rolling(window=60).mean()
+
+    # Composite Alpha Factor
+    composite_alpha_factor = (
+        (volume_weighted_close - sma_volume_weighted_close_21) +
+        (volume_weighted_close - wma_close_21) +
+        vami +
+        short_term_reversal +
+        combined_spreads -
+        long_term_trend
+    )
+
+    # Additional Factors
+    # Momentum Indicator
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    momentum_indicator = ema_12 - ema_26
+
+    # On-Balance Volume (OBV)
+    obv = df['volume'].copy()
+    obv[1:] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+
+    # Volume-Adjusted Return
+    log_return = np.log(df['close'] / df['open'])
+    volume_adjusted_log_return = log_return * df['volume']
+    ema_volume_adjusted_log_return_20 = volume_adjusted_log_return.ewm(span=20, adjust=False).mean()
+
+    # Enhanced Composite Alpha Factor
+    enhanced_composite_alpha_factor = (
+        composite_alpha_factor +
+        momentum_indicator +
+        obv +
+        ema_volume_adjusted_log_return_20
+    )
+
+    return enhanced_composite_alpha_factor
+```

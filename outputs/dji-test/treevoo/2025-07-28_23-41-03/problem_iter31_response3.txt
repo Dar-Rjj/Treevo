@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # 20-Day Weighted Moving Average of Returns
+    df['daily_return'] = df['close'].pct_change()
+    df['return_vol_product'] = df['daily_return'].shift(-1) * df['volume']
+    df['weighted_return'] = df['return_vol_product'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Adjust for Price Volatility
+    df['avg_daily_range'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['adjusted_weighted_return'] = df['weighted_return'] - df['avg_daily_range']
+
+    # Intraday Return Ratio
+    df['intraday_return_ratio'] = df['high'] / df['low']
+
+    # Weighted Open-to-Close Return
+    df['weighted_open_close'] = (df['close'] - df['open']) * df['volume']
+
+    # High-Low Range Momentum
+    df['hl_range_momentum'] = (df['high'] - df['low']) / (df['high'].shift(1) - df['low'].shift(1))
+
+    # Price Trend
+    df['50_day_sma'] = df['close'].rolling(window=50).mean()
+    df['price_trend'] = df['close'] - df['50_day_sma']
+
+    # Simple Moving Averages (SMA)
+    df['100_day_sma'] = df['close'].rolling(window=100).mean()
+    df['200_day_sma'] = df['close'].rolling(window=200).mean()
+
+    # Momentum Signals
+    df['momentum_100_200'] = df['100_day_sma'] - df['200_day_sma']
+    df['momentum_50_100'] = df['50_day_sma'] - df['100_day_sma']
+
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal
+    df['combined_momentum_100_200'] = df['momentum_100_200'] * df['reversal_signal']
+    df['combined_momentum_50_100'] = df['momentum_50_100'] * df['reversal_signal']
+
+    # Volume Adjustment
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+
+    # Adjusted High-Low Range Momentum
+    df['adjusted_hl_range_momentum'] = df['hl_range_momentum'] / df['avg_volume']
+
+    # Combined Price and Volume Momentum
+    df['combined_price_vol_momentum'] = df['combined_momentum_100_200'] * df['avg_volume']
+
+    # Final Alpha Factor
+    df['final_alpha'] = (
+        df['adjusted_weighted_return'] +
+        df['intraday_return_ratio'] +
+        df['weighted_open_close'] +
+        df['hl_range_momentum'] +
+        df['price_trend'] +
+        (df['momentum_50_100'] + df['momentum_100_200']) * df['reversal_signal'] +
+        df['adjusted_hl_range_momentum'] +
+        df['combined_price_vol_momentum']
+    )
+
+    return df['final_alpha']
+```

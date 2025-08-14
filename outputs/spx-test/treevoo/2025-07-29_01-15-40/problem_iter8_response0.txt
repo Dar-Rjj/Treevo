@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Log Return
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # EWMA of Log Return
+    df['ewma_log_return'] = df['log_return'].ewm(span=21).mean()
+    
+    # Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Combined Momentum
+    df['combined_momentum'] = df['ewma_log_return'] * df['volume_change']
+    
+    # Calculate Upward and Downward Movements
+    df['upward_movement'] = df['high'] - df['close'].shift(1)
+    df['downward_movement'] = df['low'] - df['close'].shift(1)
+    
+    # Determine Net Directional Movement
+    df['net_directional_movement'] = np.where(df['upward_movement'] > df['downward_movement'], 1, 
+                                              np.where(df['upward_movement'] < df['downward_movement'], -1, 0))
+    
+    # Adjusted Cumulative Directional Movement
+    df['cumulative_directional_movement'] = (df['net_directional_movement'] * df['volume']).rolling(window=10).sum()
+    
+    # Integrated Factor
+    df['integrated_factor'] = df['combined_momentum'] + df['cumulative_directional_movement']
+    
+    # Daily High-Low Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Rolling Average of High-Low Ratios
+    df['avg_high_low_ratio'] = df['high_low_ratio'].rolling(window=10).mean()
+    
+    # Daily Volume Weight
+    df['volume_weight'] = df['volume'] / df['close']
+    
+    # Volume Weighted High-Low Ratios
+    df['vol_weighted_high_low_ratio'] = df['high_low_ratio'] * df['volume_weight']
+    df['avg_vol_weighted_high_low_ratio'] = df['vol_weighted_high_low_ratio'].rolling(window=10).mean()
+    
+    # Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Average Intraday High-Low Spread
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=10).mean()
+    
+    # High-Low Momentum Score
+    df['high_low_momentum_score'] = np.where(df['intraday_high_low_spread'] > df['avg_intraday_high_low_spread'], 
+                                             df['intraday_high_low_spread'] - df['avg_intraday_high_low_spread'], 
+                                             -(df['avg_intraday_high_low_spread'] - df['intraday_high_low_spread']))
+    df['high_low_momentum_score'] *= df['volume']
+    
+    # Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(5)
+    df['price_momentum'] = df['price_change'].rolling(window=5).sum()
+    
+    # Volume Trend
+    df['volume_trend'] = (df['volume'] - df['volume'].shift(5)).rolling(window=5).sum()
+    
+    # Combine High-Low Momentum, Price Momentum, and Volume Trend
+    df['weighted_sum'] = 0.3 * df['high_low_momentum_score'] + 0.4 * df['price_momentum'] + 0.3 * df['volume_trend']
+    
+    # Final Factor
+    df['final_factor'] = df['integrated_factor'] + df['weighted_sum']
+    
+    return df['final_factor']
+```

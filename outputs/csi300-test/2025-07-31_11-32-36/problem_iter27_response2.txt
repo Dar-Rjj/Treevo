@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 5-day and 20-day simple moving averages of the close price
+    sma5 = df['close'].rolling(window=5).mean()
+    sma20 = df['close'].rolling(window=20).mean()
+    price_sma_diff = sma5 - sma20
+
+    # Calculate the 5-day and 20-day simple moving averages of the volume
+    vma5 = df['volume'].rolling(window=5).mean()
+    vma20 = df['volume'].rolling(window=20).mean()
+    volume_sma_diff = vma5 - vma20
+
+    # Detect bullish and bearish engulfing patterns
+    prev_close = df['close'].shift(1)
+    is_bullish_engulfing = (df['open'] < prev_close) & (df['close'] > df['open']) & (df['close'] > prev_close) & (df['open'] < df['low'])
+    is_bearish_engulfing = (df['open'] > prev_close) & (df['close'] < df['open']) & (df['close'] < prev_close) & (df['open'] > df['high'])
+    engulfing_pattern = is_bullish_engulfing.astype(int) - is_bearish_engulfing.astype(int)
+
+    # Calculate the ratio of volume to price
+    volume_price_ratio = df['volume'] / df['close']
+    vpma5 = volume_price_ratio.rolling(window=5).mean()
+    vpma20 = volume_price_ratio.rolling(window=20).mean()
+    volume_price_ratio_diff = vpma5 - vpma20
+
+    # Calculate the daily range (high - low)
+    daily_range = df['high'] - df['low']
+    range_ma5 = daily_range.rolling(window=5).mean()
+    range_ma20 = daily_range.rolling(window=20).mean()
+    range_diff = range_ma5 - range_ma20
+
+    # Calculate the true range (max(high, prev_close) - min(low, prev_close))
+    true_range = pd.concat([df['high'], df['low'], prev_close], axis=1).max(axis=1) - pd.concat([df['high'], df['low'], prev_close], axis=1).min(axis=1)
+    tr_ma5 = true_range.rolling(window=5).mean()
+    tr_ma20 = true_range.rolling(window=20).mean()
+    true_range_diff = tr_ma5 - tr_ma20
+
+    # Combine all the factors into a single alpha factor
+    alpha_factor = (price_sma_diff + volume_sma_diff + engulfing_pattern + volume_price_ratio_diff + range_diff + true_range_diff) / 6
+
+    return alpha_factor
+```

@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Volume-Adjusted Momentum with Open-to-Close Movement
+    n = 20  # Lookback period
+    df['Simple_Momentum'] = df['close'].diff(n)
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Adjusted_Momentum'] = df['Simple_Momentum'] * (df['volume'] / df['Average_Volume'])
+    df['Open_to_Close'] = df['close'] - df['open']
+    df['Combined_Indicator'] = 0.7 * df['Adjusted_Momentum'] + 0.3 * df['Open_to_Close']
+    threshold = df['Combined_Indicator'].quantile(0.8)  # Define a threshold
+    df['Strong_Move'] = (df['Combined_Indicator'] > threshold).astype(int)
+
+    # High-Low Return with Spread Momentum
+    df['High_to_Low_Range'] = df['high'] - df['low']
+    df['High_to_Low_Return'] = df['High_to_Low_Range'] / df['close'].shift(1)
+    df['Moving_Sum_High_Low'] = df['high'].rolling(window=20).sum() - df['low'].rolling(window=20).sum()
+    df['Spread_Momentum'] = df['Moving_Sum_High_Low'].diff()
+
+    # Combined Momentum, High-Low Return, and Strong Move Indicator
+    df['Combined_Momentum'] = df['Adjusted_Momentum'] + df['High_to_Low_Return'] + df['Strong_Move']
+
+    # Open-High-Low Volatility with Volume-Weighted Adjustments
+    df['Open_High_Diff'] = df['high'] - df['open']
+    df['Open_Low_Diff'] = df['open'] - df['low']
+    df['Volume_Weighted_Avg'] = (df['Open_High_Diff'] + df['Open_Low_Diff']) * df['volume']
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Volume_Adjusted_Volatility'] = df['Volume_Weighted_Avg'] * df['Volume_Change']
+    df['Volume_Weighted_Close'] = df['close'] * df['volume']
+    df['MA_Volume_Weighted_Close'] = df['Volume_Weighted_Close'].rolling(window=20).mean()
+    df['Volume_Weighted_Momentum'] = df['Volume_Weighted_Close'] - df['MA_Volume_Weighted_Close']
+
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    df['Sum_Amount_n_days'] = df['amount'].rolling(window=n).sum()
+    df['Ratio'] = df['Sum_Amount_n_days'] / df['close']
+    df['Previous_Ratio'] = df['amount'].shift(n).rolling(window=n).sum() / df['close'].shift(n)
+    df['Differential'] = df['Ratio'] - df['Previous_Ratio']
+
+    # Volume-Adjusted Breakout Strength
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Volume_Adjusted_Range'] = df['Daily_Range'] * df['volume']
+    df['10Day_High'] = df['high'].rolling(window=10).max()
+    df['10Day_Low'] = df['low'].rolling(window=10).min()
+    df['Proximity_High'] = df['close'] / df['10Day_High']
+    df['Proximity_Low'] = df['close'] / df['10Day_Low']
+    df['Min_Proximity'] = df[['Proximity_High', 'Proximity_Low']].min(axis=1)
+    df['Inverted_Proximity'] = 1 / df['Min_Proximity']
+    df['Std_Dev'] = df['close'].pct_change().rolling(window=20).std()
+    df['Enhanced_Price_Reversion'] = df['Inverted_Proximity'] / df['Std_Dev']
+
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Volume_Adjusted_Range'] * df['Enhanced_Price_Reversion'] *
+                                df['Volume_Adjusted_Volatility'] * df['Spread_Momentum'])
+
+    return df['Final_Alpha_Factor']
+```

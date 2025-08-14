@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum - Calculate the 10-day and 30-day moving averages of the close price
+    df['ma_10d'] = df['close'].rolling(window=10).mean()
+    df['ma_30d'] = df['close'].rolling(window=30).mean()
+    # Calculate the momentum as the difference between the two moving averages
+    df['momentum'] = df['ma_10d'] - df['ma_30d']
+    
+    # Volatility - Calculate the standard deviation of the daily close price over the last 30 days
+    df['volatility'] = df['close'].pct_change().rolling(window=30).std()
+    
+    # Liquidity - Calculate the average volume over the last 20 days
+    df['avg_vol_20d'] = df['volume'].rolling(window=20).mean()
+    
+    # Price-Volume Relationship - Calculate the 10-day change in volume
+    df['volume_change_10d'] = df['volume'].pct_change(periods=10)
+    
+    # Relative Strength - Calculate the ratio of the daily close difference to the average volume
+    df['close_diff'] = df['close'].diff()
+    df['relative_strength'] = df['close_diff'] / (df['avg_vol_20d'] + 1e-7)
+    
+    # Trend - Calculate the 60-day linear regression slope on the close price
+    df['trend'] = df['close'].rolling(window=60).apply(lambda x: np.polyfit(range(60), x, 1)[0], raw=False)
+    
+    # Candlestick Pattern - Bearish Engulfing pattern
+    df['bearish_engulfing'] = ((df['open'] < df['close'].shift(1)) & 
+                               (df['close'] > df['open'].shift(1)) & 
+                               (df['open'] >= df['close']) & 
+                               (df['high'] == df['open']) & 
+                               (df['low'] == df['close']))
+    df['bearish_engulfing'] = df['bearish_engulfing'].astype(int)
+    
+    # Composite Factor - Combine momentum, volatility, liquidity, relative strength, trend, and candlestick pattern
+    df['composite_factor'] = (df['momentum'] - df['volatility'] * 2 + df['relative_strength'] + 
+                              df['volume_change_10d'] + df['trend'] - df['bearish_engulfing']) / 6
+    
+    # Return the composite factor
+    return df['composite_factor']
+```

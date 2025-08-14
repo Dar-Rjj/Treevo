@@ -1,0 +1,62 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate adaptive volatility using a 10-day and 30-day window for low and high volatility periods
+    df['volatility_10'] = (df['high'] - df['low']).rolling(window=10).mean()
+    df['volatility_30'] = (df['high'] - df['low']).rolling(window=30).mean()
+    df['adaptive_volatility'] = df['volatility_10'].where(df['volatility_10'] < df['volatility_30'], df['volatility_30'])
+
+    # Calculate adaptive momentum with a 10-day and 30-day moving average
+    df['close_ma_10'] = df['close'].rolling(window=10).mean()
+    df['close_ma_30'] = df['close'].rolling(window=30).mean()
+    df['momentum_10'] = df['close'] - df['close_ma_10']
+    df['momentum_30'] = df['close'] - df['close_ma_30']
+    df['adaptive_momentum'] = df['momentum_10'].where(df['close_ma_10'] > df['close_ma_30'], df['momentum_30'])
+
+    # Volume adjustment factor using a 20-day rolling mean
+    df['volume_adjustment'] = df['volume'] / df['volume'].rolling(window=20).mean()
+
+    # Calculate the 50-day and 200-day moving averages for longer-term context
+    df['close_ma_50'] = df['close'].rolling(window=50).mean()
+    df['close_ma_200'] = df['close'].rolling(window=200).mean()
+
+    # Long-term momentum using the 200-day moving average
+    df['long_term_momentum'] = df['close'] - df['close_ma_200']
+
+    # Advanced smoothing using a double exponential moving average
+    df['smoothed_adaptive_momentum'] = df['adaptive_momentum'].ewm(span=10, adjust=False).mean().ewm(span=5, adjust=False).mean()
+    df['smoothed_long_term_momentum'] = df['long_term_momentum'].ewm(span=10, adjust=False).mean().ewm(span=5, adjust=False).mean()
+
+    # Incorporate RSI (Relative Strength Index) for overbought/oversold conditions
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Incorporate ATR (Average True Range) for volatility
+    df['tr'] = pd.concat([(df['high'] - df['low']), abs(df['high'] - df['close'].shift()), abs(df['low'] - df['close'].shift())], axis=1).max(axis=1)
+    df['atr'] = df['tr'].ewm(alpha=1/14, adjust=False).mean()
+
+    # Adaptive trend strength indicator
+    df['trend_strength'] = (df['close_ma_200'] - df['close'].shift(200)) / df['close'].shift(200)
+
+    # Market regime detection using Bollinger Bands
+    df['bb_mid'] = df['close'].rolling(window=20).mean()
+    df['bb_std'] = df['close'].rolling(window=20).std()
+    df['bb_upper'] = df['bb_mid'] + 2 * df['bb_std']
+    df['bb_lower'] = df['bb_mid'] - 2 * df['bb_std']
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_mid']
+
+    # Create a factor that combines smoothed adaptive momentum, adaptive volatility, volume adjustment, and smoothed long-term momentum
+    factor = (
+        (df['smoothed_adaptive_momentum'] / (df['adaptive_volatility'] + 1e-7)) * 
+        df['volume_adjustment'] + 
+        df['smoothed_long_term_momentum'] + 
+        (df['rsi']/100) * 
+        (1 + df['trend_strength']) - 
+        (df['atr']/df['close']) +
+        df['bb_width']
+    )
+
+    return factor
+```

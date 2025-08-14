@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Price Momentum
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['ROC_21'] = (df['close'] - df['close'].shift(21)) / df['close'].shift(21)
+    
+    # Volume Analysis
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume_20']
+    
+    # Historical Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Std_Dev_30'] = df['Daily_Return'].rolling(window=30).std()
+    
+    # True Range
+    df['High_Low'] = df['high'] - df['low']
+    df['High_PrevClose'] = abs(df['high'] - df['close'].shift(1))
+    df['PrevClose_Low'] = abs(df['close'].shift(1) - df['low'])
+    df['True_Range'] = df[['High_Low', 'High_PrevClose', 'PrevClose_Low']].max(axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # On-balance volume (OBV)
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] + \
+                (df['close'] < df['close'].shift(1)).astype(int) * -df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # MACD
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
+    df['Signal_Line'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+    
+    # Aroon Oscillator
+    df['Aroon_Up'] = 100 * (25 - df['high'].rolling(window=25).apply(lambda x: list(x).index(max(x))))
+    df['Aroon_Down'] = 100 * (25 - df['low'].rolling(window=25).apply(lambda x: list(x).index(min(x))))
+    df['Aroon_Oscillator'] = df['Aroon_Up'] - df['Aroon_Down']
+    
+    # Bullish and Bearish Engulfing Pattern
+    df['Bullish_Engulfing'] = ((df['open'] < df['close'].shift(1)) & 
+                               (df['close'] > df['open'].shift(1))).astype(int)
+    df['Bearish_Engulfing'] = ((df['open'] > df['close'].shift(1)) & 
+                               (df['close'] < df['open'].shift(1))).astype(int)
+    
+    # Price Change Statistics
+    df['Pct_Change'] = df['close'].pct_change()
+    df['Avg_Pct_Change_10'] = df['Pct_Change'].rolling(window=10).mean()
+    
+    # Breakout Detection
+    df['Days_Since_52Week_High'] = (df['close'].rolling(window=52).max() == df['close']).rolling(window=52, min_periods=1).apply(lambda x: x[::-1].argmax())
+    df['Days_Since_52Week_Low'] = (df['close'].rolling(window=52).min() == df['close']).rolling(window=52, min_periods=1).apply(lambda x: x[::-1].argmax())
+    df['Pct_Distance_from_52Week_High'] = (df['close'] - df['close'].rolling(window=52).max()) / df['close'].rolling(window=52).max()
+    df['Pct_Distance_from_52Week_Low'] = (df['

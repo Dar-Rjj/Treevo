@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['price_momentum'] = df['log_return'].rolling(window=5).sum().shift(1)
+    
+    # Apply Combined Volume and Amount Shock Filter
+    df['abs_vol_change'] = np.abs(df['volume'] - df['volume'].shift(1))
+    df['abs_amount_change'] = np.abs(df['amount'] - df['amount'].shift(1))
+    vol_75th = df['abs_vol_change'].rolling(window=20).quantile(0.75)
+    amount_75th = df['abs_amount_change'].rolling(window=20).quantile(0.75)
+    df['filter'] = (df['abs_vol_change'] < vol_75th) & (df['abs_amount_change'] < amount_75th)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['vol_weighted_intraday_vol'] = df['intraday_volatility'] * df['volume']
+    df['vol_weighted_ma_intraday_vol'] = df['vol_weighted_intraday_vol'].rolling(window=10).mean()
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_reversal_score'] = df['close_to_open_return'] / df['vol_weighted_ma_intraday_vol']
+    
+    # Apply Exponential Decay to Reversal Score
+    half_life = 5
+    decay_factor = np.log(2) / half_life
+    df['exp_decay_reversal_score'] = df['intraday_reversal_score'].ewm(halflife=half_life).mean()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Range
+    df['vol_weighted_intraday_range'] = df['intraday_range'] * df['volume']
+    df['vol_weighted_ma_intraday_range'] = df['vol_weighted_intraday_range'].rolling(window=10).mean()
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = (df['close'] - df['open']) / df['open']
+    
+    # Apply Exponential Decay to Intraday Momentum
+    df['exp_decay_intraday_momentum'] = df['intraday_momentum'].ewm(halflife=half_life).mean()
+    
+    # Combine Reversal Score, Intraday Range, and Intraday Momentum
+    df['combined_factor'] = df['exp_decay_reversal_score'] + df['vol_weighted_ma_intraday_range'] + df['exp_decay_intraday_momentum']
+    df['final_factor'] = df['combined_factor'].ewm(halflife=half_life).mean()
+    
+    # Apply the filter
+    df['final_factor'] = df['final_factor'] * df['filter']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

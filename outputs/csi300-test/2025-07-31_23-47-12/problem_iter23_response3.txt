@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Momentum
+    cumulative_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Define dynamic thresholds (example: 2 standard deviations)
+    upper_threshold = log_returns.mean() + 2 * log_returns.std()
+    lower_threshold = log_returns.mean() - 2 * log_returns.std()
+    
+    clipped_cumulative_log_returns = cumulative_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = (volumes / mean_volume) * clipped_cumulative_log_returns
+    
+    # Determine Absolute Price Changes
+    absolute_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_volatility = absolute_price_changes.rolling(window=M).std()
+    ema_volatility = absolute_price_changes.ewm(span=M, min_periods=M).mean()
+    iqr_volatility = absolute_price_changes.rolling(window=M).quantile(0.75) - absolute_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine Weighted Momentum, Volume, and Volatility Components
+    combined_factor = (
+        0.4 * volume_adjusted_momentum + 
+        0.3 * std_volatility + 
+        0.2 * ema_volatility + 
+        0.1 * iqr_volatility
+    )
+    
+    return combined_factor
+```

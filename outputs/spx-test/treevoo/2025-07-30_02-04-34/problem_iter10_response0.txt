@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Intraday_Momentum'] = (df['High_Low_Diff'] - df['open']) * df['volume']
+
+    # Calculate Smoothed Price Momentum
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['Smoothed_Price_Momentum'] = df['Daily_Price_Change'].rolling(window=5).sum() / 5
+
+    # Compute Weighted Volume Indicator
+    df['Volume_Change'] = df['volume'].diff()
+    df['Signed_Volume_Change'] = df['Volume_Change'] * df['Volume_Change'].apply(lambda x: 1 if x > 0 else -1)
+    df['Weighted_Volume_Indicator'] = df['Signed_Volume_Change'].rolling(window=5).mean()
+
+    # Final Intraday Alpha Component
+    df['Final_Intraday_Alpha'] = df['Smoothed_Price_Momentum'] * df['Weighted_Volume_Indicator'] + df['Intraday_Momentum']
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Volume-Adjusted Momentum
+    df['7Day_Price_Momentum'] = df['close'].shift(1) - df['close'].shift(7)
+    df['7Day_Volume_Momentum'] = df['volume'].shift(1) - df['volume'].shift(7)
+    df['Volume_Adjusted_Momentum'] = df['7Day_Price_Momentum'] * df['7Day_Volume_Momentum']
+
+    # Apply Volume-Adjusted Momentum to High-Low Range
+    df['Weighted_High_Low_Range'] = df['High_Low_Range'] * df['Volume_Adjusted_Momentum']
+    df['Sum_Weighted_Ranges'] = df['Weighted_High_Low_Range'].rolling(window=7).sum()
+
+    # Combine Final Alpha Signal
+    df['Final_Alpha'] = df['Final_Intraday_Alpha'] + df['Sum_Weighted_Ranges']
+
+    return df['Final_Alpha']
+```

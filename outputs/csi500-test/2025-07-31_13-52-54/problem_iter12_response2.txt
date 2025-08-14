@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics(df, lookback_period=20, n_days=5, m_days=10):
+    # Volume-Weighted High-Low Spread
+    df['high_low_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Cumulative Volume-Weighted High-Low Spread
+    df['cum_high_low_spread'] = df['high_low_spread'].rolling(window=lookback_period).sum()
+    df['total_volume'] = df['volume'].rolling(window=lookback_period).sum()
+    df['vw_high_low_spread'] = df['cum_high_low_spread'] / df['total_volume']
+    
+    # Momentum Indicator
+    df['avg_vw_high_low_spread'] = df['vw_high_low_spread'].rolling(window=n_days).mean()
+    df['momentum'] = df['vw_high_low_spread'] - df['avg_vw_high_low_spread'].shift(1)
+    
+    # Price Momentum
+    df['close_return'] = df['close'].pct_change(n_days)
+    df['open_return'] = df['open'].pct_change(n_days)
+    df['price_momentum'] = df['close_return'] + df['open_return']
+    
+    # Volume-Weighted Volatility
+    df['range'] = df['high'] - df['low']
+    df['volatility'] = df['range'].rolling(window=n_days).std() * df['volume']
+    df['vw_volatility'] = df['volatility'].rolling(window=n_days).mean()
+    
+    # Intraday Range Growth
+    df['daily_range'] = df['high'] - df['low']
+    df['prev_daily_range'] = df['daily_range'].shift(1)
+    df['intraday_range_growth'] = (df['daily_range'] - df['prev_daily_range']) / df['prev_daily_range']
+    
+    # Volume Weighted Moving Average
+    df['vwma'] = (df['close'] * df['volume']).rolling(window=n_days).sum() / df['volume'].rolling(window=n_days).sum()
+    
+    # Amount Adjusted Return
+    df['amount_adj_return'] = df['amount'].pct_change(n_days)
+    
+    # Combine Factors
+    df['initial_factor'] = (df['price_momentum'] * df['vw_volatility'] 
+                            + df['amount_adj_return'] 
+                            + df['momentum'] 
+                            + df['intraday_range_growth'] 
+                            + df['vwma'])
+    
+    # Calculate Price Momentum (Alternative)
+    df['n_day_diff'] = df['close'] - df['close'].shift(n_days)
+    df['m_day_diff'] = df['close'] - df['close'].shift(m_days)
+    df['price_momentum_alt'] = df['n_day_diff'] + df['m_day_diff']
+    
+    # Calculate Volume Surge
+    df['n_day_vol_change'] = df['volume'] - df['volume'].shift(n_days)
+    df['m_day_vol_change'] = df['volume'] - df['volume'].shift(m_days)
+    df['volume_surge'] = df['n_day_vol_change'] + df['m_day_vol_change']
+    
+    # Calculate Intraday Price Efficiency
+    df['mid_price'] = (df['high'] + df['low']) / 2
+    df['intraday_efficiency'] = (df['close'] - df['open']) / (df['mid_price'] - df['open'])
+    
+    # Final Alpha Factor
+    df['final_factor'] = (df['initial_factor'] * df['price_momentum_alt'] 
+                          + df['intraday_efficiency'])
+    df['final_factor'] = df.apply(lambda x: x['final_factor'] * 0.8 if x['volume_surge'] < 0 else x['final_factor'], axis=1)
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics(df)
+```

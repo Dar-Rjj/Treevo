@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum - Calculate the 10-day and 30-day moving averages of the close price
+    df['ma_10d'] = df['close'].rolling(window=10).mean()
+    df['ma_30d'] = df['close'].rolling(window=30).mean()
+    df['momentum'] = df['ma_10d'] - df['ma_30d']
+    
+    # Volatility - Calculate the standard deviation of the daily close price over the last 30 days
+    df['volatility'] = df['close'].pct_change().rolling(window=30).std()
+    
+    # Liquidity - Calculate the average volume over the last 20 days
+    df['avg_vol_20d'] = df['volume'].rolling(window=20).mean()
+    
+    # Price-Volume Relationship - Calculate the 10-day change in volume
+    df['volume_change_10d'] = df['volume'].pct_change(periods=10)
+    
+    # Relative Strength - Calculate the ratio of the daily close difference to the average volume
+    df['close_diff'] = df['close'].diff()
+    df['relative_strength'] = df['close_diff'] / (df['avg_vol_20d'] + 1e-7)
+    
+    # Trend - Calculate the 60-day linear regression slope on the close price
+    df['trend'] = df['close'].rolling(window=60).apply(lambda x: np.polyfit(range(60), x, 1)[0], raw=False)
+    
+    # Candlestick Pattern - Bearish Engulfing pattern
+    df['bearish_engulfing'] = ((df['open'] < df['close'].shift(1)) & 
+                               (df['close'] > df['open'].shift(1)) & 
+                               (df['open'] >= df['close']) & 
+                               (df['high'] == df['open']) & 
+                               (df['low'] == df['close']))
+    df['bearish_engulfing'] = df['bearish_engulfing'].astype(int)
+    
+    # Additional Features
+    # Calculate the RSI (Relative Strength Index) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the MACD (Moving Average Convergence Divergence)
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd'] - df['signal_line']
+    
+    # Machine Learning Feature - Use RandomForestRegressor to combine features
+    features = ['momentum', 'volatility', 'relative_strength', 'volume_change_10d', 'trend', 'bearish_engulfing', 'rsi', 'macd_histogram']
+    X = df[features].dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index]
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    df['ml_feature'] = model.predict(df[features])
+    
+    # Composite Factor - Combine all features
+    df['composite_factor'] = (df['momentum'] - df['volatility'] * 2 + 
+                              df['relative_strength'] + df['volume_change_10d'] + 
+                              df['trend'] - df['bearish_engulfing'] + 
+                              df['rsi'] + df['macd_histogram'] + df['ml_feature']) / 8
+    
+    # Return the composite factor
+    return df['composite_factor']
+```

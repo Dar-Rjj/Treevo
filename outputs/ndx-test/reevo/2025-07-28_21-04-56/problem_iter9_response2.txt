@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    import numpy as np
+    from scipy.signal import argrelextrema
+
+    # Calculate the Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal = macd.ewm(span=9, adjust=False).mean()
+
+    # Dynamic ratio with volume-weighted, exponentially smoothed indicators
+    volume_weighted_close = (df['close'] * df['volume']).ewm(span=10, adjust=False).mean() / df['volume'].ewm(span=10, adjust=False).mean()
+    dynamic_ratio = (volume_weighted_close / df['close']).pct_change(periods=10)
+
+    # Seasonality factor
+    df['date'] = df.index
+    df['month'] = df['date'].dt.month
+    monthly_avg = df.groupby('month')['close'].transform('mean')
+    seasonality = (df['close'] / monthly_avg).pct_change(periods=12)
+
+    # Market breadth: number of new highs minus number of new lows
+    high_count = (df['high'] == df['high'].rolling(window=20).max()).astype(int)
+    low_count = (df['low'] == df['low'].rolling(window=20).min()).astype(int)
+    market_breadth = high_count - low_count
+
+    # Combine RSI, MACD, and dynamic ratio with seasonality and market breadth
+    alpha_factor = (rsi / (macd - signal)) * (dynamic_ratio + seasonality) * market_breadth
+
+    # Smooth the alpha factor using a 3-day exponentially weighted moving average
+    smoothed_alpha_factor = alpha_factor.ewm(span=3, adjust=False).mean()
+
+    return smoothed_alpha_factor
+```

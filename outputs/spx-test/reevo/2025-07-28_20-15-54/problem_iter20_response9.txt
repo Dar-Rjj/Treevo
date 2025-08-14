@@ -1,0 +1,72 @@
+```python
+def heuristics_v2(df: pd.DataFrame, sector_data: pd.DataFrame, macro_data: pd.DataFrame) -> pd.Series:
+    # Momentum factor: difference between today's close and the 5-day moving average of close
+    momentum_factor = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Volume change: difference between today's volume and the 5-day moving average of volume
+    volume_change = df['volume'] - df['volume'].rolling(window=5).mean()
+    
+    # Close ratio: today's close price to the 5-day moving average of close prices
+    close_ratio = df['close'] / df['close'].rolling(window=5).mean()
+    
+    # Volume ratio: today's volume to the 5-day moving average of volume
+    volume_ratio = df['volume'] / df['volume'].rolling(window=5).mean()
+    
+    # Price range: average of high and low prices over the last 5 days
+    price_range = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # ATR (Average True Range) for robust volatility
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Dynamic volatility measures
+    ewstd_10 = df['close'].ewm(span=10, adjust=False).std()  # 10-day exponentially weighted standard deviation
+    ewstd_20 = df['close'].ewm(span=20, adjust=False).std()  # 20-day exponentially weighted standard deviation
+    
+    # Sector-specific indicators
+    sector_momentum = sector_data['sector_close'] - sector_data['sector_close'].rolling(window=5).mean()
+    sector_volume_change = sector_data['sector_volume'] - sector_data['sector_volume'].rolling(window=5).mean()
+    sector_close_ratio = sector_data['sector_close'] / sector_data['sector_close'].rolling(window=5).mean()
+    sector_volume_ratio = sector_data['sector_volume'] / sector_data['sector_volume'].rolling(window=5).mean()
+    
+    # Interaction terms for more comprehensive signals
+    interaction_term_1 = momentum_factor * volume_change
+    interaction_term_2 = close_ratio * volume_ratio
+    interaction_term_3 = price_range * atr
+    interaction_term_4 = momentum_factor * close_ratio
+    interaction_term_5 = volume_change * volume_ratio
+    interaction_term_6 = price_range * close_ratio
+    interaction_term_7 = momentum_factor * ewstd_10
+    interaction_term_8 = volume_change * ewstd_20
+    interaction_term_9 = close_ratio * ewstd_10
+    interaction_term_10 = volume_ratio * ewstd_20
+    interaction_term_11 = sector_momentum * momentum_factor
+    interaction_term_12 = sector_volume_change * volume_change
+    interaction_term_13 = sector_close_ratio * close_ratio
+    interaction_term_14 = sector_volume_ratio * volume_ratio
+    
+    # Combine the factors in a heuristic way with dynamic weights using machine learning
+    features = pd.concat([momentum_factor, volume_change, close_ratio, volume_ratio,
+                          price_range, atr, ewstd_10, ewstd_20, 
+                          sector_momentum, sector_volume_change, sector_close_ratio, sector_volume_ratio,
+                          interaction_term_1, interaction_term_2, interaction_term_3, 
+                          interaction_term_4, interaction_term_5, interaction_term_6, 
+                          interaction_term_7, interaction_term_8, interaction_term_9, 
+                          interaction_term_10, interaction_term_11, interaction_term_12, 
+                          interaction_term_13, interaction_term_14, macro_data], axis=1)
+    
+    # Train a simple linear regression model to learn dynamic weights
+    from sklearn.linear_model import LinearRegression
+    model = LinearRegression()
+    X = features.iloc[:-1].dropna().values
+    y = df['close'].pct_change().shift(-1).dropna().loc[features.index[:-1]].values
+    model.fit(X, y)
+    dynamic_weights = model.predict(features.dropna().values)
+    
+    alpha_factor = (interaction_term_1 + interaction_term_2 + interaction_term_3 +
+                    interaction_term_4 + interaction_term_5 + interaction_term_6 +
+                    interaction_term_7 + interaction_term_8 + interaction_term_9 +
+                    interaction_term_10 + interaction_term

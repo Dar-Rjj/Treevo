@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High-Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    df['Volume_MA_10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = df['volume'] - df['Volume_MA_10']
+    df['Volume_Trend_Label'] = np.where(df['Volume_Trend'] > 0, 'Positive', 'Negative')
+    
+    # Calculate Short-Term Price Trend
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Short_Term_Price_Trend'] = df['close'] - df['EMA_10']
+    df['Short_Term_Price_Trend_Label'] = np.where(df['Short_Term_Price_Trend'] > 0, 'Positive', 'Negative')
+    
+    # Calculate Medium-Term Price Trend
+    df['EMA_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['Medium_Term_Price_Trend'] = df['close'] - df['EMA_30']
+    df['Medium_Term_Price_Trend_Label'] = np.where(df['Medium_Term_Price_Trend'] > 0, 'Positive', 'Negative')
+    
+    # Calculate Long-Term Price Trend
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['Long_Term_Price_Trend'] = df['close'] - df['EMA_50']
+    df['Long_Term_Price_Trend_Label'] = np.where(df['Long_Term_Price_Trend'] > 0, 'Positive', 'Negative')
+    
+    # Calculate Dynamic Volatility
+    df['Volatility_20'] = df['close'].rolling(window=20).std()
+    volatility_75th = df['Volatility_20'].quantile(0.75)
+    volatility_25th = df['Volatility_20'].quantile(0.25)
+    df['Volatility_Label'] = np.where(df['Volatility_20'] > volatility_75th, 'High',
+                                      np.where(df['Volatility_20'] < volatility_25th, 'Low', 'Neutral'))
+    
+    # Integrate Momentum and Relative Strength
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Relative_Strength'] = df['EMA_5'] / df['EMA_20']
+    df['Relative_Strength_Label'] = np.where(df['Relative_Strength'] > 1, 'Strong', 'Weak')
+    
+    # Combine Spread, Volume, Multi-Period Price Trends, and Volatility
+    df['Adjusted_Spread'] = df['High-Low_Spread']
+    df['Adjusted_Spread'] = np.where(df['Volume_Trend_Label'] == 'Positive', df['Adjusted_Spread'] * 1.5,
+                                     np.where(df['Volume_Trend_Label'] == 'Negative', df['Adjusted_Spread'] * 0.5, df['Adjusted_Spread']))
+    df['Adjusted_Spread'] = np.where(df['Short_Term_Price_Trend_Label'] == 'Positive', df['Adjusted_Spread'] * 1.2,
+                                     np.where(df['Short_Term_Price_Trend_Label'] == 'Negative', df['Adjusted_Spread'] * 0.8, df['Adjusted_Spread']))
+    df['Adjusted_Spread'] = np.where(df['Medium_Term_Price_Trend_Label'] == 'Positive', df['Adjusted_Spread'] * 1.1,
+                                     np.where(df['Medium_Term_Price_Trend_Label'] == 'Negative', df['Adjusted_Spread'] * 0.9, df['Adjusted_Spread']))
+    df['Adjusted_Spread'] = np.where(df['Long_Term_Price_Trend_Label'] == 'Positive', df['Adjusted_Spread'] * 1.3,
+                                     np.where(df['Long_Term_Price_Trend_Label'] == 'Negative', df['Adjusted_Spread'] * 0.7, df['Adjusted_Spread']))
+    df['Adjusted_Spread'] = np.where(df['Volatility_Label'] == 'High', df['Adjusted_Spread'] * 1.4,
+                                     np.where(df['Volatility_Label'] == 'Low', df['Adjusted_Spread'] * 0.6, df['Adjusted_Spread']))
+    df['Adjusted_Spread'] = np.where(df['Relative_Strength_Label'] == 'Strong', df['Adjusted_Spread'] * 1.5,
+                                     np.where(df['Relative_

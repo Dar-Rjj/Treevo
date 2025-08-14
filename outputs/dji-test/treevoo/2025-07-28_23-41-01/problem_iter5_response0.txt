@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=10, sma_period=5, ema_period=5, roc_period=5):
+    # Calculate Daily High-to-Low Range
+    df['range'] = df['high'] - df['low']
+    
+    # Calculate Average High-to-Low Range over N Days
+    df['avg_range'] = df['range'].rolling(window=n_days).mean()
+    
+    # Compare with Current High-to-Low Range and Derive Preliminary Momentum Signal
+    df['momentum_signal'] = (df['range'] > df['avg_range']).astype(int)
+    
+    # Adjust Preliminary Momentum Signal by Volume
+    mean_volume = df['volume'].rolling(window=n_days).mean()
+    volume_ratio = df['volume'] / mean_volume
+    df['weighted_momentum_signal'] = df['momentum_signal'] * volume_ratio
+    
+    # Calculate Momentum Indicators
+    df['sma'] = df['close'].rolling(window=sma_period).mean()
+    df['ema'] = df['close'].ewm(span=ema_period, adjust=False).mean()
+    df['roc'] = df['close'].pct_change(periods=roc_period)
+    
+    # Determine Volume Impact on Momentum Indicators
+    df['weighted_sma'] = df['sma'] * volume_ratio
+    df['weighted_ema'] = df['ema'] * volume_ratio
+    df['weighted_roc'] = df['roc'] * volume_ratio
+    
+    # Combine Adjusted Indicators and Momentum Signal
+    df['combined_score'] = (df['weighted_sma'] + 
+                            df['weighted_ema'] + 
+                            df['weighted_roc'] + 
+                            df['weighted_momentum_signal'])
+    
+    # Volume-Weighted Intraday Reversal Score
+    intraday_range = df['high'] - df['low']
+    close_open_delta = df['close'] - df['open']
+    df['reversal_score'] = (close_open_delta / intraday_range) * df['volume']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_score'] + df['reversal_score']
+    
+    return df['alpha_factor']
+```

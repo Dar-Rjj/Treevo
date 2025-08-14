@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Evaluate Intraday Dynamics
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Midpoint_to_Open_Ratio'] = ((df['high'] + df['low']) / 2) / df['open']
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    df['Adj_Close_to_Open_Return'] = df['Close_to_Open_Return'] / df['Intraday_Range']
+
+    # Analyze Trend and Momentum
+    df['ROC_5'] = df['close'].pct_change(5)
+    df['ROC_20'] = df['close'].pct_change(20)
+    
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    df['SMA_Crossover_5_20'] = df['SMA_5'] > df['SMA_20']
+    df['SMA_Crossover_20_50'] = df['SMA_20'] > df['SMA_50']
+    
+    df['Close_to_High_Ratio'] = df['close'] / df['high']
+    df['Close_to_Low_Ratio'] = df['close'] / df['low']
+
+    # Introduce Volatility and Volume Factors
+    df['Volatility'] = df['close'].rolling(window=20).std()
+    df['Vol_Adjusted_Return'] = df['close'].pct_change() / df['Volatility']
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+
+    # Combine Intraday and Cumulative Metrics
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['Cumulative_Price_Change'] = df['Daily_Price_Change'].cumsum()
+    df['Close_to_Next_Open_Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['Weighted_Sum_of_Returns'] = df['Close_to_Next_Open_Return'] * df['volume']
+
+    # Final Factor Adjustment
+    df['Weighted_Intraday_Ratio'] = df['Intraday_Midpoint_to_Open_Ratio'] * df['Weighted_Sum_of_Returns']
+    df['Combined_Envelopes'] = df['close'].rolling(window=20).max() - df['open'].rolling(window=20).min()
+    df['Final_Factor'] = df['Weighted_Intraday_Ratio'] + df['Adj_Close_to_Open_Return'] + df['Combined_Envelopes']
+
+    # Compute Cumulative Price Momentum
+    df['EMA_Daily_Price_Change'] = df['Daily_Price_Change'].ewm(span=20, adjust=False).mean()
+
+    return df['Final_Factor']
+```

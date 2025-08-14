@@ -1,0 +1,52 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+    
+    # Adaptive Lookback Periods
+    short_term_lookback = 5
+    mid_term_lookback = 10
+    long_term_lookback = 20
+    
+    # Short-Term Lookback (e.g., 5 days)
+    df['SMA_5'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).mean()
+    df['STD_5'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).std()
+    
+    # Mid-Term Lookback (e.g., 10 days)
+    df['SMA_10'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).mean()
+    df['STD_10'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).std()
+    
+    # Long-Term Lookback (e.g., 20 days)
+    df['SMA_20'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).mean()
+    df['STD_20'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).std()
+    
+    # Combine Multi-Period Volatilities
+    volatility_weights = [0.4, 0.3, 0.3]
+    combined_volatility = (df['STD_5'] * volatility_weights[0] +
+                           df['STD_10'] * volatility_weights[1] +
+                           df['STD_20'] * volatility_weights[2])
+    
+    # Incorporate Dynamic Market Trend Adjustments
+    df['SMA_Close_5'] = df['close'].rolling(window=short_term_lookback).mean()
+    df['SMA_Close_20'] = df['close'].rolling(window=long_term_lookback).mean()
+    df['Price_Trend'] = (df['SMA_Close_5'] > df['SMA_Close_20']).astype(int) * 2 - 1
+    
+    # Incorporate Momentum and Mean Reversion Signals
+    df['10_Day_Momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['20_Day_Momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    df['10_Day_Mean_Reversion'] = (df['close'] - df['SMA_Close_10']) / df['SMA_Close_10']
+    df['20_Day_Mean_Reversion'] = (df['close'] - df['SMA_Close_20']) / df['SMA_Close_20']
+    
+    # Assign Weights to Each Signal
+    momentum_mean_reversion_weights = [0.25, 0.25, 0.25, 0.25]
+    weighted_momentum_mean_reversion = (df['10_Day_Momentum'] * momentum_mean_reversion_weights[0] +
+                                        df['20_Day_Momentum'] * momentum_mean_reversion_weights[1] +
+                                        df['10_Day_Mean_Reversion'] * momentum_mean_reversion_weights[2] +
+                                        df['20_Day_Mean_Reversion'] * momentum_mean_reversion_weights[3])
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Close_to_Open_Return'] / combined_volatility) * df['Price_Trend'] + weighted_momentum_mean_reversion
+    
+    return df['Alpha_Factor']

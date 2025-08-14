@@ -1,0 +1,30 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change from yesterday to today
+    df['close_diff'] = df['close'].diff()
+    
+    # Calculate the average volume over the past 5 days
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    
+    # Calculate the weighted moving average of the close price over the past 10 days
+    weights = [i for i in range(1, 11)]
+    df['wma_10d'] = df['close'].rolling(window=10).apply(lambda prices: sum(w * p for w, p in zip(weights, prices)) / sum(weights), raw=True)
+    
+    # Calculate the realized volatility (standard deviation of log returns) over the past 20 days
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['realized_volatility'] = df['log_returns'].rolling(window=20).std()
+    
+    # Leverage weighted moving averages: calculate the difference between the current close and the weighted moving average
+    df['leverage_wma_diff'] = df['close'] - df['wma_10d']
+    
+    # Integrate trading volume with price changes: ratio of close price change to average volume
+    df['volume_price_ratio'] = df['close_diff'] / df['avg_volume_5d']
+    
+    # Calculate the 5-day momentum
+    df['momentum_5d'] = df['close'] / df['close'].shift(5) - 1
+    
+    # Combine the factors into a single alpha factor
+    factor = (df['close_diff'] + df['amount'] / df['avg_volume_5d'] - df['leverage_wma_diff']) * df['realized_volatility'] + df['momentum_5d']
+    
+    return factor.dropna()
+```

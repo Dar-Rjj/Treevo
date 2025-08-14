@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    avg_vol_5 = df['volume'].rolling(window=5).mean()
+    relative_volume = df['volume'] / avg_vol_5
+    short_term_momentum_vol_adj = short_term_momentum * relative_volume
+    
+    # Weight by Volume Surge
+    avg_vol_10 = df['volume'].rolling(window=10).mean()
+    volume_surge_weight = 1 + (df['volume'] > 1.5 * avg_vol_10) * 0.5 + ((df['volume'] > avg_vol_10) & (df['volume'] <= 1.5 * avg_vol_10)) * 0.2
+    short_term_momentum_vol_adj_weighted = short_term_momentum_vol_adj * volume_surge_weight
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range_20 = daily_price_range.rolling(window=20).mean()
+    price_range_filter = (daily_price_range > 1.5 * avg_daily_price_range_20)
+    short_term_momentum_vol_adj_weighted_filtered = short_term_momentum_vol_adj_weighted.where(~price_range_filter, other=0)
+    
+    # Apply Volatility Filter
+    daily_return = df['close'].pct_change()
+    std_dev_daily_returns_20 = daily_return.rolling(window=20).std()
+    volatility_filter = (std_dev_daily_returns_20 > 0.03)
+    short_term_momentum_vol_adj_weighted_filtered_vol = short_term_momentum_vol_adj_weighted_filtered.where(~volatility_filter, other=0)
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Oscillator
+    momentum_oscillator = short_term_momentum - long_term_momentum
+    
+    # Introduce High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range_5 = high_low_range.rolling(window=5).mean()
+    normalized_high_low_range = high_low_range / avg_high_low_range_5
+    
+    # Introduce Open-Close Range Indicator
+    open_close_range = (df['open'] - df['close']).abs()
+    avg_open_close_range_5 = open_close_range.rolling(window=5).mean()
+    normalized_open_close_range = open_close_range / avg_open_close_range_5
+    
+    # Final Alpha Factor
+    final_factor = (short_term_momentum_vol_adj_weighted_filtered_vol 
+                    * momentum_oscillator 
+                    * normalized_high_low_range 
+                    * normalized_open_close_range)
+    
+    return final_factor
+```

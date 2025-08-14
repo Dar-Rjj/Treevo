@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range (High - Low)
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Change in Intraday Range over Time
+    df['daily_delta_intraday_range'] = df['intraday_range'].diff()
+    df['weekly_delta_intraday_range'] = df['intraday_range'].diff(5)
+    
+    # Identify Gaps at Market Open
+    df['open_gap_up'] = df['open'] - df['close'].shift(1)
+    df['open_gap_down'] = df['close'].shift(1) - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Daily VWAP Trend
+    df['daily_vwap_slope'] = df['vwap'].diff()
+    df['weekly_vwap_slope'] = df['vwap'].diff(5)
+    
+    # Analyze Volume Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].rolling(window=20).mean() * 2).astype(int)
+    
+    # Examine Trading Amount and Its Impact
+    df['trading_amount_volatility_daily'] = df['amount'].pct_change().rolling(window=5).std()
+    df['trading_amount_volatility_weekly'] = df['amount'].pct_change().rolling(window=20).std()
+    
+    # Correlate Trading Amount with Price Changes
+    df['daily_trading_amount_to_price_change_ratio'] = df['amount'].pct_change() / df['close'].pct_change()
+    df['weekly_trading_amount_to_price_change_ratio'] = df['amount'].pct_change(5) / df['close'].pct_change(5)
+    
+    # Integrate Multiple Indicators for Composite Alpha Factors
+    df['composite_alpha_score'] = (df['daily_delta_intraday_range'] + 
+                                   df['open_gap_up'] - df['open_gap_down'] + 
+                                   df['daily_vwap_slope'] + 
+                                   df['volume_spike'] * 2 + 
+                                   df['trading_amount_volatility_daily'])
+    
+    # Create a Combined Factor Using Volume Spikes and Trading Amount
+    df['enhanced_alpha_factor'] = (df['volume_spike'] * df['vwap'] + 
+                                   df['trading_amount_volatility_daily'] * df['close'].pct_change())
+    
+    return df['composite_alpha_score'], df['enhanced_alpha_factor']
+```

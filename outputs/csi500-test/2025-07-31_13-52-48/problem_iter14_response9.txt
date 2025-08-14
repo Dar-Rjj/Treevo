@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close to High and Low Ratios
+    close_high_ratio = df['close'] / df['high']
+    close_low_ratio = df['close'] / df['low']
+
+    # Combine Close to High and Low Ratios
+    combined_ratio = 0.6 * close_high_ratio + 0.4 * close_low_ratio
+
+    # Calculate Intraday Price Movements
+    high_low_diff = (df['high'] - df['low']) / df['open']
+    close_open_diff = (df['close'] - df['open']) / df['open']
+
+    # Average Intraday Price Movements
+    avg_pct_move = (high_low_diff + close_open_diff) / 2
+    smoothed_pct_move = avg_pct_move.ewm(span=3, adjust=False).mean()
+
+    # Calculate Volume-Adjusted Momentum
+    price_change = df['close'] - df['close'].shift(1)
+    volume_adj_momentum = price_change * df['volume']
+
+    # Apply Volume Shock Filter
+    abs_volume_change = (df['volume'] - df['volume'].shift(1)).abs()
+    threshold = abs_volume_change.quantile(0.75)
+    filtered_days = abs_volume_change < threshold
+
+    # Confirm with Volume
+    vol_change = df['volume'] - df['volume'].shift(1)
+    weighted_final_factor = smoothed_pct_move * (vol_change / df['volume'].shift(1))
+
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    close_open_return = df['close'] - df['open']
+
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    vol_wtd_intraday_volatility = intraday_volatility * df['volume']
+    vol_wtd_intraday_volatility_ma = vol_wtd_intraday_volatility.rolling(window=15).mean()
+
+    # Calculate Intraday Reversal Score
+    reversal_score = close_open_return / vol_wtd_intraday_volatility_ma
+
+    # Apply Exponential Decay to Reversal Score
+    decayed_reversal_score = reversal_score.ewm(halflife=7, adjust=False).mean()
+
+    # Combine All Factors
+    final_factor = (
+        combined_ratio 
+        + volume_adj_momentum 
+        + weighted_final_factor
+        + decayed_reversal_score
+    )
+
+    # Apply the volume shock filter
+    final_factor[~filtered_days] = np.nan
+
+    return final_factor
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    combined_indicator = intraday_pct_change * volume_ratio
+    
+    # Apply Threshold to Identify Significant Movements
+    # Calculate 20-Day Exponential Moving Standard Deviation of Daily Returns
+    daily_returns = df['close'].pct_change()
+    ema_std_20 = daily_returns.ewm(span=20).std()
+    dynamic_threshold = 2 * ema_std_20
+    significant_movements = combined_indicator.abs() > dynamic_threshold
+    
+    # Confirm with Price Momentum
+    lookback_period = 20
+    ema_close_20 = df['close'].ewm(span=lookback_period).mean()
+    momentum_score = (df['close'] - ema_close_20) / ema_close_20
+    
+    # Synthesize Final Indicator
+    final_indicator = (combined_indicator * significant_movements) + momentum_score
+    
+    # Integrate Opening Gap Analysis
+    opening_gap = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Incorporate Opening Gap into Final Indicator
+    final_indicator += opening_gap
+    
+    # Assign Weights to Each Component
+    weights = {
+        'combined_indicator': 0.5,
+        'momentum_score': 0.3,
+        'opening_gap': 0.2
+    }
+    
+    final_indicator = (combined_indicator * weights['combined_indicator'] +
+                       momentum_score * weights['momentum_score'] +
+                       opening_gap * weights['opening_gap'])
+    
+    return final_indicator
+```

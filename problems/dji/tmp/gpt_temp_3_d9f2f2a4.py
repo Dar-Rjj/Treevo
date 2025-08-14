@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Analyze Volume Trend
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Direction'] = np.where(df['Volume_Change'] > 0, 1, -1)
+    
+    # Adjust High-Low Spread with Volume
+    df['Adjusted_High_Low_Spread'] = np.where(
+        df['Volume_Direction'] == 1,
+        df['High_Low_Spread'] * (df['Volume_Change'] / df['volume'].shift(1)),
+        df['High_Low_Spread'] / (df['volume'].shift(1) - df['Volume_Change'])
+    )
+    
+    # Incorporate Price Confirmation
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Price_Direction'] = np.where(df['Price_Change'] > 0, 1, -1)
+    
+    # Combine High-Low Spread, Volume, and Price
+    df['Combined_Factor'] = np.where(
+        (df['Price_Direction'] == 1) & (df['Volume_Direction'] == 1),
+        df['Adjusted_High_Low_Spread'] * (df['Price_Change'] + df['Volume_Change']),
+        np.where(
+            (df['Price_Direction'] == -1) & (df['Volume_Direction'] == -1),
+            df['Adjusted_High_Low_Spread'] * -(df['Price_Change'] + df['Volume_Change']),
+            df['Adjusted_High_Low_Spread'] * (df['Price_Change'] - df['Volume_Change'])
+        )
+    )
+    
+    # Apply Weighted Moving Average (WMA)
+    weights = np.arange(1, 6)
+    df['WMA'] = df['Combined_Factor'].rolling(window=5, min_periods=1).apply(lambda x: np.sum(x * weights) / np.sum(weights), raw=True)
+    
+    return df['WMA']

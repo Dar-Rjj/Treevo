@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    momentum_lookback = 10
+    volatility_lookback = 10
+    consistency_lookback = 20
+    
+    # Calculate Daily Open-Close Price Spread
+    df['open_close_spread'] = df['close'] - df['open']
+    
+    # Calculate Momentum
+    df['momentum'] = df['close'] - df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Adjust Momentum by Absolute Daily Open-Close Spread
+    df['adjusted_momentum'] = df['momentum'] * df['open_close_spread'].abs()
+    
+    # Calculate Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Further Adjust Momentum by High-Low Range
+    df['final_adjusted_momentum'] = df['adjusted_momentum'] / df['high_low_range']
+    
+    # Weight Final Adjusted Momentum by Volume
+    df['weighted_adjusted_momentum'] = df['final_adjusted_momentum'] * df['volume']
+    
+    # Final Alpha Factor Component 1
+    total_volume = df['volume'].rolling(window=momentum_lookback).sum()
+    weighted_sum = df['weighted_adjusted_momentum'].rolling(window=momentum_lookback).sum()
+    alpha_factor_1 = weighted_sum / total_volume
+    
+    # Calculate Intraday Volatility
+    df['true_range'] = df[['high' - 'low', (df['high'] - df['close']).abs(), (df['low'] - df['close']).abs()]].max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=volatility_lookback).mean()
+    df['weighted_volatility'] = df['atr'] * df['volume']
+    
+    # Final Alpha Factor Component 2
+    weighted_volatility_sum = df['weighted_volatility'].rolling(window=volatility_lookback).sum()
+    alpha_factor_2 = weighted_volatility_sum / total_volume
+    
+    # Calculate Price Movement Consistency
+    df['daily_returns'] = df['close'].pct_change()
+    df['moving_average'] = df['close'].rolling(window=consistency_lookback).mean()
+    df['std_dev'] = df['daily_returns'].rolling(window=consistency_lookback).std()
+    
+    # Final Alpha Factor Component 3
+    alpha_factor_3 = df['std_dev'] / df['moving_average']
+    
+    # Combine Final Alpha Factors
+    final_alpha_factor = alpha_factor_1 + alpha_factor_2 + alpha_factor_3
+    
+    return final_alpha_factor
+```

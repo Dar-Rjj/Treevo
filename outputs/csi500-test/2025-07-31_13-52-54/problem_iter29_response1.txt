@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the 50-day Exponential Moving Average (EMA) of Closing Prices
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Generate a Binary Trend Signal; 1 if the Current Close is Above the EMA, 0 Otherwise
+    df['trend_signal'] = (df['close'] > df['ema_50']).astype(int)
+    
+    # Calculate the Difference Between Today’s High and the Previous Day's High
+    df['high_diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the Difference Between Today’s Low and the Previous Day's Low
+    df['low_diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the Differences to Get a Combined Momentum Score
+    df['momentum_score'] = df['high_diff'] + df['low_diff']
+    
+    # Create a Simple Threshold to Classify Stocks as Having Positive or Negative Momentum Based on the Score
+    df['momentum_class'] = (df['momentum_score'] > 0).astype(int)
+    
+    # Calculate the Daily Volume Percentage Change from the Previous Day
+    df['volume_change'] = df['volume'] / df['volume'].shift(1) - 1
+    
+    # Assign a Value Indicating Strong Buying (Positive Change) or Selling (Negative Change) Pressure
+    df['buying_selling_pressure'] = (df['volume_change'] > 0).astype(int)
+    
+    # Compute High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    df['volume_weighted_hl_spread'] = df['high_low_spread'] * df['volume']
+    
+    # Compute Volume-Weighted Close Price
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    
+    # Sum of These Values Over the Lookback Period
+    lookback_period = 50
+    df['sum_volume_weighted_hl_spread'] = df['volume_weighted_hl_spread'].rolling(window=lookback_period).sum()
+    df['sum_volume_weighted_close'] = df['volume_weighted_close'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    df['volatility_ratio'] = df['sum_volume_weighted_hl_spread'] / df['sum_volume_weighted_close']
+    
+    # Calculate Momentum Component
+    df['current_volume_weighted_hl_spread'] = df['volume_weighted_hl_spread']
+    df['avg_past_volume_weighted_hl_spread'] = df['volume_weighted_hl_spread'].rolling(window=lookback_period).mean()
+    df['momentum_component'] = df['current_volume_weighted_hl_spread'] - df['avg_past_volume_weighted_hl_spread']
+    
+    # Generate Interim Factor
+    df['interim_factor'] = (df['volume_weighted_hl_spread'] + df['momentum_component']) / df['volume_weighted_close']
+    
+    # Incorporate Price Trend
+    df['price_trend'] = (df['close'] - df['ema_50']) * df['interim_factor']
+    
+    # Calculate Price Momentum
+    df['n_day_log_return'] = np.log(df['close']) - np.log(df['close'].shift(lookback_period))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    df['log_volume'] = np.log(df['volume'])
+    df['volatility'] = df[['open', 'high', 'low', 'close']].std(axis=1)
+    df['enhanced_volatility'] = df['volatility'] * df['log_volume']
+    
+    # Calculate Trade Frequency Adjusted Return
+    df['trade_frequency'] = df['volume'].rolling(window=lookback_period).count()
+    df['adjusted_return'] = (np.log(df['close']) - np.log(df['close'].shift(lookback_period))) / np.sqrt(df['trade_frequency'])
+    
+    # Combine Factors
+    df['combined_factor'] = df['n_day_log_return'] * df['enhanced_volatility'] + df['adjusted_return']
+    
+    # Apply a Nonlinear Transformation to the Sum (e.g., Square)
+    df['transformed_value'] = df['combined_factor'] ** 2
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['price_trend'] * df['transformed_value']
+    
+    return df['final_alpha_factor']
+```

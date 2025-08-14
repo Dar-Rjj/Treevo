@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Compute 20-day moving average of daily returns
+    df['ma_20_daily_return'] = df['daily_return'].rolling(window=20).mean()
+    
+    # Compute WMA with weights linearly increasing over a 10-day window
+    weights = list(range(1, 11))
+    df['wma_close'] = df['close'].rolling(window=10).apply(lambda prices: (prices * weights).sum() / sum(weights), raw=True)
+    
+    # Subtract WMA from Current Close price
+    df['price_momentum'] = df['close'] - df['wma_close']
+    
+    # Intraday range
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_range_ratio'] = df['intraday_range'] / df['close'].shift(1)
+    
+    # Upper and lower shadow lengths
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['shadow_ratio'] = df['upper_shadow'] / df['lower_shadow']
+    
+    # Change in volume from the previous day
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Ratio of volume to the 20-day moving average of volume
+    df['ma_20_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['ma_20_volume']
+    
+    # High-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Volume Adjusted High-Low Range
+    df['log_volume'] = df['volume'].apply(lambda x: 0 if x <= 0 else np.log(x))
+    df['vol_adj_high_low_range'] = df['high_low_range'] * df['log_volume']
+    
+    # Relative Volume
+    df['rel_volume'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Volume Adjusted Spread
+    df['vol_adj_spread'] = df['high_low_range'] * df['rel_volume']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['price_momentum'] - df['vol_adj_spread']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({'date': ..., 'open': ..., 'high': ..., 'low': ..., 'close': ..., 'amount': ..., 'volume': ...})
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

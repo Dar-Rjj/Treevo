@@ -1,0 +1,93 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate Volume Impact Score
+    n_days = 10
+    volume_sum = df['volume'].rolling(window=n_days).sum()
+    avg_high = df['high'].rolling(window=n_days).mean()
+    avg_low = df['low'].rolling(window=n_days).mean()
+    volume_impact_score = (avg_high - avg_low) / volume_sum
+
+    # Intermediate Factor (Factor 1)
+    factor_1 = intraday_return * volume_impact_score
+
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(20)
+
+    # Adjust Price Momentum by Volume
+    adjusted_momentum = price_momentum / volume_sum
+
+    # Calculate Cumulative Volume-Weighted Momentum
+    cumulative_volume_weighted_momentum = (adjusted_momentum * df['volume']).rolling(window=10).sum()
+
+    # Crossover Hybrid Momentum with Intraday, Breakout, and Volume-Weighted Adjustments
+    high_low_spread = df['high'] - df['low']
+    breakout_momentum = high_low_spread / df['close'].shift(1)
+    
+    # Adjust by Volume
+    adjusted_breakout_momentum = (breakout_momentum + price_momentum) / volume_sum
+
+    # Volume-Weighted and Amount-Weighted Movements
+    volume_weighted_intraday = intraday_return * df['volume']
+    amount_weighted_intraday = intraday_return * df['amount']
+    cumulative_amount = df['amount'].rolling(window=n_days).sum()
+    volume_adjusted_breakout = breakout_momentum / volume_sum
+    amount_adjusted_breakout = breakout_momentum / cumulative_amount
+
+    # Incorporate Opening Trend and Amount Impact
+    opening_trend = df['open'] - df['close'].shift(1)
+    amount_weighted_opening_trend = opening_trend * df['amount']
+
+    # Combine Weighted Movements
+    combined_movements = (
+        volume_weighted_intraday + 
+        volume_adjusted_breakout + 
+        amount_weighted_intraday + 
+        amount_adjusted_breakout + 
+        amount_weighted_opening_trend
+    )
+
+    # Incorporate Trend Strength
+    short_term_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd = short_term_ema - long_term_ema
+    trend_adjusted_combined_movements = combined_movements * macd
+
+    # Calculate Moving Averages
+    ma_volume_weighted_intraday = volume_weighted_intraday.rolling(window=5).mean()
+    ma_amount_weighted_intraday = amount_weighted_intraday.rolling(window=5).mean()
+    ma_amount_weighted_opening_trend = amount_weighted_opening_trend.rolling(window=5).mean()
+
+    # Introduce Additional Trend Indicators
+    rsi_14 = compute_rsi(df['close'], 14)
+    rsi_28 = compute_rsi(df['close'], 28)
+    williams_r_14 = compute_williams_r(df, 14)
+
+    # Adjust for Trend Indicators
+    trend_adjusted_factor = trend_adjusted_combined_movements * rsi_14 * rsi_28
+
+    # Aggregate and Adjust Momentum
+    final_factor = trend_adjusted_factor - ma_volume_weighted_intraday - ma_amount_weighted_intraday - ma_amount_weighted_opening_trend
+
+    return final_factor
+
+def compute_rsi(series, period):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def compute_williams_r(df, period):
+    high_roll = df['high'].rolling(window=period).max()
+    low_roll = df['low'].rolling(window=period).min()
+    williams_r = -100 * ((high_roll - df['close']) / (high_roll - low_roll))
+    return williams_r
+```

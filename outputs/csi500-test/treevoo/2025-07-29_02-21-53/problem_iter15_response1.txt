@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['Previous Close'] = df['close'].shift(1)
+    df['High-Low'] = df['high'] - df['low']
+    df['High-PrevClose'] = abs(df['high'] - df['Previous Close'])
+    df['Low-PrevClose'] = abs(df['low'] - df['Previous Close'])
+    df['True Range'] = df[['High-Low', 'High-PrevClose', 'Low-PrevClose']].max(axis=1)
+
+    # Calculate Rolling Average True Range (ATR) with 14 days window
+    n_days = 14
+    df['ATR'] = df['True Range'].rolling(window=n_days).mean()
+
+    # Adjust for Volume Impact on Price
+    df['Volume_Adjusted_High_Low'] = (df['high'] - df['low']) * df['volume']
+
+    # Calculate Open-Close Momentum
+    df['Open_Close_Momentum'] = df['close'] - df['open']
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    volatility = df['close'].pct_change().rolling(window=n_days).std()
+    weight_adjusted_high_low = (volatility / (volatility + 1))
+    df['Combined_Measure'] = (weight_adjusted_high_low * df['Volume_Adjusted_High_Low'] +
+                              (1 - weight_adjusted_high_low) * df['Open_Close_Momentum'])
+
+    # Dynamic Momentum Indicator
+    df['Intraday_Oscillator'] = df['close'] - df['open']
+    df['Volume_Synchronized_Oscillator'] = (df['close'] - df['open']) * (df['volume'] / df['volume'].rolling(window=n_days).mean())
+    df['Prev_Day_Oscillator'] = df['Intraday_Oscillator'].shift(1)
+    df['Dynamic_Momentum_Indicator'] = (df['Intraday_Oscillator'] + df['Volume_Synchronized_Oscillator'] -
+                                        df['Prev_Day_Oscillator']) / df['close'].pct_change().rolling(window=n_days).std()
+
+    # Aggregate and Smooth High-Low Ranges
+    df['Smoothed_High_Low_Range'] = df['high'] - df['low']
+    df['Smoothed_High_Low_Range'] = df['Smoothed_High_Low_Range'].ewm(span=20, adjust=False).mean()
+    df['Long_Term_High_Low_Range'] = df['high'] - df['low']
+    df['Long_Term_High_Low_Range'] = df['Long_Term_High_Low_Range'].rolling(window=50).sum()
+
+    # Evaluate Volume Activity
+    df['Average_Volume'] = df['volume'].ewm(span=n_days, adjust=False).mean()
+    df['High_Volume_Indicator'] = (df['volume'] > df['Average_Volume']).astype(int)
+
+    # Integrate Combined Factors
+    df['Final_Factor'] = (df['Combined_Measure'] * df['ATR'] * 
+                          df['Smoothed_High_Low_Range'] * df['High_Volume_Indicator'] * 
+                          df['Dynamic_Momentum_Indicator'])
+
+    # Incorporate Market Sentiment (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    df['Final_Alpha_Factor'] = df['Final_Factor'] * (1 + (df['RSI'] - 50) / 50)
+
+    return df['Final_Alpha_Factor']
+```

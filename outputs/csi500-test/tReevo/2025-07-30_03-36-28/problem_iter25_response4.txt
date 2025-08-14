@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_window=20, long_window=100, vol_window=30, momentum_window=50, trend_window=200, liquidity_window=30):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_short'] = df['close'].rolling(window=short_window).mean()
+    df['SMA_long'] = df['close'].rolling(window=long_window).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_adj_volatility'] = df['high_low_diff'] * df['volume']
+    df['vol_adj_volatility'] = df['vol_adj_volatility'].rolling(window=vol_window).mean()
+
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['SMA_short']) / df['close'].rolling(window=momentum_window).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['pct_change_close'] = df['close'].pct_change()
+    df['high_low_range'] = (df['high'] - df['low']) / df['close']
+
+    # Consider Market Trend Alignment
+    df['trend_indicator'] = (df['SMA_short'] > df['SMA_long']).astype(int)
+
+    # Incorporate Dynamic Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['avg_daily_turnover'] = df['daily_turnover'].rolling(window=liquidity_window).mean()
+    df['liquidity_factor'] = df['avg_daily_turnover'].rank(pct=True)
+
+    # Final Alpha Factor
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adj_volatility': -0.2,
+        'pct_change_close': 0.1,
+        'high_low_range': 0.1,
+        'liquidity_factor': 0.2
+    }
+    
+    df['alpha_factor'] = (
+        weights['price_momentum'] * df['price_momentum'] +
+        weights['vol_adj_volatility'] * df['vol_adj_volatility'] +
+        weights['pct_change_close'] * df['pct_change_close'] +
+        weights['high_low_range'] * df['high_low_range'] +
+        weights['liquidity_factor'] * df['liquidity_factor']
+    )
+
+    # Adjust Weights Dynamically Based on Market Trend
+    df['alpha_factor'] = df['alpha_factor'] * (1 + 0.5 * (df['trend_indicator'] - 0.5))
+
+    return df['alpha_factor']
+```

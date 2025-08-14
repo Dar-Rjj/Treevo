@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Weighted Moving Average (WMA) with exponential weights
+    df['WMA'] = df['close'].ewm(span=15).mean()
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['WMA']
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Log Return with Volume Change
+    df['Integrated_Momentum'] = (df['Daily_Log_Return'] * df['Volume_Change']).rolling(window=15).sum()
+    
+    # Enhance with Moving Average Crossover
+    df['7_day_EMA'] = df['close'].ewm(span=7).mean()
+    df['30_day_EMA'] = df['close'].ewm(span=30).mean()
+    crossover_signal = np.where(df['7_day_EMA'] > df['30_day_EMA'], 1, np.where(df['7_day_EMA'] < df['30_day_EMA'], -1, 0))
+    df['Enhanced_Crossover_Signal'] = crossover_signal * 0.01  # Add/subtract a small positive value
+    
+    # Incorporate High-Low Range
+    df['High_Low_Range'] = (df['high'] - df['low']) / df['open']
+    df['Integrated_Momentum'] *= df['High_Low_Range']
+    
+    # Calculate Intraday Momentum
+    df['Intraday_Momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Enhanced Volume Thrust
+    upward_thrust = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    downward_thrust = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    price_range_factor = (df['high'] - df['low']) / df['open']
+    df['Enhanced_Volume_Thrust'] = upward_thrust - downward_thrust + price_range_factor
+    
+    # Calculate High-Low Price Range
+    df['High_Low_Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted High-Low Range
+    df['Volume_Adjusted_High_Low_Range'] = df['High_Low_Price_Range'] * np.sqrt(df['volume'])
+    
+    # Rolling Average of Volume Adjusted High-Low Range
+    df['Rolling_Avg_Volume_Adjusted_High_Low_Range'] = df['Volume_Adjusted_High_Low_Range'].rolling(window=25).mean()
+    
+    # Rolling Average of Daily Log Return
+    df['Rolling_Avg_Daily_Log_Return'] = df['Daily_Log_Return'].rolling(window=25).mean()
+    
+    # Final Integration
+    df['Final_Integration'] = (
+        df['Integrated_Momentum'] + 
+        df['Intraday_Momentum'] + 
+        df['Enhanced_Volume_Thrust'] + 
+        df['Rolling_Avg_Volume_Adjusted_High_Low_Range'] - 
+        df['Rolling_Avg_Daily_Log_Return'] + 
+        df['Enhanced_Crossover_Signal']
+    )
+    
+    # Calculate Volume Adjusted Spread
+    spread = df['high'] - df['low']
+    avg_volume = df['volume'].rolling(window=25).mean()
+    relative_volume = df['volume'] / avg_volume
+    df['Volume_Adjusted_Spread'] = spread * relative_volume
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Price_Momentum'] - 
+        df['Volume_Adjusted_Spread'] + 
+        df['Final_Integration']
+    )
+    
+    return df['Final_Alpha_Factor']
+```

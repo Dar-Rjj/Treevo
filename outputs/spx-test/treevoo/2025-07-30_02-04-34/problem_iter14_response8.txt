@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Spread
+    df['close_open_spread'] = df['close'] - df['open']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Smooth Intraday Return using EMA with span 5
+    df['smoothed_intraday_return'] = df['intraday_return'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Difference between actual and smoothed return
+    df['intraday_momentum_diff'] = df['intraday_return'] - df['smoothed_intraday_return'].shift(1)
+    
+    # Calculate Average Volume over the last 5 periods
+    df['avg_volume_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Multiply Intraday Momentum Difference by Inverse of Average Volume
+    df['intraday_momentum_volume_impact'] = df['intraday_momentum_diff'] * (1 / df['avg_volume_5'])
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['avg_volume_change_25'] = df['volume_change'].rolling(window=25).mean()
+    df['spike_indicator'] = (df['volume_change'] > 1.75 * df['avg_volume_change_25']).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    df['combined_factor'] = df['intraday_momentum_volume_impact'] * df['spike_indicator']
+    df['smoothed_combined_factor'] = df['combined_factor'].rolling(window=4).mean().shift(1)
+    
+    # Calculate Momentum Indicator
+    df['momentum_indicator'] = df['intraday_high_low_spread'] / df['close_open_spread']
+    
+    # Integrate Volume Impact
+    df['momentum_volume_impact'] = df['momentum_indicator'] * (df['volume'] / df['avg_volume_5'])
+    
+    # Final Alpha Signal
+    df['final_alpha_signal'] = (df['smoothed_intraday_return'] * df['momentum_volume_impact']) + df['smoothed_combined_factor']
+    
+    return df['final_alpha_signal']
+```

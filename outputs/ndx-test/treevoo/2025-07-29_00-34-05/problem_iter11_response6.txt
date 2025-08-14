@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    
+    # Combine Intraday Measures and Multiply by Volume
+    combined_intraday_measure = (intraday_high_low_spread + close_open_diff) * df['volume']
+    
+    # Adjust Combined Measure by Price Momentum
+    short_term_momentum = df['close'].ewm(span=5).mean() - df['close'].ewm(span=10).mean()
+    daily_price_change = df['close'] - df['close'].shift(1)
+    moving_avg_20_day = daily_price_change.rolling(window=20).mean()
+    momentum_adjusted_intraday = (short_term_momentum * moving_avg_20_day) / combined_intraday_measure
+    
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate Average Price
+    average_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    volume_adjusted_range = (daily_price_range / average_price) * np.sqrt(df['volume'])
+    
+    # Calculate Short-Term Rolling Average
+    short_term_rolling_avg = volume_adjusted_range.rolling(window=10).mean()
+    
+    # Calculate Long-Term Rolling Average
+    long_term_rolling_avg = volume_adjusted_range.rolling(window=30).mean()
+    
+    # Calculate High-Low Range Momentum
+    high_low_range_ema = daily_price_range.ewm(span=5, adjust=False).mean()
+    daily_change_in_ema = high_low_range_ema - high_low_range_ema.shift(1)
+    
+    # Calculate Volume Shock
+    volume_percentage_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_shock = np.where(volume_percentage_change > 0.5, 1, 0)
+    
+    # Combine Indicators
+    combined_indicator = daily_change_in_ema * np.sign(volume_shock)
+    short_long_diff = short_term_rolling_avg - long_term_rolling_avg
+    alpha_factor_1 = (combined_indicator + short_long_diff) / 2
+    
+    # Combine Price Momentum and Volume Adjusted Range
+    short_term_indicator = moving_avg_20_day * short_term_rolling_avg
+    long_term_indicator = moving_avg_20_day / long_term_rolling_avg
+    final_composite_factor = (short_term_indicator + long_term_indicator) / 2
+    
+    # Final Alpha Factor
+    final_alpha_factor = (momentum_adjusted_intraday + final_composite_factor) / 2
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic Price Momentum
+    df['Close_10_days_ago'] = df['close'].shift(10)
+    df['Price_Momentum'] = df['close'] - df['Close_10_days_ago']
+    df['Smoothed_Momentum'] = df['Price_Momentum'].ewm(span=10, adjust=False).mean()
+
+    # Incorporate Volume Dynamics
+    df['Volume_Variability'] = df['volume'].rolling(window=10).std()
+
+    # Evaluate Adaptive Short-Term Trend
+    df['5_day_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Trend_Strength'] = (df['close'] > df['5_day_EMA']).astype(int)
+    df['Trend_Difference'] = (df['close'] - df['5_day_EMA']) / df['high'].sub(df['low']).rolling(window=10).mean()
+
+    # Combine Momentum and Volume
+    df['Combined_Momentum_Volume'] = df['Smoothed_Momentum'] * df['Volume_Variability']
+
+    # Integrate Short-Term Price Oscillations
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+
+    # Incorporate Adaptive Market Microstructure
+    df['Spread'] = df['high'].sub(df['low']).rolling(window=10).mean()
+    df['Order_Book_Imbalance'] = ((df['high'] + df['low']) / 2) - df['close']
+    df['Microstructure_Factor'] = df['Spread'] * df['Order_Book_Imbalance']
+
+    # Determine Final Factor Value
+    df['Final_Factor'] = (df['Combined_Momentum_Volume'] * df['Trend_Difference']) + df['RSI_14'] + df['Microstructure_Factor'] + 0.3
+
+    return df['Final_Factor']
+```

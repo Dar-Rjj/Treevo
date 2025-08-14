@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Weighted Average Price Momentum over 5 Days
+    weights = np.array([1, 2, 3, 4, 5])
+    df['weighted_momentum'] = df['price_change'].rolling(window=5).apply(lambda x: np.sum(x * weights) / np.sum(weights), raw=True)
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Calculate Daily Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Compute Average Volume Change over 10 Days
+    df['avg_volume_change_10d'] = df['volume_change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['momentum_volume'] = df['weighted_momentum'] * df['avg_volume_change_10d']
+    
+    # Adjust by Exponential Moving Average of Volume
+    n = 10
+    alpha = 2 / (n + 1)
+    df['ema_volume'] = df['volume'].ewm(alpha=alpha, adjust=False).mean()
+    df['volume_ratio'] = df['volume'] / df['ema_volume']
+    
+    # Calculate Momentum Indicator
+    df['daily_returns'] = df['close'] / df['close'].shift(1) - 1
+    df['short_term_momentum'] = df['daily_returns'].rolling(window=5).sum()
+    df['long_term_momentum'] = df['daily_returns'].rolling(window=20).sum()
+    
+    # Calculate Average True Range
+    df['true_range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Combine Momentum and Volatility
+    df['combined_momentum'] = df['short_term_momentum'] * 0.6 + df['long_term_momentum'] * 0.4
+    df['trend_multiplier'] = np.where(df['close'] > df['close'].ewm(span=50, adjust=False).mean(), 1.5, 1)
+    df['momentum_volatility'] = df['combined_momentum'] * df['trend_multiplier']
+    
+    # Combine High-Low Range and Volume
+    df['range_volume'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Amount
+    m = 10
+    df['average_amount'] = df['amount'].rolling(window=m).mean()
+    df['amount_ratio'] = df['amount'] / df['average_amount']
+    
+    # Introduce Weighting Factors
+    w1 = 0.2
+    w2 = 0.3
+    w3 = 0.2
+    w4 = 0.1
+    w5 = 0.2
+    
+    # Combine Weighted Components
+    df['final_alpha'] = (df['range_volume'] * w1 + 
+                         df['weighted_momentum'] * w2 + 
+                         df['momentum_volume'] * w3 + 
+                         df['volume_ratio'] * w4 + 
+                         df['amount_ratio'] * w5)
+    
+    # Final Combined Alpha Factor
+    df['final_alpha'] = (df['momentum_volume'] + df['price_change'] * df['volume_ratio']) * df['momentum_volatility'] * df['amount_ratio']
+    
+    return df['final_alpha'].dropna()
+```

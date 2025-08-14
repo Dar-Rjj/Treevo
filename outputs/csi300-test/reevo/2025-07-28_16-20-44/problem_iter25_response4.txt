@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return with exponential decay over a dynamic lookback period (10-30 days)
+    def exp_decay(weights, decay_rate):
+        return np.exp(-decay_rate * np.arange(len(weights)))
+    
+    momentum_10 = np.log(df['close']).diff(periods=10).ewm(span=10, adjust=False).mean()
+    momentum_20 = np.log(df['close']).diff(periods=20).ewm(span=20, adjust=False).mean()
+    momentum_30 = np.log(df['close']).diff(periods=30).ewm(span=30, adjust=False).mean()
+    momentum = (momentum_10 + momentum_20 + momentum_30) / 3
+    
+    # Calculate the liquidity factor using the average volume with exponential decay over a dynamic lookback period (10-40 days)
+    liquidity_10 = df['volume'].ewm(span=10, adjust=False).mean()
+    liquidity_20 = df['volume'].ewm(span=20, adjust=False).mean()
+    liquidity_30 = df['volume'].ewm(span=30, adjust=False).mean()
+    liquidity_40 = df['volume'].ewm(span=40, adjust=False).mean()
+    liquidity = (liquidity_10 + liquidity_20 + liquidity_30 + liquidity_40) / 4
+    
+    # Calculate the market sentiment using the average money flow ratio with exponential decay over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment_5 = money_flow_ratio.ewm(span=5, adjust=False).mean()
+    market_sentiment_10 = money_flow_ratio.ewm(span=10, adjust=False).mean()
+    market_sentiment_15 = money_flow_ratio.ewm(span=15, adjust=False).mean()
+    market_sentiment = (market_sentiment_5 + market_sentiment_10 + market_sentiment_15) / 3
+    
+    # Calculate the volatility factor using the standard deviation of the log returns with exponential decay over a dynamic lookback period (20-50 days)
+    volatility_20 = np.log(df['close']).diff().ewm(span=20, adjust=False).std()
+    volatility_40 = np.log(df['close']).diff().ewm(span=40, adjust=False).std()
+    volatility_60 = np.log(df['close']).diff().ewm(span=60, adjust=False).std()
+    volatility = (volatility_20 + volatility_40 + volatility_60) / 3
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices with exponential decay over the last 5-10 days
+    intraday_dynamics_5 = (df['high'] / df['low']).ewm(span=5, adjust=False).mean()
+    intraday_dynamics_10 = (df['high'] / df['low']).ewm(span=10, adjust=False).mean()
+    intraday_dynamics = (intraday_dynamics_5 + intraday_dynamics_10) / 2
+    
+    # Combine the factors without normalization
+    factor = (momentum * liquidity * market_sentiment * intraday_dynamics) / (volatility + 1e-6)
+    
+    return factor
+```

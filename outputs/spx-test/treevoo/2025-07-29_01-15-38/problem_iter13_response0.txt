@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume Change Indicator
+    df['volume_change'] = df['volume'].diff()
+    
+    # Calculate Price Momentum Indicator
+    df['close_ema_10'] = df['close'].ewm(span=10).mean()
+    df['price_momentum'] = df['close_ema_10'] - df['close']
+    
+    # Combine and Filter Indicators
+    df['combined_indicator'] = df['volume_change'] * df['price_momentum']
+    upper_threshold = df['combined_indicator'].quantile(0.75)
+    lower_threshold = df['combined_indicator'].quantile(0.25)
+    df['filtered_indicator'] = np.where(df['combined_indicator'] > upper_threshold, 1,
+                                        np.where(df['combined_indicator'] < lower_threshold, -1, 0))
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Short-Term High-Low Range Momentum
+    df['range_diff_short'] = df['high_low_range'].diff().rolling(window=5).sum()
+    
+    # Calculate Long-Term High-Low Range Momentum
+    df['range_diff_long'] = df['high_low_range'].diff().rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum Oscillator
+    df['range_momentum_oscillator'] = df['range_diff_short'] - df['range_diff_long']
+    
+    # Weight by Volume Surge
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    volume_weight = np.where(df['volume_ratio'] > 1.5, 1.5,
+                             np.where(df['volume_ratio'] > 1, 1.2, 1))
+    
+    # Filter by Close Price Increase
+    df['close_increase'] = np.where(df['close'] > df['close'].shift(1), 1, 0)
+    df['momentum_filtered'] = df['range_momentum_oscillator'] * df['close_increase']
+    
+    # Final Alpha Factor
+    df['final_factor'] = (df['filtered_indicator'] * df['momentum_filtered'] * volume_weight)
+    
+    return df['final_factor']
+```

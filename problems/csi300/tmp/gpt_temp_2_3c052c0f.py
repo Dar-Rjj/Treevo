@@ -1,0 +1,46 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics(df):
+    # Calculate the daily price movement
+    df['daily_price_movement'] = df['close'].diff()
+    
+    # Calculate the intraday volatility
+    df['high_low'] = df['high'] - df['low']
+    df['high_close'] = df['high'] - df['close']
+    df['close_low'] = df['close'] - df['low']
+    df['open_close'] = df['open'] - df['close']
+    df['intraday_volatility'] = (df['high_low'] + df['high_close'] + df['close_low'] + df['open_close']) / 4
+    
+    # Calculate the ratio of close price change to volume change
+    df['close_change'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].pct_change()
+    df['price_volume_ratio'] = df['close_change'] / df['volume_change']
+    
+    # Create a factor based on the sequential patterns of closing prices over the past 5 days
+    def pattern_score(series):
+        pattern = ''.join(['1' if x > 0 else '0' for x in series.diff().dropna()])
+        if pattern == '110':
+            return 'bullish'
+        elif pattern == '001':
+            return 'bearish'
+        else:
+            return 'neutral'
+    
+    df['pattern_5d'] = df['close'].rolling(window=5).apply(lambda x: pattern_score(x), raw=False)
+    
+    # Introduce a weighted moving average factor using the last 10 days' closing prices
+    weights = [i / 55 for i in range(1, 11)][::-1]  # Linearly decreasing weights
+    df['wma_10d'] = df['close'].rolling(window=10).apply(lambda x: (x * weights).sum(), raw=True)
+    df['sma_10d'] = df['close'].rolling(window=10).mean()
+    df['trend_signal'] = df['wma_10d'] - df['sma_10d']
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['daily_price_movement'] +
+        df['intraday_volatility'] * 0.5 +
+        df['price_volume_ratio'] * 0.3 +
+        df['trend_signal'] * 0.2
+    )
+    
+    return df['alpha_factor']

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Weight by Intraday Volatility
+    intraday_volatility = intraday_return.rolling(window=5).std()
+    weighted_aggregate_returns = aggregate_returns * intraday_volatility
+    
+    # Adjust for Volume
+    volume_adjusted_returns = weighted_aggregate_returns * df['volume']
+    
+    # Smoothed Moving Average
+    sma = volume_adjusted_returns.rolling(window=5).mean()
+    smoothed_returns = sma.ewm(span=5, adjust=False).mean()
+    
+    # Compute Price Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    price_momentum = log_returns.rolling(window=20).sum()
+    
+    # Apply Volume Confirmation
+    volume_confirmation = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Generate Final Momentum Factor
+    final_momentum_factor = price_momentum * volume_confirmation
+    
+    # Incorporate High-Low Volatility into Final Factor
+    high_low_volatility = high_low_range * intraday_volatility
+    
+    # Integrate All Components
+    integrated_factor = smoothed_returns + final_momentum_factor + high_low_volatility
+    
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Integrate Additional Factors
+    close_to_open_return = (df['open'] / df['close'].shift(1)) - 1
+    additional_factor = intraday_return * close_to_open_return * price_momentum_ratio
+    
+    # Conditionally Adjust by Volume Metrics
+    avg_volume = df['volume'].rolling(window=5).mean()
+    volume_adjusted_factor = additional_factor.where(df['volume'] > avg_volume, other=additional_factor * 0.5) * 1.5
+    
+    # Combine Momentum and Volatility
+    combined_momentum_volatility = price_momentum + high_low_volatility * df['volume'] / df['volume'].mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = integrated_factor + volume_adjusted_factor + combined_momentum_volatility
+    
+    return final_alpha_factor
+```

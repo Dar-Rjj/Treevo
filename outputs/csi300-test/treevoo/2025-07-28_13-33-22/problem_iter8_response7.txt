@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5, threshold=3):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['intraday_feature'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Combine Factors
+    df['intraday_range_n'] = df['intraday_range'].rolling(window=n).mean()
+    df['combined_factor'] = df['intraday_range_n'] * (df['close_to_open_return'] + df['price_change'])
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = (df['close'] - df['close'].shift(1)).abs()
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=m).mean()
+    df['enhanced_factor'] = df['combined_factor'] * df['avg_abs_price_change']
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = df['volume'] / df['volume'].shift(1)
+    
+    # Adjust Combined Factor by Volume Spike
+    df['adjusted_factor'] = df['enhanced_factor'] / df['volume_spike']
+    df['capped_factor'] = df['adjusted_factor'].clip(-threshold, threshold)
+    
+    # Weight by Relative Volume
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['relative_volume'] = df['volume'] / df['average_volume']
+    df['final_factor'] = df['capped_factor'] * df['relative_volume']
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# factor_values = heuristics_v2(df)
+```

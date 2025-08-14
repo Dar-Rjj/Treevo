@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price by Open Price
+    adjusted_close = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    avg_intraday_momentum = (high_indicator + low_indicator) / 2
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    volume_lookback = 10
+    ma_volume = df['volume'].rolling(window=volume_lookback).mean()
+    normalized_volume = df['volume'] / ma_volume
+    volume_adjusted_intraday_momentum = avg_intraday_momentum * normalized_volume
+    
+    # Incorporate Longer-Term Volume-Adjusted Momentum
+    long_term_lookback = 20
+    long_term_momentum = (df['close'] - df.shift(long_term_lookback)['close']) / df.shift(long_term_lookback)['close']
+    volume_ratio = df['volume'] / df.shift(long_term_lookback)['volume']
+    final_long_term_factor = long_term_momentum * volume_ratio + long_term_momentum
+    
+    # Consolidate All Factors
+    total_factors = (adjusted_close + volume_adjusted_intraday_momentum + final_long_term_factor) / df['open']
+    
+    # Calculate Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01  # 1% threshold
+    significant_increase = (daily_price_return > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    volume_spike_lookback = 7
+    avg_past_week_volume = df['volume'].rolling(window=volume_spike_lookback).mean()
+    volume_spike_indicator = (df['volume'] > avg_past_week_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_momentum_accumulator = 0
+    weighted_momentum = daily_price_return * significant_increase
+    weighted_momentum_accumulator += weighted_momentum
+    
+    # Apply Volume Spike Filter
+    volume_spike_filtered_momentum = weighted_momentum_accumulator * volume_spike_indicator
+    
+    # Final Alpha Factor Synthesis
+    final_alpha_factor = (total_factors + volume_spike_filtered_momentum) * volume_spike_indicator
+    
+    # Adjust for Open Price
+    final_alpha_factor = final_alpha_factor / df['open']
+    
+    return final_alpha_factor
+```

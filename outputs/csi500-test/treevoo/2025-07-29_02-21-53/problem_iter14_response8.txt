@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Price Movement
+    df['HighLowDiff'] = df['high'] - df['low']
+    df['CloseOpenChange'] = df['close'] - df['open']
+
+    # Aggregate and Smooth Price Movements
+    df['SumHighLowDiff'] = df['HighLowDiff'].rolling(window=20).sum()
+    df['SumCloseOpenChange'] = df['CloseOpenChange'].rolling(window=20).sum()
+    df['SmoothedHighLowRange'] = df['HighLowDiff'].ewm(span=20, adjust=False).mean()
+    df['LongTermHighLowRange'] = (df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min())
+
+    # Compute Momentum of High-Low Ranges
+    df['HLMomentum'] = df['LongTermHighLowRange'] - df['SmoothedHighLowRange']
+
+    # Calculate True Range
+    df['PrevClose'] = df['close'].shift(1)
+    df['TrueRange'] = df[['high', 'low', 'PrevClose']].apply(
+        lambda x: max(x[0] - x[1], x[0] - x[2], x[2] - x[1]), axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+
+    # Adjust Price Momentum by ATR
+    df['WeightedHighLowRange'] = df['SumHighLowDiff'] / df['ATR']
+    df['WeightedCloseOpenChange'] = df['SumCloseOpenChange'] / df['ATR']
+    df['AdjustedMomentumScore'] = (df['WeightedHighLowRange'] + df['WeightedCloseOpenChange']) / 2
+
+    # Evaluate Volume Activity
+    df['AvgVolume'] = df['volume'].rolling(window=20).mean()
+    df['HighVolumeDay'] = df['volume'] > df['AvgVolume']
+    df['FiveDayVolumeAvg'] = df['volume'].rolling(window=5).mean()
+    df['VolumeSpike'] = df['volume'] > 2 * df['FiveDayVolumeAvg']
+
+    # Adjust Momentum Based on Volume
+    df['AdjustedMomentum'] = np.where(df['VolumeSpike'], df['AdjustedMomentumScore'] * 0.8, df['AdjustedMomentumScore'])
+
+    # Integrate Combined Factors
+    df['InterimAlphaFactor'] = df['AdjustedMomentum'] * df['HighVolumeDay']
+
+    # Combine ATR and Price Momentum
+    df['FinalAlphaFactor'] = df['InterimAlphaFactor'] + df['HLMomentum']
+
+    # Incorporate Recent Price Trend
+    df['MovingAvgClose'] = df['close'].rolling(window=20).mean()
+    df['TrendMultiplier'] = np.where(df['close'] > df['MovingAvgClose'], 1.2, 0.8)
+    df['FinalAlphaFactor'] = df['FinalAlphaFactor'] * df['TrendMultiplier']
+
+    return df['FinalAlphaFactor']
+```

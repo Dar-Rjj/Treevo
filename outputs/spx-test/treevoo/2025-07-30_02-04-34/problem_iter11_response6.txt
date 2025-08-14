@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    intraday_momentum = (high_low_diff / df['open'])
+    
+    # Combine for Initial Alpha Signal
+    initial_alpha_signal = intraday_momentum * df['volume']
+    
+    # Calculate Smoothed Price Momentum
+    smoothed_price_momentum = (df['close'].pct_change().rolling(window=5).sum()) / 5
+    
+    # Compute Weighted Volume Indicator
+    volume_change = df['volume'].diff()
+    weighted_volume_indicator = (volume_change * volume_change.apply(lambda x: 1 if x > 0 else -1)).rolling(window=5).mean()
+    
+    # Final Intraday Alpha Component
+    final_intraday_alpha_component = (smoothed_price_momentum * weighted_volume_indicator) + initial_alpha_signal
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Volume-Adjusted Momentum
+    price_momentum_7day = df['close'].shift(1) - df['close'].shift(7)
+    volume_momentum_7day = df['volume'].shift(1) - df['volume'].shift(7)
+    volume_adjusted_momentum = price_momentum_7day * volume_momentum_7day
+    
+    # Apply Volume-Adjusted Momentum to High-Low Range
+    weighted_high_low_range = high_low_range * volume_adjusted_momentum
+    
+    # Identify Volume Spikes
+    volume_sma = df['volume'].rolling(window=5).mean()
+    volume_spike = (df['volume'] > volume_sma * 1.5).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    adjusted_momentum = volume_adjusted_momentum * (1 - 0.3 * volume_spike)
+    
+    # Combine Final Alpha Signal
+    final_alpha_signal = final_intraday_alpha_component + weighted_high_low_range * adjusted_momentum
+    
+    # Calculate Intraday High-Low Spread Factor
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    combined_intraday_factor = intraday_high_low_spread + close_to_open_return
+    
+    # Calculate Weighted Price Movement
+    weighted_price_movement = (df['close'] - df['open']) * df['volume']
+    average_volume = df['volume'].rolling(window=5).mean()
+    normalized_weighted_price_movement = weighted_price_movement / average_volume
+    
+    # Final Alpha Factor
+    final_alpha_factor = final_alpha_signal * combined_intraday_factor * normalized_weighted_price_movement
+    
+    return final_alpha_factor
+```

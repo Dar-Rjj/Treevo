@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, short_window=12, long_window=26, volume_ema_span=5):
+    # Intraday High-Low Range Ratio
+    df['Intraday_Range_Ratio'] = df['high'] / df['low']
+    
+    # Open-to-Close Direction
+    df['Open_to_Close_Direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Volume Weighted Smoothed Returns
+    df['Volume_EMA'] = df['volume'].ewm(span=volume_ema_span, adjust=False).mean()
+    df['Volume_Weighted_Returns'] = (df['close'].diff() * (df['volume'] / df['Volume_EMA']))
+    
+    # Summarize Momentum-Reversal Indicator
+    df['Momentum_Reversal_Indicator'] = df['Intraday_Range_Ratio'] + df['Volume_Weighted_Returns']
+    df['Momentum_Reversal_Sign'] = np.sign(df['Momentum_Reversal_Indicator'])
+    
+    # Price and Volume Oscillator
+    df['SMA_Short'] = df['adj_close'].rolling(window=short_window).mean()
+    df['SMA_Long'] = df['adj_close'].rolling(window=long_window).mean()
+    df['PVO'] = (df['SMA_Short'] - df['SMA_Long']) / df['SMA_Long']
+    
+    df['Volume_EMA_Short'] = df['volume'].ewm(span=short_window, adjust=False).mean()
+    df['Volume_EMA_Long'] = df['volume'].ewm(span=long_window, adjust=False).mean()
+    df['Volume_Momentum'] = (df['Volume_EMA_Short'] - df['Volume_EMA_Long']) / df['Volume_EMA_Long']
+    
+    df['PVO_Volume_Adjusted'] = df['PVO'] * df['Volume_Momentum']
+    
+    # Combine All Factors
+    df['Combined_Factor'] = df['Momentum_Reversal_Indicator'] + df['PVO_Volume_Adjusted']
+    df['Combined_Factor_Sign'] = np.sign(df['Combined_Factor'])
+    
+    return df['Combined_Factor_Sign']
+```

@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=5, k1=1.0, k2=1.0):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Compute Price Momentum Factor
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    df['volume_momentum'] = df['volume_change'].rolling(window=m).sum()
+    
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = 0
+    df.loc[df['return_deviation'] > df['return_deviation'].shift(1), 'trend_reversal'] = 1
+    
+    # Check for Volume Increase
+    df['volume_ma_14'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = 0
+    df.loc[df['volume'] > df['volume_ma_14'], 'volume_increase'] = 1
+    
+    # Combine Price and Volume Momentum
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Final Composite Factor Calculation
+    df['composite_factor'] = 0
+    df.loc[(df['trend_reversal'] == 1) & (df['volume_increase'] == 1), 'composite_factor'] = 2
+    df['composite_factor'] += df['combined_momentum']
+    
+    return df['composite_factor']
+```

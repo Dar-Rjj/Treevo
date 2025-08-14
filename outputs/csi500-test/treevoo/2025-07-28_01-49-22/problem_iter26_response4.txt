@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    high_low_range_ratio = high_low_range / df['high'].shift(1) - df['low'].shift(1)
+    
+    # Smooth High-Low Range Ratio with EMA (window size 10 days)
+    smoothed_high_low_range_ratio = high_low_range_ratio.ewm(span=10).mean()
+    
+    # Generate Alpha Factor from Momentum
+    baseline = smoothed_high_low_range_ratio.mean()
+    alpha_factor = np.where(smoothed_high_low_range_ratio > baseline, 1, -1) * df['volume']
+    
+    # Adjust Alpha Factor by Close-Price Change
+    close_price_change = df['close'] - df['close'].shift(1)
+    alpha_factor *= close_price_change
+    
+    # Calculate High-Low Range Volatility (n-period sum divided by n, e.g., n=5)
+    n = 5
+    high_low_range_volatility = (high_low_range.rolling(window=n).sum() / n)
+    
+    # Smooth High-Low Range Volatility with EMA (window size 15 days)
+    smoothed_high_low_range_volatility = high_low_range_volatility.ewm(span=15).mean()
+    
+    # Incorporate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    weighted_close_open_diff = 0.5 * close_open_diff  # Fixed weight for simplicity
+    combined_volatility = smoothed_high_low_range_volatility + weighted_close_open_diff
+    
+    # Enhance Alpha Factor with Volume-Adjusted High-Low Range
+    average_volume = df['volume'].rolling(window=n).mean()
+    volume_adjusted_high_low_range = high_low_range * average_volume
+    alpha_factor += volume_adjusted_high_low_range
+    
+    # Calculate Absolute Close-to-Close Return
+    abs_close_to_close_return = np.abs(df['close'] - df['close'].shift(1))
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_value = high_low_range - abs_close_to_close_return
+    
+    # Calculate Intraday Volatility (average of (High - Low) over 5 days)
+    intraday_volatility = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate Combined Value Momentum
+    combined_value_momentum = combined_value - combined_value.shift(1)
+    
+    # Calculate Close Price Momentum (sum of N-day returns over the last 30 days)
+    n_days = 30
+    close_price_returns = (df['close'] / df['close'].shift(1) - 1)
+    close_price_momentum = close_price_returns.rolling(window=n_days).sum()
+    
+    # Apply Volume Filter
+    median_volume = df['volume'].rolling(window=n_days).median()
+    alpha_factor = alpha_factor[df['volume'] >= median_volume]
+    
+    # Adjust for Volatility (standard deviation with 30-day window)
+    volatility = df['close'].rolling(window=30).std()
+    alpha_factor /= volatility
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Open-to-Close Momentum
+    open_to_close_momentum = open_to_close_return.rolling(window=n_days).sum()
+    
+    # Final Alpha Factor
+    final_alpha_factor = intraday_volatility * (combined_value_momentum + close_price_momentum + open_to_close_momentum)
+    final_alpha_factor *= df['volume']
+    
+    return final_alpha_factor
+```

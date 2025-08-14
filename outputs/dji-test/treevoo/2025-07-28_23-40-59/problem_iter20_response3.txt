@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+
+    # Compute Volume-Weighted Daily Return
+    N = 5
+    df['Volume_Weighted_Return'] = (df['Daily_Price_Change'] * df['volume']).rolling(N).sum() / df['volume'].rolling(N).sum()
+
+    # Introduce Enhanced Price Directional Component
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Close_Open_Sign'] = np.sign(df['Close_Open_Diff'])
+
+    # Incorporate Dynamic Volume Spike Indicator
+    rolling_window = 20
+    df['Vol_Rolling_Mean'] = df['volume'].rolling(window=rolling_window).mean()
+    df['Vol_Rolling_Std'] = df['volume'].rolling(window=rolling_window).std()
+    df['Volume_Spike'] = df['volume'] > (df['Vol_Rolling_Mean'] + 2 * df['Vol_Rolling_Std'])
+    df['Dynamic_Factor'] = 1 + (df['volume'] - df['Vol_Rolling_Mean']) / df['Vol_Rolling_Std']
+    df.loc[df['Volume_Spike'], 'Volume_Weighted_Return'] *= df['Dynamic_Factor']
+
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Adjusted Volume
+    df['Adjusted_Volume'] = df['volume'] / df['High_Low_Spread']
+
+    # Calculate Log Return
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+
+    # Combine Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Combined_Adjusted_Volume_Log_Return'] = df['Log_Return'] * df['Adjusted_Volume'] * df['Close_Open_Sign'] * np.sign(df['high'] - df['close'])
+
+    # Smooth the Combined Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Smoothed_Combined'] = df['Combined_Adjusted_Volume_Log_Return'].ewm(span=5).mean()
+
+    # Calculate Intraday Range Weighted Average Price (IRWAP)
+    df['IRWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Evaluate IRWAP Difference
+    df['IRWAP_Difference'] = df['close'] - df['IRWAP']
+
+    # Integrate Volume-Adjusted Log Return
+    df['Volume_Adjusted_Log_Return'] = df['Log_Return'] * df['Adjusted_Volume']
+
+    # Combine Indicators for Intraday Analysis
+    df['Intraday_Analysis'] = df['High_Low_Spread'] + df['IRWAP_Difference']
+
+    # Calculate Price Momentum
+    N = 5
+    df['Price_Momentum'] = df['close'].pct_change(periods=N)
+
+    # Compare Latest Volume to Moving Average
+    M = 20
+    df['Moving_Average_Volume'] = df['volume'].rolling(window=M).mean()
+    df['Volume_Support'] = np.where(df['volume'] > df['Moving_Average_Volume'], 1, -1)
+
+    # Calculate Long-Term (LMA) and Short-Term (SMA) Moving Averages
+    LMA_period = 200
+    SMA_period = 50
+    df['LMA'] = df['close'].rolling(window=LMA_period).mean()
+    df['SMA'] = df['close'].rolling(window=SMA_period).mean()
+
+    # Calculate Volume-Weighted Difference Between LMA and SMA
+    df['Volume_Weighted_Diff'] = (df['LMA'] - df['SMA']) * df['volume']
+
+    # Smooth with Exponential Moving Average Over 10 periods
+    df['Final_Alpha'] = df['Volume_Weighted_Diff'].ewm(span=10).mean()
+
+    return df['Final_Alpha']
+```

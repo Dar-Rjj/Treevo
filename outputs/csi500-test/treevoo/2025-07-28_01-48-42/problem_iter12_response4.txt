@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Momentum
+    high_low_momentum = high_low_range.diff()
+    high_low_momentum_sum_5 = high_low_momentum.rolling(window=5).sum()
+    
+    # Adjust for Volume
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    adjusted_high_low_momentum = high_low_momentum_sum_5 / avg_volume_10
+    
+    # Apply Exponential Moving Average Smoothing
+    smoothed_adjusted_momentum = adjusted_high_low_momentum.ewm(span=10, adjust=False).mean()
+    interim_alpha_factor_1 = smoothed_adjusted_momentum
+    
+    # Calculate Logarithmic Daily Returns
+    daily_returns = np.log(df['close'] / df['close'].shift(1))
+    
+    # Enhanced Momentum Component
+    ema_21 = daily_returns.ewm(span=21, adjust=False).mean()
+    ema_60 = daily_returns.ewm(span=60, adjust=False).mean()
+    enhanced_momentum = ema_21 - ema_60
+    
+    # Enhanced Volatility Component
+    squared_daily_returns = daily_returns ** 2
+    sum_squared_21 = squared_daily_returns.rolling(window=21).sum()
+    sum_squared_60 = squared_daily_returns.rolling(window=60).sum()
+    enhanced_volatility = sum_squared_21 - sum_squared_60
+    
+    # Enhanced Volume Component
+    daily_volume_changes = np.log(df['volume'] / df['volume'].shift(1))
+    ema_volume_21 = daily_volume_changes.ewm(span=21, adjust=False).mean()
+    ema_volume_60 = daily_volume_changes.ewm(span=60, adjust=False).mean()
+    enhanced_volume_momentum = ema_volume_21 - ema_volume_60
+    
+    # Combine Components
+    final_momentum = enhanced_momentum
+    final_volatility = enhanced_volatility
+    final_volume_momentum = enhanced_volume_momentum
+    final_alpha_factor_2 = final_momentum + final_volatility + final_volume_momentum
+    
+    # Integrate Open and Close Prices
+    open_close_range = df['open'] - df['close']
+    open_close_range_ratio = open_close_range / high_low_range
+    
+    # Apply Additional Momentum on Open-Close Range
+    open_close_momentum = open_close_range.diff()
+    open_close_momentum_sum_5 = open_close_momentum.rolling(window=5).sum()
+    
+    # Adjust for Volume Again
+    adjusted_open_close_momentum = open_close_momentum_sum_5 / avg_volume_10
+    
+    # Apply Exponential Moving Average Smoothing Again
+    smoothed_adjusted_open_close_momentum = adjusted_open_close_momentum.ewm(span=10, adjust=False).mean()
+    interim_alpha_factor_3 = smoothed_adjusted_open_close_momentum
+    
+    # Combine All Components
+    final_alpha_factor = interim_alpha_factor_1 + final_alpha_factor_2 + interim_alpha_factor_3
+    
+    return final_alpha_factor
+```

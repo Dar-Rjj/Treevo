@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum Score
+    high_low_delta = df['high'] - df['low']
+    close_open_delta = df['close'] - df['open']
+    intraday_momentum_score = (high_low_delta + close_open_delta) * df['volume']
+
+    # Calculate Intraday Volatility Score
+    high_close_delta = df['high'] - df['close']
+    low_close_delta = df['low'] - df['close']
+    intraday_volatility_score = (high_close_delta + low_close_delta) / 2 * df['amount']
+
+    # Calculate Daily Close-to-Close Return
+    daily_returns = df['close'].pct_change()
+
+    # Apply Exponential Moving Average (EMA) to Returns
+    ema_returns = daily_returns.ewm(span=20, adjust=False).mean()
+
+    # Compute EMA of Squared Returns for Volatility
+    squared_returns = daily_returns**2
+    ema_squared_returns = squared_returns.ewm(span=20, adjust=False).mean()
+
+    # Combine Scores
+    combined_scores = intraday_momentum_score - intraday_volatility_score
+
+    # Calculate Enhanced Divergence and Volume-Weighted Factor
+    divergence = np.abs(ema_returns - ema_squared_returns)
+    high_low_range = df['high'] - df['low']
+    volume_weighted_divergence = (divergence * df['volume']) / high_low_range
+
+    # Introduce Time-Varying Volatility Adjustment
+    long_term_volatility = squared_returns.ewm(span=50, adjust=False).mean()
+    short_term_volatility = squared_returns.ewm(span=10, adjust=False).mean()
+    volatility_ratio = short_term_volatility / long_term_volatility
+    adjusted_combined_scores = combined_scores * volatility_ratio
+
+    # Finalize Alpha Factor
+    alpha_factor = adjusted_combined_scores + volume_weighted_divergence
+
+    return alpha_factor
+```

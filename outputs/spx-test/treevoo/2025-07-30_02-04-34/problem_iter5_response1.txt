@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Smooth Intraday Return with EMA
+    ema_intraday_return = intraday_return.ewm(span=5, adjust=False).mean().shift(1)
+    intraday_momentum_diff = intraday_return - ema_intraday_return
+    
+    # Detect Volume Spikes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_volume_change = volume_change.rolling(window=20).mean()
+    volume_spike = (volume_change > 1.5 * avg_volume_change).astype(int)
+    
+    # Combine Intraday Momentum and Volume Spike
+    combined_momentum_vol_spike = intraday_momentum_diff * volume_spike
+    combined_momentum_vol_spike_smoothed = combined_momentum_vol_spike.rolling(window=3).mean().shift(1)
+    
+    # Incorporate Close Price Trend
+    close_price_change = df['close'] - df['close'].shift(1)
+    ema_close_price_change = close_price_change.ewm(span=5, adjust=False).mean().shift(1)
+    close_price_trend_diff = close_price_change - ema_close_price_change
+    
+    # Combine All Factors
+    combined_factor = (combined_momentum_vol_spike_smoothed * close_price_trend_diff).sum()
+    
+    # Compute Next Day Open to Current Day Close
+    next_day_open_to_current_close = df['open'].shift(-1) - df['close']
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) / df['low'] - (df['open'] - df['low'])
+    
+    # Final Alpha Signal
+    alpha_signal = combined_factor * intraday_momentum * df['volume']
+    
+    return alpha_signal
+```

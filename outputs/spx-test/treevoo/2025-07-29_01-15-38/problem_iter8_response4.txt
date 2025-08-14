@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Returns
+    df['intraday_returns'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    df['open_to_close_returns'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_returns'] = df['intraday_returns'] + df['open_to_close_returns']
+    
+    # Analyze Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    conditions = [
+        (df['volume_ratio'] > 1.5),
+        (df['volume_ratio'] < 0.5),
+        (True)
+    ]
+    choices = [2, -2, 0]
+    df['volume_trend_classification'] = pd.Series(pd.np.select(conditions, choices, default=0), index=df.index)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['adjusted_combined_returns'] = df['combined_returns'] * df['volume_trend_classification']
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['volume_adjustment'] = df['volume'] / df['volume'].shift(1)
+    
+    # Calculate Weighted High-Low Spread
+    df['weighted_high_low_spread'] = df['intraday_momentum'] * df['volume_adjustment']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['volume_integrated_intraday_dynamics'] = (df['high'] - df['low']) * df['volume_adjustment']
+    
+    # Compute Hybrid Factor
+    df['hybrid_factor'] = df['intraday_returns'] + df['weighted_high_low_spread']
+    
+    # Apply Cumulative Movement
+    df['hybrid_factor_cumulative'] = df['hybrid_factor'].rolling(window=5).sum()
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Short-Term High-Low Range Momentum
+    df['short_term_momentum'] = df['high_low_range'].diff().rolling(window=5).sum()
+    
+    # Calculate Long-Term High-Low Range Momentum
+    df['long_term_momentum'] = df['high_low_range'].diff().rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum Oscillator
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Weight by Volume Surge
+    df['volume_ratio_avg'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    conditions_volume = [
+        (df['volume_ratio_avg'] > 1.5),
+        (df['volume_ratio_avg'] > 1) & (df['volume_ratio_avg'] <= 1.5),
+        (True)
+    ]
+    choices_volume = [1.5, 1.2, 1]
+    df['volume_weight'] = pd.Series(pd.np.select(conditions_volume, choices_volume, default=1), index=df.index)
+    
+    # Filter by Close Price Increase
+    df['filtered_momentum_oscillator'] = df['momentum_oscillator'] * (df['close'] > df['close'].shift(1))
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['filtered_momentum_oscillator'] * df['volume_weight'] + df['hybrid_factor_cumulative'])
+    
+    return df['final_alpha_factor']
+```

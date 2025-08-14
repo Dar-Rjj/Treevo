@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Smooth High-Low Range with EMA
+    df['Smoothed_High_Low_Range'] = df['High_Low_Range'].ewm(span=10).mean()
+    
+    # Generate Intraday Momentum Signal
+    df['Intraday_Signal'] = df['Smoothed_High_Low_Range'].apply(lambda x: 1 if x > 1.3 else -1)
+    
+    # Calculate Volume-Weighted High-Low Range
+    df['Volume_Weighted_High_Low_Range'] = df['High_Low_Range'] * df['volume']
+    df['Volume_Weighted_High_Low_Range_EMA'] = df['Volume_Weighted_High_Low_Range'].ewm(span=10).mean()
+    
+    # Adjust for Volatility
+    df['Volatility'] = df['close'].rolling(window=20).std()
+    df['Volatility_Adjusted_Volume_Weighted_High_Low_Range'] = df['Volume_Weighted_High_Low_Range_EMA'] / df['Volatility']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['Close_to_Close_Return'] = df['close'].diff().abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['Combined_Value'] = df['Smoothed_High_Low_Range'] - df['Close_to_Close_Return']
+    
+    # Calculate Combined Value Momentum
+    df['Combined_Value_Momentum'] = df['Combined_Value'].diff()
+    
+    # Calculate Intraday Range Ratio
+    df['Intraday_Range_Ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Calculate Close Price Momentum
+    df['Close_Price_Momentum'] = (df['close'] / df['close'].shift(1) - 1).rolling(window=20).sum()
+    
+    # Generate Intermediate Alpha Factor
+    df['Intermediate_Alpha_Factor'] = (df['Volatility_Adjusted_Volume_Weighted_High_Low_Range'] 
+                                       + df['Combined_Value_Momentum'] 
+                                       + df['Intraday_Range_Ratio'] 
+                                       - (df['open'] - df['close'].shift(1)))
+    
+    # Adjust Intermediate Alpha Factor based on Intraday Signal
+    df['Adjusted_Intermediate_Alpha_Factor'] = df.apply(
+        lambda row: row['Intermediate_Alpha_Factor'] * 1.8 if row['Intraday_Signal'] == 1 else row['Intermediate_Alpha_Factor'] * 0.2,
+        axis=1
+    )
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_Intermediate_Alpha_Factor'] + df['Close_Price_Momentum']
+    
+    # Weight by Volume
+    df['Volume_Weighted_Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['volume']
+    df['EMA_Volume_Weighted_Final_Alpha_Factor'] = df['Volume_Weighted_Final_Alpha_Factor'].ewm(span=5).mean()
+    
+    # Introduce Additional Momentum Component
+    df['50_Day_MA'] = df['close'].rolling(window=50).mean()
+    df['200_Day_MA'] = df['close'].rolling(window=200).mean()
+    df['Long_Term_Momentum'] = df.apply(
+        lambda row: 1 if row['50_Day_MA'] > row['200_Day_MA'] else -1,
+        axis=1
+    )
+    
+    # Adjust Final Alpha Factor based on Long-Term Momentum
+    df['Adjusted_Final_Alpha_Factor'] = df.apply(
+        lambda row: row['EMA_Volume_Weighted_Final_Alpha_Factor'] * 1.2 if row['Long_Term_Momentum'] == 1 else row['EMA_Volume_Weighted_Final_Alpha_Factor'] * 0.8,
+        axis=1
+    )
+    
+    return df['Adjusted_Final_Alpha_Factor']
+```

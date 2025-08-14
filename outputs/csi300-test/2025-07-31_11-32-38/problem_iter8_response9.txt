@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate 10-Day Moving Average of Daily Price Changes
+    df['10_day_ma_price_change'] = df['price_change'].rolling(window=10).mean()
+    
+    # Calculate Volume and Amount Weighted Daily Return
+    df['daily_return'] = df['close'] / df['open']
+    df['weighted_return'] = df['daily_return'] * df['volume'] * df['amount']
+    
+    # Compute 20-Day Moving Average of Volume and Amount Weighted Returns
+    df['20_day_ma_weighted_return'] = df['weighted_return'].rolling(window=20).mean()
+    
+    # Calculate Volume-Weighted Momentum
+    n = 20
+    df['raw_momentum'] = df['close'] - df['close'].shift(n)
+    df['cumulative_volume'] = df['volume'].rolling(window=n).sum().shift(1)
+    df['volume_weighted_momentum'] = df['raw_momentum'] / df['cumulative_volume']
+    
+    # Incorporate Price Range Factor
+    df['price_range'] = df['high'] - df['low']
+    df['combined_momentum'] = df['volume_weighted_momentum'] + df['price_range']
+    
+    # Weigh by Intraday Volume Activity
+    df['20_day_ma_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['20_day_ma_volume']
+    df['combined_momentum_weighted'] = df['combined_momentum'] * df['volume_ratio']
+    
+    # Combine Signals
+    df['signal'] = df['10_day_ma_price_change'] - df['20_day_ma_weighted_return']
+    df['smoothed_signal'] = df['signal'].rolling(window=5).mean()
+    
+    # Smooth Combined Momentum
+    df['smoothed_combined_momentum'] = df['combined_momentum_weighted'].ewm(alpha=0.2, adjust=False).mean()
+    
+    return df['smoothed_combined_momentum']
+```

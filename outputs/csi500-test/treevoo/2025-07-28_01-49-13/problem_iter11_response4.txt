@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, M=10, N=5, K=2):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Calculate Volume Momentum
+    volume_momentum = df['volume'] - df['volume'].shift(1)
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_close_to_open_return = close_to_open_return * intraday_range
+    
+    # Combine Metrics: Weight Intraday Range by Volume Momentum and adjust by Close-to-Open Return
+    combined_metrics = (intraday_range * volume_momentum) + adjusted_close_to_open_return
+    
+    # Identify Volume Spike
+    volume_ma = df['volume'].rolling(window=M).mean()
+    volume_std = df['volume'].rolling(window=M).std()
+    volume_spike = (df['volume'] > (volume_ma + 2 * volume_std)).astype(int)
+    
+    # Calculate N-day Price Momentum
+    n_day_price_momentum = df['close'] - df['close'].shift(N)
+    
+    # Combine Price Momentum, Volume Spike, and Intraday Volatility
+    n_day_price_momentum_adj = n_day_price_momentum * (K * volume_spike + (1 - volume_spike))
+    combined_return = n_day_price_momentum_adj * intraday_range * close_to_open_return
+    
+    # Calculate Volume Weighted Adjusted Return
+    volume_weighted_adjusted_return = df['volume'] * combined_return
+    
+    # Calculate Exponential Moving Average of Volume Weighted Adjusted Return
+    ema_volume_weighted_adjusted_return = volume_weighted_adjusted_return.ewm(span=M).mean()
+    
+    # Final Combination
+    alpha_factor = (combined_metrics + volume_weighted_adjusted_return) / ema_volume_weighted_adjusted_return
+    
+    return alpha_factor
+```

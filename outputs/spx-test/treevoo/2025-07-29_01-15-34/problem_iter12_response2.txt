@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20):
+    # Daily return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Rolling maximum and minimum close prices
+    max_close = df['close'].rolling(window=lookback_period).max()
+    min_close = df['close'].rolling(window=lookback_period).min()
+    
+    # Difference between current close and nearest peak/trough
+    df['dist_from_peak'] = df['close'] - max_close
+    df['dist_from_trough'] = df['close'] - min_close
+    
+    # Average trading volume over the lookback period
+    avg_volume = df['volume'].rolling(window=lookback_period).mean()
+    
+    # Ratio of current day's volume to average volume
+    df['volume_ratio'] = df['volume'] / avg_volume
+    
+    # Cumulative sum of positive and negative money flow
+    df['positive_money_flow'] = (df['volume'] * df['daily_return']).where(df['daily_return'] > 0, 0).rolling(window=lookback_period).sum()
+    df['negative_money_flow'] = (df['volume'] * df['daily_return']).where(df['daily_return'] < 0, 0).rolling(window=lookback_period).sum()
+    
+    # Ratio of positive to negative money flow
+    df['money_flow_ratio'] = df['positive_money_flow'] / df['negative_money_flow'].abs()
+    
+    # Factor combining momentum and volume anomaly
+    df['momentum_volume_factor'] = df['daily_return'] * df['volume_ratio']
+    
+    # Factor indicating value change with respect to peaks and valleys, adjusted by recent volume trends
+    df['value_change_factor'] = ((df['close'] - min_close) / (max_close - min_close)) * df['volume_ratio']
+    
+    # Final alpha factor
+    df['alpha_factor'] = df['momentum_volume_factor'] + df['value_change_factor']
+    
+    return df['alpha_factor']
+```

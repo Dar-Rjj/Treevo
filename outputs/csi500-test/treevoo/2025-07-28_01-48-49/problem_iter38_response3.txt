@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['IntradayPriceMovement'] = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    df['CloseDifference'] = df['close'] - df['close'].shift(1)
+    df['WeightedIntradayPriceMovement'] = df['IntradayPriceMovement'] * df['volume'] * df['CloseDifference']
+    
+    # Integrate Intraday Volatility
+    df['DailyRange'] = df['high'] - df['low']
+    df['IntradayVolatility'] = df['DailyRange'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['ReversalSignal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['VolumeWeightedReturn'] = df['volume'] * df['ReversalSignal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['IntradayReturnAndReversal'] = (df['volume'] * df['IntradayPriceMovement']) + (df['amount'] * df['ReversalSignal'])
+    
+    # Combine Enhanced Factors
+    df['CombinedEnhancedFactor'] = df['WeightedIntradayPriceMovement'] * df['VolumeWeightedReturn'] * df['IntradayVolatility']
+    
+    # Adjust by Average Volume
+    df['AverageVolume'] = df['volume'].rolling(window=40).mean()
+    df['AdjustedCombinedEnhancedFactor'] = df['CombinedEnhancedFactor'] / df['AverageVolume']
+    
+    # Incorporate Close Price Momentum
+    df['30DayMA'] = df['close'].rolling(window=30).mean()
+    df['Momentum'] = df['close'] - df['30DayMA']
+    df['MomentumByVolatility'] = df['Momentum'] * df['IntradayVolatility']
+    
+    # Adjusted Price Momentum
+    df['10DayEMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['AdjustedMomentum'] = df['10DayEMA'] - df['30DayMA']
+    
+    # Filter for Recent Price Trend
+    df['5DayMA'] = df['close'].rolling(window=5).mean()
+    df['RecentPriceTrend'] = df['close'] - df['5DayMA']
+    
+    # Introduce Volume Trend
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['IntegratedMomentumFactor'] = df['AdjustedMomentum'] + df['RecentPriceTrend']
+    df['VolumeTrendAdjustedFactor'] = df['IntegratedMomentumFactor'] * df['VolumeRatio']
+    
+    # Final Factor Calculation
+    df['FinalAlphaFactor'] = (0.55 * df['WeightedIntradayPriceMovement'] + 
+                              0.225 * df['IntradayVolatility'] + 
+                              0.225 * df['AdjustedMomentum'])
+    df['FinalAlphaFactor'] = (0.75 * df['FinalAlphaFactor'] + 
+                              0.25 * df['IntradayReturnAndReversal'])
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (0.6 * df['IntegratedMomentumFactor'] + 
+                              0.4 * df['VolumeTrendAdjustedFactor'])
+    
+    return df['FinalAlphaFactor']
+```

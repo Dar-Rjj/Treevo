@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['daily_price_range'] = df['high'] - df['low']
+    
+    # Calculate Average Price
+    df['average_price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    df['volume_adjusted_range'] = (df['daily_price_range'] / df['average_price']).replace([np.inf, -np.inf], 0) * df['volume']
+    
+    # Calculate Short-Term Rolling Average
+    df['short_term_rolling_avg'] = df['volume_adjusted_range'].rolling(window=10).mean()
+    
+    # Calculate Long-Term Rolling Average
+    df['long_term_rolling_avg'] = df['volume_adjusted_range'].rolling(window=28).mean()
+    
+    # Calculate High-Low Range Momentum
+    N = 5
+    alpha = 2 / (N + 1)
+    df['ema_high_low_range'] = df['daily_price_range'].ewm(alpha=alpha, adjust=False).mean()
+    df['daily_change_ema'] = df['ema_high_low_range'].diff()
+    
+    # Calculate Volume Shock
+    df['volume_percentage_change'] = df['volume'].pct_change() * 100
+    significant_volume_change_threshold = 50
+    df['volume_shock_flag'] = (df['volume_percentage_change'].abs() > significant_volume_change_threshold).astype(int)
+    
+    # Assess Volatility Adjustment
+    df['daily_range'] = df['high'] - df['low']
+    df['30_day_average_range_volatility'] = df['daily_range'].rolling(window=30).mean()
+    
+    # Incorporate Volume Influence
+    df['5_day_ema_volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['10_day_ema_volume'] = df['volume'].ewm(span=10, adjust=False).mean()
+    df['volume_deviation_score'] = df['volume'] - df['volume'].rolling(window=30).mean()
+    
+    # Combine Indicators
+    df['high_low_range_momentum_with_volume_shock'] = df['daily_change_ema'] * df['volume_shock_flag']
+    df['adjusted_momentum_by_volatility'] = df['high_low_range_momentum_with_volume_shock'] / df['30_day_average_range_volatility']
+    df['final_momentum_adjustment'] = df['adjusted_momentum_by_volatility'] * df['volume_deviation_score']
+    
+    # Calculate Enhanced Intraday Spread
+    df['enhanced_intraday_spread'] = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Adjust by Short-Term Momentum and Volume Trend
+    df['5_day_ema_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['10_day_ema_close'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['short_term_price_momentum'] = df['5_day_ema_close'] - df['10_day_ema_close']
+    df['volume_momentum'] = df['5_day_ema_volume'] - df['10_day_ema_volume']
+    
+    # Integrate Indicators
+    df['integrated_alpha_factor'] = df['final_momentum_adjustment'] * (df['enhanced_intraday_spread'] * df['volume'])
+    df['integrated_alpha_factor'] *= df['short_term_price_momentum'] * df['volume_momentum']
+    df['integrated_alpha_factor'] /= (df['short_term_price_momentum'] * df['volume_momentum']).replace(0, 1)  # Avoid division by zero
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['short_term_rolling_avg'] - df['long_term_rolling_avg']) * df['integrated_alpha_factor']
+    
+    return df['final_alpha_factor']
+```

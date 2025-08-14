@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5, X=0.05, Y=0.1, Z=0.5):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Momentum Component
+    returns = df['close'].pct_change()
+    momentum = returns.rolling(window=N).sum() * close_to_range_ratio
+    
+    # Adjust for Volume Activity
+    volume_change_5d = df['volume'] - df['volume'].shift(5)
+    avg_volume_10d = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change_5d / avg_volume_10d
+    volume_trend_score = volume_change_rate.apply(lambda x: 2.0 if x > 1 else (-1.5 if x < -1 else 0))
+    
+    # Integrate Price Trend
+    ema_close = df['close'].ewm(span=20, adjust=False).mean()
+    price_trend = df['close'] - ema_close
+    
+    # Combine Components
+    combined_factor = momentum * volume_trend_score + price_trend
+    
+    # Opening Impact and Gap Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    overnight_gap = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    combined_factor -= open_to_close_return
+    combined_factor -= overnight_gap
+    
+    # Analyze Intraday Price Patterns
+    intraday_volatility = intraday_range / df['close'].shift(1)
+    volatility_adjustment = intraday_volatility.apply(lambda x: 1.5 if x > X else 1.0)
+    combined_factor *= volatility_adjustment
+    
+    # Incorporate Trading Volume Insights
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike = daily_volume_change.apply(lambda x: 1 if x > Y * df['volume'].shift(1) else 0)
+    combined_factor += volume_spike * Z
+    
+    return combined_factor
+```

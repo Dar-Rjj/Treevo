@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    df['Open_Close_Momentum'] = df['close'] - df['open']
+    
+    # Integrate Intraday and Open-to-Close Momentum
+    df['Integrated_Momentum'] = df['High_Low_Range'] + df['Open_Close_Momentum']
+    
+    # Apply Volume Filter
+    df['Volume_Rolling_Mean'] = df['volume'].rolling(window=20).mean()
+    volume_threshold = df['Volume_Rolling_Mean'].quantile(0.75)
+    df = df[df['volume'] > volume_threshold]
+    
+    # Calculate Short-Term and Long-Term Momentum
+    df['Short_Term_Momentum'] = df['close'].shift(1) - df['close'].shift(7)
+    df['Long_Term_Momentum'] = df['close'].shift(1) - df['close'].shift(30)
+    
+    # Adjust Price Momentum by Volume Shock
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Adjusted_Momentum'] = (df['Short_Term_Momentum'] - df['Long_Term_Momentum']) * df['Volume_Change']
+    
+    # Adjust Intraday Momentum by Volatility
+    df['Integrated_Momentum_Volatility_Adjusted'] = df['Integrated_Momentum'] * df['High_Low_Range']
+    
+    # Calculate Price Velocity and Acceleration
+    df['Velocity'] = df['close'] - df['close'].shift(1)
+    df['Acceleration'] = df['Velocity'] - df['Velocity'].shift(1)
+    
+    # Calculate Short-Term and Long-Term EMA
+    df['EMA_7'] = df['close'].ewm(span=7, adjust=False).mean()
+    df['EMA_25'] = df['close'].ewm(span=25, adjust=False).mean()
+    df['EMA_Difference'] = df['EMA_7'] - df['EMA_25']
+    
+    # Adjust EMA Difference by Volume Shock
+    df['Adjusted_EMA_Difference'] = df['EMA_Difference'] * df['Volume_Change']
+    
+    # Synthesize Intermediate Alpha Factor
+    df['Intermediate_Alpha_Factor'] = df['Adjusted_Momentum'] + df['Integrated_Momentum_Volatility_Adjusted']
+    
+    # Calculate High-Low Range Volatility
+    df['High_Low_Volatility'] = df['High_Low_Range'].rolling(window=7).mean()
+    
+    # Incorporate High-Low Range Volatility
+    df['Intermediate_Alpha_Factor'] += df['High_Low_Volatility']
+    
+    # Introduce Volume Weighted Price Momentum
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_Price'] = df['VWAP'] * df['volume']
+    df['Volume_Weighted_Momentum'] = df['Volume_Weighted_Price'].rolling(window=7).sum() / df['volume'].rolling(window=7).sum()
+    
+    # Generate Composite Momentum Signal
+    df['Composite_Momentum_Signal'] = df['EMA_Difference'] * df['volume'] + df['Acceleration']
+    
+    # Adjust Momentum by Volume Shock
+    df['Momentum_By_Volume_Shock'] = (df['Short_Term_Momentum'] - df['Long_Term_Momentum']) * df['Volume_Change']
+    
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Momentum_By_Volume_Shock'] + df['Integrated_Momentum_Volatility_Adjusted'] + df['Acceleration']
+    df['Final_Alpha_Factor'] += df['Adjusted_EMA_Difference']
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Final_Alpha_Factor'] *= df['Intraday_Return']
+    df = df[df['volume'] > volume_threshold]
+    
+    # Adjust Momentum by High-Low Volatility
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['High_Low_Range']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

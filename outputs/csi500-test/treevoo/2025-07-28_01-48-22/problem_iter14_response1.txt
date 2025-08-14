@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Relative Strength
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Average High-Low Range
+    df['avg_high_low_range'] = df['high_low_range'].rolling(window=5).mean()
+    
+    # Calculate High-Low Range Over Average
+    df['high_low_over_avg'] = df['high_low_range'] / df['avg_high_low_range']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_return'] = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Identify Volume Spikes
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_mean = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume'] > (volume_mean + 2 * volume_std)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['combined_return_with_spike'] = df['combined_return'] * df['volume_spike']
+    
+    # Calculate Volume Difference
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Volume-to-VWAP Ratio
+    df['vwap'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    df['volume_to_vwap_ratio'] = df['volume'] / df['vwap']
+    
+    # Integrate Volume and Price Information
+    df['integrated_info'] = 0.5 * df['volume_diff'] + 0.3 * df['avg_high_low_range'] + (df['close'] - df['close'].shift(1))
+    
+    # Combine Indicators
+    df['intermediate_factor'] = (df['high_low_over_avg'] * df['volume_diff'] * df['volume_to_vwap_ratio'] * 
+                                 (df['close'] / df['close'].shift(1) - 1))
+    
+    # Adjusted Integrated Factor
+    df['volume_average'] = df['volume'].rolling(window=5).mean()
+    daily_returns = (df['close'] - df['open']) / df['open']
+    df['volatility'] = daily_returns.rolling(window=20).std()
+    df['adjusted_factor'] = df['intermediate_factor'] * df['volume_average'] * df['volatility']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['adjusted_factor'] + df['integrated_info']
+    
+    return df['alpha_factor'].dropna()
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Movement
+    intraday_high_low_movement = df['high'] - df['low']
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Sum of Recent Returns
+    recent_returns_sum = daily_return.rolling(window=5).sum()
+    
+    # Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Amount Change
+    amount_change = df['amount'] - df['amount'].shift(1)
+    
+    # Average Volume and Amount for the last 5 days
+    average_volume = df['volume'].rolling(window=5).mean()
+    average_amount = df['amount'].rolling(window=5).mean()
+    
+    # Volume Ratio and Amount Ratio
+    volume_ratio = df['volume'] / average_volume
+    amount_ratio = df['amount'] / average_amount
+    
+    # Weighted Intraday Return and Weighted Amount Intraday Return
+    weighted_intraday_return = intraday_return * volume_change
+    weighted_amount_intraday_return = intraday_return * amount_change
+    
+    # Combined Weighted Momentum
+    combined_weighted_momentum = (
+        weighted_intraday_return + 
+        weighted_amount_intraday_return + 
+        recent_returns_sum
+    ) * volume_ratio * amount_ratio
+    
+    # Adjusted Logarithmic Returns with Enhanced Volume Shock
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    smoothed_log_returns = log_returns.rolling(window=5).mean()
+    
+    # Volume Shock Indicator
+    volume_change_daily = df['volume'] - df['volume'].shift(1)
+    std_vol_change = volume_change_daily.rolling(window=5).std()
+    volume_shock = (np.abs(volume_change_daily) > 2 * std_vol_change).astype(int)
+    
+    # Compute adjusted return when shock is detected
+    adjusted_return = np.where(
+        volume_shock == 1,
+        smoothed_log_returns * (df['high'] - df['low']) / df['close'],
+        smoothed_log_returns
+    )
+    
+    # Combine Intraday Weighted Return and Shock Adjusted Return
+    final_factor = combined_weighted_momentum + adjusted_return
+    
+    return final_factor
+```

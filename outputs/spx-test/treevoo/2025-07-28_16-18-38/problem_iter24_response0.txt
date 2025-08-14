@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Enhanced Intraday Movement and Price Direction
+    high_low_spread = df['high'] - df['low']
+    close_open_spread = df['close'] - df['open']
+    combined_intraday_indicator = high_low_spread + close_open_spread
+    price_direction = np.where(df['close'] > df['open'], 1, -1)
+    
+    # Momentum Indicators with Volume Influence
+    ema_7_high_low = df['high'].rolling(window=7).mean() - df['low'].rolling(window=7).mean()
+    ema_21_high_low = df['high'].rolling(window=21).mean() - df['low'].rolling(window=21).mean()
+    momentum_ratio = ema_7_high_low / ema_21_high_low
+    adjusted_momentum = momentum_ratio * high_low_spread
+    volume_weighted_high_low = (df['high'] - df['low']) * df['volume']
+    sma_14_volume_weighted = volume_weighted_high_low.rolling(window=14).mean()
+    smoothed_momentum = (volume_weighted_high_low - sma_14_volume_weighted) * 0.2
+    
+    # Volume and Amount Analysis for Alpha Generation
+    volume_change = df['volume'].pct_change()
+    volume_spike = (df['volume'] > df['volume'].rolling(window=14).mean() * 2).astype(int)
+    transaction_value = df['amount'] / df['volume']
+    avg_amount_30_days = df['amount'].rolling(window=30).mean()
+    amount_deviation = df['amount'] - avg_amount_30_days
+    volume_weighted_momentum = smoothed_momentum * volume_spike
+    
+    # Advanced Intraday and Momentum Integration
+    intraday_volatility = (df['high'] - df['low']).rolling(window=7).std()
+    sma_14_close = df['close'].rolling(window=14).mean()
+    momentum_oscillator = (df['close'] - sma_14_close) / sma_14_close
+    intraday_momentum_score = intraday_volatility * momentum_oscillator
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        0.3 * momentum_ratio +
+        0.3 * adjusted_momentum +
+        0.3 * volume_weighted_momentum +
+        0.1 * price_direction +
+        0.1 * volume_spike +
+        0.1 * volume_change +
+        0.1 * intraday_momentum_score
+    )
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Weight by Volume
+    df['volume_weighted_return'] = df['daily_return'] * df['volume']
+
+    # Adjust Weighted Return Using High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['adjusted_weighted_return'] = df['volume_weighted_return'] / df['high_low_spread']
+
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=5).mean()
+
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'].rolling(window=20).mean()
+
+    # Difference between Short and Long-Term Momentum
+    df['momentum_diff'] = df['short_term_momentum'] - df['long_term_momentum']
+
+    # Calculate Adjusted High-Low Range
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['scaled_volume'] = df['volume'] / avg_volume
+    df['adjusted_high_low_range'] = (df['high'] - df['low']) * df['scaled_volume']
+
+    # Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+
+    # Previous Day's Return
+    df['prev_day_return'] = df['close'] / df['open'].shift(1) - 1
+
+    # Short-Term Momentum Adjustment
+    short_term_avg = df['close'].rolling(window=4).mean()
+    current_momentum = df['close'] - short_term_avg
+    df['adjusted_momentum'] = current_momentum / df['intraday_range']
+
+    # Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Weight by Volume
+    df['weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+
+    # Realized Volatility
+    high_low_ranges = (df['high'] - df['low']).pow(2)
+    df['realized_volatility'] = high_low_ranges.rolling(window=10).sum()
+
+    # Adjust Short-Term Momentum by Volatility
+    df['adjusted_short_term_momentum'] = df['short_term_momentum'] / df['realized_volatility']
+
+    # Combine Factors
+    df['combined_factors'] = (
+        df['adjusted_high_low_range'] * (1 / df['intraday_range']) +
+        df['prev_day_return'] +
+        df['adjusted_short_term_momentum'] +
+        df['weighted_close_to_open_return'] +
+        df['momentum_diff']
+    )
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['combined_factors'] +
+        (df['momentum_diff'] / (avg_volume.pct_change() + 1e-8)) +
+        df['adjusted_high_low_range']
+    )
+
+    # Integrate Volume Momentum
+    df['volume_momentum'] = df['volume'] / df['volume'].shift(5)
+    df['adjusted_volume_momentum'] = df['volume_momentum'] / df['close'].rolling(window=20).std()
+    df['final_alpha_factor'] += 0.5 * df['adjusted_volume_momentum']
+
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def adaptive_ema(data, period, alpha=None):
+    if alpha is None:
+        alpha = 2 / (period + 1)
+    return data.ewm(alpha=alpha, adjust=False).mean()
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    combined_factor = intraday_return * high_low_range
+    aema_period = 14
+    aema_alpha = 2 / (aema_period + 1)  # Adaptive EMA with fixed alpha
+    smoothed_factor = adaptive_ema(combined_factor, aema_period, aema_alpha)
+    
+    # Apply Volume Weighting
+    volume_weighted_factor = smoothed_factor * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    closing_gap = df['open'] - df['close'].shift(1)
+    volume_weighted_factor += closing_gap
+    
+    # Integrate Long-Term Momentum
+    long_term_return = df['close'] - df['close'].shift(50)
+    normalized_long_term_return = long_term_return / high_low_range
+    
+    # Include Enhanced Dynamic Volatility Component
+    rolling_std = intraday_return.rolling(window=20).std()
+    atr = (df['high'] - df['low']).rolling(window=14).mean()
+    combined_volatility = (rolling_std + atr) / 2
+    adjusted_volatility = combined_volatility * df['volume']
+    
+    # Consider Sector-Specific Volatility
+    # For simplicity, we assume the sector-specific volatility is the same as the overall market volatility
+    # In practice, you would calculate this based on the sector of the stock
+    sector_specific_volatility = combined_volatility
+    sector_adjusted_volatility = adjusted_volatility * (sector_specific_volatility / combined_volatility)
+    
+    # Final Factor Calculation
+    final_factor = (volume_weighted_factor + closing_gap + normalized_long_term_return + sector_adjusted_volatility)
+    
+    # Apply Non-Linear Transformation
+    final_factor = np.log(1 + final_factor)
+    
+    return final_factor
+```

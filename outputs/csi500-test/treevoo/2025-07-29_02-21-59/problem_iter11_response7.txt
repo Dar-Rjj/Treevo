@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Volume and Amount
+    df['Volume_Amount_Combined'] = df['volume'] * df['amount']
+    
+    # Weight by Volume and Amount
+    df['Volume_Amount_Adjusted_Return'] = df['Close_to_Open_Return'] * df['Volume_Amount_Combined']
+
+    # Calculate Intraday High-Low Movement
+    df['Intraday_High_Low_Movement'] = df['high'] - df['low']
+    
+    # Calculate Intraday High-Low Ratio
+    df['Intraday_High_Low_Ratio'] = df['Intraday_High_Low_Movement'] / df['close']
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Adjust by Volume Change
+    df['Volume_Adjusted_Intraday_Return'] = df['Intraday_Return'] * df['Volume_Change']
+    
+    # Combine with Volume and Amount Adjusted Close-to-Open Return
+    df['Combined_Return'] = df['Volume_Amount_Adjusted_Return'] + df['Volume_Adjusted_Intraday_Return']
+    
+    # Calculate Volume Moving Average over 20 days
+    df['Volume_MA_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Standard Deviation of Volume over 220 days
+    df['Volume_STD_220'] = df['volume'].rolling(window=220).std()
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices over 20 days
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate Exponential Moving Average (EMA) of Close Prices over 20 days
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Compute the Difference between EMA and SMA
+    df['Momentum_Difference'] = df['EMA_20'] - df['SMA_20']
+    
+    # Multiply the momentum difference by the daily Volume
+    df['Volume_Adjusted_Momentum'] = df['Momentum_Difference'] * df['volume']
+    
+    # Smooth the adjusted momentum over 5 days
+    df['Smoothed_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'].rolling(window=5).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Previous Day Close-to-Open Change
+    df['Prev_Close_to_Open_Change'] = (df['open'].shift(1) - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Volume-Weighted Breakout Measure
+    df['Volume_Weighted_Breakout'] = (df['volume'] * df['Intraday_High_Low_Spread']) / df['Prev_Close_to_Open_Change']
+    
+    # Combine Volume-Adjusted Momentum and Volume-Weighted Breakout
+    df['Momentum_Breakout'] = df['Smoothed_Volume_Adjusted_Momentum'] + df['Volume_Weighted_Breakout']
+    
+    # Calculate Volume Acceleration
+    df['Volume_Acceleration'] = df['volume'] - df['volume'].shift(1)
+    
+    # Determine Sign of Volume Change
+    df['Volume_Acceleration_Sign'] = df['Volume_Acceleration'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Identify Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(1)
+    
+    # Determine Sign of Price Change
+    df['Price_Momentum_Sign'] = df['Price_Momentum'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Confirm Positive Trend
+    df['Positive_Trend'] = (df['Smoothed_Volume_Adjusted_Momentum'] > 0) & (df['Volume_Acceleration_Sign'] > 0) & (df['Price_Momentum_Sign'] > 0)
+    
+    # Confirm Negative Trend
+    df['Negative_Trend'] = (df['Smoothed_Volume_Adjusted_Momentum

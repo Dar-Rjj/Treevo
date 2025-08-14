@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Daily Return
+    df['volume_weighted_daily_return'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Track Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Determine the Logarithmic Volume Difference
+    df['log_volume'] = np.log(df['volume'])
+    df['log_volume_diff'] = df['log_volume'] - df['log_volume'].shift(1)
+    df['smoothed_log_volume_diff'] = df['log_volume_diff'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Weigh by Intraday Volume Activity
+    df['volume_20_day_ma'] = df['volume'].rolling(window=20).mean()
+    df['intraday_volume_ratio'] = df['volume'] / df['volume_20_day_ma']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['weighted_intraday_return'] = np.abs(df['intraday_return']) * df['intraday_volume_ratio']
+    df['weighted_close_to_open_return'] = np.abs(df['close_to_open_return']) * df['intraday_volume_ratio']
+    
+    # Adjust weights by integrating volume and intraday volatility
+    df['adjusted_weight'] = (df['weighted_intraday_return'] + df['weighted_close_to_open_return']) * df['smoothed_log_volume_diff']
+    
+    # Calculate Raw Momentum
+    n = 5
+    df['raw_momentum'] = df['close'] - df['close'].shift(n)
+    
+    # Weigh by Cumulative Volume
+    df['cumulative_volume'] = df['volume'].rolling(window=n).sum().shift(1)
+    df['volume_weighted_momentum'] = df['raw_momentum'] / df['cumulative_volume']
+    
+    # Add Price Range to Volume-Weighted Momentum
+    df['price_range'] = df['high'] - df['low']
+    df['range_weighted_momentum'] = df['volume_weighted_momentum'] * df['price_range']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['ema_factor'] = df['range_weighted_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Incorporate Intraday Range Breakouts
+    df['intraday_breakout'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    df['breakout_weight'] = df['intraday_breakout'] * df['intraday_volume_ratio']
+    
+    # Final Factor Calculation
+    df['alpha_factor'] = df['volume_weighted_daily_return'] * df['adjusted_weight'] * df['ema_factor'] * df['breakout_weight']
+    
+    # Evaluate the stability and significance of the factor
+    df['factor_std'] = df['alpha_factor'].rolling(window=5).std()
+    df['factor_mean'] = df['alpha_factor'].rolling(window=5).mean()
+    df['signal_to_noise_ratio'] = df['factor_mean'] / df['factor_std']
+    
+    # Enhance the factor by incorporating recent price trends
+    df['5_day_price_trend'] = df['close'].rolling(window=5).mean() - df['close'].rolling(window=5).mean().shift(5)
+    df['trend_adjusted_factor'] = df['alpha_factor'] * (1 + df['5_day_price_trend'] / df['close'])
+    
+    return df['trend_adjusted_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

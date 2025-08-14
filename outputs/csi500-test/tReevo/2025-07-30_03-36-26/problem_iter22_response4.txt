@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['total_dollar_value'] = df['volume'] * df['close']
+    df['vwap'] = df['total_dollar_value'].rolling(window=1).sum() / df['total_volume'].rolling(window=1).sum()
+
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+
+    # Integrate Short-Term Exponential Weighted Momentum (5 days)
+    short_term_period = 5
+    decay_rate = 0.01
+    weights = np.array([np.exp(-decay_rate * t) for t in range(short_term_period)])
+    df['short_term_momentum'] = df['vwap_deviation'].rolling(window=short_term_period).apply(lambda x: np.sum(x * weights), raw=True)
+
+    # Integrate Medium-Term Exponential Weighted Momentum (10 days)
+    medium_term_period = 10
+    weights = np.array([np.exp(-decay_rate * t) for t in range(medium_term_period)])
+    df['medium_term_momentum'] = df['vwap_deviation'].rolling(window=medium_term_period).apply(lambda x: np.sum(x * weights), raw=True)
+
+    # Integrate Long-Term Exponential Weighted Momentum (20 days)
+    long_term_period = 20
+    weights = np.array([np.exp(-decay_rate * t) for t in range(long_term_period)])
+    df['long_term_momentum'] = df['vwap_deviation'].rolling(window=long_term_period).apply(lambda x: np.sum(x * weights), raw=True)
+
+    # Combine with Cumulative VWAP Deviation
+    df['combined_factor'] = df['cumulative_vwap_deviation'] + df['short_term_momentum'] + df['medium_term_momentum'] + df['long_term_momentum']
+
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['abs_vwap_deviation'] = np.abs(df['close'] - df['vwap'])
+    df['std_high_low_range'] = df['high_low_range'].rolling(window=20).std()
+    df['intraday_volatility'] = df['high_low_range'] + df['abs_vwap_deviation'] + df['std_high_low_range']
+
+    # Adjust for Market Cap (assuming market_cap is a column in the DataFrame)
+    if 'market_cap' in df.columns:
+        df['adjusted_intraday_volatility'] = df['intraday_volatility'] * df['market_cap']
+    else:
+        df['adjusted_intraday_volatility'] = df['intraday_volatility']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['combined_factor'] + df['adjusted_intraday_volatility']
+
+    return df['final_alpha_factor']
+```

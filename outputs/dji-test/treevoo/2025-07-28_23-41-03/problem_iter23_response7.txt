@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 10-day and 20-day Simple Moving Averages (SMA) of Close Prices
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Determine the difference between the 10-day SMA and 20-day SMA
+    df['SMA_diff'] = df['SMA_10'] - df['SMA_20']
+    
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute the 10-day and 50-day Exponential Moving Averages (EMA) of VWAP
+    df['EMA_VWAP_10'] = df['VWAP'].ewm(span=10, adjust=False).mean()
+    df['EMA_VWAP_50'] = df['VWAP'].ewm(span=50, adjust=False).mean()
+    
+    # Determine the ratio of the 10-day EMA to the 50-day EMA
+    df['VWAP_ratio'] = df['EMA_VWAP_10'] / df['EMA_VWAP_50']
+    
+    # Combine the momentum factor (difference between 10-day and 20-day SMA) and the VWAP ratio
+    df['Momentum_VWAP'] = df['SMA_diff'] * df['VWAP_ratio']
+    
+    # Calculate the average True Range (ATR) using the formula ATR = (High - Low)
+    df['ATR'] = df['high'] - df['low']
+    
+    # Compute the 14-day Simple Moving Average (SMA) of ATR
+    df['ATR_SMA_14'] = df['ATR'].rolling(window=14).mean()
+    
+    # Calculate the daily price change
+    df['price_change'] = df['close'].diff()
+    
+    # Separate the gains and losses from the daily price changes
+    df['gain'] = df['price_change'].apply(lambda x: x if x > 0 else 0)
+    df['loss'] = df['price_change'].apply(lambda x: -x if x < 0 else 0)
+    
+    # Compute the 14-day average gain and 14-day average loss
+    df['avg_gain'] = df['gain'].rolling(window=14).mean()
+    df['avg_loss'] = df['loss'].rolling(window=14).mean()
+    
+    # Calculate the RSI
+    df['RS'] = df['avg_gain'] / df['avg_loss']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Combine the volatility factor (14-day SMA of ATR) and the RSI
+    df['Volatility_RSI'] = df['ATR_SMA_14'] * (df['RSI'] - 50)
+    
+    # Calculate the Typical Price (TP)
+    df['TP'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute the Money Flow (MF) by multiplying TP by Volume
+    df['MF'] = df['TP'] * df['volume']
+    
+    # Determine the Positive Money Flow (PMF) and Negative Money Flow (NMF)
+    df['PMF'] = df['MF'].where(df['TP'] > df['TP'].shift(1), 0)
+    df['NMF'] = df['MF'].where(df['TP'] < df['TP'].shift(1), 0)
+    
+    # Calculate the 14-day positive money flow and 14-day negative money flow
+    df['PMF_14'] = df['PMF'].rolling(window=14).sum()
+    df['NMF_14'] = df['NMF'].rolling(window=14).sum()
+    
+    # Compute the Money Ratio (MR)
+    df['MR'] = df['PMF_14'] / df['NMF_14']
+    
+    # Calculate the MFI
+    df['MFI'] = 100 - (100 / (1 + df['MR']))
+    
+    # Combine the MFI and the VWAP ratio
+    df['MFI_VWAP'] = (df['MFI'] - 50) * df['VWAP_ratio']
+    
+   

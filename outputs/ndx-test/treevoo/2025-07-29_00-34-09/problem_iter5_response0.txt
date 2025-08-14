@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Weighted Price
+    df['weighted_price'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    
+    # Smoothed Momentum
+    short_ema = df['weighted_price'].ewm(span=5, adjust=False).mean()
+    long_ema = df['weighted_price'].ewm(span=20, adjust=False).mean()
+    df['smoothed_momentum'] = short_ema - long_ema
+    
+    # Calculate Intraday Price Change Ratio
+    df['intraday_price_change_ratio'] = (df['high'] - df['low']) / df['low']
+    df['intraday_trading_activity'] = df['volume'] / (df['high'] + df['low'])
+    df['intraday_price_change_ratio'] *= df['intraday_trading_activity']
+    
+    # Measure Sustained Momentum
+    df['sustained_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume-Weighted Price (VWP)
+    df['vwp'] = (df['high'] * df['volume'] + df['low'] * df['volume']) / (2 * df['volume'])
+    
+    # Compute Momentum from VWP
+    vwp_ema = df['vwp'].ewm(span=20, adjust=False).mean()
+    df['vwp_momentum'] = df['vwp'] - vwp_ema
+    
+    # Incorporate Intraday Range Volatility
+    df['intraday_range_volatility'] = df['high'] - df['low']
+    average_volume = df['volume'].rolling(window=20).mean()
+    df['intraday_range_volatility'] /= average_volume
+    
+    # Combine Factors
+    df['combined_momentum'] = df['smoothed_momentum'] + df['intraday_price_change_ratio'] + df['sustained_momentum'] + df['vwp_momentum']
+    df['inverse_intraday_range_volatility'] = 1 / df['intraday_range_volatility']
+    df['alpha_factor'] = df['combined_momentum'] * df['inverse_intraday_range_volatility']
+    
+    return df['alpha_factor']
+```

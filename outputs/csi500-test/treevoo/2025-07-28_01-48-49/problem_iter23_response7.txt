@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the Rate of Change (ROC) over a 10-day period
+    df['ROC'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    
+    # Determine the Directional Movement Index (DMI) over a 14-day period
+    df['+DM'] = df['high'].diff().apply(lambda x: max(x, 0))
+    df['-DM'] = df['low'].shift(1) - df['low']
+    df['-DM'] = df['-DM'].apply(lambda x: max(x, 0))
+
+    def smooth(data, n):
+        return data.rolling(window=n).sum() / n
+    
+    df['+DI'] = 100 * smooth(df['+DM'], 14) / df['ATR_14']
+    df['-DI'] = 100 * smooth(df['-DM'], 14) / df['ATR_14']
+    
+    df['DX'] = 100 * (abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI']))
+    df['ADX'] = df['DX'].ewm(alpha=1/14).mean()
+    df['DI_Ratio'] = df['+DI'] / df['-DI']
+    df['DMI'] = 100 * (df['DI_Ratio'] - 1) / (df['DI_Ratio'] + 1)
+
+    # Calculate the On-Balance Volume (OBV)
+    df['OBV'] = 0
+    df['OBV'] = (df['volume'] * (df['close'] > df['close'].shift(1)).astype(int) -
+                 df['volume'] * (df['close'] < df['close'].shift(1)).astype(int)).cumsum()
+
+    # Evaluate the Accumulation/Distribution Line (A/D)
+    df['AD'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['AD'] = df['AD'].cumsum()
+
+    # Integrate Momentum with Volume Trends
+    df['HybridAlpha_1'] = df['ROC'] * (df['OBV'] / df['OBV'].shift(1))
+
+    # Mix Directional Movement with Volume
+    df['CompositeAlpha_2'] = df['DMI'] * (df['AD'] / df['AD'].shift(1))
+
+    # Final alpha factor
+    df['alpha_factor'] = 0.5 * df['HybridAlpha_1'] + 0.5 * df['CompositeAlpha_2']
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Adjusted Daily Range
+    adjusted_daily_range = (df['high'] - df['low']) * df['volume']
+
+    # Price Reversion
+    highest_high_10d = df['high'].rolling(window=10).max()
+    lowest_low_10d = df['low'].rolling(window=10).min()
+    proximity_to_high = (highest_high_10d - df['close']) / (highest_high_10d - lowest_low_10d)
+    proximity_to_low = (df['close'] - lowest_low_10d) / (highest_high_10d - lowest_low_10d)
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    std_20d_returns = df['close'].pct_change().rolling(window=20).std()
+    price_reversion = (1 - min_proximity) / std_20d_returns
+
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff + open_low_diff) * df['volume'] / 2
+
+    # Moving Sum of High-Low Spreads
+    high_low_spreads = df['high'] - df['low']
+    moving_sum_high_low = high_low_spreads.rolling(window=20).sum()
+
+    # Spread Momentum
+    spread_momentum = moving_sum_high_low - moving_sum_high_low.shift(1)
+
+    # Volume-Adjusted Open-to-Close Movement
+    volume_adjusted_movement = (df['close'] - df['open']) * df['volume']
+
+    # Simple Momentum
+    simple_momentum = df['close'] - df['close'].shift(1)
+
+    # Final Alpha Factor
+    final_alpha_factor = (adjusted_daily_range * price_reversion * weighted_avg_volatility * spread_momentum +
+                          volume_adjusted_movement + simple_momentum)
+
+    # Filter for Strong Moves
+    dynamic_threshold = final_alpha_factor.rolling(window=20).mean() + 2 * final_alpha_factor.rolling(window=20).std()
+    strong_moves = (final_alpha_factor > dynamic_threshold).astype(int)
+
+    return strong_moves
+```

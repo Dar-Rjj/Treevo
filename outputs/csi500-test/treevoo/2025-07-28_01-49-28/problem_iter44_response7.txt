@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength and Momentum
+    daily_range_expansion = (df['high'] - df['low']) * df['volume']
+    open_to_close_movement = (df['close'] - df['open']) * df['volume']
+    breakout_strength_momentum = daily_range_expansion + open_to_close_movement
+    
+    # Enhanced High-Low Spread Momentum
+    high_low_spread_30d = df['high'].rolling(window=30).sum() - df['low'].rolling(window=30).sum()
+    high_low_spread_30d_prev = high_low_spread_30d.shift(1)
+    high_low_spread_momentum = high_low_spread_30d - high_low_spread_30d_prev
+    
+    # Proximity to Dynamic 10-Day High and Low
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = df['close'] / ten_day_high
+    proximity_to_low = df['close'] / ten_day_low
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    proximity_adjusted = min_proximity / twenty_day_volatility
+    
+    # Open-High-Low Volatility and Momentum
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg = (open_high_diff + open_low_diff) * df['volume'] / df['volume'].rolling(window=5).mean()
+    
+    # Amount per Unit Close Price Rate of Change
+    sum_amount_10d = df['amount'].rolling(window=10).sum()
+    sum_amount_20d = df['amount'].rolling(window=20).sum().shift(10)
+    amount_rate_of_change = sum_amount_10d / sum_amount_20d
+    
+    # Volume-Weighted Moving Average Crossover
+    short_term_vwma = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    long_term_vwma = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    vwma_crossover = short_term_vwma - long_term_vwma
+    
+    # Trend Strength
+    trend_strength = (df['close'].rolling(window=50).mean() - df['close'].rolling(window=20).mean()) / df['close'].rolling(window=20).mean()
+    
+    # Combined Momentum
+    return_10d = (df['close'] / df['close'].shift(10)) - 1
+    return_30d = (df['close'] / df['close'].shift(30)) - 1
+    combined_momentum = return_10d + return_30d
+    
+    # Final Synthesized Alpha Factor
+    alpha_factor = (
+        breakout_strength_momentum *
+        high_low_spread_momentum *
+        proximity_adjusted *
+        weighted_avg *
+        amount_rate_of_change *
+        vwma_crossover *
+        trend_strength *
+        combined_momentum
+    )
+    
+    return alpha_factor
+```

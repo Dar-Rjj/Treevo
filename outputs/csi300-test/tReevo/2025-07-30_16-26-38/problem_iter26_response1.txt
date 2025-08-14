@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Determine Volatility
+    df['Volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    
+    # Adjust Window Size Based on Volatility
+    def adjust_window(volatility):
+        if volatility > df['Volatility'].quantile(0.75):
+            return 5
+        else:
+            return 30
+    
+    df['Adaptive_Window'] = df['Volatility'].apply(adjust_window)
+    
+    # Trading Volume Trends
+    df['Volume_Mean'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Std'] = df['volume'].rolling(window=20).std()
+    
+    # Determine Volume Trend
+    df['Volume_Trend'] = np.where(df['Volume_Mean'].diff() > 0, 'Positive', 'Negative')
+    
+    # Adjust Window Size Based on Volume Trend
+    def adjust_window_trend(window, trend):
+        if trend == 'Positive':
+            return window + 5
+        else:
+            return max(window - 5, 5)  # Ensure window size is at least 5 days
+    
+    df['Adaptive_Window'] = df.apply(lambda row: adjust_window_trend(row['Adaptive_Window'], row['Volume_Trend']), axis=1)
+    
+    # Rolling Statistics with Adaptive Window
+    def rolling_stats(series, window):
+        return series.rolling(window=window).agg(['mean', 'std'])
+    
+    df['Adaptive_Window'] = df['Adaptive_Window'].astype(int)
+    df_expanded = df.reset_index().set_index(['date', 'Adaptive_Window'])
+    rolling_stats_df = df_expanded.groupby(level='Adaptive_Window')['Volume_Weighted_Return'].apply(rolling_stats).reset_index()
+    rolling_stats_df = rolling_stats_df.set_index('date')
+    
+    # Extract the mean and std columns
+    df['Rolling_Mean'] = rolling_stats_df['mean']
+    df['Rolling_Std'] = rolling_stats_df['std']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Rolling_Mean'] / df['Rolling_Std']
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

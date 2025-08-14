@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['open']
+    
+    # Calculate Moving Average Volume (Last 20 Days)
+    df['MA_Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Generate Adjusted Price-Volume Signal
+    df['Adjusted_Price_Volume_Signal'] = df['Daily_Price_Change'] / df['MA_Volume']
+    
+    # Calculate Realized Volatility (Close price, 20 days rolling window)
+    df['Realized_Volatility'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Calculate Daily Close-to-Close Return
+    df['Close_to_Close_Return'] = df['close'].pct_change()
+    
+    # Smooth with Exponential Moving Average (EMA, 5 days window)
+    df['EMA_Return'] = df['Close_to_Close_Return'].ewm(span=5).mean()
+    
+    # Summarize Volume and Amount over the EMA period (5 days)
+    df['Sum_Volume_5D'] = df['volume'].rolling(window=5).sum()
+    df['Sum_Amount_5D'] = df['amount'].rolling(window=5).sum()
+    
+    # Calculate Ratio of Momentum to Combined Volume and Amount
+    df['Combined_VA'] = df['Sum_Volume_5D'] + df['Sum_Amount_5D']
+    df['Momentum_VA_Adjusted'] = df['EMA_Return'] / df['Combined_VA']
+    
+    # Calculate Daily Price Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Range Ratio
+    df['Price_Range_Ratio'] = df['Daily_Price_Range'] / df['open']
+    
+    # Compute Relative True Strength Index (RTSI)
+    df['Gains'] = np.where(df['close'].diff() > 0, df['close'].diff(), 0)
+    df['Losses'] = np.where(df['close'].diff() < 0, -df['close'].diff(), 0)
+    df['EMA_Gains'] = df['Gains'].ewm(span=14).mean()
+    df['EMA_Losses'] = df['Losses'].ewm(span=14).mean()
+    df['RTSI'] = (df['EMA_Gains'] / (df['EMA_Gains'] + df['EMA_Losses'])) * 100
+    
+    # Calculate Daily Volatility (High and Low prices, 20 days rolling window)
+    df['Daily_Volatility'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Combine Factors
+    df['Combined_Factor'] = df['Price_Range_Ratio'] * df['RTSI'] + df['Momentum_VA_Adjusted']
+    df['Combined_Factor'] *= df['Momentum_VA_Adjusted']
+    df['Combined_Factor'] /= df['Daily_Volatility']
+    
+    # Final Alpha Signal Based on Combined Indicators
+    threshold = 0.05
+    df['Alpha_Factor'] = np.where((df['Adjusted_Price_Volume_Signal'] > threshold) & 
+                                  (df['Combined_Factor'] > df['Combined_Factor'].median()) & 
+                                  (df['Realized_Volatility'] < df['Realized_Volatility'].median()), 1,
+                                  np.where((df['Adjusted_Price_Volume_Signal'] < -threshold) & 
+                                           (df['Combined_Factor'] < df['Combined_Factor'].median()) & 
+                                           (df['Realized_Volatility'] < df['Realized_Volatility'].median()), -1, 0))
+    
+    return df['Alpha_Factor']
+```

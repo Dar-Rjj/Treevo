@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data):
+    # Calculate 5-day Weighted Moving Average (WMA)
+    weights = [1, 2, 3, 4, 5]
+    data['WMA'] = (data['close'] * weights).rolling(window=5).sum() / sum(weights)
+    
+    # Generate Signal from WMA
+    data['WMA_Signal'] = data.apply(lambda x: 1 if x['close'] > x['WMA'] else -1, axis=1)
+    
+    # Calculate Short-Term and Long-Term Returns
+    data['Short_Term_Return'] = (data['close'] / data['close'].shift(5)) - 1
+    data['Long_Term_Return'] = (data['close'] / data['close'].shift(20)) - 1
+    
+    # Combine Short-Term and Long-Term Returns to create a momentum score
+    data['Momentum_Score'] = data['Short_Term_Return'] + data['Long_Term_Return']
+    
+    # Intraday Momentum Component
+    data['Intraday_Momentum'] = (data['close'] - data['open']) / data['open'] * data['volume']
+    
+    # Historical Momentum Component
+    data['Historical_Momentum'] = data['close'] - data['close'].shift(10)
+    
+    # Add Intraday and Historical Momentum Components
+    data['Combined_Momentum'] = data['Intraday_Momentum'] + data['Historical_Momentum']
+    
+    # Smooth Combined Momentum with Exponential Moving Average (EMA) over 5 days
+    data['Smoothed_Momentum'] = data['Combined_Momentum'].ewm(span=5).mean()
+    
+    # 20-Day Volume Change
+    data['Volume_Change_20'] = data['volume'] - data['volume'].shift(20)
+    
+    # Average Volume
+    data['Average_Volume'] = data['volume'].rolling(window=10).mean()
+    
+    # Adjusted Momentum
+    data['Adjusted_Momentum'] = (data['Momentum_Score'] / data['Volume_Change_20'] * data['Average_Volume'])
+    
+    # Consider Relative Strength
+    data['Relative_Strength'] = data['Short_Term_Return'] - data['Long_Term_Return']
+    
+    # Calculate High-Low Range and 5-Day Average High-Low Range
+    data['High_Low_Range'] = data['high'] - data['low']
+    data['Avg_High_Low_Range_5'] = data['High_Low_Range'].rolling(window=5).mean()
+    
+    # Calculate Relative High-Low Range
+    data['Relative_High_Low_Range'] = data['High_Low_Range'] / data['Avg_High_Low_Range_5']
+    
+    # Intraday Return and Open-to-Close Return
+    data['Intraday_Return'] = data['high'] - data['low']
+    data['Open_to_Close_Return'] = data['close'] - data['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    data['Combined_Return'] = data['Intraday_Return'] + data['Open_to_Close_Return']
+    
+    # Identify Volume Spikes
+    mean_volume = data['volume'].rolling(window=10).mean()
+    std_volume = data['volume'].rolling(window=10).std()
+    data['Volume_Spike_Indicator'] = (data['volume'] > (mean_volume + 2 * std_volume)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    data['Spike_Adjusted_Return'] = data['Combined_Return'] * data['Volume_Spike_Indicator']
+    
+    # Calculate Volume Difference
+    data['Volume_Difference'] = data['volume'] - data['volume'].shift(1)
+    
+    # Calculate VWAP
+    data['VWAP'] = ((data['high'] + data['low'] + data['close']) / 3) * data['volume']
+    
+    # Calculate Volume-to-VWAP Ratio
+    data['Volume_to_VWAP_Ratio'] = data['volume'] / data['VWAP']
+    
+    # Integrate Volume and Price Information
+    data['Integrated_Info'] = 0.6 * data['Volume_Difference'] + 0.4 * data['Avg_High_Low_Range_5'] + (data['close'] - data['close'].shift(1))
+    
+    # Combine Indicators
+    data['Factor'] = (data['Relative_High_Low_Range'] * data['Volume_Difference'] * data['Volume_to_VWAP_Ratio'] * (data['close'] - data['close'].shift(1)))
+    
+

@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate Average Price
+    average_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    volume_adjusted_range = (daily_price_range / average_price).replace([np.inf, -np.inf], np.nan).fillna(0) * df['volume']
+    
+    # Calculate Short-Term Rolling Average of Volume Adjusted Range
+    short_term_vol_adj_avg = volume_adjusted_range.rolling(window=10).mean()
+    
+    # Calculate Long-Term Rolling Average of Volume Adjusted Range
+    long_term_vol_adj_avg = volume_adjusted_range.rolling(window=20).mean()
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    
+    # Combine Intraday Measures
+    combined_intraday_measures = (intraday_high_low_spread + close_open_diff) * df['volume']
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].ewm(span=5).mean() - df['close'].ewm(span=10).mean()
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'].ewm(span=20).mean()
+    
+    # Compute Momentum Difference
+    momentum_difference = short_term_momentum - long_term_momentum
+    
+    # Assess Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    avg_daily_range_volatility = daily_range.rolling(window=30).mean()
+    
+    # Incorporate Volume Influence
+    avg_volume_30d = df['volume'].rolling(window=30).mean()
+    volume_deviation_score = (df['volume'] - avg_volume_30d) / avg_volume_30d
+    volume_acceleration = df['volume'].pct_change(periods=5)
+    
+    # Final Factor Adjustment
+    volatility_adjusted_momentum = momentum_difference / (avg_daily_range_volatility + 1e-6)
+    adjusted_factor = volatility_adjusted_momentum * volume_acceleration / (combined_intraday_measures + 1e-6)
+    
+    # Calculate 30-Day Average Range
+    avg_range_30d = daily_range.rolling(window=30).mean()
+    
+    # Calculate 50-Day Moving Average
+    ma_50d = df['close'].rolling(window=50).mean()
+    
+    # Calculate 200-Day Moving Average
+    ma_200d = df['close'].rolling(window=200).mean()
+    
+    # Calculate Moving Average Crossover Signal
+    crossover_signal = (ma_50d > ma_200d).astype(int)
+    
+    # Adjust Momentum
+    pct_change_30d = df['close'].pct_change(periods=30)
+    adjusted_momentum = pct_change_30d / (avg_range_30d + 1e-6)
+    
+    # Combine Factors
+    combined_factors = (
+        short_term_vol_adj_avg -
+        long_term_vol_adj_avg +
+        adjusted_factor +
+        adjusted_momentum +
+        volume_deviation_score +
+        crossover_signal
+    )
+    
+    # Final Alpha Factor
+    alpha_factor = combined_factors
+    return alpha_factor
+```

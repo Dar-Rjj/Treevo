@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Compute Momentum (sum over the last 10 days)
+    df['momentum_10d'] = df['price_change'].rolling(window=10).sum()
+    
+    # Calculate Volume Delta
+    df['volume_delta'] = df['volume'].diff()
+    
+    # Adjust for Volume
+    df['volume_adjusted_range'] = df['high_low_range'] * df['volume_delta']
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = df[['high', 'low', 'open']].max(axis=1) - df[['high', 'low', 'open']].min(axis=1)
+    
+    # Adjust for Volatility
+    df['volatility_adjusted'] = (df['momentum_10d'] + df['volume_adjusted_range']) / df['daily_volatility']
+    
+    # Combine Momentum, Volume-Adjusted Range, and Volatility Adjustment (sum over the last 20 days)
+    df['combined_momentum_volatility'] = df['volatility_adjusted'].rolling(window=20).sum() / df['volume_adjusted_range']
+    
+    # Calculate High-Low Range Momentum
+    df['high_low_range_momentum'] = df['high_low_range'].diff().rolling(window=5).sum()
+    
+    # Adjust for Volume
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['high_low_range_momentum_adjusted'] = df['high_low_range_momentum'] * df['5_day_avg_volume']
+    
+    # Apply Exponential Moving Average Smoothing
+    df['smoothed_adjusted_momentum'] = df['high_low_range_momentum_adjusted'].ewm(span=10).mean()
+    
+    # Interim Alpha Factor 1: Smoothed Adjusted Momentum
+    interim_alpha_factor_1 = df['smoothed_adjusted_momentum']
+    
+    # Calculate Logarithmic Daily Returns
+    df['log_daily_returns'] = df['close'].pct_change().apply(lambda x: np.log(1 + x))
+    
+    # Momentum Component
+    df['ema_21_returns'] = df['log_daily_returns'].ewm(span=21).mean()
+    df['ema_60_returns'] = df['log_daily_returns'].ewm(span=60).mean()
+    df['momentum_component'] = df['ema_21_returns'] - df['ema_60_returns']
+    
+    # Volatility Component
+    df['abs_log_daily_returns'] = df['log_daily_returns'].abs()
+    df['ema_21_abs_returns'] = df['abs_log_daily_returns'].ewm(span=21).mean()
+    df['ema_60_abs_returns'] = df['abs_log_daily_returns'].ewm(span=60).mean()
+    df['volatility_component'] = df['ema_21_abs_returns'] - df['ema_60_abs_returns']
+    
+    # Volume Component
+    df['log_daily_volume_changes'] = df['volume'].pct_change().apply(lambda x: np.log(1 + x))
+    df['ema_21_volume_changes'] = df['log_daily_volume_changes'].ewm(span=21).mean()
+    df['ema_60_volume_changes'] = df['log_daily_volume_changes'].ewm(span=60).mean()
+    df['volume_momentum'] = df['ema_21_volume_changes'] - df['ema_60_volume_changes']
+    
+    # Final Alpha Factor 2: Combine Components
+    final_alpha_factor_2 = df['momentum_component'] + df['volatility_component'] + df['volume_momentum']
+    
+    # Final Alpha Factor: Interim Alpha Factor 1 + Final Alpha Factor 2
+    final_alpha_factor = interim_alpha_factor_1 + final_alpha_factor_2
+    
+    return final_alpha_factor
+```

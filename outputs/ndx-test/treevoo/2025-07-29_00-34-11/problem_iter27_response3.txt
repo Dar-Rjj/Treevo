@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement Ratio
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['open'] / df['close']
+    intraday_price_movement_ratio = (high_low_ratio * df['volume'] + open_close_ratio * df['volume']) / (df['volume'] + df['volume'])
+
+    # Measure Price-Volatility Alignment
+    intraday_volatility = (df['high'] - df['low']) * df['volume']
+    price_volatility_alignment = intraday_price_movement_ratio / intraday_volatility
+    sentiment = np.where(price_volatility_alignment > 0, 1, -1)
+
+    # Calculate Gain and Loss
+    df['gain'] = np.where(df['close'] > df['close'].shift(1), df['close'] - df['close'].shift(1), 0)
+    df['loss'] = np.where(df['close'] < df['close'].shift(1), df['close'].shift(1) - df['close'], 0)
+
+    # Aggregate Gains and Losses
+    period = 14
+    avg_gain = df['gain'].rolling(window=period).mean()
+    avg_loss = df['loss'].rolling(window=period).mean()
+
+    # Calculate Relative Strength
+    rs = avg_gain / avg_loss
+
+    # Convert to ARSI
+    arsi = 100 - (100 / (1 + rs))
+    arsi = arsi * df['volume'].rolling(window=period).mean() * (df['close'] / df['open']).shift(1)
+
+    # Calculate Short-Term Logarithmic Return
+    short_term_log_return = np.log(df['close'] / df['close'].shift(5))
+
+    # Calculate Long-Term Logarithmic Return
+    long_term_log_return = np.log(df['close'] / df['close'].shift(20))
+
+    # Calculate Volume-Weighted Short-Term Logarithmic Return
+    volume_weighted_short_term_return = df['volume'] * short_term_log_return
+
+    # Calculate Volume-Weighted Long-Term Logarithmic Return
+    volume_weighted_long_term_return = df['volume'] * long_term_log_return
+
+    # Calculate Short-Term Volatility
+    short_term_volatility = (df['high'] - df['low']).rolling(window=5).mean()
+
+    # Adjust for Volatility
+    adjusted_short_term_return = (volume_weighted_short_term_return / short_term_volatility) - volume_weighted_long_term_return
+
+    # Calculate Price Oscillator
+    price_oscillator = short_term_log_return - long_term_log_return
+
+    # Combine ARSI, Adjusted Returns, and Price Oscillator
+    combined_factor = arsi * adjusted_short_term_return + price_oscillator - volume_weighted_long_term_return
+
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+
+    # Compute VWMA of High-Low Spread
+    vwma_high_low_spread = (high_low_spread * df['volume']).ewm(span=period).mean()
+
+    # Incorporate Close-to-Close Return
+    close_to_close_return = df['close'] - df['close'].shift(1)
+    multiplied_vwma = vwma_high_low_spread * close_to_close_return
+
+    # Adjust with Volume Change
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    final_factor = multiplied_vwma * volume_change
+
+    return final_factor
+```

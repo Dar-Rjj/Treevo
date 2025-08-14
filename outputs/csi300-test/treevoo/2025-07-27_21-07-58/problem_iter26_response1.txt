@@ -1,0 +1,85 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'].diff()
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Moving Average of Positive Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: x if x > 0 else 0)
+    df['ma_positive_returns'] = df['positive_returns'].rolling(window=21).mean()
+    
+    # Volume Adjusted Momentum
+    df['cumulative_volume'] = df['volume'].rolling(window=21).sum()
+    df['volume_adjusted_momentum'] = (df['ma_positive_returns'] * df['cumulative_volume']) / 21
+    
+    # Calculate Short-Term Momentum
+    df['short_term_momentum'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Momentum
+    df['long_term_momentum'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine High-Low Range and Volume
+    df['high_low_vol'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['avg_volume_21'] = df['volume'].rolling(window=21).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_21']
+    
+    # Adjust by Average Amount
+    df['avg_amount_21'] = df['amount'].rolling(window=21).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount_21']
+    
+    # Introduce New Component: Price-Volume Divergence
+    df['daily_volume_change'] = df['volume'].pct_change()
+    df['price_volume_divergence'] = df['daily_return'] - df['daily_volume_change']
+    
+    # Weights
+    w1, w2, w3, w4, w5, w6 = 0.2, 0.15, 0.15, 0.1, 0.1, 0.1
+    
+    # Combine Weighted Components
+    df['weighted_high_low_vol'] = w1 * df['high_low_vol']
+    df['weighted_short_term_momentum'] = w2 * df['short_term_momentum']
+    df['weighted_long_term_momentum'] = w3 * df['long_term_momentum']
+    df['weighted_volume_surge'] = w4 * df['volume_adjusted_momentum']
+    df['weighted_volume_ratio'] = w5 * df['volume_ratio']
+    df['weighted_amount_ratio'] = w6 * df['amount_ratio']
+    
+    df['combined_weighted_components'] = (
+        df['weighted_high_low_vol'] +
+        df['weighted_short_term_momentum'] +
+        df['weighted_long_term_momentum'] +
+        df['weighted_volume_surge'] +
+        df['weighted_volume_ratio'] +
+        df['weighted_amount_ratio']
+    )
+    
+    # Calculate 21-Day Price Volatility
+    df['volatility_21'] = df['close'].rolling(window=21).std()
+    
+    # Adjust by Price Volatility
+    volatility_threshold = df['volatility_21'].median()
+    df['volatility_adjustment'] = df['volatility_21'].apply(lambda x: 1.75 if x > volatility_threshold else 1.25)
+    
+    # Introduce New Component: Relative Strength Index (RSI)
+    gain = df['daily_return'].apply(lambda x: max(x, 0)).rolling(window=14).mean()
+    loss = abs(df['daily_return'].apply(lambda x: min(x, 0))).rolling(window=14).mean()
+    df['rsi'] = 100 - (100 / (1 + (gain / loss)))
+    
+    # Apply Trend Multiplier
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['trend_multiplier'] = df.apply(lambda row: 1.5 if row['close'] > row['ema_50'] else 1, axis=1)
+    
+    # Final Combined Alpha Factor
+    df['alpha_factor'] = (
+        df['combined_weighted_components'] +
+        df['price_volume_divergence']
+    ) * df['volatility_adjustment'] * df['rsi'] * df['trend_multiplier']
+    
+    return

@@ -1,0 +1,48 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Compute Log Returns over N Days
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    
+    # Apply Dynamic Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    momentum_clipped = momentum.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_ratio = volumes / mean_volume
+    volume_adjusted_momentum = momentum_clipped * volume_ratio
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev = abs_price_changes.rolling(window=M).std()
+    ema = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    high_low_range = df['high'] - df['low']
+    true_range = (df['high'] - df['low']).abs().combine((df['high'] - close_prices.shift(1)).abs(), max).combine((df['low'] - close_prices.shift(1)).abs(), max)
+    
+    # Combine Volatility Measures
+    volatility_measures = 0.4 * std_dev + 0.3 * ema + 0.15 * iqr + 0.1 * high_low_range + 0.05 * true_range
+    
+    # Final Factor Calculation
+    final_factor = 0.6 * volume_adjusted_momentum + 0.4 * volatility_measures
+    
+    return final_factor
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', parse_dates=True, index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)

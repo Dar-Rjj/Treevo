@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1))
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+    
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5DayCloseReturn'] = df['close'] / df['close'].shift(5) - 1
+    df['5DayVolumeRatio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['5DayVolumeAdjustedMomentum'] = df['5DayCloseReturn'] * df['5DayVolumeRatio']
+    
+    # Weight by Volume
+    df['VolumeWeightedMomentum'] = df['5DayVolumeAdjustedMomentum'] * df['volume']
+    
+    # Calculate High-Low Price Oscillation
+    df['HighLowRange'] = df['high'] - df['low']
+    df['5DayStdHighLowRange'] = df['HighLowRange'].rolling(window=5).std()
+    df['5DayMeanHighLowRange'] = df['HighLowRange'].rolling(window=5).mean()
+    df['AdjustedHighLowOscillation'] = (df['HighLowRange'] - df['5DayMeanHighLowRange']) / df['5DayStdHighLowRange']
+    df['5DayMA_AdjustedHighLowOscillation'] = df['AdjustedHighLowOscillation'].rolling(window=5).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = df['close'] / df['open'] - 1
+    
+    # Calculate Price Momentum
+    df['PriceMomentum'] = df['close'] - df['close'].shift(14)
+    
+    # Calculate Volume-Weighted Average Price
+    df['VWAP'] = (df['open'] * df['volume'] + df['high'] * df['volume'] + df['low'] * df['volume'] + df['close'] * df['volume']) / (4 * df['volume'])
+    
+    # Combine Indicators
+    df['CombinedIndicators'] = df['ATR'] + df['VolumeWeightedMomentum'] + df['IntradayHighLowSpread'] + df['CloseToOpenReturn'] + df['5DayMA_AdjustedHighLowOscillation']
+    
+    # Adjust Momentum by ATR
+    df['ATR_AdjustedMomentum'] = df['VolumeWeightedMomentum'] / df['ATR']
+    
+    # Generate Final Alpha Factor
+    df['AlphaFactor'] = df['ATR_AdjustedMomentum'] + df['CombinedIndicators'] + df['VWAP']
+    
+    return df['AlphaFactor']
+```

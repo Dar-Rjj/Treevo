@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Volume Trend
+    df['volume_trend'] = df['volume'] - df['volume'].rolling(window=20).mean()
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    df['adjusted_close_to_open_return'] = df['close_to_open_return'] * df['intraday_range']
+    
+    # Calculate Volume-Weighted Volatility
+    df['volume_weighted_volatility'] = df['intraday_range'] / df['volume']
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    df['combined_factor'] = df['adjusted_close_to_open_return'] * df['volume_weighted_volatility']
+    
+    # Incorporate Volume Trend
+    df['incorporated_volume_trend'] = df['combined_factor'] * df['volume_trend']
+    
+    # Calculate Daily Price Return
+    N = 5  # Example: 5-day return
+    df['daily_price_return'] = (df['close'] / df['close'].shift(N)) - 1
+    
+    # Identify Volume Spike
+    M = 20  # Moving average window for volume
+    vol_avg = df['volume'].rolling(window=M).mean()
+    vol_std = df['volume'].rolling(window=M).std()
+    df['volume_spike'] = (df['volume'] > (vol_avg + 3 * vol_std)).astype(int)
+    
+    # Adjust Daily Price Return for Volume Spike
+    K = 1.5  # Example amplification factor
+    df['adjusted_daily_price_return'] = df['daily_price_return'] * (1 + (K - 1) * df['volume_spike'])
+    
+    # Compute Cumulative Sum of Adjusted Price Return
+    df['cumulative_adjusted_price_return'] = df['adjusted_daily_price_return'].cumsum()
+    
+    # Compute Cumulative Sum of Volume Change
+    df['cumulative_volume_change'] = df['volume_change'].cumsum()
+    
+    # Combine Cumulative Sums
+    df['combined_cumulative'] = df['cumulative_adjusted_price_return'] * df['cumulative_volume_change']
+    
+    # Introduce Momentum Factor
+    df['momentum_factor'] = df['close'] - df['close'].rolling(window=50).mean()
+    
+    # Incorporate Momentum Factor
+    df['final_factor'] = df['adjusted_daily_price_return'] * df['momentum_factor']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

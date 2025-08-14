@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between close and open prices
+    df['price_diff'] = df['close'] - df['open']
+    
+    # Count the number of days in the past 10 days where the close was higher than the open
+    df['positive_days'] = df['price_diff'].rolling(window=10).apply(lambda x: (x > 0).sum(), raw=True)
+    
+    # Calculate the Average True Range (ATR) over the last 10 days
+    df['high_low'] = df['high'] - df['low']
+    df['high_close'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+    df['atr_10'] = df['tr'].rolling(window=10).mean()
+    
+    # Calculate the ATR's moving average over the last 20 days
+    df['atr_20_ma'] = df['atr_10'].rolling(window=20).mean()
+    
+    # Examine the trading volume relative to the price movement
+    df['volume_30_ma'] = df['volume'].rolling(window=30).mean()
+    df['strong_buy_pressure'] = ((df['price_diff'] > 0) & (df['volume'] > df['volume_30_ma'])).astype(int)
+    df['buy_pressure_score'] = df['strong_buy_pressure'].rolling(window=30).sum()
+    
+    # Compute the ratio of (high - open) / (open - low)
+    df['intraday_ratio'] = (df['high'] - df['open']) / (df['open'] - df['low'])
+    df['bullish_sentiment'] = df['intraday_ratio'].rolling(window=5).apply(lambda x: (x > 1).sum(), raw=True)
+    
+    # Combine the factors into a composite alpha factor
+    df['composite_factor'] = (
+        0.4 * df['positive_days'] +
+        0.3 * (df['atr_10'] < df['atr_20_ma']).astype(int) +
+        0.2 * df['buy_pressure_score'] +
+        0.1 * df['bullish_sentiment']
+    )
+    
+    return df['composite_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', parse_dates=['date'], index_col='date')
+# composite_factor = heuristics_v2(df)
+# print(composite_factor)
+```

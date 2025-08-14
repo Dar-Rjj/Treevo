@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Range
+    intraday_range = (df['high'] - df['low']) + (df['close'] - df['open'])
+    enhanced_intraday_range = intraday_range / 2
+
+    # Adjust by Short-Term and Long-Term Momentum
+    ema5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema10 = df['close'].ewm(span=10, adjust=False).mean()
+    ema20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    short_term_momentum = ema5 - ema10
+    long_term_momentum = ema10 - ema20
+    total_momentum = short_term_momentum - long_term_momentum
+
+    # Incorporate Volume and Volatility Influence
+    vol5 = df['volume'].rolling(window=5).mean()
+    vol10 = df['volume'].rolling(window=10).mean()
+    volume_momentum = vol5 - vol10
+    
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=30).mean()
+    avg_vol_30 = df['volume'].rolling(window=30).mean()
+    volume_deviation = df['volume'] - avg_vol_30
+    volume_change = df['volume'].pct_change(5)
+
+    # Daily Dynamic Price Range
+    dynamic_price_range = (df['high'] - df['low']) * (df['close'] / df['low'])
+
+    # Average Trading Price
+    avg_trading_price = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+
+    # Volume Adjusted Dynamic Range
+    volume_adjusted_dynamic_range = (dynamic_price_range / np.where(avg_trading_price == 0, 1, avg_trading_price)) * df['volume']
+
+    # Short-Term and Long-Term Rolling Avg of Volume Adjusted Dynamic Range
+    short_term_avg = volume_adjusted_dynamic_range.rolling(window=15).mean()
+    long_term_avg = volume_adjusted_dynamic_range.rolling(window=25).mean()
+
+    # Price Volatility
+    price_volatility = df['close'].rolling(window=30).std()
+
+    # Trade Activity Influence
+    avg_amount_30 = df['amount'].rolling(window=30).mean()
+    trade_activity_influence = df['amount'] / avg_amount_30
+
+    # Combine Momentum with Volatility and Volume
+    combined_momentum = total_momentum / price_volatility
+    momentum_volume_influence = combined_momentum * volume_momentum
+
+    # Final Alpha Factor
+    adjusted_momentum = (momentum_volume_influence * short_term_avg) / (enhanced_intraday_range * df['close'])
+    final_alpha_factor = adjusted_momentum + volume_deviation
+    final_alpha_factor = final_alpha_factor * (trade_activity_influence / price_volatility)
+
+    return final_alpha_factor
+```

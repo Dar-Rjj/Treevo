@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight by Volume
+    df['weighted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Intraday Momentum
+    df['close_open_diff'] = df['close'] - df['open']
+    df['intraday_momentum'] = df['close_open_diff'].rolling(window=5).sum()
+    
+    # Integrate Momentum and Volatility
+    df['integrated_factor'] = df['weighted_volatility'] + df['intraday_momentum']
+    
+    # Define Smoothing Factor
+    smoothing_factor = 0.9
+    
+    # Apply Dynamic Exponential Smoothing
+    df['smoothed_factor'] = df['integrated_factor'].ewm(alpha=1 - smoothing_factor).mean()
+    
+    # Ensure Values are Positive
+    df['smoothed_factor_positive'] = df['smoothed_factor'] + 1e-6
+    
+    # Apply Logarithmic Transformation
+    df['log_smoothed_factor'] = np.log(df['smoothed_factor_positive'])
+    
+    # Calculate Average True Range (ATR)
+    df['true_range'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Dynamic Adjustment of Smoothing Factor based on ATR
+    df['adjusted_smoothing_factor'] = np.clip(1 - (df['atr'] / df['atr'].max()), 0.1, 0.9)
+    
+    # Dynamic Adjustment of Rolling Window based on RSI
+    df['adjusted_window'] = np.clip(5 + (df['rsi'] - 50) // 10, 5, 20)
+    
+    # Apply Adjusted Smoothing Factor and Rolling Window
+    df['final_factor'] = df['integrated_factor'].ewm(alpha=1 - df['adjusted_smoothing_factor']).mean().rolling(window=df['adjusted_window']).mean()
+    
+    # Ensure Values are Positive
+    df['final_factor_positive'] = df['final_factor'] + 1e-6
+    
+    # Apply Logarithmic Transformation
+    df['log_final_factor'] = np.log(df['final_factor_positive'])
+    
+    return df['log_final_factor']

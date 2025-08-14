@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum
+    n = 10
+    df['raw_momentum'] = df['daily_price_change'].rolling(window=n).sum() / n
+    
+    # Identify Volume Spikes
+    m = 20
+    df['volume_moving_avg'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > 1.5 * df['volume_moving_avg']).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df['raw_momentum'] * (1 - 0.3 * df['volume_spike'])
+    
+    # Calculate Smoothed Price Momentum
+    df['smoothed_momentum'] = df['daily_price_change'].rolling(window=5).sum() / 5
+    
+    # Compute Volume Weight
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['normalized_volume'] = df['volume'] / df['average_volume']
+    df['volume_weight'] = df['normalized_volume'].rolling(window=n).mean()
+    
+    # Combine Smoothed Price Momentum and Volume Weight
+    df['base_momentum_signal'] = df['smoothed_momentum'] * df['volume_weight']
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['combined_intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['avg_vol_5_days'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['avg_vol_5_days']
+    
+    # Final Alpha Factor
+    df['final_alpha'] = (df['adjusted_momentum'] * df['combined_intraday_factor'] * 
+                         df['weighted_price_movement_normalized'] + 
+                         df['base_momentum_signal'])
+    
+    # Adjust for Volatility
+    df['std_close'] = df['close'].rolling(window=10).std()
+    df['final_alpha'] = df['final_alpha'] / (1 + df['std_close'])
+    
+    # Incorporate Trend Following
+    df['long_term_momentum'] = df['daily_price_change'].rolling(window=20).sum() / 20
+    df['final_alpha'] = df['final_alpha'] * df['long_term_momentum']
+    
+    return df['final_alpha']
+```

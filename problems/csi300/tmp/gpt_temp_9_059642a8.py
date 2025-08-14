@@ -1,0 +1,52 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import numpy as np
+    import pandas as pd
+    from sklearn.ensemble import RandomForestRegressor
+    
+    # Calculate the momentum factor using an adaptive lookback period (10-30 days)
+    def adaptive_momentum(price, window_min=10, window_max=30):
+        return np.log(price).diff(periods=window_min).rolling(window=window_max).mean()
+    momentum = adaptive_momentum(df['close'])
+    
+    # Calculate the liquidity factor using an adaptive lookback period (10-40 days)
+    def adaptive_liquidity(volume, window_min=10, window_max=40):
+        return volume.rolling(window=window_min).mean().rolling(window=window_max).mean()
+    liquidity = adaptive_liquidity(df['volume'])
+    
+    # Calculate the market sentiment using an adaptive lookback period (5-15 days)
+    def adaptive_market_sentiment(amount, volume, window_min=5, window_max=15):
+        money_flow_ratio = amount / volume
+        return money_flow_ratio.rolling(window=window_min).mean().rolling(window=window_max).mean()
+    market_sentiment = adaptive_market_sentiment(df['amount'], df['volume'])
+    
+    # Calculate the volatility factor using an adaptive lookback period (20-50 days)
+    def adaptive_volatility(price, window_min=20, window_max=50):
+        return np.log(price).diff().rolling(window=window_min).std().rolling(window=window_max).mean()
+    volatility = adaptive_volatility(df['close'])
+    
+    # Create a combined factor by summing the weighted factors
+    # Use machine learning to dynamically adjust the weights based on historical performance
+    features = pd.concat([momentum, liquidity, market_sentiment, volatility], axis=1).dropna()
+    target = df['close'].pct_change().shift(-1)[features.index].dropna()
+    X, y = features.align(target, join='inner')
+    
+    # Train a RandomForestRegressor to predict future returns and get feature importances
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    feature_importances = model.feature_importances_
+    
+    # Apply the learned weights to the factors
+    combined_factor = (X * feature_importances).sum(axis=1)
+    
+    # Optionally, you can add sector-specific factors here
+    # For example, if there is a column 'sector' in the DataFrame, you can add it as follows:
+    # sector_factors = df.groupby('sector')[combined_factor.name].transform(lambda x: x.rolling(window=10).mean())
+    # combined_factor += sector_factors * 0.1  # Adjust the weight as needed
+    
+    # Apply exponential decay to the combined factor to emphasize recent data
+    decay_factor = 0.95
+    factor_decay = combined_factor.ewm(alpha=(1 - decay_factor)).mean()
+    
+    return factor_decay

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+
+    # Calculate Previous Day's Close-to-Open Return
+    prev_close_to_open_return = (df['open'].shift(1) - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Aggregate Returns
+    aggregate_returns = intraday_return + prev_close_to_open_return
+
+    # Volume Surge Indicator
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    volume_surge_indicator = (df['volume'] > avg_5d_volume).astype(int)
+
+    # Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+
+    # Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(20)
+
+    # Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+
+    # Volume-Weighted High-Low Volatility
+    high_low_range = df['high'] - df['low']
+    vol_weighted_high_low_vol = (high_low_range * df['volume']) / avg_5d_volume
+
+    # Integrate Factors
+    integrated_factor = (intraday_return * prev_close_to_open_return * price_momentum_ratio)
+    integrated_factor *= 1.7 if volume_surge_indicator else 0.3
+
+    # Incorporate Additional High-Low Volatility
+    avg_10d_high_low = high_low_range.rolling(window=10).mean()
+    high_low_above_avg = (high_low_range > avg_10d_high_low).astype(int)
+    integrated_factor *= 1.2 if high_low_above_avg else 0.8
+
+    # Standard Deviation of Daily Returns
+    daily_returns = df['close'].pct_change()
+    std_dev_daily_returns = daily_returns.rolling(window=20).std()
+
+    # Volume-to-Average Volume Ratio
+    avg_30d_volume = df['volume'].rolling(window=30).mean()
+    vol_to_avg_vol_ratio = df['volume'] / avg_30d_volume
+
+    # High-Low Spread Indicators
+    high_low_spread_sum = high_low_range.rolling(window=10).sum()
+
+    # Consecutive Bullish Days
+    bullish_days = (df['close'] > df['open']).astype(int)
+    consecutive_bullish_days = bullish_days.rolling(window=7).sum()
+
+    # Composite Alpha Factor
+    composite_alpha = (
+        aggregate_returns +
+        price_momentum_ratio +
+        vol_weighted_high_low_vol +
+        std_dev_daily_returns +
+        vol_to_avg_vol_ratio +
+        high_low_spread_sum +
+        consecutive_bullish_days
+    ) / 7
+
+    return composite_alpha
+```

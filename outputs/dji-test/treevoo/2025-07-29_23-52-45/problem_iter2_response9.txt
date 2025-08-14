@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, sma_lookback=20, ema_alpha=0.1, price_weight=0.7, volume_weight=0.3):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'].pct_change().rolling(window=lookback_period).sum()
+    
+    # Calculate Volume Momentum
+    df['volume_momentum'] = df['volume'].diff().abs().rolling(window=lookback_period).sum()
+    
+    # Adjust Momentum by Intraday Volatility
+    df['adjusted_price_momentum'] = df['price_momentum'] / df['intraday_volatility']
+    df['adjusted_volume_momentum'] = df['volume_momentum'] / df['intraday_volatility']
+    
+    # Combine Adjusted Momentum Factors
+    df['combined_momentum'] = (price_weight * df['adjusted_price_momentum']) + (volume_weight * df['adjusted_volume_momentum'])
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['sma_close'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Calculate Exponential Moving Average (EMA) of Returns
+    df['ema_returns'] = df['daily_returns'].ewm(alpha=ema_alpha).mean()
+    
+    # Measure Price Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['ema_high_low_range'] = df['high_low_range'].ewm(alpha=ema_alpha).mean()
+    
+    # Incorporate Volume
+    df['volume_weighted_return'] = df['daily_returns'] * df['volume']
+    df['volume_weighted_return_sum'] = df['volume_weighted_return'].rolling(window=lookback_period).sum()
+    
+    # Combine All Momentum, Volatility, and Volume Factors
+    df['final_alpha_factor'] = (
+        df['combined_momentum'] +
+        df['ema_returns'] +
+        df['ema_high_low_range'] +
+        df['volume_weighted_return_sum']
+    )
+    
+    # Final Alpha Factor
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

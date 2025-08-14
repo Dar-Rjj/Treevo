@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] / df['open']) - 1
+    
+    # Calculate Weighted Intraday Volatility
+    df['weighted_intraday_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['vma_intraday_volatility'] = df['weighted_intraday_volatility'].rolling(window=10).mean()
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_reversal_score'] = df['close_to_open_return'] / df['vma_intraday_volatility']
+    
+    # Apply Exponential Decay with Half-life of 5 Days
+    half_life = 5
+    decay_factor = 0.5 ** (1 / half_life)
+    df['smoothed_reversal_score'] = df['intraday_reversal_score'].ewm(alpha=decay_factor, adjust=False).mean()
+    
+    # Calculate Price Momentum
+    df['log_returns'] = np.log(df['close']).diff()
+    df['price_momentum'] = df['log_returns'].rolling(window=5).sum().shift(1)
+    
+    # Apply Volume Shock Filter
+    df['volume_change'] = df['volume'].diff().abs()
+    volume_threshold = df['volume_change'].quantile(0.75)
+    df = df[df['volume_change'] < volume_threshold]
+    
+    # Combine Intraday Reversal and Price Momentum
+    df['factor'] = df['smoothed_reversal_score'] + df['price_momentum']
+    
+    return df['factor']
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['Previous Close'] = df['close'].shift(1)
+    df['High-Low'] = df['high'] - df['low']
+    df['High-PrevClose'] = abs(df['high'] - df['Previous Close'])
+    df['PrevClose-Low'] = abs(df['Previous Close'] - df['low'])
+    df['True Range'] = df[['High-Low', 'High-PrevClose', 'PrevClose-Low']].max(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    n_days = 14
+    df['ATR'] = df['True Range'].rolling(window=n_days).mean()
+    
+    # Calculate Short-Term and Long-Term Price Averages
+    df['10_day_avg'] = df['close'].rolling(window=10).mean()
+    df['30_day_avg'] = df['close'].rolling(window=30).mean()
+    
+    # Determine Price Momentum
+    df['Price Momentum'] = df['10_day_avg'] - df['30_day_avg']
+    
+    # Detect Volume Spike
+    df['5_day_vol_avg'] = df['volume'].rolling(window=5).mean()
+    df['Volume Spike'] = df['volume'] > 2 * df['5_day_vol_avg']
+    
+    # Adjust Momentum Based on Volume
+    df['Adjusted Momentum'] = df.apply(
+        lambda row: row['Price Momentum'] * 0.8 if row['Volume Spike'] else row['Price Momentum'],
+        axis=1
+    )
+    
+    # Normalize Price Momentum by ATR
+    df['Normalized Momentum'] = df['Adjusted Momentum'] / df['ATR']
+    
+    # Evaluate Volume Activity
+    df['Average Volume'] = df['volume'].rolling(window=30).mean()
+    high_volume_threshold = 1.5
+    df['High Volume Indicator'] = (df['volume'] > high_volume_threshold * df['Average Volume']).astype(int)
+    
+    # Integrate Combined Factors
+    df['Final Alpha Factor'] = df['Normalized Momentum'] * df['High Volume Indicator']
+    
+    return df['Final Alpha Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+    
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+    
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Typical_Price'] = df['Typical_Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    vwap = df['Volume_Typical_Price'].sum() / total_volume
+    
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = df.apply(lambda row: 1 if vwap > row['close'] else -1, axis=1)
+    
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+    
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Return'] = (df['Return'] * df['volume']).sum() / total_volume
+    
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+    
+    # Calculate Volatility
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility'] = df['Daily_Return'].rolling(window=20).std()
+    
+    # Adjust for Volatility
+    df['Volatility_Adjusted_Alpha_Factor'] = df['Initial_Alpha_Factor'] / df['Volatility']
+    
+    # Incorporate Transaction Amount
+    df['Amount_Weighted_Return'] = (df['close'] - df['open']) / df['open'] * df['amount']
+    total_amount = df['amount'].sum()
+    amount_weighted_return = df['Amount_Weighted_Return'].sum() / total_amount
+    
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    df['Final_Alpha_Factor'] = df['Volatility_Adjusted_Alpha_Factor'] + amount_weighted_return
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

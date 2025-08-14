@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+from sklearn.ensemble import RandomForestRegressor
+
+def heuristics_v2(df, lookback_period=14):
+    # Calculate price-based features
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['body_size'] = abs(df['open'] - df['close'])
+    df['true_range'] = df[['high_low_range', 'high' - df['close'].shift(1), 'df['close'].shift(1) - df['low']]].max(axis=1)
+
+    # Calculate volume and amount-based features
+    df['change_volume'] = df['volume'] - df['volume'].shift(1)
+    df['change_amount'] = df['amount'] - df['amount'].shift(1)
+    df['vwap'] = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+
+    # Calculate volatility measures
+    df['std_daily_return'] = df['daily_return'].rolling(window=lookback_period).std()
+    df['atr'] = df['true_range'].rolling(window=lookback_period).mean()
+
+    # Calculate momentum indicators
+    df['sma_close'] = df['close'].rolling(window=lookback_period).mean()
+    df['ema_close'] = df['close'].ewm(span=lookback_period, adjust=False).mean()
+    df['rsi'] = 100 - (100 / (1 + (df['daily_return'][df['daily_return'] > 0].rolling(window=lookback_period).mean() / df['daily_return'][df['daily_return'] < 0].rolling(window=lookback_period).mean())))
+    df['roc'] = (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+
+    # Calculate trend indicators
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['trend_diff'] = df['sma_close'].rolling(window=50).mean() - df['sma_close'].rolling(window=200).mean()
+    df['plus_di'] = 100 * (df['high'] - df['high'].shift(1)).rolling(window=lookback_period).sum() / df['true_range'].rolling(window=lookback_period).sum()
+    df['minus_di'] = 100 * (df['low'].shift(1) - df['low']).rolling(window=lookback_period).sum() / df['true_range'].rolling(window=lookback_period).sum()
+    df['adx'] = 100 * (abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])).rolling(window=lookback_period).mean()
+
+    # Calculate candlestick pattern recognition
+    df['doji'] = (df['open'] - df['close']).abs() / df['high_low_range'] < 0.05
+    df['bullish_engulfing'] = (df['open'] > df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['close'] > df['open'].shift(1))
+    df['bearish_engulfing'] = (df['open'] < df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['close'] < df['open'].shift(1))
+    df['hammer'] = (df['lower_shadow'] > 2 * df['body_size']) & (df['upper_shadow'] < 0.5 * df['body_size'])
+    df['hanging_man'] = (df['lower_shadow'] > 2 * df['body_size']) & (df['upper_shadow'] < 0.5 * df['body_size'])
+
+    # Calculate money flow and accumulation/distribution
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume

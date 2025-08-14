@@ -1,0 +1,42 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    df['volume_weighted_return_100'] = 0.0
+    for i in range(100, len(df)):
+        returns_100 = df.loc[i-99:i, 'daily_return']
+        volume_100 = df.loc[i-99:i, 'volume']
+        weighted_returns_100 = (returns_100 * volume_100).sum()
+        total_volume_100 = volume_100.sum()
+        df.loc[df.index[i], 'volume_weighted_return_100'] = weighted_returns_100 / total_volume_100
+    
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    df['volume_weighted_return_5'] = 0.0
+    for i in range(5, len(df)):
+        returns_5 = df.loc[i-4:i, 'daily_return']
+        volume_5 = df.loc[i-4:i, 'volume']
+        weighted_returns_5 = (returns_5 * volume_5).sum()
+        total_volume_5 = volume_5.sum()
+        df.loc[df.index[i], 'volume_weighted_return_5'] = weighted_returns_5 / total_volume_5
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['close']
+    
+    # Compute Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).rolling(window=20).sum()
+    
+    # Intraday Momentum Factor
+    df['intraday_momentum_5'] = (df['intraday_return'] * df['volume']).rolling(window=5).sum()
+    
+    # Volume-Weighted Intraday Reversal
+    df['intraday_reversal_10'] = -(df['intraday_return'] * df['volume']).rolling(window=10).sum()
+    
+    # Combine All Components
+    df['alpha_factor'] = (df['volume_weighted_return_100'] - df['volume_weighted_return_5'] 
+                          + df['intraday_momentum_5'] + df['intraday_reversal_10'])
+    
+    return df['alpha_factor']

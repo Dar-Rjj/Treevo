@@ -1,0 +1,36 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate ADX
+    df['tr'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['dm_pos'] = (df['high'] - df['high'].shift(1)).where(lambda x: x > 0, 0)
+    df['dm_neg'] = (df['low'].shift(1) - df['low']).where(lambda x: x > 0, 0)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    df['dmp'] = df['dm_pos'].rolling(window=14).mean()
+    df['dmn'] = df['dm_neg'].rolling(window=14).mean()
+    df['di_pos'] = 100 * (df['dmp'] / df['atr'])
+    df['di_neg'] = 100 * (df['dmn'] / df['atr'])
+    df['adx'] = 100 * ((df['di_pos'] - df['di_neg']).abs() / (df['di_pos'] + df['di_neg'])).rolling(window=14).mean()
+    
+    # Calculate price volatility
+    df['volatility'] = df['close'].rolling(window=10).std()
+    
+    # Inverse standard deviations for weights
+    inv_std_rsi = 1 / df['rsi'].rolling(window=60).std()
+    inv_std_adx = 1 / df['adx'].rolling(window=60).std()
+    inv_std_volatility = 1 / df['volatility'].rolling(window=60).std()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['rsi'] * inv_std_rsi + 
+                         df['adx'] * inv_std_adx + 
+                         df['volatility'] * inv_std_volatility)
+    
+    return heuristics_matrix

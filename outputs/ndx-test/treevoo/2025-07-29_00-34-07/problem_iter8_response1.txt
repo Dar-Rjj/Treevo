@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Trend
+    df['volume_5day_ma'] = df['volume'].rolling(window=5).mean()
+    df['volume_growth'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend'] = df['volume_5day_ma'] * df['volume_growth']
+    
+    # Filter by Relative Volume
+    n = 20  # period for average volume
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df_filtered = df[df['volume'] > df['avg_volume']]
+    
+    # Calculate Adjusted Price Difference
+    df_filtered['adj_price_diff'] = (df_filtered['close'] - df_filtered['close'].shift(10)) * \
+                                    np.log(df_filtered['close'] / df_filtered['close'].shift(1))
+    
+    # Calculate Rolling High-Low Differential
+    df_filtered['rolling_high'] = df_filtered['high'].rolling(window=20).max()
+    df_filtered['rolling_low'] = df_filtered['low'].rolling(window=20).min()
+    df_filtered['high_low_diff'] = df_filtered['rolling_high'] - df_filtered['rolling_low']
+    
+    # Weight by Volume Volatility
+    df_filtered['vol_volatility'] = df_filtered['volume'].rolling(window=10).std()
+    df_filtered['weighted_high_low_diff'] = df_filtered['high_low_diff'] * df_filtered['vol_volatility']
+    
+    # Calculate Volume Adjusted Momentum
+    df_filtered['momentum'] = df_filtered['volume'] - df_filtered['volume'].shift(1)
+    df_filtered['10day_ma_close'] = df_filtered['close'].rolling(window=10).mean()
+    df_filtered['vol_adj_momentum'] = df_filtered['momentum'] * (df_filtered['close'] - df_filtered['10day_ma_close'])
+    
+    # Aggregate Price and Volume Signals
+    df_filtered['aggregated_signal'] = df_filtered['weighted_high_low_diff'] - df_filtered['adj_price_diff'] + \
+                                      df_filtered['vol_adj_momentum']
+    
+    # Generate Alpha Factor
+    df_filtered['alpha_factor'] = df_filtered['aggregated_signal'] / df_filtered['volume']
+    
+    return df_filtered['alpha_factor']
+```

@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    df['close_to_range_ratio'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Advanced Price Momentum
+    df['ema_20_close'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['advanced_momentum'] = (df['close'] - df['ema_20_close']) / (df['open'] - df['high'])
+    
+    # Combine with Close-to-Range Ratio
+    df['momentum_combined'] = df['close_to_range_ratio'] * df['advanced_momentum']
+    
+    # Adjust for Volume Activity
+    df['volume_sum_20'] = df['volume'].rolling(window=20).sum()
+    df['volume_trend_indicator'] = (df['volume'] / df['volume_sum_20']).shift(1)
+    df['volume_change_5'] = df['volume'] - df['volume'].shift(5)
+    df['volume_trend_score'] = df['volume_change_5'].apply(lambda x: 1 if x > 0 else -1) * \
+                                (df['volume'] / df['volume'].rolling(window=10).mean()).apply(
+                                    lambda x: 1.5 if x > 1 else (-1.2 if x < 1 else 0))
+    
+    # Calculate Range Expansion
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['atr_10'] = df['true_range'].rolling(window=10).mean()
+    df['range_expansion'] = df['true_range'] / df['atr_10']
+    
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0)) * df['volume']
+    df['obv'] = df['obv'].cumsum()
+    
+    # Composite Factor
+    df['composite_factor'] = (df['momentum_combined'] * df['volume_trend_score']) / df['volume_sum_20']
+    df['composite_factor'] = df['composite_factor'] + df['range_expansion'] + df['obv']
+    df['composite_factor_smoothed'] = df['composite_factor'].ewm(span=10, adjust=False).mean()
+    
+    # Opening Impact Adjustment
+    df['open_close_return'] = (df['close'] - df['open']) / df['open']
+    df['final_alpha_factor'] = df['composite_factor_smoothed'] - df['open_close_return']
+    
+    return df['final_alpha_factor']
+```

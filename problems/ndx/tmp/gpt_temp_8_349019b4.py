@@ -1,0 +1,26 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Obtain Last 5 Days' Close Prices
+    last_5_days_close = df['close'].rolling(window=5).apply(lambda x: x[-5:], raw=False)
+    
+    # Calculate Short-term (3-day) and Long-term (10-day) Moving Averages
+    short_term_ma = df['close'].rolling(window=3).mean()
+    long_term_ma = df['close'].rolling(window=10).mean()
+    
+    # Compute Momentum Signal
+    momentum_signal = short_term_ma - long_term_ma
+    momentum_direction = momentum_signal.apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Volume Ratio
+    sum_volume_last_5_days = df['volume'].rolling(window=5).sum()
+    avg_daily_volume = df['volume'].rolling(window=20).mean()  # Using a 20-day window for average daily volume
+    volume_ratio = sum_volume_last_5_days / avg_daily_volume
+    
+    # Apply Volume Filter
+    volume_threshold = 1.0  # Threshold to determine if volume is high enough
+    alpha_factor = momentum_direction.copy()
+    alpha_factor[(volume_ratio < volume_threshold)] = 0  # Neutral or negative factor if volume does not confirm
+    
+    return alpha_factor

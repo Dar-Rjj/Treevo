@@ -1,0 +1,43 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low prices, representing the daily trading range
+    daily_range = df['high'] - df['low']
+
+    # Compute an adjusted volume factor; this aims to measure volume intensity
+    volume_intensity = df['volume'] / (df['high'] - df['low'] + 1e-7)
+
+    # Define a volatility-like feature by taking the standard deviation of the close price over the last few days
+    rolling_std = df['close'].rolling(window=5).std()
+
+    # Create a momentum indicator by computing the ratio of the current close price to the 10-day moving average
+    momentum = df['close'] / df['close'].rolling(window=10).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Adjust for liquidity using the volume and trading range
+    liquidity_adjustment = df['volume'] / (daily_range + 1e-7)
+
+    # Calculate the 30-day mean return
+    returns_30 = df['close'].pct_change().rolling(window=30).mean()
+
+    # Calculate the 60-day mean return
+    returns_60 = df['close'].pct_change().rolling(window=60).mean()
+
+    # Adaptive momentum adjustment based on recent returns
+    adaptive_momentum = momentum * (returns_30 + 1)
+
+    # Adaptive RSI adjustment based on longer-term returns
+    adaptive_rsi = rsi * (returns_60 + 1)
+
+    # Combine all components into a single interpretable alpha factor
+    alpha_factor = (adaptive_momentum * adaptive_rsi * liquidity_adjustment) / (rolling_std + 1e-7)
+
+    return alpha_factor
+```

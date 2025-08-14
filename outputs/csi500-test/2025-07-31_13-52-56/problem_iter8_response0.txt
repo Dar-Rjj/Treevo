@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 30-Day Price Momentum
+    df['30_day_momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Identify Volume Shock
+    df['avg_volume_30'] = df['volume'].rolling(window=30).mean().shift(1)  # Exclude current day
+    df['volume_shock'] = (df['volume'] > 2 * df['avg_volume_30']).astype(int)
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Volume Adjusted High-Low Range
+    df['vol_adj_high_low_range'] = df['volume'] * df['high_low_range']
+    
+    # Calculate Cumulative High-Low Range over N days (N=30)
+    df['cum_vol_adj_high_low_range'] = df['vol_adj_high_low_range'].rolling(window=30).sum()
+    
+    # Calculate Open-to-Close Price Change
+    df['open_close_change'] = df['close'] - df['open']
+    
+    # Calculate Cumulative Open-to-Close Price Change over N days (N=30)
+    df['cum_open_close_change'] = df['open_close_change'].rolling(window=30).sum()
+    
+    # Calculate High-Low Range Momentum
+    df['high_low_range_momentum'] = df['cum_vol_adj_high_low_range'] / df['cum_open_close_change']
+    
+    # Calculate Difference in Volume Adjusted High-Low Range
+    df['diff_vol_adj_high_low_range'] = df['vol_adj_high_low_range'] - df['vol_adj_high_low_range'].shift(29)
+    
+    # Calculate Volume Momentum
+    df['vol_sum_30'] = df['volume'].rolling(window=30).sum()
+    df['vol_momentum'] = df['vol_sum_30'] - df['vol_sum_30'].shift(30)
+    
+    # Measure High-Low Range Ratio (H/L)
+    df['hl_ratio'] = df['high_low_range'] / (df['high'] + df['low'])
+    
+    # Combined Alpha Factor
+    df['adj_vol_momentum'] = df['vol_momentum'] * df['hl_ratio']
+    df['inv_vol_momentum'] = -1 * df['vol_momentum']
+    df['composite_alpha'] = df['inv_vol_momentum'] + df['high_low_range_momentum'] + df['adj_vol_momentum']
+    df['final_factor'] = (df['30_day_momentum'] * df['volume_shock']) + df['composite_alpha'] * df['diff_vol_adj_high_low_range']
+    
+    return df['final_factor']
+```

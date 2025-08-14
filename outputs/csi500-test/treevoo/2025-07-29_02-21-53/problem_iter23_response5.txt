@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Price Movement
+    high_low_diff = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+    
+    # Aggregate and Smooth Price Movements
+    sum_high_low_diff = high_low_diff.rolling(window=20).sum()
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+    smooth_high_low_range = high_low_diff.ewm(span=20, adjust=False).mean()
+    long_term_high_low_range = (df[['high', 'low']].rolling(window=50).max() - 
+                                df[['high', 'low']].rolling(window=50).min()).max(axis=1)
+    
+    # Compute Momentum of High-Low Ranges
+    momentum_high_low_ranges = long_term_high_low_range - smooth_high_low_range
+    
+    # Calculate True Range
+    prev_close = df['close'].shift(1)
+    true_range = pd.DataFrame({
+        'high_low': df['high'] - df['low'],
+        'high_prev_close': abs(df['high'] - prev_close),
+        'prev_close_low': abs(prev_close - df['low'])
+    }).max(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    atr = true_range.rolling(window=20).mean()
+    
+    # Adjust Price Momentum by ATR
+    adjusted_momentum = (sum_high_low_diff + sum_close_open_change) / atr
+    
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = df['volume'] > avg_volume
+    volume_spike = df['volume'] > 2 * df['volume'].rolling(window=5).mean()
+    
+    # Adjust Momentum Based on Volume
+    adjusted_momentum[volume_spike] *= 0.7
+    
+    # Integrate Combined Factors
+    interim_alpha_factor = adjusted_momentum * high_volume_days
+    
+    # Combine ATR and Price Momentum
+    interpretable_factor = interim_alpha_factor + momentum_high_low_ranges
+    
+    # Incorporate Recent Price Trend
+    recent_price_trend = df['close'].rolling(window=20).mean()
+    trend_multiplier = (recent_price_trend > recent_price_trend.shift(1)).astype(float) * 2 - 1
+    final_alpha_factor = interpretable_factor * trend_multiplier
+    
+    return final_alpha_factor
+```

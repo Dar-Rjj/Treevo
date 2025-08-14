@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Price Spread
+    df['HighLowSpread'] = df['high'] - df['low']
+    
+    # Evaluate Weighted Average Volume Over Period
+    df['Volume10DayAvg'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate 10-Day and 30-Day Moving Averages of High-Low Spread
+    df['HighLow10DayMA'] = df['HighLowSpread'].rolling(window=10).mean()
+    df['HighLow30DayMA'] = df['HighLowSpread'].rolling(window=30).mean()
+    
+    # Derive Short-Term Momentum by Comparing Averages
+    df['ShortTermMomentum'] = df['HighLow10DayMA'] - df['HighLow30DayMA']
+    
+    # Apply Volume-Weighted Adjustment to Short-Term Momentum
+    df['VolumeAdjustedMomentum'] = df['ShortTermMomentum'] * (df['volume'] / df['Volume10DayAvg'])
+    
+    # Assess Trend Direction Using Close Prices
+    df['Trend'] = (df['close'] - df['close'].shift(10)).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Adjust Volume-Adjusted Momentum Based on Trend
+    df['TrendAdjustedMomentum'] = df['VolumeAdjustedMomentum'] * (df['Trend'] + 1) / 2 * 1.5 + df['VolumeAdjustedMomentum'] * (1 - (df['Trend'] + 1) / 2) * 0.5
+    
+    # Integrate Accumulated Momentum Impact
+    df['AccumulatedMomentum'] = df['TrendAdjustedMomentum'].rolling(window=10).sum() * 0.6 + df['TrendAdjustedMomentum'].rolling(window=30).sum() * 0.4
+    
+    # Incorporate Open-Price Momentum
+    df['OpenCloseSpread'] = df['open'] - df['close']
+    df['OpenClose10DayMA'] = df['OpenCloseSpread'].rolling(window=10).mean()
+    df['OpenClose30DayMA'] = df['OpenCloseSpread'].rolling(window=30).mean()
+    df['OpenPriceMomentum'] = df['OpenClose10DayMA'] - df['OpenClose30DayMA']
+    df['AdjustedOpenPriceMomentum'] = df['OpenPriceMomentum'] * (df['volume'] / df['Volume10DayAvg'])
+    
+    # Combine Open-Price Momentum with Adjusted High-Low Momentum
+    df['CombinedMomentum'] = df['AccumulatedMomentum'] + df['AdjustedOpenPriceMomentum']
+    
+    return df['CombinedMomentum']
+```

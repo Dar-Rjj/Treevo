@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range Indicator
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Daily VWAP
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_diff'] = df['close'] - df['vwap']
+    
+    # Combine Indicators for Intraday Analysis
+    df['intraday_analysis'] = df['intraday_range'] + df['vwap_diff']
+    
+    # Calculate Volume-Adjusted Log Return
+    df['high_low_spread'] = df['high'] - df['low']
+    df['adjusted_volume'] = df['volume'] / df['high_low_spread']
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['volume_adjusted_log_return'] = df['log_return'] * df['adjusted_volume']
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Averaged Daily Return over N days (e.g., 5, 10, 20)
+    N = 5
+    df['volume_averaged_daily_return'] = (df['daily_price_change'] * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Incorporate Volume Change
+    df['volume_factor'] = df['volume'] / df['volume'].rolling(window=7).mean()
+    
+    # Adjust for Volatility
+    df['short_term_volatility'] = df['close'].rolling(window=7).std()
+    df['volatility_adjusted_momentum'] = df['raw_momentum'] / df['short_term_volatility'] * df['volume_factor']
+    
+    # Combine Factors
+    df['intermediate_alpha_factor'] = df['volume_adjusted_log_return'] * df['volatility_adjusted_momentum']
+    
+    # Confirm with Volume Trends
+    M = 30
+    df['average_volume_M_days'] = df['volume'].rolling(window=M).mean()
+    df['volume_trend_score'] = np.where(df['volume'] > df['average_volume_M_days'], 1, -1)
+    
+    # Calculate Long-Term (LMA) and Short-Term (SMA) Moving Averages
+    LMA = 200
+    SMA = 50
+    df['lma'] = df['close'].rolling(window=LMA).mean()
+    df['sma'] = df['close'].rolling(window=SMA).mean()
+    df['lma_sma_diff'] = df['lma'] - df['sma']
+    
+    # Apply Volume Weighted Filter
+    df['volume_weighted_lma_sma_diff'] = df['lma_sma_diff'] * df['volume']
+    df['ewma_volume_weighted_lma_sma_diff'] = df['volume_weighted_lma_sma_diff'].ewm(span=10).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['intermediate_alpha_factor'] * df['volume_averaged_daily_return'] * df['ewma_volume_weighted_lma_sma_diff']
+    
+    return df['final_alpha_factor']
+```

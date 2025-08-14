@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Advanced High-to-Low Price Ratio
+    df['high_low_ratio'] = (df['high'] - df['low']) / df['low']
+    
+    # Evaluate Volume Trend and Momentum
+    df['volume_ma'] = df['volume'].rolling(window=10).mean()
+    df['volume_trend'] = np.where(df['volume'] > df['volume_ma'], 1, -1)
+    df['volume_change'] = df['volume'] - df['volume_ma']
+
+    # Quantify High-Low Range and Volatility
+    df['high_low_range'] = (df['high'] - df['low']) * np.sqrt(df['volume'])
+    df['atr'] = (df['high'] - df['low']).abs().rolling(window=10).mean()  # Simplified ATR
+    df['price_volatility'] = df['close'].rolling(window=10).std()
+
+    # Integrated and Weighted Alpha Factor
+    df['adjusted_high_low_ratio'] = df['high_low_ratio'] * df['volume_trend']
+    df['adjusted_volume_momentum'] = df['volume_change'] * df['high_low_ratio']
+    df['inverted_volume_momentum'] = -1 * df['volume_change']
+    
+    df['composite_alpha'] = (df['inverted_volume_momentum'] + 
+                             df['price_volatility'] + 
+                             df['adjusted_volume_momentum'])
+    
+    df['weighted_adjusted_volume_momentum'] = 0.4 * df['adjusted_volume_momentum']
+    df['weighted_inverted_volume_momentum'] = 0.3 * df['inverted_volume_momentum']
+    df['final_alpha'] = (df['weighted_adjusted_volume_momentum'] + 
+                         df['weighted_inverted_volume_momentum'] + 
+                         0.3 * df['price_volatility'])
+    
+    # Combine Adjusted Range, Momentum, and Volume Signals
+    df['close_ema'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['volume_ema'] = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    df['momentum_signal'] = df['close'] - df['close_ema']
+    df['volume_signal'] = df['volume'] - df['volume_ema']
+    
+    df['adjusted_high_low_range'] = df['high_low_range'] - df['momentum_signal']
+    df['final_signal'] = df['adjusted_high_low_range'] * df['volume_signal']
+    
+    return df['final_alpha']
+```

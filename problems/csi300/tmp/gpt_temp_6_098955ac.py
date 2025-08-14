@@ -1,0 +1,26 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Frequency Intraday Returns
+    df['high_low_diff'] = df['high'] - df['low']
+    df['high_low_norm'] = df['high_low_diff'] / df['open']
+
+    # Incorporate Volume-Weighted Momentum
+    df['close_open_return'] = (df['close'] - df['open']) / df['open']
+    df['volume_weighted_momentum'] = df['close_open_return'] * df['volume']
+
+    # Integrate Cross-Asset Correlation
+    # Assuming we have another asset's high-frequency intraday returns in a column named 'other_high_low_norm'
+    if 'other_high_low_norm' not in df.columns:
+        raise ValueError("The DataFrame must contain 'other_high_low_norm' for cross-asset correlation.")
+    
+    df['pairwise_correlation'] = df['high_low_norm'].rolling(window=30).corr(df['other_high_low_norm'])
+    df['correlation_adjustment'] = np.where(df['pairwise_correlation'] > 0, df['pairwise_correlation'] * 1.5, df['pairwise_correlation'] * 0.5)
+
+    # Combine Factors into Final Alpha
+    df['alpha'] = df['high_low_norm'] + df['volume_weighted_momentum'] + df['correlation_adjustment']
+
+    return df['alpha']

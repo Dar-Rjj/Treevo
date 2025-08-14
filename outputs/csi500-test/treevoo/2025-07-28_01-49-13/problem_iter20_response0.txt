@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+
+    # Calculate Volume Weighted Momentum
+    df['close_to_next_open_return'] = (df['open'].shift(-1) / df['close']) - 1
+    df['volume_weighted_momentum'] = df['close_to_next_open_return'] * df['volume']
+
+    # Calculate Adjusted Close-to-Open Envelope
+    df['max_adjusted_close'] = df['close'].rolling(window=20).max()
+    df['min_open'] = df['open'].rolling(window=20).min()
+
+    # Calculate Intraday Range to Open Ratio
+    df['intraday_range_to_open_ratio'] = df['intraday_range'] / df['open']
+
+    # Calculate Volume Momentum
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['close_to_close_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['volume_momentum'] = df['close_to_close_return'] * df['daily_volume_change']
+
+    # Combine Intraday Factors
+    df['intraday_factors_combined'] = (df['midpoint_to_open_ratio'] * df['volume_weighted_momentum']) / (df['max_adjusted_close'] - df['min_open'])
+
+    # Adjust by Intraday Range to Open Ratio and Volume Momentum
+    df['high_low_envelope'] = (df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min())
+    df['intraday_range_vol_mom_adj'] = (df['intraday_range_to_open_ratio'] * df['volume_momentum']) / df['high_low_envelope']
+
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] / df['close'].shift(1)) - 1
+
+    # Combine High-Low Range and Close-Open Return
+    df['combined_high_low_range_close_open_return'] = df['intraday_range'] * df['close_to_open_return']
+
+    # Calculate Volume Weighted Adjusted Return
+    df['volume_weighted_adj_return'] = df['volume'] * df['combined_high_low_range_close_open_return']
+
+    # Calculate Price Change Momentum
+    df['price_change_momentum'] = (df['high'] + df['low']) / 2 - (df['high'].shift(1) + df['low'].shift(1)) / 2
+    df['price_change_momentum'] *= df['intraday_range']
+
+    # Detect Volume Spike
+    volume_spike_threshold = 3
+    df['volume_spike'] = (df['daily_volume_change'] > volume_spike_threshold).astype(int)
+
+    # Integrate MACD into Final Factor
+    short_term_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = short_term_ema - long_term_ema
+
+    # Incorporate Volatility into Final Factor
+    df['volatility'] = (df['high'] - df['low']).rolling(window=20).std()
+
+    # Final Factor Calculation
+    df['final_factor'] = (df['volume_weighted_adj_return'] * df['price_change_momentum']) * df['volume_spike'] * df['macd'] / df['volatility']
+
+    return df['final_factor']
+```

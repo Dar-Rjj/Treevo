@@ -1,0 +1,31 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily volume change
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Determine surge threshold
+    vol_change_ma = df['volume_change'].rolling(window=20).mean()
+    vol_change_std = df['volume_change'].rolling(window=20).std()
+    surge_threshold = vol_change_ma + 2 * vol_change_std
+
+    # Identify volume surge days
+    df['is_surge_day'] = (df['volume_change'] > surge_threshold).astype(int)
+
+    # Calculate close-to-close return
+    df['close_to_close_return'] = df['close'].pct_change()
+
+    # Aggregate returns on surge days
+    df['surge_day_return'] = df['close_to_close_return'] * df['is_surge_day']
+
+    # Calculate cumulative factor with exponential decay weighting
+    df['days_since_surge'] = df['is_surge_day'][::-1].cumsum()[::-1]
+    df['weighted_return'] = df['surge_day_return'] * np.exp(-0.05 * df['days_since_surge'])
+
+    # Sum aggregated returns
+    factor_values = df['weighted_return'].cumsum()
+
+    return factor_values
+```

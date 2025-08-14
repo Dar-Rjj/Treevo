@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Daily Return
+    df['daily_return'] = df['close'].diff()
+    
+    # Average Daily Return (5-day lookback)
+    df['avg_daily_return'] = df['daily_return'].rolling(window=5).mean()
+    
+    # Rolling Average Volume Difference (5-day lookback)
+    df['volume_diff'] = df['volume'].diff()
+    df['avg_volume_diff'] = df['volume_diff'].rolling(window=5).mean()
+    
+    # Volume and Amplitude Confirmation
+    df['volume_confirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['amplitude'] = df['high'] - df['low']
+    df['amplitude_confirmation'] = (df['amplitude'] > df['amplitude'].shift(1)).astype(int)
+    df['combined_confirmation'] = (df['volume_confirmation'] + df['amplitude_confirmation']) * 0.5
+    
+    # Price Momentum by Volume and Amplitude Trend
+    df['price_momentum'] = df['avg_daily_return'] * df['avg_volume_diff'] * df['combined_confirmation']
+    
+    # Intraday Momentum Score
+    df['intraday_high_low_range'] = df['high'] - df['low']
+    df['close_to_open_diff'] = df['close'] - df['open']
+    df['sum_of_deltas'] = df['intraday_high_low_range'] + df['close_to_open_diff']
+    df['intraday_momentum_score'] = df['volume'] * df['sum_of_deltas']
+    
+    # Volume Weighted Price Change
+    df['volume_weighted_price'] = (df['close'] * df['volume'] + df['open'] * df['volume']) / df['volume']
+    df['volume_weighted_price_change'] = df['volume_weighted_price'].diff()
+    
+    # Combined Intraday and Daily Momentum
+    df['combined_intraday_daily_momentum'] = df['intraday_momentum_score'] + df['volume_weighted_price_change']
+    
+    # Intraday Volatility Score
+    df['high_close_delta'] = df['high'] - df['close']
+    df['low_close_delta'] = df['low'] - df['close']
+    df['average_deltas'] = (df['high_close_delta'] + df['low_close_delta']) / 2
+    df['intraday_volatility_score'] = df['average_deltas'] * df['amount'].rolling(window=30).std()
+    
+    # Composite Momentum and Volatility
+    df['ema_30_combined_momentum'] = df['combined_intraday_daily_momentum'].ewm(span=30).mean()
+    df['composite_momentum_volatility'] = df['combined_intraday_daily_momentum'] - df['ema_30_combined_momentum'] - df['intraday_volatility_score']
+    
+    # Combine Factors
+    df['factor'] = (df['price_momentum'] * 
+                    df['intraday_momentum_score'] * 
+                    df['combined_intraday_daily_momentum'] * 
+                    df['intraday_volatility_score'] * 
+                    df['volume_weighted_price_change'])
+    
+    return df['factor']
+```

@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=15).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=15).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    sentiment_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Non-linear transformation of the sentiment factor
+    sentiment_factor_nonlinear = np.sign(sentiment_factor) * np.log1p(np.abs(sentiment_factor))
+
+    # Calculate the volatility using the close price
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    volatility = df['log_returns'].rolling(window=40).std() * np.sqrt(252)
+
+    # Calculate the VWAP
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=40).mean()
+
+    # Exponential smoothing on the VWAP
+    df['vwap_smoothed'] = df['vwap'].ewm(span=40, adjust=False).mean()
+
+    # Non-linear transformation of the VWAP ratio
+    vwap_ratio_nonlinear = np.sign(df['vwap'] / df['vwap_smoothed']) * np.log1p(np.abs(df['vwap'] / df['vwap_smoothed']))
+
+    # Momentum factor
+    momentum = df['close'].pct_change(periods=40)
+
+    # Mean reversion factor
+    mean_reversion = -df['close'].pct_change(periods=20)
+
+    # Long-term trend strength factor: difference between 60-day and 30-day exponential moving averages
+    df['ema_60'] = df['close'].ewm(span=60, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    long_trend_strength = df['ema_30'] - df['ema_60']
+
+    # Adaptive weighting based on recent market conditions
+    recent_volatility = df['log_returns'].rolling(window=15).std() * np.sqrt(252)
+    adaptive_weight = 1 / (1 + np.exp(-recent_volatility))
+
+    # Additional factor: relative strength index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Combine factors with adaptive weights
+    alpha_factor = (
+        0.4 * adaptive_weight * sentiment_factor_nonlinear +
+        0.2 * (1 - adaptive_weight) * (1 / volatility) +
+        0.2 * vwap_ratio_nonlinear +
+        0.1 * momentum +
+        0.1 * mean_reversion +
+        0.05 * long_trend_strength +
+        0.05 * (rsi - 50) / 50  # Normalize RSI to be between -1 and 1
+    )
+
+    return alpha_factor
+```

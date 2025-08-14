@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_lookback=10, medium_lookback=30, long_lookback=100):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    sma_close = df['close'].rolling(window=medium_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    high_low_diff = df['high'] - df['low']
+    volume_weighted_high_low = high_low_diff * df['volume']
+    vol_adj_volatility = volume_weighted_high_low.rolling(window=short_lookback).mean()
+    
+    # Compute Price Momentum
+    price_momentum = (df['close'] - sma_close) / df['close'].rolling(window=medium_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    pct_change_close = df['close'].pct_change(periods=short_lookback)
+    high_low_range = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    long_sma = df['close'].rolling(window=long_lookback).mean()
+    trend_indicator = (sma_close > long_sma).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Refined Liquidity Measures
+    daily_turnover = df['volume'] * df['close']
+    rolling_avg_turnover = daily_turnover.rolling(window=medium_lookback).mean()
+    liquidity_ratio = daily_turnover / rolling_avg_turnover
+    
+    # Add Recent Price Action Patterns
+    short_price_direction = df['close'].diff(short_lookback)
+    long_price_direction = df['close'].diff(long_lookback)
+    trend_consistency = (short_price_direction * long_price_direction > 0).astype(int)  # 1 for Consistent, 0 for Inconsistent
+    
+    # Define Weights and Combine Components
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adj_volatility': -0.3,
+        'pct_change_close': 0.1,
+        'liquidity_ratio': 0.1,
+        'trend_indicator': 0.1
+    }
+    
+    alpha_factor = (
+        weights['price_momentum'] * price_momentum +
+        weights['vol_adj_volatility'] * vol_adj_volatility +
+        weights['pct_change_close'] * pct_change_close +
+        weights['liquidity_ratio'] * liquidity_ratio +
+        weights['trend_indicator'] * trend_indicator
+    )
+    
+    # Adjust Weights Dynamically Based on Trend
+    alpha_factor += trend_indicator * 0.05  # Increase weight for Bullish Trends
+    alpha_factor -= (1 - trend_indicator) * 0.05  # Decrease weight for Bearish Trends
+    alpha_factor += trend_consistency * 0.05  # Increase weight for Consistent Trends
+    alpha_factor -= (1 - trend_consistency) * 0.05  # Decrease weight for Inconsistent Trends
+    
+    return alpha_factor
+```

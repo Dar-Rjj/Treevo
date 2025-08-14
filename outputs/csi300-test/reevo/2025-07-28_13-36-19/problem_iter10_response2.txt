@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices with adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement using multi-period analysis
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Calculate the dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Calculate recent volatility
+    vol = df['close'].rolling(window=20).std()
+
+    # Dynamically adjust weights based on recent volatility
+    weight_ema = 1 / (1 + vol)
+    weight_rsi = vol / (1 + vol)
+    weight_vol_trend = 1 - (vol / vol.max())
+    weight_dynamic = 1 - abs(dynamic_indicator) / dynamic_indicator.abs().max()
+    weight_seasonal = 1 / (1 + abs(seasonal_adj_price_movement))
+
+    # Incorporate adaptive windows for smoothing
+    adaptive_weight_ema = weight_ema.ewm(span=10, adjust=False).mean()
+    adaptive_weight_rsi = weight_rsi.ewm(span=10, adjust=False).mean()
+    adaptive_weight_vol_trend = weight_vol_trend.ewm(span=10, adjust=False).mean()
+    adaptive_weight_dynamic = weight_dynamic.ewm(span=10, adjust=False).mean()
+    adaptive_weight_seasonal = weight_seasonal.ewm(span=10, adjust=False).mean()
+
+    # Combine the factors with dynamically adjusted and smoothed weights
+    factor = (adaptive_weight_ema * ema_price_movement * df['amount'] + 
+              adaptive_weight_rsi * rsi * df['volume'] + 
+              adaptive_weight_vol_trend * volume_trend * avg_price + 
+              adaptive_weight_dynamic * dynamic_indicator * (df['amount'] + df['volume']) + 
+              adaptive_weight_seasonal * seasonal_adj_price_movement * (df['amount'] + df['volume'])) / (3 * (df['amount'] + df['volume']))
+
+    return factor
+```

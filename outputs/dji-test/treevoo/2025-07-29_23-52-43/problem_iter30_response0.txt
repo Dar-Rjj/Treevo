@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    close_to_prev_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    breakout_intensity = (df['high'] - df['low']) / df['close']
+    breakout_intensity = np.maximum(breakout_intensity, 0)
+    
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    combined_metrics = intraday_return + close_to_prev_close_return + breakout_intensity
+    combined_metrics_weighted = combined_metrics * df['volume']
+    
+    # Adjust for Volatility
+    high_low_range = df['high'] - df['low']
+    rolling_volatility = high_low_range.rolling(window=21).std()
+    combined_metrics_adjusted = combined_metrics_weighted / rolling_volatility
+    
+    # Calculate Daily High-Low Difference
+    daily_high_low_diff = df['high'] - df['low']
+    
+    # Calculate Moving Sum of High-Low Differences
+    moving_sum_high_low_diff = daily_high_low_diff.rolling(window=21).sum()
+    
+    # Compute Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    prev_day_intraday_momentum = (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    prev_day_vwap = vwap.shift(1)
+    
+    # Combine Intraday Momentum and VWAP
+    momentum_difference = intraday_momentum - prev_day_intraday_momentum
+    vwap_difference = vwap - prev_day_vwap
+    final_combined_indicator = momentum_difference * vwap_difference
+    
+    # Adjust for Momentum
+    rolling_momentum = (df['close'] - df['close'].shift(1)).rolling(window=21).sum()
+    combined_metrics_momentum_adjusted = combined_metrics_adjusted / rolling_momentum
+    
+    # Identify Volume Spikes
+    daily_volume_change = df['volume'] / df['volume'].shift(1)
+    spike_threshold = daily_volume_change.rolling(window=21).quantile(0.85) * 1.5
+    is_spike = daily_volume_change > spike_threshold
+    
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = intraday_return * df['volume']
+    
+    # Filter with Spike Condition
+    volume_weighted_intraday_return_filtered = volume_weighted_intraday_return * is_spike
+    
+    # Intermediate Factor
+    intermediate_factor = (df['volume'] / df['volume'].shift(1)) * (df['close'] - df['close'].shift(7).rolling(window=7).mean())
+    
+    # Generate Crossover Alpha Factor
+    alpha_factor = (combined_metrics_adjusted + final_combined_indicator + intermediate_factor) / 3
+    
+    # Introduce Exponential Moving Average (EMA) for Smoothing
+    ema_intraday_return = intraday_return.ewm(span=7, adjust=False).mean()
+    ema_close_to_prev_close_return = close_to_prev_close_return.ewm(span=7, adjust=False).mean()
+    ema_breakout_intensity = breakout_intensity.ewm(span=7, adjust=False).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = (ema_intraday_return + ema_close_to_prev_close_return + ema_breakout_intensity) / 3
+    
+    return final_alpha_factor
+```

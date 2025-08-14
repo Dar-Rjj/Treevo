@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility using High, Low, and Close prices
+    df['high_low_close_volatility'] = df[['high', 'low', 'close']].std(axis=1)
+    
+    # Fixed window for initial volatility calculation
+    fixed_window = 30
+    df['rolling_volatility'] = df['high_low_close_volatility'].rolling(window=fixed_window).std()
+    
+    # Adaptive Window Calculation
+    def adaptive_window(volatility, high_threshold, low_threshold):
+        if volatility > high_threshold:
+            return 5  # Smaller window
+        elif volatility < low_threshold:
+            return 60  # Larger window
+        else:
+            return 30  # Default window
+    
+    # Apply adaptive window function
+    df['window_size'] = df['rolling_volatility'].apply(lambda x: adaptive_window(x, high_threshold=0.1, low_threshold=0.05))
+    
+    # Rolling Statistics with Adaptive Window
+    def rolling_stats_with_adaptive_window(series, window_series):
+        result = series.rolling(window=window_series, min_periods=1).mean()
+        result_std = series.rolling(window=window_series, min_periods=1).std()
+        return result, result_std
+    
+    df['rolling_mean'], df['rolling_std'] = rolling_stats_with_adaptive_window(df['volume_weighted_return'], df['window_size'])
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['volume_weighted_return'] - df['rolling_mean']) / df['rolling_std']
+    
+    return df['alpha_factor']
+
+# Example usage
+# df = pd.DataFrame({'open': [...], 'high': [...], 'low': [...], 'close': [...], 'amount': [...], 'volume': [...]})
+# alpha_factor = heuristics_v2(df)
+```

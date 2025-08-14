@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Intraday Return for Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Compute 20-day Moving Average of Close Prices
+    ma_20 = df['close'].rolling(window=20).mean()
+    
+    # Compute 20-day Price Momentum
+    momentum_20 = (df['close'] - ma_20) / ma_20
+    
+    # Enhance Momentum with High-Low Range
+    high_low_range = df['high'] - df['low']
+    high_low_range_30_avg = high_low_range.rolling(window=30).mean()
+    high_low_range_adjustment = (high_low_range > 1.5 * high_low_range_30_avg).astype(int)
+    enhanced_momentum = momentum_20 * high_low_range_adjustment
+    
+    # Determine Volume Shocks
+    volume_30_median = df['volume'].rolling(window=30).median()
+    volume_shock = (df['volume'] > 3 * volume_30_median).astype(int)
+    
+    # Evaluate Amount Shocks
+    amount_30_median = df['amount'].rolling(window=30).median()
+    amount_shock = (df['amount'] > 2.5 * amount_30_median).astype(int)
+    
+    # Assess Price Volatility
+    true_range = df[['high', 'low', df['close'].shift(1)]].max(axis=1) - df[['high', 'low', df['close'].shift(1)]].min(axis=1)
+    atr_14 = true_range.rolling(window=14).mean()
+    
+    # Aggregate All Signals
+    aggregated_signals = enhanced_momentum * volume_shock * amount_shock / atr_14
+    
+    # Refinement through Contextual Analysis
+    recent_trend_direction = (df['close'] > df['open'].shift(1)).astype(int) * 2 - 1
+    final_factor = aggregated_signals * recent_trend_direction
+    
+    return final_factor
+```

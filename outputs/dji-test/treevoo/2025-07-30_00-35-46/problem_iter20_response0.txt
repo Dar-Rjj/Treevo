@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = df['close'] / df['open'] - 1
+    df['daily_volatility'] = (df['high'] - df['low']) / df['close']
+    df['intraday_momentum'] = (df['high_low_diff'] * df['daily_volatility'] + df['open_close_return']) / (df['daily_volatility'] + 1)
+    
+    # Apply Volume and Price Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['price_shock'] = abs(df['close'] - df['close'].shift(1))
+    df['price_shock_ratio'] = df['price_shock'] / df['close'].rolling(window=5).max() - df['close'].rolling(window=5).min()
+    df['intraday_momentum_filtered'] = df['intraday_momentum'] * (df['volume_ratio'] > 1.5) * (df['amount_ratio'] > 1.5) * (df['price_shock_ratio'] > 0.05)
+    df['intraday_momentum_adjusted'] = df['intraday_momentum_filtered'] / df['volume']
+    
+    # Measure Volume Synchronization
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['synchronization'] = np.sign(df['volume_change'] * df['price_change']) * (df['volume_ratio'] > 1.5)
+    
+    # Calculate EMAs and Determine Momentum
+    df['ema_short'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_long'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum'] = (df['ema_short'] > df['ema_long']).astype(int)
+    
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Measure Close Position in Range
+    df['close_position_in_range'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    df['close_position_in_range'] = df['close_position_in_range'].fillna(0)
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['open'] * df['volume'] + df['high'] * df['volume'] + df['low'] * df['volume'] + df['close'] * df['volume']) / (4 * df['volume'])
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['intraday_range'].rolling(window=5).std()
+    
+    # Combine Momentum and OBV into a Factor
+    df['obv_momentum_weight'] = abs(df['ema_short'] - df['ema_long'])
+    df['obv_momentum_factor'] = df['obv'] * df['obv_momentum_weight']
+    
+    # Synthesize Final Alpha Factor
+    factors = [
+        'intraday_momentum_adjusted',
+        'synchronization',
+        'obv_momentum_factor',
+        'intraday_range',
+        'close_position_in_range',
+        'vwap',
+        'intraday_volatility'
+    ]
+    
+    std_devs = [df[factor].rolling(window=5).std() for factor in factors]
+    weights = [1 / std for std in std_devs]
+    sum_weights = sum(weights)
+    weights = [w / sum_weights for w in weights]
+    
+    df['alpha_factor'] = sum(w * df[f] for w, f in zip(weights, factors))
+    
+    return df['alpha_factor']
+```

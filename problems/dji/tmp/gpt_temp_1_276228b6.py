@@ -1,0 +1,52 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Impact Score
+    sum_volume_10d = df['volume'].rolling(window=10).sum()
+    avg_high_10d = df['high'].rolling(window=10).mean()
+    avg_low_10d = df['low'].rolling(window=10).mean()
+    volume_impact_score = (avg_high_10d - avg_low_10d) / sum_volume_10d
+    
+    # Generate Factor 1
+    factor_1 = intraday_return * volume_impact_score
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Adjust by Volume
+    cumulative_volume_10d = df['volume'].rolling(window=10).sum()
+    adjusted_momentum = price_momentum / cumulative_volume_10d
+    
+    # Confirm with Volume Trend
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    current_volume = df['volume']
+    volume_ratio = current_volume / avg_volume_5d
+    
+    def generate_factor_2(row):
+        if row['volume_ratio'] > 1:
+            return (row['price_momentum'] * row['intraday_return']).rolling(window=10).sum() * row['cumulative_volume_10d']
+        else:
+            return 0
+    
+    # Combine the data into a DataFrame for easier manipulation
+    combined_df = pd.DataFrame({
+        'intraday_return': intraday_return,
+        'volume_impact_score': volume_impact_score,
+        'factor_1': factor_1,
+        'price_momentum': price_momentum,
+        'adjusted_momentum': adjusted_momentum,
+        'cumulative_volume_10d': cumulative_volume_10d,
+        'volume_ratio': volume_ratio
+    })
+    
+    # Apply the function to generate Factor 2
+    combined_df['factor_2'] = combined_df.apply(generate_factor_2, axis=1)
+    
+    # Final Factor
+    final_factor = combined_df['factor_1'] * combined_df['factor_2']
+    
+    return final_factor

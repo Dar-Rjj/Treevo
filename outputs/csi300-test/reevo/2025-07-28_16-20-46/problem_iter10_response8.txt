@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day weighted moving average of closing prices to capture momentum
+    df['WMA_5'] = df['close'].rolling(window=5).apply(lambda x: (x * np.arange(1, 6)).sum() / 15)
+    df['WMA_20'] = df['close'].rolling(window=20).apply(lambda x: (x * np.arange(1, 21)).sum() / 210)
+
+    # Momentum factor: difference between 5-day and 20-day weighted moving averages
+    df['momentum_factor'] = df['WMA_5'] - df['WMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day WMA
+    df['relative_strength'] = df['close'] / df['WMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Adaptive weights for the factors
+    df['momentum_weight'] = df['volatility_factor'].rank(pct=True)
+    df['liquidity_weight'] = df['liquidity_factor'].rank(pct=True)
+    df['relative_strength_weight'] = df['relative_strength'].rank(pct=True)
+    df['market_breadth_weight'] = df['market_breadth'].rank(pct=True)
+
+    # Calculate a dynamic weight adjustment factor based on the overall market trend
+    df['trend_factor'] = df['WMA_20'].pct_change(periods=20)
+    df['trend_weight'] = df['trend_factor'].rank(pct=True)
+
+    # Incorporate a dynamic volume factor to adjust for trading activity
+    df['volume_change'] = df['volume'].pct_change(periods=5)
+    df['volume_weight'] = df['volume_change'].rank(pct=True)
+
+    # Calculate sector-specific trends (assuming 'sector' is a column in the DataFrame)
+    df['sector_trend'] = df.groupby('sector')['close'].transform(lambda x: x.pct_change(periods=20))
+    df['sector_weight'] = df['sector_trend'].rank(pct=True)
+
+    # Combine the factors with adaptive weights, trend weight, volume weight, and sector weight
+    heuristic_factor = (
+        (df['momentum_factor'] * df['momentum_weight']) +
+        (df['liquidity_factor'] * df['liquidity_weight']) +
+        (df['relative_strength'] * df['relative_strength_weight']) +
+        (df['market_breadth'] * df['market_breadth_weight'])
+    ) * (df['trend_weight'] + df['volume_weight'] + df['sector_weight'])
+
+    return heuristic_factor
+```

@@ -1,0 +1,62 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Adaptive RSI window based on market volatility
+    volatility = df['close'].pct_change().rolling(window=14).std()
+    adaptive_rsi_window = 14
+    if volatility.iloc[-1] > df['close'].pct_change().std():
+        adaptive_rsi_window = 10
+    else:
+        adaptive_rsi_window = 20
+    gain_adaptive = (delta.where(delta > 0, 0)).rolling(window=adaptive_rsi_window).mean()
+    loss_adaptive = (-delta.where(delta < 0, 0)).rolling(window=adaptive_rsi_window).mean()
+    rs_adaptive = gain_adaptive / loss_adaptive
+    rsi_adaptive = 100 - (100 / (1 + rs_adaptive))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Calculate the dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Dynamic weighting based on volatility
+    weight_volatility = 1 / (1 + np.exp(-volatility))
+    weight_stability = 1 - weight_volatility
+
+    # Integrate macroeconomic data
+    macro_factor = (df['amount'] * weight_volatility + df['volume'] * weight_stability)
+
+    # Simplify the normalization by dividing by the sum of amounts and volumes
+    total_activity = df['amount'] + df['volume']
+
+    # Calculate the weighted average of the price movement, RSI, volume trend, and dynamic indicator with seasonality
+    factor = (
+        ema_price_movement * df['amount'] * weight_volatility +
+        rsi_adaptive * df['volume'] * weight_stability +
+        volume_trend * avg_price * weight_volatility +
+        dynamic_indicator * total_activity * weight_volatility +
+        seasonal_adj_price_movement * total_activity * weight_stability +
+        macro_factor
+    ) / total_activity
+
+    return factor
+```

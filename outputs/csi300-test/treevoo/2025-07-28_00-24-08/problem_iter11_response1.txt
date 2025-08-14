@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = (df['close'].shift(1) - df['close'].shift(2)) / df['close'].shift(2)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+
+    # Intraday Trend Strength
+    df['daily_range'] = df['high'] - df['low']
+    df['intraday_pct_change'] = (df['close'] - df['open']) / df['open']
+
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_weighted_volatility'] = df['high_low_range'] * (df['volume'] / df['avg_volume'])
+
+    # Volume Adjusted Reversal Signal
+    df['volume_momentum'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['close_to_next_open_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['price_reversal_score'] = -df['close_to_next_open_return']
+
+    # Adjust for Combined Volatility
+    df['adjusted_volatility'] = df['aggregate_returns'] * df['volume_weighted_volatility']
+
+    # Composite Factor
+    df['composite_factor'] = (
+        df['aggregate_returns'] 
+        + df['intraday_pct_change'] 
+        + df['volume_weighted_volatility'] 
+        + df['price_reversal_score'] 
+        + df['adjusted_volatility']
+    )
+    
+    # Smoothed Moving Average of Composite Factor
+    df['sma_composite'] = df['composite_factor'].rolling(window=5).mean()
+    df['ema_composite'] = df['sma_composite'].ewm(span=5, adjust=False).mean()
+
+    return df['ema_composite']
+```

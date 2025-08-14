@@ -1,0 +1,37 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for EMA based on recent volatility
+    vol = df['close'].rolling(window=14).std()
+    adaptive_window = (vol / vol.mean() * 7).astype(int).clip(lower=3, upper=10)
+    ema_close = df['close'].ewm(span=adaptive_window, adjust=False).mean()
+
+    # Volume-Weighted Average Price (VWAP) with an adaptive window
+    vwap = (df['amount'] / df['volume']).rolling(window=adaptive_window).mean()
+
+    # Relative Strength Index (RSI) with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=adaptive_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=adaptive_window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+
+    # Dynamic volatility
+    dynamic_volatility = df['close'].pct_change().rolling(window=21).std()
+
+    # Sentiment factor using the ratio of close to VWAP
+    sentiment = df['close'] / vwap
+
+    # Cross-asset correlation (assuming `df` has multiple stocks, and `close` is the column for the stock of interest)
+    cross_correlation = df['close'].rolling(window=21).corr(df['close'].shift(1))
+
+    # Nuanced trend strength: combining RSI and cross-correlation
+    trend_strength = rsi * cross_correlation
+
+    # Final alpha factor: combining all components
+    factor = (df['close'] - ema_close) * trend_strength * log_returns * dynamic_volatility * sentiment
+
+    return factor

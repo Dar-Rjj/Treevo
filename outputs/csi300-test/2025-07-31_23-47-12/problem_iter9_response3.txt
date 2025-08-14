@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=20, m_days=20, momentum_threshold=3, volume_weight=0.5, volatility_weight=0.3):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff().fillna(0)
+    
+    # Compute Momentum
+    cumulative_log_returns = log_returns.rolling(window=n_days).sum()
+    upper_threshold = cumulative_log_returns.quantile(1 - 1/momentum_threshold)
+    lower_threshold = cumulative_log_returns.quantile(1/momentum_threshold)
+    clipped_momentum = cumulative_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=n_days).mean()
+    volume_adjusted_momentum = (volumes / mean_volume) * clipped_momentum
+    
+    # Determine Absolute Price Changes
+    absolute_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev_volatility = absolute_price_changes.rolling(window=m_days).std()
+    ema_volatility = absolute_price_changes.ewm(span=m_days, adjust=False).mean()
+    iqr_volatility = absolute_price_changes.rolling(window=m_days).quantile(0.75) - absolute_price_changes.rolling(window=m_days).quantile(0.25)
+    
+    # Combine Weighted Components
+    combined_factor = (
+        volume_weight * volume_adjusted_momentum +
+        volatility_weight * (std_dev_volatility + ema_volatility + iqr_volatility) / 3
+    )
+    
+    # Ensure Weights Sum to 1
+    total_weight = volume_weight + volatility_weight
+    combined_factor /= total_weight
+    
+    # Integrate Market Breadth and Economic Indicators
+    # For simplicity, we are not including market breadth and economic indicators in this example.
+    
+    return combined_factor
+```

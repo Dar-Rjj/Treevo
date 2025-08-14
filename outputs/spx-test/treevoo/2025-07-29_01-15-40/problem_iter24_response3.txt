@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=5, hl_coeff=0.2, pm_coeff=0.3, vt_coeff=0.1, rm_coeff=0.2, oc_coeff=0.1, ol_coeff=0.1, rsi_coeff=0.1):
+    # Intraday High-Low Spread
+    df['intraday_hl_spread'] = df['high'] - df['low']
+    
+    # Average Intraday High-Low Spread over past N days
+    df['avg_intraday_hl_spread'] = df['intraday_hl_spread'].rolling(window=n).mean()
+    
+    # High-Low Momentum Score
+    df['hl_momentum_score'] = (df['intraday_hl_spread'] > df['avg_intraday_hl_spread']).astype(int) * 2 - 1
+    df['hl_momentum_score'] *= df['volume']
+    
+    # Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(n)
+    df['price_momentum'] = df['price_change'].rolling(window=n).sum()
+    
+    # Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(n)
+    df['volume_trend'] = df['volume_change'].rolling(window=n).sum()
+    
+    # Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Average Daily Range over past M days
+    df['avg_daily_range'] = df['daily_range'].rolling(window=m).mean()
+    
+    # Range Momentum
+    df['range_momentum'] = (df['daily_range'] > df['avg_daily_range']).astype(int) * 2 - 1
+    
+    # Open to Close Price Difference
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_close_movement'] = df['open_close_diff'].rolling(window=n).sum()
+    
+    # Open to Low Price Difference
+    df['open_low_diff'] = df['low'] - df['open']
+    df['open_low_movement'] = df['open_low_diff'].rolling(window=n).sum()
+    
+    # Relative Strength Index (RSI)
+    df['gain'] = df['close'].diff().clip(lower=0)
+    df['loss'] = -df['close'].diff().clip(upper=0)
+    df['avg_gain'] = df['gain'].rolling(window=n).mean()
+    df['avg_loss'] = df['loss'].rolling(window=n).mean()
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Combine Factors
+    df['factor'] = (hl_coeff * df['hl_momentum_score'] 
+                    + pm_coeff * df['price_momentum'] 
+                    + vt_coeff * df['volume_trend'] 
+                    + rm_coeff * df['range_momentum'] 
+                    + oc_coeff * df['open_close_movement'] 
+                    + ol_coeff * df['open_low_movement'] 
+                    + rsi_coeff * df['rsi'])
+    
+    return df['factor']
+```

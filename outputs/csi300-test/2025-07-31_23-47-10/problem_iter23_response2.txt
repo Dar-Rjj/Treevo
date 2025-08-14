@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import rankdata
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    vol_10_ma = df['volume'].rolling(window=10).mean()
+    volume_trend = df['volume'] - vol_10_ma
+    volume_trend_signal = np.where(volume_trend > 0, 1.5, 0.5)
+    
+    # Calculate Short-Term Price Trend
+    short_term_ema = df['close'].ewm(span=10, adjust=False).mean()
+    short_term_trend = df['close'] - short_term_ema
+    short_term_trend_signal = np.where(short_term_trend > 0, 1.2, 0.8)
+    
+    # Calculate Medium-Term Price Trend
+    medium_term_ema = df['close'].ewm(span=30, adjust=False).mean()
+    medium_term_trend = df['close'] - medium_term_ema
+    medium_term_trend_signal = np.where(medium_term_trend > 0, 1.1, 0.9)
+    
+    # Calculate Long-Term Price Trend
+    long_term_ema = df['close'].ewm(span=50, adjust=False).mean()
+    long_term_trend = df['close'] - long_term_ema
+    long_term_trend_signal = np.where(long_term_trend > 0, 1.3, 0.7)
+    
+    # Calculate Dynamic Volatility
+    volatility = df['close'].rolling(window=10).std()
+    volatility_score = np.zeros_like(volatility)
+    volatility_percentile = rankdata(volatility, method='average') / len(volatility)
+    volatility_score[volatility_percentile > 0.8] = 2.5
+    volatility_score[(volatility_percentile > 0.6) & (volatility_percentile <= 0.8)] = 1.5
+    volatility_score[(volatility_percentile > 0.4) & (volatility_percentile <= 0.6)] = 1.0
+    volatility_score[volatility_percentile <= 0.4] = 0.5
+    
+    # Integrate Momentum and Relative Strength
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    relative_strength = short_ema / long_ema
+    relative_strength_signal = np.where(relative_strength > 1, 1.7, 0.3)
+    
+    # Combine Spread, Volume, Multi-Period Price Trends, and Volatility
+    adjusted_spread = high_low_spread * volume_trend_signal
+    adjusted_spread *= short_term_trend_signal
+    adjusted_spread *= medium_term_trend_signal
+    adjusted_spread *= long_term_trend_signal
+    adjusted_spread *= volatility_score
+    adjusted_spread *= relative_strength_signal
+    
+    # Final Alpha Factor
+    alpha_factor = adjusted_spread
+    return pd.Series(alpha_factor, index=df.index, name='alpha_factor')
+```

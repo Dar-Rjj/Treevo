@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['close_ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['price_momentum'] = df['close_ema_5'] - df['close_ema_5'].shift(1)
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_range_prev'] = df['high_low_range'].shift(1)
+    df['high_low_momentum'] = (df['high_low_range'] + df['high_low_range_prev']) / 2
+
+    # Combine Price and High-to-Low Range Momentum
+    df['combined_momentum'] = df['price_momentum'] + df['high_low_momentum']
+
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Ensure positive volume change
+    df['positive_volume_change'] = df['volume_change'].apply(lambda x: max(x, 0))
+
+    # Calculate Amount Acceleration
+    df['amount_ema_5'] = df['amount'].ewm(span=5, adjust=False).mean()
+    df['amount_acceleration'] = df['amount_ema_5'] - df['amount_ema_5'].shift(1)
+
+    # Adjust High-Low Spread with Volume and Amount Acceleration
+    df['adjusted_high_low_spread'] = df['high_low_range'] * df['positive_volume_change'] * df['amount_acceleration']
+
+    # Apply Simple Moving Average (SMA) to smooth the adjusted high-low spread
+    df['smoothed_adjusted_high_low_spread'] = df['adjusted_high_low_spread'].rolling(window=5).mean()
+
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['final_alpha_factor'] = df['combined_momentum'] * df['smoothed_adjusted_high_low_spread']
+
+    return df['final_alpha_factor']
+```

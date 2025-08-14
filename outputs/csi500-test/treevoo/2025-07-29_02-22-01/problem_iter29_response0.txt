@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=10):
+    # Calculate the Momentum over N days using Closing Prices
+    df['momentum'] = (df['close'] / df['close'].shift(N)) - 1
+    
+    # Enhance the Momentum with Volume Weighted Average Price (VWAP) for N days
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=N).mean()
+    df['vwap_momentum'] = (df['vwap'] / df['vwap'].shift(N)) - 1
+    
+    # Incorporate Range-based Volatility Measure
+    df['range'] = df['high'] - df['low']
+    df['atr'] = df['range'].rolling(window=N).mean()
+    df['adjusted_momentum'] = df['momentum'] / df['atr']
+    df['adjusted_vwap_momentum'] = df['vwap_momentum'] / df['atr']
+    
+    # Introduce a Reversal Indicator based on Short-term Oversold/Overbought Conditions
+    short_window = 5
+    df['5_day_low'] = df['low'].rolling(window=short_window).min()
+    df['5_day_high'] = df['high'].rolling(window=short_window).max()
+    df['reversal_score'] = (df['close'] - df['5_day_low']) / (df['5_day_high'] - df['5_day_low'])
+    df['refined_alpha_factor'] = df['adjusted_vwap_momentum'] * (1 - df['reversal_score'])
+    
+    # Investigate the Impact of Trading Volume Changes
+    recent_volume = df['volume'].rolling(window=N).mean()
+    previous_volume = df['volume'].shift(M).rolling(window=M).mean()
+    volume_change = (recent_volume - previous_volume) / previous_volume
+    df['volume_multiplier'] = volume_change.apply(lambda x: 1.2 if x > 0.2 else 0.8 if x < -0.2 else 1)
+    df['alpha_factor'] = df['refined_alpha_factor'] * df['volume_multiplier']
+    
+    # Incorporate Gap Analysis
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['gap_direction'] = df['gap'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    df['gap_magnitude'] = df['gap'].abs()
+    df['alpha_factor_with_gap'] = df['alpha_factor'] + (df['gap_magnitude'] * df['gap_direction'] * 0.1)
+    
+    # Final alpha factor
+    return df['alpha_factor_with_gap']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

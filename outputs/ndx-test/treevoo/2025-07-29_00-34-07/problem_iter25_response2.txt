@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_Signal'] = (df['SMA_50'] > df['SMA_200']).astype(int) - (df['SMA_50'] < df['SMA_200']).astype(int)
+
+    df['ROC_12'] = df['close'].pct_change(periods=12)
+    df['ROC_Signal'] = (df['ROC_12'] > 0).astype(int) - (df['ROC_12'] < 0).astype(int)
+
+    # Volume Indicators
+    df['OBV'] = 0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] + df.loc[df.index[i], 'volume']
+        elif df.loc[df.index[i], 'close'] < df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] - df.loc[df.index[i], 'volume']
+        else:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV']
+
+    df['OBV_Signal'] = (df['OBV'] > df['OBV'].shift(1)).astype(int) - (df['OBV'] < df['OBV'].shift(1)).astype(int)
+
+    # Price Action Indicators
+    df['Bullish_Engulfing'] = (df['open'] > df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'])
+    df['Bearish_Engulfing'] = (df['open'] < df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'])
+    df['Candlestick_Signal'] = df['Bullish_Engulfing'].astype(int) - df['Bearish_Engulfing'].astype(int)
+
+    df['Upward_Gap'] = (df['low'] > df['high'].shift(1))
+    df['Downward_Gap'] = (df['high'] < df['low'].shift(1))
+    df['Gap_Signal'] = df['Upward_Gap'].astype(int) - df['Downward_Gap'].astype(int)
+
+    # Combining Factors
+    df['Alpha_Signal'] = 0.4 * df['SMA_Signal'] + 0.3 * df['ROC_Signal'] + 0.2 * df['OBV_Signal'] + 0.1 * df['Candlestick_Signal'] + 0.1 * df['Gap_Signal']
+
+    return df['Alpha_Signal']
+```

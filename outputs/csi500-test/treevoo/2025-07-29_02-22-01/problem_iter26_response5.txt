@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate EMAs
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Intraday Metrics
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_return'] = df['close'] - df['open']
+
+    # Volume-Adjusted Intraday Return
+    df['volume_adjusted_intraday_return'] = df['volume'] * df['intraday_return']
+
+    # Proportional Movement Index
+    df['proportional_movement_index'] = (df['intraday_range'] / df['close']) * df['intraday_return']
+
+    # Combine Factors
+    df['price_momentum'] = df['EMA_5'] - df['EMA_20']
+    df['intraday_momentum'] = df['proportional_movement_index']
+    df['weighted_intraday_adjustment'] = df['volume_adjusted_intraday_return'] * np.log(df['volume'])
+
+    # Cumulative Price Change
+    df['cumulative_price_change'] = df['close'].pct_change().rolling(window=14).sum()
+
+    # Average Volume
+    df['average_volume'] = df['volume'].rolling(window=14).mean()
+
+    # Weighted Cumulative Momentum
+    df['weighted_cumulative_momentum'] = df['cumulative_price_change'] * df['average_volume']
+
+    # Volume-Adjusted High-Low Spread
+    df['volume_adjusted_high_low_spread'] = (df['high'] - df['low']) * df['volume']
+
+    # 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    df['10_day_sum_volume_adjusted_high_low_spread'] = df['volume_adjusted_high_low_spread'].rolling(window=10).sum()
+
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    df['combined_vol_adj_high_low_momentum'] = df['10_day_sum_volume_adjusted_high_low_spread'] * df['price_momentum']
+
+    # Simple Moving Averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum Component
+    df['momentum_component'] = df['SMA_5'] - df['SMA_20']
+
+    # Volatility
+    df['daily_log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['daily_log_returns'].rolling(window=22).std()
+
+    # Volume-Weighted Average Price (VWAP)
+    df['vwap'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    df['vwap'] = df['vwap'].rolling(window=22).sum() / df['volume'].rolling(window=22).sum()
+
+    # Incorporate Volume Reversal Indicator
+    df['volume_rate_of_change'] = df['volume'] / df['volume'].shift(10) - 1
+    df['smoothed_volume_roc'] = df['volume_rate_of_change'].rolling(window=5).mean()
+    df['inverse_smoothed_volume_roc'] = 1 / df['smoothed_volume_roc']
+
+    # Volume Confirmation
+    df['daily_volume_change'] = df['volume'].diff()
+    positive_volume_diff = df['daily_volume_change'].apply(lambda x: x if x > 0 else 0)
+    df['volume_confirmation'] = (positive_volume_diff.rolling(window=10).sum() / (df['daily_volume_change'] > 0).rolling(window=10).sum()).fillna(0)
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['price_momentum'] +
+        df['intraday_momentum'] +
+        df['weighted_cumulative_momentum'] +
+        df['combined_vol_adj_high_low_momentum'] +
+        df['momentum_component'] +
+        df['vwap'] +
+        (df['close'] - df['open']) * df['volume'] +
+        df['inverse_smoothed_volume_roc'] +
+        df['volume_confirmation']
+    )
+
+    return df['final_alpha_factor']
+```

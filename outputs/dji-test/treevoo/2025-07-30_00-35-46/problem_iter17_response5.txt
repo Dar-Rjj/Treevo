@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Volume Adjustment
+    df['volume_adj'] = (df['volume'] / df['volume'].rolling(window=5).mean()) + 0.01
+    
+    # Adjusted Intraday Range
+    df['adj_intraday_range'] = df['intraday_range'] * df['volume_adj']
+    
+    # Smoothed Intraday Range
+    df['smoothed_intraday_range'] = df['adj_intraday_range'].ewm(span=7, min_periods=5).mean()
+    
+    # EMA Cross Signal
+    df['short_ema'] = df['close'].ewm(span=7, min_periods=5).mean()
+    df['long_ema'] = df['close'].ewm(span=25, min_periods=20).mean()
+    
+    # Momentum
+    df['momentum'] = np.where(df['short_ema'] > df['long_ema'], 1, -1)
+    
+    # On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Weight OBV by EMA Difference
+    df['weight'] = (df['short_ema'] - df['long_ema']) ** 2
+    df['final_obv_factor'] = df['obv'] * df['weight']
+    
+    # Measure Close Position in Range
+    df['close_position'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    df['close_position'] = np.where(df['high'] == df['low'], 0.5, df['close_position'])
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['open']*df['volume'] + df['high']*df['volume'] + df['low']*df['volume'] + df['close']*df['volume']) / (4 * df['volume'])
+    
+    # Calculate Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = df['close'] - df['open']
+    df['intraday_momentum'] = 0.5 * df['high_low_diff'] + 0.5 * df['open_close_return']
+    
+    # Apply Volume and Amount Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume'] / ((df['high'].shift(1) + df['low'].shift(1) + df['close'].shift(1)) / 3 * df['volume'].shift(1))
+    df['filtered_intraday_momentum'] = np.where((df['volume_ratio'] > 1.5) & (df['amount_ratio'] > 1.5), df['intraday_momentum'], 0)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['intraday_volatility'].rolling(window=5).std()
+    
+    # Combine Factors
+    factors = [
+        ('smoothed_intraday_range', df['smoothed_intraday_range']),
+        ('close_position', df['close_position']),
+        ('vwap', df['vwap']),
+        ('filtered_intraday_momentum', df['filtered_intraday_momentum']),
+        ('intraday_volatility', df['intraday_volatility'])
+    ]
+    
+    combined_factors = []
+    for name, factor in factors:
+        std_dev = factor.rolling(window=5).std()
+        combined_factors.append(factor / std_dev)
+    
+    df['combined_factors'] = np.sum(combined_factors, axis=0) / len(factors)
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factors'] * df['final_obv_factor']
+    
+    return df['alpha_factor']
+```

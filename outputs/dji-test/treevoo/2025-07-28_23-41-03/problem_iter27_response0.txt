@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # Combined Momentum
+    df['Combined_Momentum'] = (df['SMA_50'] - df['SMA_100']) + (df['SMA_100'] - df['SMA_200'])
+    
+    # Intraday Momentum
+    df['Intraday_Momentum'] = df['close'] - df['open']
+    df['Combined_Momentum'] += df['Intraday_Momentum']
+    
+    # Volume-Adjusted Factors
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Volume_Adjusted_Return'] = (df['close'] - df['open']) * df['Volume_Ratio']
+    df['Volume_Weighted_Price_Movement'] = (df['high'] - df['low']) * df['volume']
+    df['Volume_Adjusted_Intraday_Range'] = (df['high'] - df['low']) * df['Volume_Ratio']
+    
+    # High-Low Range Momentum
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Adjusted_High_Low_Range'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+    df['High_Low_Range_Momentum'] = df['Adjusted_High_Low_Range'] / df['volume'].rolling(window=20).mean()
+    
+    # Volume-Adjusted High-Low Range Momentum
+    df['Volume_Adjusted_High_Low_Range_Momentum'] = (df['High_Low_Range_Momentum'] * df['volume']) / df['volume'].rolling(window=20).mean()
+    
+    # 20-Day Weighted Moving Average of Returns
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    weighted_return = daily_return * df['volume']
+    df['20D_WMA_Return'] = weighted_return.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Adjust for Price Volatility
+    df['20D_Avg_Daily_Price_Range'] = df['High_Low_Range'].rolling(window=20).mean()
+    df['20D_Avg_Return'] = daily_return.rolling(window=20).mean()
+    df['20D_Std_Return'] = ((daily_return - df['20D_Avg_Return']) ** 2).rolling(window=20).mean().apply(lambda x: x**0.5)
+    df['Adjusted_20D_WMA_Return'] = (df['20D_WMA_Return'] - df['20D_Avg_Daily_Price_Range']) / df['20D_Std_Return']
+    
+    # Intraday Return Ratio
+    df['Intraday_Return_Ratio'] = (df['high'] - df['low']) / (df['open'] + df['close'])
+    
+    # Weighted Open-to-Close Return
+    df['Weighted_Open_to_Close_Return'] = (df['close'] - df['open']) * df['volume']
+    
+    # Final Alpha Factor Combination
+    w1, w2, w3, w4, w5, w6 = 0.3, 0.1, 0.1, 0.2, 0.15, 0.15
+    df['Final_Alpha_Factor'] = (
+        df['Combined_Momentum'] * w1 +
+        df['High_Low_Range_Momentum'] * w2 +
+        df['Volume_Adjusted_High_Low_Range_Momentum'] * w3 +
+        df['Adjusted_20D_WMA_Return'] * w4 +
+        df['Intraday_Return_Ratio'] * w5 +
+        df['Weighted_Open_to_Close_Return'] * w6
+    )
+    
+    return df['Final_Alpha_Factor']
+```

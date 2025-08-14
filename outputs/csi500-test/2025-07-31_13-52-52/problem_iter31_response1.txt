@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Daily Volatility
+    df['Daily_Volatility'] = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    df['Combined_Factor'] = (df['Close_to_Open_Return'] * df['volume']) / df['Daily_Volatility']
+    
+    # Adjust for Opening Gap
+    df['Opening_Gap_Adjustment'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['open']
+    
+    # Compute 10-Day Price Momentum
+    df['10_Day_Price_Momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    df['Volume_Change_Indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Apply Volume Confirmation
+    df['Volume_Confirmed_Factor'] = df['Combined_Factor'] * df['Volume_Change_Indicator']
+    df['Volume_Confirmed_Factor'] = df['Volume_Confirmed_Factor'].where(df['Volume_Change_Indicator'] > 0, 0)
+    
+    # Combine Intraday and 10-Day Momentum
+    df['Combined_Momentum'] = df['10_Day_Price_Momentum'] + df['Intraday_Return']
+    
+    # Incorporate Volume and Amount Momentum
+    df['Volume_Change'] = df['volume'] - df['volume'].rolling(window=9).mean()
+    df['Amount_Change'] = df['amount'] - df['amount'].rolling(window=9).mean()
+    df['Combined_Volume_Amount_Momentum'] = (df['Volume_Change'] + df['Amount_Change']) / df['High_Low_Range']
+    
+    # Multiply Combined Momentum by Combined Volume-Amount Momentum
+    df['Final_Combined_Momentum'] = df['Combined_Momentum'] * df['Combined_Volume_Amount_Momentum']
+    
+    # Integrate Both Metrics
+    df['Weighted_Factor'] = 0.5 * df['Volume_Confirmed_Factor'] + 0.5 * df['Final_Combined_Momentum']
+    
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Weighted_Factor'] - df['Weighted_Factor'].rolling(window=20).mean()
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].where(df['Volume_Change_Indicator'] > 0, 0)
+    
+    # Smooth the Result
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].rolling(window=20).mean()
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Momentum
+    intraday_momentum = df['high'] / df['low']
+    
+    # Apply Moving Averages to Intraday Momentum
+    fast_ema_period = 5
+    slow_ema_period = 20
+    fast_ema = intraday_momentum.ewm(span=fast_ema_period, adjust=False).mean()
+    slow_ema = intraday_momentum.ewm(span=slow_ema_period, adjust=False).mean()
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    ma_log_returns = log_returns.rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Amount
+    ema_amount = df['amount'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Intraday Momentum by Amount and Long-Term Price Trend
+    adjusted_intraday_momentum = (fast_ema * ma_log_returns) / ema_amount - slow_ema
+    
+    # Smooth the Adjusted Intraday Momentum
+    smoothed_adjusted_momentum = adjusted_intraday_momentum.rolling(window=5).mean()
+    
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / daily_range.rolling(window=25).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / daily_range.rolling(window=10).mean()
+    
+    # Combine Momentum Indicators
+    combined_momentum = (long_term_momentum * 0.7) + (short_term_momentum * 0.3)
+    
+    # Incorporate Intraday High-to-Low Percentage Change
+    intraday_high_low_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    volatility = df['close'].pct_change().rolling(window=25).std()
+    threshold = 2 * volatility
+    significant_movement = (intraday_high_low_pct_change * volume_ratio) > threshold
+    combined_indicator = combined_momentum + significant_movement.astype(int)
+    
+    # Final Alpha Factor
+    alpha_factor = smoothed_adjusted_momentum + combined_indicator
+    
+    return alpha_factor
+```

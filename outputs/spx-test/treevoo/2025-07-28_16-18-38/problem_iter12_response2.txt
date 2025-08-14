@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, m=20):
+    # Calculate Day-to-Day Log Return of Close Price
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: x['high'] - x['low'], axis=1)
+    df['true_range'] = df[['true_range', 'close']].apply(lambda x: max(x['true_range'], abs(x['close'] - df['close'].shift(1))), axis=1)
+    
+    # Compute Volume-Weighted Moving Sum of Log Returns
+    df['volume_weighted_log_return'] = df['log_return'] * df['volume']
+    df['volume_weighted_sum'] = df['volume_weighted_log_return'].rolling(window=n).sum()
+    
+    # Compute Volume-Adjusted Factor
+    df['volume_sum'] = df['volume'].rolling(window=n).sum()
+    df['volume_adjusted_factor'] = df['volume_weighted_sum'] / df['volume_sum']
+    
+    # Compute Average True Range (ATR)
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Incorporate Volume Weight
+    df['volume_weighted_atr'] = df['atr'] * df['volume_adjusted_factor']
+    
+    # Apply Exponential Smoothing
+    weights = np.exp(-np.arange(n)[::-1] / n)
+    weights /= weights.sum()
+    df['exp_smoothed_volume_weighted_atr'] = df['volume_weighted_atr'].rolling(window=n).apply(lambda x: (x * weights).sum(), raw=False)
+    
+    # Incorporate Volume Trend
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_trend'] = df['volume'] / df['average_volume']
+    df['volume_trend_adjusted_exp_smoothed'] = df['exp_smoothed_volume_weighted_atr'] * df['volume_trend']
+    
+    # Introduce Price Momentum Component
+    df['sma_close'] = df['close'].rolling(window=m).mean()
+    df['price_momentum'] = (df['close'] - df['sma_close']) / df['sma_close']
+    df['final_factor'] = df['volume_trend_adjusted_exp_smoothed'] * df['price_momentum']
+    
+    return df['final_factor']
+```

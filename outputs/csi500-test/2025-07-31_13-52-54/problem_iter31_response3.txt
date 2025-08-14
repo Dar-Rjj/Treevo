@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback=20, n_days=5, m_days=10):
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    df['Volume_Weighted_High_Low_Spread'] = df['High_Low_Spread'] * df['volume']
+    df['Volume_Weighted_High_Low_Spread_Sum'] = df['Volume_Weighted_High_Low_Spread'].rolling(window=lookback).sum()
+    
+    # Calculate Volume-Averaged Close Price
+    df['Volume_Averaged_Close'] = (df['close'] * df['volume']).rolling(window=lookback).sum() / df['volume'].rolling(window=lookback).sum()
+    
+    # Compute Volume-Weighted High-Low Spread Ratio
+    df['Volume_Weighted_High_Low_Spread_Ratio'] = df['Volume_Weighted_High_Low_Spread_Sum'] / df['Volume_Averaged_Close']
+    
+    # Calculate Momentum Component
+    df['Momentum_Component'] = df['Volume_Weighted_High_Low_Spread'] - df['Volume_Weighted_High_Low_Spread'].rolling(window=n_days).mean()
+    
+    # Generate Preliminary Factor
+    df['Preliminary_Factor'] = df['Volume_Weighted_High_Low_Spread_Ratio'] + df['Momentum_Component']
+    
+    # Incorporate Price Trend
+    df['n_Day_Moving_Average'] = df['close'].rolling(window=n_days).mean()
+    df['Price_Trend'] = df['close'] - df['n_Day_Moving_Average']
+    df['Preliminary_Factor'] *= df['Price_Trend']
+    
+    # Calculate Intraday Range Growth
+    df['Today_High_Low_Range'] = df['high'] - df['low']
+    df['Prev_Day_High_Low_Range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_High_Low_Range'] - df['Prev_Day_High_Low_Range']) / df['Prev_Day_High_Low_Range']
+    
+    # Adjust for Volume Surge
+    df['N_Day_Volume_Change'] = df['volume'] - df['volume'].shift(n_days)
+    df['M_Day_Volume_Change'] = df['volume'] - df['volume'].shift(m_days)
+    df['Volume_Surge'] = df['N_Day_Volume_Change'] + df['M_Day_Volume_Change']
+    df['Adjusted_Volume_Surge'] = df['Volume_Surge'].apply(lambda x: x * 0.8 if x < 0 else x)
+    
+    # Leverage Price and Volume for an Intensity Factor
+    df['Return'] = df['close'].pct_change()
+    df['Intensity_Factor'] = df['Return'] * df['volume']
+    df['Smoothed_Intensity_Factor'] = df['Intensity_Factor'].rolling(window=20).mean()
+    
+    # Synthesize Factors
+    df['Alpha_Factor'] = (df['Volume_Weighted_High_Low_Spread_Ratio'] + 
+                          df['Preliminary_Factor'] + 
+                          df['Intraday_Range_Growth'] + 
+                          df['Adjusted_Volume_Surge'] + 
+                          df['Smoothed_Intensity_Factor'])
+    
+    return df['Alpha_Factor'].dropna()
+```

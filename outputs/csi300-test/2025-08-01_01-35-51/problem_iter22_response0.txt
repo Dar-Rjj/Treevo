@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_price_range'] = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Determine Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Adjust Volatility by Volume
+    df['adjusted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Short-Term Momentum
+    df['short_term_momentum'] = df['close'].diff()
+    
+    # Refine Short-Term Momentum with Exponential Weighting
+    df['refined_short_term_momentum'] = df['close'].ewm(span=5).mean().diff()
+    
+    # Calculate Long-Term Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Refine Long-Term Momentum with Moving Average
+    df['refined_long_term_momentum'] = df['close'] - df['close'].rolling(window=20).mean()
+    
+    # Calculate Additional Price Transformations
+    df['log_return'] = np.log(df['close']).diff()
+    df['price_to_volume_ratio'] = df['close'] / df['volume']
+    df['roc'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Combine Intraday Return, Adjusted Volatility, and Refined Momentum
+    df['combined_value'] = (
+        df['intraday_return'] - 
+        df['adjusted_volatility'] + 
+        df['refined_short_term_momentum'] + 
+        df['refined_long_term_momentum'] + 
+        df['log_return'] - 
+        df['price_to_volume_ratio'] + 
+        df['roc'] + 
+        df['obv']
+    )
+    
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = (df['combined_value'] > 0).astype(int)
+    
+    return df['alpha_factor']
+```

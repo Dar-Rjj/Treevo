@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 10-day simple moving average (SMA) of the close price
+    df['10_day_SMA'] = df['close'].rolling(window=10).mean()
+    
+    # Define a momentum factor as the difference between the current close price and the 10-day SMA
+    df['momentum_factor'] = df['close'] - df['10_day_SMA']
+    
+    # Use the sign of the momentum factor to predict continuation or reversion
+    df['momentum_sign'] = df['momentum_factor'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Calculate 30-day simple moving average of volume
+    df['30_day_volume_SMA'] = df['volume'].rolling(window=30).mean()
+    
+    # Define high-activity days as those where the volume is above its 30-day simple moving average
+    df['high_activity'] = df['volume'] > df['30_day_volume_SMA']
+    
+    # On high-activity days, calculate the percentage change in the closing price from the previous day
+    df['daily_return'] = df['close'].pct_change()
+    df['high_activity_return'] = df['high_activity'] * df['daily_return']
+    
+    # Adjust the momentum score based on the percentage change: increase for positive, decrease for negative
+    df['adjusted_momentum'] = df['momentum_factor'] + (df['high_activity_return'] * 10)
+    
+    # Incorporate the open, high, low, and close prices to measure intraday market sentiment
+    df['daily_range'] = df['high'] - df['low']
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Compare the daily close with the midpoint of the daily range
+    df['directional_bias'] = df.apply(lambda row: 1 if row['close'] > row['midpoint'] else (-1 if row['close'] < row['midpoint'] else 0), axis=1)
+    
+    # Combine the directional bias indicator with the volume-based momentum adjustment to create a composite sentiment-adjusted momentum signal
+    df['composite_sentiment'] = df['adjusted_momentum'] * df['directional_bias']
+    
+    # Introduce a volatility component by calculating the average true range (ATR) over the last 10 days
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['ATR_10'] = df['true_range'].rolling(window=10).mean()
+    
+    # Adjust the composite sentiment-adjusted momentum score by multiplying it with the ATR
+    df['enhanced_momentum_score'] = df['composite_sentiment'] * df['ATR_10']
+    
+    # Return the enhanced momentum score
+    return df['enhanced_momentum_score']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', index_col='date', parse_dates=True)
+# enhanced_momentum = heuristics_v2(df)
+# print(enhanced_momentum)
+```

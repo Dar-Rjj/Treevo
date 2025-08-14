@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    adjusted_range = high_to_low_range * np.sqrt(df['volume'])
+    
+    # Evaluate Volume Trend
+    volume_10d_ma = df['volume'].rolling(window=10).mean()
+    volume_trend = np.where(df['volume'] > volume_10d_ma, 1, -1)
+    adjusted_range *= volume_trend
+    
+    # Calculate 30-day Price Momentum
+    close_price_30d_ago = df['close'].shift(30)
+    price_momentum_30d = (df['close'] - close_price_30d_ago) / close_price_30d_ago
+    
+    # Identify Volume Shock
+    volume_30d_avg = df['volume'].rolling(window=30).mean().shift(1)  # Exclude current day
+    volume_shock = np.where(df['volume'] > 2 * volume_30d_avg, 1, 0)
+    momentum_with_shock = price_momentum_30d * volume_shock
+    
+    # Detect Volume Spike
+    volume_5d_ma = df['volume'].rolling(window=5).mean()
+    volume_spike = np.where(df['volume'] > 2.0 * volume_5d_ma, 1, 0)
+    
+    # Calculate 10-day Momentum
+    close_price_10d_ago = df['close'].shift(10)
+    momentum_10d = df['close'] - close_price_10d_ago
+    
+    # Combine Adjusted High-to-Low Range, 10-day Momentum, and Volume Spike
+    combined_factor = (adjusted_range + momentum_10d) * (volume_spike * 3.0 + (1 - volume_spike))
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = momentum_with_shock + combined_factor
+    
+    return final_alpha_factor
+```

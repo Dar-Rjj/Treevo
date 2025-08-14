@@ -1,0 +1,48 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame, sector_performance: pd.Series, macroeconomic_indicators: pd.DataFrame) -> pd.Series:
+    # Calculate the adaptive momentum as the difference between today's close and the 10-day moving average, normalized by the 10-day standard deviation
+    adaptive_momentum = (df['close'] - df['close'].rolling(window=10).mean()) / df['close'].rolling(window=10).std()
+    
+    # Calculate the volume-weighted price using amount and volume to identify the money flow, with a 5-day rolling window
+    money_flow = (df['amount'] / df['volume']).rolling(window=5).mean()
+    
+    # Calculate the ratio of the current day's range to the 10-day average range
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=10).mean()
+    range_ratio = daily_range / avg_daily_range
+    
+    # Adaptive volatility factor: standard deviation of returns over the past 20 days, with a 5-day smoothing
+    volatility = df['close'].pct_change().rolling(window=20).std().ewm(span=5, adjust=False).mean()
+    
+    # Market sentiment: ratio of the close price to the 30-day simple moving average, with a 5-day smoothing
+    market_sentiment = (df['close'] / df['close'].rolling(window=30).mean()).ewm(span=5, adjust=False).mean()
+    
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Incorporate sector performance
+    sector_factor = sector_performance.ewm(span=5, adjust=False).mean()
+    
+    # Incorporate macroeconomic indicators
+    macroeconomic_factor = macroeconomic_indicators.mean(axis=1).ewm(span=5, adjust=False).mean()
+    
+    # Seasonality factor: month and day of the week
+    df['month'] = df.index.month
+    df['day_of_week'] = df.index.dayofweek
+    monthly_seasonality = df.groupby('month')['close'].transform(lambda x: (x - x.mean()) / x.std())
+    weekly_seasonality = df.groupby('day_of_week')['close'].transform(lambda x: (x - x.mean()) / x.std())
+    seasonality_factor = (monthly_seasonality + weekly_seasonality) / 2
+    
+    # Combine all factors with dynamic weighting
+    alpha_factor = (adaptive_momentum + 2 * money_flow + 3 * range_ratio + 4 * volatility + 5 * market_sentiment + 6 * rsi + 7 * sector_factor + 8 * macroeconomic_factor + 9 * seasonality_factor) / 45
+    
+    # Smooth the alpha factor with a 5-day exponential moving average
+    alpha_factor_smoothed = alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return alpha_factor_smoothed

@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily price momentum
+    df['Daily_Price_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate daily price range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    
+    # Calculate intraday return adjusted by high-low range
+    df['Intraday_Return_Adjusted'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Calculate volume change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate dollar volume
+    df['Dollar_Volume'] = df['amount'] * df['close']
+    
+    # Calculate VWAP momentum
+    df['VWAP'] = df['amount'] / df['volume']
+    df['VWAP_Momentum'] = (df['VWAP'] - df['open']) / df['VWAP']
+    
+    # Calculate moving averages and crossovers
+    short_window = 10
+    long_window = 30
+    df['SMA_Short'] = df['close'].rolling(window=short_window).mean()
+    df['SMA_Long'] = df['close'].rolling(window=long_window).mean()
+    df['SMA_Crossover'] = df['SMA_Short'] - df['SMA_Long']
+    
+    # Calculate RSI
+    def rsi(series, window=14):
+        delta = series.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    df['RSI'] = rsi(df['close'], window=14)
+    
+    # Calculate MACD
+    df['MACD'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate On-Balance Volume (OBV)
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Calculate intraday reversal
+    df['Intraday_Reversal'] = (df['high'] - df['open']) / (df['high'] - df['low'])
+    
+    # Intraday Reversal Adjustment
+    df['Intraday_Reversal_Adjustment'] = df.apply(lambda row: 0.8 if row['Intraday_Reversal'] > 0.5 else 1, axis=1)
+    
+    # Final Alpha Factor Integration
+    df['Final_Alpha_Factor'] = (df['Daily_Price_Momentum'] * 
+                                df['Daily_Price_Range'] * 
+                                df['Intraday_Return_Adjusted'] * 
+                                df['Volume_Change'] * 
+                                df['Dollar_Volume'] * 
+                                df['VWAP_Momentum'] * 
+                                df['SMA_Crossover'] * 
+                                df['RSI'] * 
+                                df['MACD'] * 
+                                df['OBV'] * 
+                                df['Intraday_Reversal_Adjustment'])
+    
+    return df['Final_Alpha_Factor']
+```

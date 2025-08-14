@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High and Low
+    lookback_period = 14
+    df['vol_weighted_high'] = (df['high'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    df['vol_weighted_low'] = (df['low'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    df['vol_weighted_diff'] = (df['vol_weighted_high'] - df['vol_weighted_low']) / df['volume'].rolling(window=lookback_period).sum()
+
+    # Compute Dynamic Momentum
+    high_low_diff = df['high'] - df['low']
+    sma_high_low_diff = high_low_diff.rolling(window=lookback_period).mean()
+    raw_momentum = high_low_diff - sma_high_low_diff
+    smoothing_factor = 0.2
+    dynamic_momentum = raw_momentum.ewm(alpha=smoothing_factor, adjust=False).mean()
+
+    # Combine Volume-Weighted High-Low Range and Dynamic Momentum
+    scaling_factor = 0.5
+    combined_value = (df['vol_weighted_diff'] * dynamic_momentum) * scaling_factor
+
+    # Transform to Bounded Range Without Normalization
+    offset = 0
+    max_possible_value = combined_value.max()
+    scaled_value = (combined_value + offset) / max_possible_value * 100
+
+    # Compute EMA Components
+    ema_7 = scaled_value.ewm(span=7, adjust=False).mean()
+    ema_21 = scaled_value.ewm(span=21, adjust=False).mean()
+
+    # Compute Ratio of EMAs
+    ema_ratio = ema_7 / ema_21
+
+    # Compute Price Oscillator
+    ema_5_close = df['close'].ewm(span=5, adjust=False).mean()
+    ema_14_close = df['close'].ewm(span=14, adjust=False).mean()
+    price_oscillator = ema_5_close - ema_14_close
+
+    # Compute Amount-Adjusted Return
+    daily_return = df['close'].pct_change()
+    amount_adjusted_return = daily_return * df['amount']
+    amount_adjusted_return_sma = amount_adjusted_return.rolling(window=5).mean()
+
+    # Final Alpha Factor
+    alpha_factor = ema_ratio * amount_adjusted_return_sma + price_oscillator
+
+    return alpha_factor
+```

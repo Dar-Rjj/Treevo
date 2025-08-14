@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # High-Low Spread Ratio
+    df['high_low_spread_ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Volume-Weighted Close-Open Difference
+    df['volume_weighted_diff'] = (df['close'] - df['open']) * df['volume']
+    
+    # Volume-Weighted Close Price
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    
+    # 21-day EMA of Close
+    df['ema_21_close'] = df['close'].ewm(span=21).mean()
+    
+    # Subtract 21-day EMA from volume-weighted close
+    df['sub_ema_21'] = df['volume_weighted_close'] - df['close'].ewm(span=21).mean()
+    
+    # 10-day Reversal
+    df['reversal_10'] = df['close'].pct_change().rolling(window=10).mean()
+    
+    # Volume Adjusted Price Change
+    df['vami'] = (df['close'] - df['open']) * df['volume']
+    
+    # 20-day EMA of Volume Adjusted Price Change
+    df['ema_20_vami'] = df['vami'].ewm(span=20).mean()
+    
+    # Divide Volume Adjusted Price Change by EMA
+    df['vami_adjusted'] = df['vami'] / df['ema_20_vami']
+    
+    # Composite Alpha Factor
+    df['composite_alpha'] = df['sub_ema_21'] + df['reversal_10'] + df['vami_adjusted']
+    
+    # Intraday Log-Return
+    df['intraday_log_return'] = np.log(df['close'] / df['open'])
+    
+    # True Range for Intraday Volatility
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'],
+                                                               abs(x['high'] - df['close'].shift(1)),
+                                                               abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Scale by Log-Return
+    df['scaled_true_range'] = df['true_range'] * df['intraday_log_return']
+    
+    # Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Adjusted Return
+    df['adjusted_return'] = df['intraday_log_return'] + df['scaled_true_range'] + df['volume_change']
+    
+    # Final Integration
+    df['alpha_factor'] = (df['high_low_spread_ratio'] + df['volume_weighted_diff'] +
+                          df['composite_alpha'] + df['adjusted_return'])
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [1, 2, 3, 4, 5],
+#     'high': [2, 3, 4, 5, 6],
+#     'low': [1, 1, 2, 3, 4],
+#     'close': [2, 3, 4, 5, 6],
+#     'amount': [100, 200, 300, 400, 500],
+#     'volume': [10, 20, 30, 40, 50]
+# }, index=pd.date_range('2023-01-01', periods=5))
+
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

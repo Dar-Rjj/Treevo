@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    intraday_movement = df['High_Low_Range'] + df['Close_Open_Diff']
+
+    # Incorporate Volume Influence
+    volume_adjusted_momentum = intraday_movement * df['volume']
+    ema_10_vol_adj_mom = volume_adjusted_momentum.ewm(span=10, adjust=False).mean()
+
+    # Adjust for Market Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    abs_daily_return = df['Daily_Return'].abs()
+    std_dev_30 = df['Daily_Return'].rolling(window=30).std()
+    volatility_adjusted_momentum = ema_10_vol_adj_mom - std_dev_30
+
+    # Enhance Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_signal = np.where(momentum_reversal > 0, 1, -1)
+    interim_alpha_factor = volatility_adjusted_momentum + reversal_signal
+
+    # Refine Final Alpha Factor
+    final_alpha_factor = interim_alpha_factor.ewm(span=5, adjust=False).mean()
+
+    # Introduce Dynamic Volatility Adjustment
+    if 'market_close' in df.columns:
+        rolling_beta = (df['close']).rolling(window=20).cov(df['market_close']) / df['market_close'].rolling(window=20).var()
+        final_alpha_factor = final_alpha_factor * rolling_beta
+
+    return final_alpha_factor
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=60),
+#     'open': np.random.rand(60),
+#     'high': np.random.rand(60),
+#     'low': np.random.rand(60),
+#     'close': np.random.rand(60),
+#     'amount': np.random.rand(60) * 100,
+#     'volume': np.random.randint(100, 1000, 60),
+#     'market_close': np.random.rand(60)  # Assuming a market index close price
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

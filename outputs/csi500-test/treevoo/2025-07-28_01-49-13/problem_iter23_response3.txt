@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+    
+    # Calculate Volume-Weighted Volatility
+    rolling_volume_sum = df['volume'].rolling(window=20).sum()
+    df['volume_weighted_volatility'] = df['intraday_range'] / rolling_volume_sum
+    
+    # Calculate Volume Weighted Momentum
+    df['close_to_next_open_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['volume_weighted_momentum'] = df['close_to_next_open_return'] * df['volume']
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    df['adjusted_close_to_open_return'] = df['close_to_next_open_return'] / df['intraday_range']
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    df['combined_adjusted_return_volatility'] = df['adjusted_close_to_open_return'] * df['volume_weighted_volatility']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = df['amount'] / df['volume']
+    
+    # Calculate Close-to-Next Day Open Return over a period
+    df['vwap_to_next_open_return'] = (df['open'].shift(-1) - df['vwap']) / df['vwap']
+    df['weighted_returns'] = df['vwap_to_next_open_return'] * df['volume']
+    
+    # Calculate Close-to-Open Envelope
+    df['max_close_period'] = df['close'].rolling(window=20).max()
+    df['min_open_period'] = df['open'].rolling(window=20).min()
+    df['close_to_open_envelope'] = df['max_close_period'] - df['min_open_period']
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    df['max_adjusted_close_to_open_return'] = df['adjusted_close_to_open_return'].rolling(window=20).max()
+    df['adjusted_close_to_open_envelope'] = df['max_adjusted_close_to_open_return'] - df['min_open_period']
+    
+    # Combine Intraday Factors
+    df['intraday_factors_combined'] = df['midpoint_to_open_ratio'] * df['volume_weighted_momentum']
+    df['intraday_factors_adjusted'] = df['intraday_factors_combined'] / df['adjusted_close_to_open_envelope']
+    
+    # Adjust by Intraday Range to Open Ratio and Volume Momentum
+    df['intraday_range_to_open_ratio'] = df['intraday_range'] / df['open']
+    df['high_low_envelope'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    df['intraday_factors_final'] = df['intraday_range_to_open_ratio'] * df['volume_weighted_momentum'] / df['high_low_envelope']
+    
+    # Calculate Volume Momentum
+    df['volume_momentum'] = df['volume'] - df['volume'].shift(1)
+    df['close_to_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['volume_adj_momentum'] = df['close_to_close_return'] * df['volume_momentum']
+    
+    # Integrate MACD into Final Factor
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd = short_ema - long_ema
+    df['factor_macd'] = df['intraday_factors_final'] * macd
+    
+    # Integrate RSI into Final Factor
+    gain = df['close'].diff().clip(lower=0)
+    loss = -df['close'].diff().clip(upper=0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    df['final_factor_rsi'] = df['factor_macd'] * rsi
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = df['final_factor_rsi']
+

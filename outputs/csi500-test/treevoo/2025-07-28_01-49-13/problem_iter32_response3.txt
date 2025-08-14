@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum Indicators
+    df['Daily_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Assess Volatility and Intraday Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Intraday_Midpoint'] = (df['high'] + df['low']) / 2
+    df['Intraday_Midpoint_to_Open_Ratio'] = df['Intraday_Midpoint'] / df['open']
+    df['Close_to_Open_Return_Adjusted'] = (df['close'] - df['open']) / df['Daily_Price_Range']
+    
+    # Investigate Volume, Amount, and Trading Activity Levels
+    window = 5
+    df['Average_Volume'] = df['volume'].rolling(window=window).mean()
+    df['Volume_to_Average_Volume'] = df['volume'] / df['Average_Volume']
+    df['Dollar_Volume'] = df['amount'] * df['close']
+    df['VWAP'] = (df['amount'].cumsum() / df['volume'].cumsum())
+    df['Volume_Weighted_Momentum'] = df['VWAP'] - df['open'].shift(-1)
+    
+    # Identify Technical Indicator Signals
+    short_window, long_window = 10, 30
+    df['SMA_Short'] = df['close'].rolling(window=short_window).mean()
+    df['SMA_Long'] = df['close'].rolling(window=long_window).mean()
+    df['SMA_Crossover'] = df['SMA_Short'] - df['SMA_Long']
+    
+    rsi_window = 14
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    ema_short_term, ema_long_term = 12, 26
+    df['EMA_Short'] = df['close'].ewm(span=ema_short_term, adjust=False).mean()
+    df['EMA_Long'] = df['close'].ewm(span=ema_long_term, adjust=False).mean()
+    df['MACD'] = df['EMA_Short'] - df['EMA_Long']
+    
+    # Examine Market Sentiment through Price, Volume, and OBV
+    df['OBV'] = (df['volume'] * (df['close'] > df['close'].shift(1))).cumsum()
+    df['PVT'] = (df['volume'] * (df['close'] - df['close'].shift(1)) / df['close'].shift(1)).cumsum()
+    
+    # Leverage Price, Volume, and Momentum Correlation
+    df['Volume_Adjusted_Intraday_Momentum'] = df['Intraday_Midpoint'] * df['volume']
+    df['Price_Change_Momentum'] = ((df['high'] + df['low']) / 2) - ((df['high'].shift(1) + df['low'].shift(1)) / 2)
+    df['Combined_Factor'] = df['Price_Change_Momentum'] * df['Daily_Price_Range']
+    
+    # Detect and Incorporate Volume Spikes and Reversals
+    df['Daily_Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Intraday_Reversal'] = (df['high'] - df['open']) / df['Daily_Price_Range']
+    df['Intraday_Reversal_Adjustment'] = df['Intraday_Reversal'].apply(lambda x: 0.8 if x > 0.5 else 1.0)
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Combined_Factor'] * df['Daily_Momentum'] * 
+                                df['Volume_Spike_Indicator'] * df['Intraday_Reversal_Adjustment'] * 
+                                df['Volume_Adjusted_Intraday_Momentum'])
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,37 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change().fillna(0)
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 3-day moving average of the close
+    momentum_3d = df['close'] - df['close'].rolling(window=3).mean()
+
+    # Calculate the relative strength index (RSI) for the last 7 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/7, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/7, adjust=False).mean()
+    rs = gain / loss
+    rsi_7d = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility factor using the standard deviation of the past 5 days
+    volatility_5d = df['close'].rolling(window=5).std()
+
+    # Integrate multiple indicators to create a robust factor
+    # Weigh factors by their predictive power
+    weighted_price_change = price_change * 0.4
+    weighted_volume_change = volume_change * 0.3
+    weighted_diff_close_avg = diff_close_avg * 0.2
+    weighted_momentum = momentum_3d * 0.5
+    weighted_rsi = rsi_7d * 0.6
+    weighted_volatility = volatility_5d * 0.4
+
+    # Sum the weighted factors
+    factor = (weighted_price_change + weighted_volume_change + weighted_diff_close_avg + weighted_momentum + weighted_rsi + weighted_volatility).ewm(span=3, adjust=False).mean()
+    
+    return factor
+```

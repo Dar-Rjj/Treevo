@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate 5-Day Average High-Low Spread
+    avg_high_low_spread = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-Day Momentum
+    five_day_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Multiply High-Low Spread and Momentum
+    high_low_momentum = avg_high_low_spread * five_day_momentum
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_range / df['volume']
+    
+    # Calculate Momentum
+    momentum = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Adjust Momentum by Intraday Volatility
+    adjusted_momentum = momentum * intraday_volatility
+    
+    # Calculate Dynamic Adjustment Factor
+    dynamic_adjustment_factor = df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Apply Dynamic Adjustment
+    dynamically_adjusted_momentum = adjusted_momentum * (dynamic_adjustment_factor / df['volume'])
+    
+    # Calculate Close to Close Return
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume Weighted Average Price
+    vwap = (df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Factors
+    combined_factor = (close_to_close_return * intraday_range) / vwap
+    
+    # Filter for Recent Price Trend
+    recent_price_trend = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Introduce Volume Trend
+    volume_sum_5_days = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / volume_sum_5_days
+    
+    # Final Combined Factor Computation
+    final_combined_factor = combined_factor * volume_ratio * high_low_momentum
+    
+    # Final Alpha Factor
+    alpha_factor = dynamically_adjusted_momentum - dynamically_adjusted_momentum.ewm(span=5, adjust=False).mean() + final_combined_factor
+    
+    return alpha_factor
+```

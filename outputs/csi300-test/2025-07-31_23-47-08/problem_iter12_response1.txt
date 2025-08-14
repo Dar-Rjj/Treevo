@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_Typical_Price'] = df['Typical_Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    vwap = df['Volume_Weighted_Typical_Price'].sum() / total_volume
+    df['VWAP'] = vwap
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = np.where(df['VWAP'] > df['close'], 1, -1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Return'] = df['Return'] * df['volume']
+    volume_weighted_return = df['Volume_Weighted_Return'].sum() / total_volume
+    df['Volume_Weighted_Return'] = volume_weighted_return
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Final_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+
+    # Calculate Volatility
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    lookback_period = 20
+    df['Volatility'] = df['Daily_Return'].rolling(window=lookback_period).std()
+
+    # Calculate Simple Moving Average (SMA)
+    sma_lookback_period = 50
+    df['Moving_Average'] = df['close'].rolling(window=sma_lookback_period).mean()
+
+    # Calculate Trend Indicator
+    df['Trend_Indicator'] = np.where(df['close'] > df['Moving_Average'], 1, -1)
+
+    # Integrate Volatility and Trend with Final Alpha Factor
+    df['Enhanced_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Volatility'] * df['Trend_Indicator']
+
+    # Incorporate Trading Volume Trends
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    ema_lookback_period = 20
+    df['Volume_EMA'] = df['volume'].ewm(span=ema_lookback_period, adjust=False).mean()
+    df['Volume_Trend_Indicator'] = np.where(df['volume'] > df['Volume_EMA'], 1, -1)
+
+    # Integrate Volume Trend with Enhanced Alpha Factor
+    df['Ultimate_Alpha_Factor'] = df['Enhanced_Alpha_Factor'] * df['Volume_Trend_Indicator']
+
+    return df['Ultimate_Alpha_Factor']
+```

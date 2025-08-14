@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(data):
+    # Calculate Intraday Price Movement
+    data['High_Low_Range'] = data['high'] - data['low']
+    data['Close_Open_Diff'] = data['close'] - data['open']
+    
+    # Incorporate Volume Influence
+    data['Volume_Adjusted_Momentum'] = (data['Close_Open_Diff'] * data['volume']).rolling(window=10).mean()
+    
+    # Adjust for Market Volatility
+    data['Daily_Return'] = data['close'].pct_change()
+    data['Abs_Return'] = abs(data['Daily_Return'])
+    data['Rolling_Std_30'] = data['Daily_Return'].rolling(window=30).std()
+    data['Adjusted_Momentum'] = data['Volume_Adjusted_Momentum'] / data['Rolling_Std_30']
+    
+    # Enhance Trend Reversal Signal
+    data['Short_Term_Momentum'] = data['close'].ewm(span=5, adjust=False).mean()
+    data['Long_Term_Momentum'] = data['close'].ewm(span=20, adjust=False).mean()
+    data['Momentum_Reversal'] = data['Short_Term_Momentum'] - data['Long_Term_Momentum']
+    data['Enhanced_Factor'] = data['Momentum_Reversal'] + data['Adjusted_Momentum']
+    
+    # Confirm Trend with Additional Indicators
+    data['ROC_12'] = (data['close'] / data['close'].shift(12) - 1) * 100
+    data['EMA_12'] = data['close'].ewm(span=12, adjust=False).mean()
+    data['EMA_26'] = data['close'].ewm(span=26, adjust=False).mean()
+    data['MACD'] = data['EMA_12'] - data['EMA_26']
+    data['Combined_Trend'] = data['ROC_12'] + data['MACD']
+    
+    # Refine Final Alpha Factor
+    data['Final_Alpha_Factor'] = (data['Enhanced_Factor'] + data['Combined_Trend']).ewm(span=5, adjust=False).mean()
+    
+    return data['Final_Alpha_Factor']
+
+# Sample usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

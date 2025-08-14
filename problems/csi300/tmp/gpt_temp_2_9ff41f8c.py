@@ -1,0 +1,39 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['vol_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Adaptive Window Calculation
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    df['window_size'] = np.where(df['volatility'] > df['volatility'].mean(), 5, 30)
+    
+    # Incorporate Recent Price Trends
+    df['close_ma_10'] = df['close'].rolling(window=10).mean()
+    df['momentum_indicator'] = df['close'] - df['close_ma_10']
+    
+    # Incorporate Trading Volume Patterns
+    df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_momentum'] = df['volume'] - df['volume_ma_10']
+    
+    # Rolling Statistics with Adaptive Window
+    def rolling_stats(series, window_size):
+        return series.rolling(window=window_size).agg(['mean', 'std'])
+    
+    stats = [rolling_stats(df['vol_weighted_close_to_open_return'], w) for w in df['window_size']]
+    stats_df = pd.concat(stats, axis=1).groupby(axis=1, level=0).mean()
+    df = df.join(stats_df, rsuffix='_stats')
+    
+    # Final alpha factor: standardized volume weighted close-to-open return
+    df['alpha_factor'] = (df['vol_weighted_close_to_open_return'] - df['mean']) / df['std']
+
+    # Drop rows with NaN values that are a result of the rolling operations
+    df.dropna(inplace=True)
+
+    return df['alpha_factor']

@@ -1,0 +1,71 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Price Change
+    close_to_open_change = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = (df[['close', 'high', 'low', 'open']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] / df['volume'].shift(1).fillna(1)
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Impact Score
+    n_days = 10
+    sum_volume = df['volume'].rolling(window=n_days).sum()
+    avg_high = df['high'].rolling(window=n_days).mean()
+    avg_low = df['low'].rolling(window=n_days).mean()
+    volume_impact_score = (avg_high - avg_low) / sum_volume
+    
+    # Adjust Intraday Price Range by VWAP
+    adjusted_intraday_price_range = intraday_price_range * (vwap / df['close'])
+    
+    # Multiply by Close-to-Open Price Change
+    combined_indicator = adjusted_intraday_price_range * close_to_open_change
+    
+    # Incorporate Volume Change
+    combined_indicator = combined_indicator * volume_change
+    
+    # Multiply Intraday Return by Volume Impact Score
+    adjusted_intraday_return = intraday_return * volume_impact_score
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Divide by Previous Close
+    momentum = high_low_spread / df['close'].shift(1).fillna(1)
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(n_days).fillna(0)
+    
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['low']
+    
+    # Adjust by Volume
+    cumulative_volume = df['volume'].rolling(window=n_days).sum()
+    adjusted_momentum = momentum / cumulative_volume
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    cumulative_volume_weighted_momentum = (adjusted_momentum * df['volume']).rolling(window=n_days).sum()
+    
+    # Confirm with Volume Trend
+    avg_volume = df['volume'].rolling(window=n_days).mean()
+    current_volume = df['volume']
+    volume_ratio = current_volume / avg_volume
+    
+    if volume_ratio > 1.2:
+        combined_factor = (price_momentum * intraday_returns) + cumulative_volume_weighted_momentum
+    else:
+        combined_factor = 0.5 * (price_momentum + intraday_returns)
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor * combined_indicator
+    
+    return final_alpha_factor

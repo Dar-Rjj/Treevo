@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Identify High Volume Days
+    volume_rolling_mean = df['volume'].rolling(window=10).mean()
+    high_volume_threshold = 1.5 * volume_rolling_mean
+    high_volume_days = df['volume'] > high_volume_threshold
+    
+    # Combine Intraday Volatility and Open-to-Close Return
+    combined_momentum = intraday_volatility + open_to_close_return
+    high_volume_filtered_momentum = combined_momentum.where(high_volume_days, 0)
+    
+    # Adjusted Momentum by Intraday Volatility
+    adjusted_momentum = high_volume_filtered_momentum * intraday_volatility
+    
+    # Short-Term and Long-Term Momentum
+    short_term_momentum = df['close'].shift(1) - df['close'].shift(7)
+    long_term_momentum = df['close'].shift(1) - df['close'].shift(30)
+    
+    # Calculate Daily Volume Change
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Adjust Price Momentum by Volume Shock
+    adjusted_price_momentum = (short_term_momentum - long_term_momentum) * volume_change
+    
+    # Adjust Intraday Momentum by Volatility
+    volatility = df['high'] - df['low']
+    adjusted_intraday_momentum = high_volume_filtered_momentum * volatility
+    
+    # Price Velocity
+    price_velocity = df['close'] - df['close'].shift(1)
+    
+    # Price Acceleration
+    price_acceleration = price_velocity - price_velocity.shift(1)
+    
+    # Adjust Price Acceleration by Volume
+    adjusted_price_acceleration = price_acceleration * df['volume']
+    
+    # Short-Term and Long-Term EMA
+    short_term_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # EMA Difference
+    ema_difference = short_term_ema - long_term_ema
+    
+    # Adjust EMA Difference by Volume Shock
+    adjusted_ema_difference = ema_difference * volume_change
+    
+    # Volume-Weighted EMA Difference
+    average_volume_12_days = df['volume'].rolling(window=12).mean()
+    volume_weighted_ema_difference = adjusted_ema_difference * average_volume_12_days
+    
+    # Momentum Signal
+    momentum_signal = volume_weighted_ema_difference * df['volume']
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = adjusted_price_momentum + adjusted_intraday_momentum + adjusted_price_acceleration + momentum_signal
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Incorporate Intraday Return
+    final_alpha_factor *= intraday_return
+    
+    # Refine the Final Factor
+    final_alpha_factor = final_alpha_factor.where(high_volume_days, 0)
+    
+    # Adjust Momentum by High-Low Volatility
+    final_alpha_factor *= volatility
+    
+    return final_alpha_factor
+```

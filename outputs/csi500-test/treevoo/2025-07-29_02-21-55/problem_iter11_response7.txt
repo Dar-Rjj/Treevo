@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_change = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    combined_indicator = intraday_change * df['volume_ratio']
+    
+    # Apply Threshold to Identify Significant Movements
+    threshold = 2.0  # Fixed threshold
+    moving_std = df['close'].pct_change().rolling(window=20).std()
+    adjusted_threshold = threshold * moving_std
+    significant_movements = (combined_indicator > adjusted_threshold) | (combined_indicator < -adjusted_threshold)
+    
+    # Confirm with Price Momentum
+    lookback_period = 20
+    ema_close = df['close'].ewm(span=lookback_period, adjust=False).mean()
+    momentum_score = df['close'] - ema_close
+    
+    # Combine Momentum and Volume Indicators
+    average_volume = df['volume'].rolling(window=lookback_period).mean()
+    volume_threshold = 1.5 * average_volume
+    volume_significant = df['volume'] > volume_threshold
+    
+    # Synthesize Final Indicator
+    final_indicator = (combined_indicator * significant_movements * volume_significant +
+                       momentum_score) / 2.0  # Weighted sum
+    
+    return final_indicator
+```

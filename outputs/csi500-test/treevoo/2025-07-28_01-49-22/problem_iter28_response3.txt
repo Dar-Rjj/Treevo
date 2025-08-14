@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['Abs_Close_to_Close_Return'] = (df['close'] - df['close'].shift(1)).abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['Combined_Value'] = df['High_Low_Range'] - df['Abs_Close_to_Close_Return']
+    
+    # Calculate Volume Adjusted Intraday Range
+    df['Volume_Adjusted_Intraday_Range'] = df['High_Low_Range'] * df['volume']
+    
+    # Calculate Combined Value Momentum
+    df['Combined_Value_Momentum'] = df['Combined_Value'] - df['Combined_Value'].shift(1)
+    
+    # Calculate Close Price Momentum
+    df['Close_Price_Momentum'] = (df['close'] / df['close'].shift(1) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Ratio
+    df['Intraday_Range_Ratio'] = df['High_Low_Range'] / (df['high'] + df['low'])
+    
+    # Compute Previous Day's Close-to-Open Change
+    df['Prev_Day_Close_to_Open'] = df['open'] - df['close'].shift(1)
+    
+    # Smooth High-Low Range Volatility
+    ema_window = 15
+    df['Smoothed_High_Low_Volatility'] = df['High_Low_Range'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Incorporate Close-Open Difference
+    fixed_weight = 0.5  # Example fixed weight
+    df['Close_Open_Difference'] = df['close'] - df['open']
+    df['Weighted_Close_Open_Difference'] = fixed_weight * df['Close_Open_Difference']
+    df['Enhanced_Smoothed_Volatility'] = df['Smoothed_High_Low_Volatility'] + df['Weighted_Close_Open_Difference']
+    
+    # Generate Intermediate Alpha Factor
+    df['Intermediate_Alpha_Factor'] = (
+        df['Volume_Adjusted_Intraday_Range'] +
+        df['Combined_Value_Momentum'] +
+        df['Intraday_Range_Ratio'] -
+        df['Prev_Day_Close_to_Open']
+    )
+    
+    # Adjust Intermediate Alpha Factor
+    df['Adjusted_Intermediate_Alpha_Factor'] = df['Intermediate_Alpha_Factor'].copy()
+    mask_high = df['Intraday_Range_Ratio'] > 1.0
+    mask_low = df['Intraday_Range_Ratio'] < 1.0
+    df.loc[mask_high, 'Adjusted_Intermediate_Alpha_Factor'] *= 1.8
+    df.loc[mask_low, 'Adjusted_Intermediate_Alpha_Factor'] *= 0.4
+    
+    # Compare with Baseline (Dynamic Threshold, e.g., EMA of Smoothed High-Low Range Volatility)
+    dynamic_threshold = df['Enhanced_Smoothed_Volatility'].ewm(span=ema_window, adjust=False).mean()
+    df['Signal'] = (df['Enhanced_Smoothed_Volatility'] > dynamic_threshold).astype(int) * 2 - 1
+    
+    # Adjust Combined Alpha Factor
+    df['Final_Combined_Alpha_Factor'] = df['Adjusted_Intermediate_Alpha_Factor'] * df['Signal']
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Final_Combined_Alpha_Factor'] + df['Close_Price_Momentum']) * df['volume']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# data = pd.DataFrame({
+#     'open': [100, 101, 102, 103, 104],
+#     'high': [105, 106, 107, 108, 109],
+#     'low': [95, 96, 97, 98, 99],
+#     'close': [102, 103, 104, 105, 106],
+#     'amount': [1000, 1000, 1000, 1000, 1000],
+#     'volume': [100, 100, 100, 100, 100]
+# })
+# factor = heuristics(data)
+# print(factor)
+```

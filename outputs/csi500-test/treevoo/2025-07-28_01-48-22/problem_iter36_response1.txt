@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average Crossover
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    simple_moving_average_crossover = (df['SMA_50'] - df['SMA_200']) / df['SMA_200']
+
+    # Exponential Moving Average Crossover
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    exponential_moving_average_crossover = (df['EMA_50'] - df['EMA_200']) / df['EMA_200']
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'OBV'] = df['OBV'] + df['volume']
+    df.loc[df['close'] < df['close'].shift(1), 'OBV'] = df['OBV'] - df['volume']
+    average_volume_30 = df['volume'].rolling(window=30).mean()
+    obv_factor = df['OBV'] / average_volume_30
+    
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_30 = df['VWAP'].rolling(window=30).mean()
+    vwap_factor = (df['close'] - vwap_30) / vwap_30
+    
+    # True Range (TR)
+    df['TR'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    tr_factor = df['TR'].rolling(window=14).mean()
+    
+    # Average True Range (ATR)
+    atr_factor = df['TR'].rolling(window=14).mean()
+    
+    # Inside Bar Pattern
+    inside_bar_pattern = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+    inside_bar_factor = inside_bar_pattern.astype(int)
+    
+    # Engulfing Pattern
+    bullish_engulfing_pattern = ((df['open'] < df['close']) & (df['open'].shift(1) > df['close'].shift(1)) &
+                                 (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)))
+    engulfing_pattern_factor = bullish_engulfing_pattern.astype(int)
+    
+    # High-Low Ratio
+    high_low_ratio = (df['high'] - df['low']) / df['low']
+    
+    # Close-Open Spread
+    close_open_spread = (df['close'] - df['open']) / df['open']
+    
+    # Price-to-Volume Ratio
+    price_to_volume_ratio = df['close'] / df['volume']
+    
+    # Price Change Ratio
+    price_change_ratio = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine all factors
+    combined_factor = (
+        simple_moving_average_crossover +
+        exponential_moving_average_crossover +
+        obv_factor +
+        vwap_factor +
+        tr_factor +
+        atr_factor +
+        inside_bar_factor +
+        engulfing_pattern_factor +
+        high_low_ratio +
+        close_open_spread +
+        price_to_volume_ratio +
+        price_change_ratio
+    ) / 12
+
+    return combined_factor.dropna()
+```

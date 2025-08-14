@@ -1,0 +1,20 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    roc_30 = ((df['close'].shift(-30) - df['close']) / df['close']).fillna(0)
+    roc_60 = ((df['close'].shift(-60) - df['close']) / df['close']).fillna(0)
+    high_low = df['high'] - df['low']
+    high_close = abs(df['high'] - df['close'].shift())
+    low_close = abs(df['low'] - df['close'].shift())
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    dm_pos = (df['high'].diff().fillna(0)).apply(lambda x: max(x, 0))
+    dm_neg = (df['low'].diff().fillna(0)).apply(lambda x: max(-x, 0))
+    smooth_dm_pos = dm_pos.ewm(alpha=1/14, min_periods=14).mean()
+    smooth_dm_neg = dm_neg.ewm(alpha=1/14, min_periods=14).mean()
+    smooth_tr = tr.ewm(alpha=1/14, min_periods=14).mean()
+    di_pos = 100 * (smooth_dm_pos / smooth_tr)
+    di_neg = 100 * (smooth_dm_neg / smooth_tr)
+    dx = 100 * (abs(di_pos - di_neg) / (di_pos + di_neg))
+    adx = dx.ewm(alpha=1/14, min_periods=14).mean()
+    heuristics_matrix = (roc_30 + roc_60 + adx) / 3
+    return heuristics_matrix

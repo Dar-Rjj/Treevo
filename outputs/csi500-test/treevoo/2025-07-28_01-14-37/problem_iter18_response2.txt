@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate momentum factors
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    df['ROC_5'] = df['close'].pct_change(periods=5)
+    df['ROC_20'] = df['close'].pct_change(periods=20)
+
+    # Derive volatility-based factors from daily returns
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(lambda x: np.log(x))
+    df['volatility_20'] = df['log_returns'].rolling(window=20).std()
+    df['volatility_60'] = df['log_returns'].rolling(window=60).std()
+
+    # Create volume-related indicators
+    df['volume_MA_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_MA_10']
+    
+    # Introduce on-balance volume (OBV)
+    df['OBV'] = 0.0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] + df.loc[df.index[i], 'volume']
+        elif df.loc[df.index[i], 'close'] < df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV'] - df.loc[df.index[i], 'volume']
+        else:
+            df.loc[df.index[i], 'OBV'] = df.loc[df.index[i-1], 'OBV']
+
+    # Utilize gap and range information for alpha generation
+    df['daily_range'] = df['high'] - df['low']
+    df['up_gap'] = (df['open'] - df['close'].shift(1)).apply(lambda x: x if x > 0 else 0)
+    df['down_gap'] = (df['close'].shift(1) - df['open']).apply(lambda x: x if x > 0 else 0)
+
+    # Incorporate money flow index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = 0.0
+    df['negative_money_flow'] = 0.0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'typical_price'] > df.loc[df.index[i-1], 'typical_price']:
+            df.loc[df.index[i], 'positive_money_flow'] = df.loc[df.index[i], 'raw_money_flow']
+        else:
+            df.loc[df.index[i], 'negative_money_flow'] = df.loc[df.index[i], 'raw_money_flow']
+    df['MFI_14'] = 100 - (100 / (1 + (df['positive_money_flow'].rolling(window=14).sum() / df['negative_money_flow'].rolling(window=14).sum())))
+
+    # Leverage inter-day price relationships for factor creation
+    df['open_above_close'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['close_above_midpoint'] = (df['close'] > (df['high'] + df['low']) / 2).astype(int)
+    
+    # Explore patterns in candlestick formations
+    df['bullish_engulfing'] = ((df['open'] < df['close']) & (df['open'].shift(-1) > df['close'].shift(-1)) & (df['close'] > df['open'].shift(-1)) & (df['open'] < df['close'].shift(-1))).astype(int)
+    df['bearish_engulfing'] = ((df['open'] > df['close']) & (df['open'].shift(-1) < df['close'].shift(-1)) & (df['close'] < df['open'].shift(-1)) & (df['open'] > df['close'].shift(-1))).astype(int)
+    df['doji'] = (abs(df['open'] - df['close']) / df['daily_range'] < 0.01).astype(int)
+    df['consecutive_doji'] = (df['doji'] + df['doji'].shift(

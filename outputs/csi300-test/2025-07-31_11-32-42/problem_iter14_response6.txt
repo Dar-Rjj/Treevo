@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Midpoint
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Multi-Day Average Midpoint (5 days)
+    df['avg_midpoint'] = df['midpoint'].rolling(window=5).mean()
+    
+    # Compute Volume Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Evaluate Open-to-Close Movement
+    df['open_to_close'] = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    df['integrated_gap'] = df['intraday_range'] - df['open_to_close']
+    
+    # Incorporate Advanced Volume Impact
+    df['volume_impact'] = df['integrated_gap'] * df['volume'].apply(lambda x: x**0.5)
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    df['price_stability'] = (df['high'] - df['low']) / (df['open'] + df['close'])
+    df['adjusted_metric'] = df['volume_impact'] / df['price_stability']
+    
+    # Daily Returns
+    df['daily_return'] = df['close'] - df['open']
+    
+    # Volume Adjusted Daily Return
+    df['volume_adjusted_daily_return'] = df['volume'] * df['daily_return']
+    
+    # Intraday Range to Volume Ratio
+    df['intraday_range_to_volume'] = df['intraday_range'] / df['volume']
+    
+    # Closing Price to High-Low Range Ratio
+    df['close_to_intraday_range'] = df['close'] / df['intraday_range']
+    
+    # Enhanced Price Envelopment
+    daily_ranges_sum = df['intraday_range'].rolling(window=5).sum()
+    volumes_sum = df['volume'].rolling(window=5).sum()
+    df['enhanced_price_envelopment'] = (daily_ranges_sum / volumes_sum) + df['midpoint']
+    
+    # Volatility-Adjusted Momentum
+    df['volatility'] = df['daily_return'].rolling(window=5).std()
+    df['volatility_adjusted_momentum'] = df['volume_adjusted_momentum'] / df['volatility']
+    
+    # Combine Factors
+    df['combined_factor_1'] = df['volume_adjusted_momentum'] * df['enhanced_price_envelopment']
+    df['combined_factor_2'] = df['volume_adjusted_daily_return'].rolling(window=5).sum()
+    df['combined_factor_3'] = df['intraday_range_to_volume'].rolling(window=5).sum()
+    df['combined_factor_4'] = df['close_to_intraday_range'].rolling(window=5).sum()
+    df['combined_factor_5'] = df['volatility_adjusted_momentum'].rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['combined_factor_1'] + 
+        df['combined_factor_2'] + 
+        df['combined_factor_3'] + 
+        df['combined_factor_4'] + 
+        df['combined_factor_5']
+    )
+    
+    # VWAPCHL
+    df['vwap_close'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_open'] = (df['open'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_chl'] = (df['vwap_close'] - df['vwap_open']) / (df['high'] - df['low'])
+    
+    # Multiply by VWAPCHL
+    df['final_alpha_factor'] = df['final_alpha_factor'] * df['vwap_chl']
+    
+    return df['final_alpha_factor']
+```

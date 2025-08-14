@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    volume_weighted_intraday_return = intraday_return * df['volume']
+    
+    # Calculate Short-Term Price Change
+    short_term_price_change = df['close'].diff(5)
+    
+    # Adjust for Volume Activity
+    average_volume_20_days = df['volume'].rolling(window=20).mean().shift(1)
+    short_term_volume_change = df['volume'].diff(5)
+    volume_trend_indicator = (short_term_volume_change > 0).astype(int) * 2 - 1
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    average_volume_5_days = df['volume'].rolling(window=5).mean()
+    scaled_volume = df['volume'] / average_volume_5_days
+    volume_adjusted_high_low_spread = high_low_spread * scaled_volume
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    volume_weighted_close_to_open_return = close_to_open_return * df['volume']
+    
+    # Combine Intraday Signals with Price Momentum and High-Low Spread
+    combined_signal = (volume_weighted_intraday_return + 
+                       short_term_price_change + 
+                       volume_adjusted_high_low_spread + 
+                       volume_weighted_close_to_open_return)
+    
+    # Volume-Weighted Factor
+    volume_weighted_factor = combined_signal * scaled_volume
+    
+    # Final Factor Adjustment
+    final_factor = volume_weighted_factor * volume_trend_indicator
+    
+    # Composite & Smoothing
+    ema_close_10_days = df['close'].ewm(span=10, adjust=False).mean()
+    price_momentum = df['close'] - ema_close_10_days
+    composite_factor = final_factor * price_momentum * volume_trend_indicator
+    
+    # 5-Day Simple Moving Average (SMA) of Composite Factor
+    sma_composite_factor_5_days = composite_factor.rolling(window=5).mean()
+    
+    return sma_composite_factor_5_days
+```

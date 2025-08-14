@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['open'] / df['close'].shift(1) - 1
+    
+    # Weight by Volume and Amount
+    volume_weighted_return = close_to_open_return * df['volume']
+    amount_weighted_return = close_to_open_return * df['amount']
+    
+    # Integrate Intraday High-Low Movement
+    intraday_high_low_ratio = (df['high'] - df['low']) / df['close']
+    
+    # Adjust by Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    intraday_return_adjusted = (df['close'] - df['open']) / df['open'] * volume_change
+    
+    # Adjust for Volume Volatility
+    volume_moving_avg = df['volume'].rolling(window=20).mean()
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_volatility = volume_std / volume_moving_avg
+    
+    # Cumulative Log Return with VWAP Integration
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    cumulative_log_return = daily_log_return.rolling(window=20).sum()
+    
+    vwap = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_20_day_ma = vwap.rolling(window=20).mean()
+    
+    # PMI Score
+    daily_price_change = df['close'] - df['close'].shift(1)
+    sum_daily_price_changes = daily_price_change.rolling(window=20).sum()
+    pmi_score = sum_daily_price_changes * vwap
+    
+    # Calculate 20-Day Momentum
+    momentum_20_day = df['close'] / df['close'].shift(20) - 1
+    
+    # Price Oscillator: Subtract 20-Day SMA from 5-Day SMA
+    sma_5_day = df['close'].rolling(window=5).mean()
+    sma_20_day = df['close'].rolling(window=20).mean()
+    price_oscillator = sma_5_day - sma_20_day
+    
+    # Final Alpha Factor
+    alpha_factor = (pmi_score * cumulative_log_return +
+                    intraday_high_low_ratio * intraday_return_adjusted +
+                    cumulative_log_return +
+                    momentum_20_day +
+                    price_oscillator)
+    
+    return alpha_factor
+```

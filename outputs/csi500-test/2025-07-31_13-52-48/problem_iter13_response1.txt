@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['price_momentum'] = df['log_return'].rolling(window=5).sum().shift(1)
+    
+    # Apply Combined Volume and Amount Shock Filter
+    df['abs_volume_change'] = abs(df['volume'] - df['volume'].shift(1))
+    df['abs_amount_change'] = abs(df['amount'] - df['amount'].shift(1))
+    
+    vol_75th = df['abs_volume_change'].quantile(0.75)
+    amount_75th = df['abs_amount_change'].quantile(0.75)
+    
+    df['shock_filter'] = (df['abs_volume_change'] < vol_75th) & (df['abs_amount_change'] < amount_75th)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['vol_weighted_intraday_volatility'] = df['intraday_volatility'] * df['volume']
+    df['vol_weighted_intraday_volatility_ma'] = df['vol_weighted_intraday_volatility'].rolling(window=10).mean()
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_reversal_score'] = df['close_to_open_return'] / df['vol_weighted_intraday_volatility_ma']
+    
+    # Apply Exponential Decay to Reversal Score
+    def exponential_decay(x, half_life):
+        return x * 0.5 ** (1 / half_life)
+    
+    df['decayed_reversal_score'] = df['intraday_reversal_score'].apply(lambda x: exponential_decay(x, 5))
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Range
+    df['vol_weighted_intraday_range'] = df['intraday_range'] * df['volume']
+    df['vol_weighted_intraday_range_ma'] = df['vol_weighted_intraday_range'].rolling(window=10).mean()
+    
+    # Combine Reversal Score and Intraday Range
+    df['combined_score'] = df['decayed_reversal_score'] + df['vol_weighted_intraday_range_ma']
+    df['final_factor'] = df['combined_score'].apply(lambda x: exponential_decay(x, 5))
+    
+    # Apply shock filter
+    df['final_factor'] = df['final_factor'] * df['shock_filter']
+    
+    return df['final_factor']
+```

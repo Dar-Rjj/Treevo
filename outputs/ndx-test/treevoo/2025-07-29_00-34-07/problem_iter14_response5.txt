@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 1-day, 5-day, and 20-day Price Returns
+    df['1d_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['5d_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20d_return'] = (df['close'] / df['close'].shift(20)) - 1
+
+    # Weighted Average the Momentum
+    df['weighted_momentum'] = 0.5 * df['1d_return'] + 0.3 * df['5d_return'] + 0.2 * df['20d_return']
+
+    # Filter by Relative Volume
+    df['avg_vol_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_filtered'] = df['volume'] >= 1.5 * df['avg_vol_10']
+    
+    # Adjust for Volume and Amount
+    df['vol_pct_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['amount_pct_change'] = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    df['adjusted_momentum'] = df['weighted_momentum'] * df['vol_pct_change'] * df['amount_pct_change']
+
+    # Incorporate High-Low Differential and Volume Volatility
+    df['20d_high'] = df['high'].rolling(window=20).max()
+    df['20d_low'] = df['low'].rolling(window=20).min()
+    df['high_low_diff'] = df['20d_high'] - df['20d_low']
+    df['vol_volatility'] = df['volume'].rolling(window=10).std()
+    df['hl_volatility'] = df['high_low_diff'] * df['vol_volatility']
+
+    # Calculate Adjusted High-Low Cumulative Return and Weighted Price Gaps
+    df['price_range'] = df['high'] - df['low']
+    df['filtered_price_range_sum'] = df[df['volume_filtered']]['price_range'].rolling(window=20).sum()
+    df['weighted_gap'] = df['price_range'] * df['vol_pct_change']
+    df['weighted_gap_sum'] = df[df['volume_filtered']]['weighted_gap'].rolling(window=20).sum()
+
+    # Combine Momentum and Volatility Components
+    df['aggregated_signal'] = df['adjusted_momentum'] + df['hl_volatility']
+
+    # Generate Alpha Factor
+    df['alpha_factor'] = (df['aggregated_signal'] + df['filtered_price_range_sum'] + df['weighted_gap_sum']) / df['volume']
+    df['final_alpha_factor'] = df['alpha_factor'] * df['amount_pct_change']
+
+    return df['final_alpha_factor']
+```

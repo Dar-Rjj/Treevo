@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, n_days=5, m_days=10, sma_period=50):
+    # Compute Volume-Weighted High-Low Spread
+    df['high_low_vol'] = (df['high'] - df['low']) * df['volume']
+    
+    # Summarize Over Lookback Period
+    cumulative_high_low_vol = df['high_low_vol'].rolling(window=lookback_period).sum()
+    total_volume = df['volume'].rolling(window=lookback_period).sum()
+    avg_high_low_vol = cumulative_high_low_vol / total_volume
+    
+    # Calculate Momentum
+    current_day_momentum = df['high_low_vol']
+    momentum = current_day_momentum - avg_high_low_vol.shift(1)
+    
+    # Incorporate Price Trend
+    price_change = df['close'] - df['open']
+    momentum += price_change
+    
+    # Calculate Intraday Range Growth
+    today_range = df['high'] - df['low']
+    prev_day_range = (df['high'].shift(1) - df['low'].shift(1)).fillna(0)
+    intraday_range_growth = (today_range - prev_day_range) / prev_day_range.replace(0, 1)
+    
+    # Volume Weighted Moving Average
+    weighted_close = df['close'] * df['volume']
+    sum_weighted_close = weighted_close.rolling(window=sma_period).sum()
+    sum_volume = df['volume'].rolling(window=sma_period).sum()
+    vwma = sum_weighted_close / sum_volume
+    
+    # Combine Intraday Range Growth and Volume Weighted Moving Average
+    combined_factor = intraday_range_growth + vwma
+    
+    # Calculate Price Momentum
+    close_momentum = df['close'].pct_change(n_days)
+    open_momentum = df['open'].pct_change(n_days)
+    price_momentum = (close_momentum + open_momentum) / 2
+    
+    # Adjust for Volume Surge
+    n_day_volume_change = df['volume'] - df['volume'].shift(n_days)
+    m_day_volume_change = df['volume'] - df['volume'].shift(m_days)
+    volume_surge = n_day_volume_change + m_day_volume_change
+    volume_surge[volume_surge < 0] *= 0.8
+    
+    # Final Combined Alpha Factor
+    alpha_factor = (price_momentum * momentum) + combined_factor + volume_surge + momentum
+    
+    # Calculate the Simple Moving Average (SMA) of closing prices
+    sma = df['close'].rolling(window=sma_period).mean()
+    
+    # Determine the current stock's position relative to its SMA
+    above_sma = (df['close'] > sma).astype(int)
+    
+    # Combine with SMA signal
+    final_alpha_factor = alpha_factor + above_sma
+    
+    return final_alpha_factor
+```

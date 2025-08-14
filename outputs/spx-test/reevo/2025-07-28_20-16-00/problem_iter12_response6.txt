@@ -1,0 +1,57 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the percentage change in closing prices
+    close_change = df['close'].pct_change()
+    
+    # Calculate the true range (high - low, high - previous close, or previous close - low)
+    true_range = (df['high'] - df['low']).abs().fillna(0)
+    prev_close = df['close'].shift(1)
+    true_range = true_range.where(true_range > (df['high'] - prev_close).abs(), (df['high'] - prev_close).abs())
+    true_range = true_range.where(true_range > (prev_close - df['low']).abs(), (prev_close - df['low']).abs())
+    
+    # Calculate the average true range over the last 14 days for more stability
+    avg_true_range = true_range.rolling(window=14).mean()
+    
+    # Calculate a weighted momentum factor, giving more weight to recent changes
+    weighted_momentum = (close_change.rolling(window=5).mean() * 3.0 + 
+                         close_change.rolling(window=10).mean() * 2.0 + 
+                         close_change.rolling(window=20).mean()) / 6.0
+    
+    # Incorporate volume by calculating the percentage change in volume
+    volume_change = df['volume'].pct_change()
+    
+    # Calculate the standard deviation of returns as a measure of volatility
+    volatility = close_change.rolling(window=20).std()
+    
+    # Calculate the relative strength index (RSI) for the closing prices
+    gain = df['close'].diff().clip(lower=0).rolling(window=14).mean()
+    loss = df['close'].diff().clip(upper=0).abs().rolling(window=14).mean()
+    rsi = 100 - (100 / (1 + (gain / loss)))
+    
+    # Dynamic weighting based on the ratio of the current day's volume to the 14-day average volume
+    avg_volume_14 = df['volume'].rolling(window=14).mean()
+    volume_ratio = df['volume'] / avg_volume_14
+    
+    # Volume shock indicator
+    volume_shock = (df['volume'] > 1.5 * avg_volume_14).astype(int)
+    
+    # Relative strength factor, comparing the current close to the 5 and 14-day SMAs
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_14 = df['close'].rolling(window=14).mean()
+    relative_strength = (df['close'] - sma_14) / (sma_5 - sma_14)
+    
+    # Adaptive volatility
+    adaptive_volatility = (volatility - volatility.rolling(window=20).min()) / (volatility.rolling(window=20).max() - volatility.rolling(window=20).min())
+    
+    # Refined momentum with a mix of short and long-term momentum
+    refined_momentum = (weighted_momentum.rolling(window=5).mean() * 0.7 + 
+                        weighted_momentum.rolling(window=20).mean() * 0.3)
+    
+    # Smart volume adjustments
+    smart_volume = (volume_change - volume_change.rolling(window=20).min()) / (volume_change.rolling(window=20).max() - volume_change.rolling(window=20).min())
+    
+    # Generate the alpha factor, with an interaction between refined momentum, adaptive volatility, smart volume, RSI, and relative strength
+    alpha_factor = (refined_momentum * (1 / (adaptive_volatility + 1e-7)) * smart_volume * (100 - rsi) * relative_strength * volume_ratio * volume_shock)
+    
+    return alpha_factor
+```

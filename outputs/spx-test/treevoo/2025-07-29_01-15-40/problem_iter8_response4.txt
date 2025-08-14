@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=5, M=20, alpha=0.1):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread over past N days
+    df['Avg_Intraday_High_Low_Spread'] = df['Intraday_High_Low_Spread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['High_Low_Momentum_Score'] = np.where(
+        df['Intraday_High_Low_Spread'] > df['Avg_Intraday_High_Low_Spread'], 
+        1, 
+        -1
+    )
+    df['High_Low_Momentum_Score'] *= df['volume']
+    
+    # Calculate 5-Day Momentum
+    df['5D_Momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate 20-Day Volume Moving Average
+    df['20D_Volume_MA'] = df['volume'].rolling(window=M).mean()
+    
+    # Compute Volume Deviation from MA
+    df['Volume_Deviation'] = df['volume'] - df['20D_Volume_MA']
+    
+    # Combine Momentum and Volume Synchronicity
+    df['Momentum_Volume_Sync'] = df['5D_Momentum'] * df['Volume_Deviation']
+    
+    # Apply Exponential Smoothing
+    df['Smoothed_Sync'] = df['Momentum_Volume_Sync'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Integrate Volume into Momentum
+    df['VWAP'] = (df['volume'] * (df['close'] + df['open']) / 2).cumsum() / df['volume'].cumsum()
+    
+    # Calculate Simple Moving Average (SMA) of Close
+    df['SMA_Close'] = df['close'].rolling(window=N).mean()
+    
+    # Calculate Price Reversal Indicator
+    df['Price_Reversal'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Composite Factor Construction
+    df['Composite_Factor'] = (
+        df['High_Low_Momentum_Score'] * df['SMA_Close'] * df['VWAP'] * df['Price_Reversal'] +
+        df['Smoothed_Sync'] * df['Volume_Deviation'] * (df['high'] - df['low'])
+    )
+    
+    # Output Final Alpha Factor
+    return df['Composite_Fctor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

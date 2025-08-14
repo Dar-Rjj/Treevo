@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day SMA of Close Price
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Compare 5-day SMA with Close Price
+    df['SMA_5_vs_Close'] = (df['SMA_5'] - df['close']) / df['close']
+    
+    # Compare 20-day SMA with Close Price
+    df['SMA_20_vs_Close'] = (df['SMA_20'] - df['close']) / df['close']
+    
+    # Determine the relationship between 5-day and 20-day SMA
+    df['SMA_5_vs_SMA_20'] = (df['SMA_5'] - df['SMA_20']) / df['SMA_20']
+    
+    # Calculate 5-day SMA of Volume
+    df['SMA_Vol_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Analyze the change in 5-day SMA of Volume
+    df['Vol_Change'] = df['SMA_Vol_5'].pct_change()
+    
+    # Calculate Daily Price Range
+    df['Price_Range'] = df['high'] - df['low']
+    
+    # Compute the Average Daily Price Range over the past 20 days
+    df['Avg_Price_Range_20'] = df['Price_Range'].rolling(window=20).mean()
+    
+    # Calculate the ratio of today's Daily Price Range to the 20-day average
+    df['Range_Ratio'] = df['Price_Range'] / df['Avg_Price_Range_20']
+    
+    # Assess the gap between Open and Close Prices
+    df['Gap'] = (df['open'] - df['close']) / df['close']
+    
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Compute the 14-day Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the standard deviation of high, low, and close prices over the last 30 days
+    df['Std_Dev_30'] = df[['high', 'low', 'close']].rolling(window=30).std().mean(axis=1)
+    
+    # Examine the ratio of the 30-day standard deviation to the daily return
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volatility_Factor'] = df['Std_Dev_30'] / df['Daily_Return'].abs()
+    
+    # Synthesize the alpha factor
+    df['Alpha_Factor'] = (
+        df['SMA_5_vs_Close'] + 
+        df['SMA_20_vs_Close'] + 
+        df['SMA_5_vs_SMA_20'] + 
+        df['Vol_Change'] + 
+        df['Range_Ratio'] + 
+        df['Gap'] + 
+        (df['VWAP'] - df['close']) / df['close'] + 
+        (50 - df['RSI']) / 50 + 
+        df['Volatility_Factor']
+    )
+    
+    # Return the alpha factor as a pandas Series
+    return df['Alpha_Factor']
+```

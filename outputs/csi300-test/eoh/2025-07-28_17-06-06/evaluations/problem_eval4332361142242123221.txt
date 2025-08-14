@@ -1,0 +1,25 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return and volume change
+    df['daily_return'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Assign weights based on the exponentially weighted moving average of daily return and volume change
+    df['price_weight'] = (df['daily_return'].abs() / df['daily_return'].abs().ewm(span=30).mean()).fillna(0)
+    df['volume_weight'] = (df['volume_change'].abs() / df['volume_change'].abs().ewm(span=30).mean()).fillna(0)
+    
+    # Introduce a new weight based on the relative change in trading amount
+    df['amount_change'] = df['amount'].pct_change().fillna(0)
+    df['amount_weight'] = (df['amount_change'].abs() / df['amount_change'].abs().ewm(span=30).mean()).fillna(0)
+    
+    # Calculate the weighted sum of features
+    df['weighted_sum'] = (df['open'] * df['price_weight'] + 
+                          df['high'] * df['volume_weight'] + 
+                          df['low'] * df['amount_weight'] + 
+                          df['close'] * (1 - (df['price_weight'] + df['volume_weight'] + df['amount_weight']) / 3))
+    
+    # Create the heuristics matrix
+    heuristics_matrix = df['weighted_sum']
+    
+    return heuristics_matrix

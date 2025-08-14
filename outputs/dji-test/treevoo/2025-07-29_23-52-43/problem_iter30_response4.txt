@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Volume Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = ((df['close'] - df['open']) / df['open']) * (df['volume'] / df['volume'].rolling(window=5).mean().shift(1))
+    
+    # Volume Spike Detection
+    df['daily_volume_change'] = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['daily_volume_change'].rolling(window=21).quantile(0.95) * 2.5
+    df['volume_spike'] = df['daily_volume_change'] > spike_threshold
+    
+    # Volume Increase Ratio
+    df['volume_increase_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=5).std() / df['close'].shift(1)
+    
+    # Intermediate Factor
+    df['intermediate_factor'] = (df['volume_increase_ratio'] * (df['close'] - df['close'].rolling(window=5).mean().shift(1)) * df['price_volatility'])
+    
+    # Adjust for Volatility
+    df['rolling_volatility'] = (df['high'] - df['low']).rolling(window=5).std()
+    df['adjusted_combined_metrics'] = df['intermediate_factor'] / df['rolling_volatility']
+    
+    # Trend Following Indicator
+    df['trend_following_indicator'] = (df['close'] - df['close'].shift(1)) / df['close'].rolling(window=5).std().shift(1)
+    
+    # Volume Momentum Indicator
+    df['volume_momentum_indicator'] = (df['volume'] - df['volume'].rolling(window=5).mean().shift(1)) / df['volume'].rolling(window=5).std().shift(1)
+    
+    # Final Composite Factor
+    df['final_composite_factor'] = (
+        df['volume_weighted_intraday_return'] +
+        df['intermediate_factor'] +
+        df['adjusted_combined_metrics'] +
+        df['trend_following_indicator'] +
+        df['volume_momentum_indicator']
+    )
+    
+    return df['final_composite_factor'].dropna()
+
+# Example usage:
+# factor_values = heuristics_v2(df)
+```

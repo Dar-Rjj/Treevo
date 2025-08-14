@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference (High - Low)
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = (df['close'].diff() > 0) * df['close'].diff()
+    df['loss'] = (df['close'].diff() < 0) * df['close'].diff().abs()
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    gain_sum = df['gain'].rolling(window=14).sum()
+    loss_sum = df['loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    rs = gain_sum / loss_sum
+    
+    # Convert to ARSI
+    rsi = 100 - (100 / (1 + rs))
+    rsi_vol_adjusted = rsi * df['volume'].rolling(window=14).mean()
+    rsi_with_momentum = rsi_vol_adjusted * (df['close'] / df['open']).shift(1)
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute VWMA of High-Low Spread
+    vwma_high_low = (high_low_spread * df['volume']).rolling(window=14).mean() / df['volume'].rolling(window=14).mean()
+    
+    # Incorporate Close-to-Close Return
+    close_to_close_return = df['close'].pct_change()
+    vwma_high_low_adjusted = vwma_high_low * close_to_close_return.shift(1)
+    
+    # Calculate Short-Term and Long-Term Returns
+    short_term_return = df['close'].pct_change(periods=5)
+    long_term_return = df['close'].pct_change(periods=20)
+    
+    # Calculate Volume-Weighted Short-Term and Long-Term Returns
+    vol_weighted_short_term_return = df['volume'] * short_term_return
+    vol_weighted_long_term_return = df['volume'] * long_term_return
+    
+    # Calculate Short-Term Volatility (Average True Range)
+    tr = df[['high', 'low']].diff().abs().max(axis=1)
+    atr = tr.rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    adjusted_short_term_return = vol_weighted_short_term_return / atr
+    
+    # Combine ARSI, Adjusted Returns, and VWMA
+    factor = rsi_with_momentum * adjusted_short_term_return * vwma_high_low_adjusted - vol_weighted_long_term_return
+    
+    return factor
+```

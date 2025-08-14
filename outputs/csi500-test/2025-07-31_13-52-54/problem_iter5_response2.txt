@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=10):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate High-Close to Open-High Ratio
+    high_close_diff = df['high'] - df['close']
+    open_high_diff = df['high'] - df['open']
+    high_close_to_open_high_ratio = high_close_diff / open_high_diff.replace(0, 1)  # Avoid division by zero
+    
+    # Combine Spread and Ratio
+    weighted_spread = intraday_high_low_spread * df['volume']
+    combined_factor = weighted_spread + high_close_to_open_high_ratio
+    
+    # Calculate Price Momentum
+    close_momentum = df['close'].pct_change(n)
+    open_momentum = df['open'].pct_change(n)
+    price_momentum = (close_momentum + open_momentum) / 2
+    
+    # Calculate Enhanced Volume Adjusted Volatility
+    range_price = df['high'] - df['low']
+    volatility = range_price.rolling(window=n).std()
+    enhanced_volatility = volatility / df['volume'].replace(0, 1)  # Avoid division by zero
+    
+    # Calculate Volume Surge Indicator
+    n_day_volume_change = df['volume'] - df['volume'].shift(n)
+    m_day_volume_change = df['volume'] - df['volume'].shift(m)
+    volume_surge = n_day_volume_change + m_day_volume_change
+    
+    # Integrate Intraday and Historical Factors
+    integrated_factor = combined_factor * enhanced_volatility * price_momentum
+    
+    # Final Adjustment for Volume Surge
+    penalty = 0.8
+    final_alpha_factor = integrated_factor.where(volume_surge >= 0, integrated_factor * penalty)
+    
+    return final_alpha_factor
+```

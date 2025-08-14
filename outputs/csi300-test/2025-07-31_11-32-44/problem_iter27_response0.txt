@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    df['DailyMomentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    df['1PeriodReturn'] = df['close'].pct_change()
+    df['5PeriodMA'] = df['1PeriodReturn'].rolling(window=5).mean()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    df['VWAP_CloseDiff'] = df['close'] - df['VWAP']
+    df['CombinedFactor'] = df['DailyMomentum'] * df['VWAP_CloseDiff']
+    
+    # Confirm with Volume
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolumeConfirmedFactor'] = df['CombinedFactor'] * np.log(df['VolumeChange'] + 1)
+    
+    # Calculate Raw Momentum
+    df['RawMomentum'] = df['close'] - df['close'].shift(20)
+    
+    # Combine Intraday and Raw Momentum
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    df['IntradaySpreadChange'] = df['IntradayHighLowSpread'] - df['IntradayHighLowSpread'].shift(1)
+    df['IntradayRawMomentum'] = df['IntradaySpreadChange'] * df['RawMomentum']
+    
+    # Adjust with Volume Delta
+    df['VolumeDelta'] = df['volume'] - df['volume'].shift(20)
+    df['AdjustedIntradayRawMomentum'] = df['IntradayRawMomentum'] * abs(df['VolumeDelta'])
+    
+    # Apply 5-day Simple Moving Average
+    df['SMA_5'] = df['AdjustedIntradayRawMomentum'].rolling(window=5).mean()
+    
+    # Calculate Intraday Reversal
+    df['IntradayReversal'] = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Introduce Intraday Range Volatility
+    df['IntradayRange'] = df['high'] - df['low']
+    P = 5  # Choose P (e.g., 5, 10, 21)
+    df['IntradayRangeVolatility'] = df['IntradayRange'].rolling(window=P).std()
+    
+    # Synthesize All Factors
+    df['SynthesizedFactor'] = df['SMA_5'] * df['IntradayReversal'] * df['IntradayRangeVolatility']
+    
+    # Integrate Price Delta
+    df['PriceDelta'] = df['close'] - df['close'].shift(1)
+    df['FinalIntegratedResult'] = df['SynthesizedFactor'] + df['PriceDelta']
+    
+    # Apply 7-day Simple Moving Average
+    df['SMA_7'] = df['FinalIntegratedResult'].rolling(window=7).mean()
+    
+    # Generate Alpha Factor Component
+    df['AlphaFactorComponent'] = df['5PeriodMA'] * np.sign(df['VolumeChange'] + df['amount'].diff())
+    
+    return df['SMA_7']
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['1_day_price_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_day_price_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['20_day_price_return'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+
+    # Average the Momentum
+    df['average_momentum'] = (df['1_day_price_return'] + df['5_day_price_return'] + df['20_day_price_return']) / 3
+
+    # Adjust for Volume
+    df['daily_volume_pct_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['volume_adjusted_momentum'] = df['average_momentum'] * (1 + df['daily_volume_pct_change'])
+
+    # Calculate Adjusted Price Difference
+    df['adjusted_price_difference'] = (df['close'] - df['close'].shift(10)) * np.log(df['close'] / df['close'].shift(1))
+
+    # Calculate Rolling High-Low Differential
+    df['rolling_high_20'] = df['high'].rolling(window=20).max()
+    df['rolling_low_20'] = df['low'].rolling(window=20).min()
+    df['rolling_high_low_diff'] = df['rolling_high_20'] - df['rolling_low_20']
+
+    # Weight by Volume Volatility
+    df['volume_volatility'] = df['volume'].rolling(window=10).std()
+    df['weighted_rolling_high_low_diff'] = df['rolling_high_low_diff'] * df['volume_volatility']
+
+    # Calculate Volume Adjusted Momentum
+    df['volume_adjusted_signal'] = (df['volume'] - df['volume'].shift(1)) * (df['close'] - df['close'].rolling(window=10).mean())
+
+    # Aggregate the Signals
+    df['aggregated_signal'] = (df['weighted_rolling_high_low_diff'] - df['adjusted_price_difference'] + df['volume_adjusted_signal'])
+
+    # Final Factor
+    df['final_factor'] = (df['volume_adjusted_momentum'] + df['aggregated_signal']) / df['volume']
+
+    return df['final_factor']
+```

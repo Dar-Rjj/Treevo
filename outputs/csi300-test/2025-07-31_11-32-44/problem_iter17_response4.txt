@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Raw Momentum
+    raw_momentum = df['close'] / df['close'].shift(20)
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(20)
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Initial Components
+    combined_component = (raw_momentum * high_low_range * abs(volume_delta))
+    
+    # Apply 5-day Simple Moving Average
+    sma_5 = combined_component.rolling(window=5).mean()
+    
+    # Calculate Daily Momentum
+    daily_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    price_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    ma_5_price_momentum = price_momentum.rolling(window=5).mean()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate VWAP to Close Difference
+    vwap_close_diff = df['close'] - vwap
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    combined_daily_vwap = daily_momentum * vwap_close_diff
+    
+    # Confirm with Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    confirmed_factor = combined_daily_vwap * np.log(volume_change + 1)
+    
+    # Synthesize with Intraday Reversal
+    intraday_reversal = (df['open'] - df['close']).shift(1) - (df['open'] - df['close'])
+    synthesized_factor = confirmed_factor + intraday_reversal
+    
+    # Integrate with Stochastic Oscillator
+    low_14 = df['low'].rolling(window=14).min()
+    high_14 = df['high'].rolling(window=14).max()
+    k_line = 100 * (df['close'] - low_14) / (high_14 - low_14)
+    d_line = k_line.rolling(window=3).mean()
+    integrated_factor = synthesized_factor * d_line
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    prev_day_intraday_high_low_spread = df['high'].shift(1) - df['low'].shift(1)
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = intraday_high_low_spread - prev_day_intraday_high_low_spread
+    
+    # Generate Alpha Factor Component
+    amount_change = df['amount'] - df['amount'].shift(1)
+    alpha_factor_component = ma_5_price_momentum * np.sign(volume_change + amount_change)
+    
+    # Synthesize All Factors
+    final_alpha_factor = integrated_factor + intraday_momentum + alpha_factor_component
+    final_alpha_factor = final_alpha_factor * np.sign(volume_change)
+    
+    return final_alpha_factor
+```

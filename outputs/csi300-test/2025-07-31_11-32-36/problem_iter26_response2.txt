@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['DailyReturn'] = df['close'].pct_change()
+
+    # Average Daily Return (5-day lookback window)
+    df['AvgDailyReturn'] = df['DailyReturn'].rolling(window=5).mean()
+
+    # Rolling Average Volume Difference
+    df['VolumeDiff'] = df['volume'].diff()
+    df['RollingAvgVolumeDiff'] = df['VolumeDiff'].rolling(window=5).mean()
+
+    # Volume Confirmation
+    df['VolumeConfirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+
+    # Amplitude Confirmation
+    df['Amplitude'] = df['high'] - df['low']
+    df['AmplitudeConfirmation'] = (df['Amplitude'] > df['Amplitude'].shift(1)).astype(int)
+
+    # Combine Volume and Amplitude Confirmation
+    df['CombinedConfirmation'] = 0.5 * (df['VolumeConfirmation'] + df['AmplitudeConfirmation'])
+
+    # Multiply Price Momentum by Volume and Amplitude Trend
+    df['PriceMomentumTrend'] = df['AvgDailyReturn'] * df['RollingAvgVolumeDiff'] * df['CombinedConfirmation']
+
+    # Intraday High-Low Range
+    df['IntradayHighLowRange'] = df['high'] - df['low']
+
+    # Close to Open Difference
+    df['CloseToOpenDiff'] = df['close'] - df['open']
+
+    # Sum of Deltas
+    df['SumOfDeltas'] = df['IntradayHighLowRange'] + df['CloseToOpenDiff']
+
+    # Weight by Volume
+    df['IntradayMomentumScore'] = df['volume'] * df['SumOfDeltas']
+
+    # Volume Weighted Price Change
+    df['VolWeightedClose'] = df['close'] * df['volume']
+    df['VolWeightedOpen'] = df['open'] * df['volume']
+    df['TotalVolume'] = df['volume']
+    df['VolumeWeightedPriceChange'] = (df['VolWeightedClose'] - df['VolWeightedOpen']) / df['TotalVolume']
+
+    # Combined Intraday and Daily Momentum
+    df['CombinedMomentum'] = df['IntradayMomentumScore'] + df['VolumeWeightedPriceChange']
+
+    # Intraday Volatility Score
+    df['HighCloseDelta'] = df['high'] - df['close']
+    df['LowCloseDelta'] = df['low'] - df['close']
+    df['AvgDelta'] = (df['HighCloseDelta'] + df['LowCloseDelta']) / 2
+    df['IntradayVolStd'] = df['IntradayHighLowRange'].rolling(window=30).std()
+    df['EnhancedVolatilityScore'] = df['AvgDelta'] * df['IntradayVolStd'] * df['amount']
+
+    # Integrate Composite Momentum and Volatility
+    df['EMACombinedMomentum'] = df['CombinedMomentum'].ewm(span=30, adjust=False).mean()
+    df['AdjustedMomentum'] = df['CombinedMomentum'] - df['EMACombinedMomentum'] - df['EnhancedVolatilityScore']
+
+    # Combine Factors
+    df['FinalFactor'] = (
+        df['PriceMomentumTrend'] +
+        df['IntradayMomentumScore'] +
+        df['CombinedMomentum'] +
+        df['VolumeWeightedPriceChange'] +
+        df['AdjustedMomentum']
+    ) * df['volume'] * df['close']
+
+    return df['FinalFactor'].dropna()
+```

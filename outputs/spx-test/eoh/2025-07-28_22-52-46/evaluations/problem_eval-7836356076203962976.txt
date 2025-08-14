@@ -1,0 +1,32 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate momentum
+    df['momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Compute exponential moving averages for close price
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate EMA crossover
+    df['ema_crossover'] = df['ema_10'] - df['ema_30']
+    
+    # Calculate Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Rolling 60-day historical Sharpe ratios
+    sharpe_ratios_momentum = (df['momentum'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['momentum'].rolling(window=60).std()
+    sharpe_ratios_ema_crossover = (df['ema_crossover'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['ema_crossover'].rolling(window=60).std()
+    sharpe_ratios_rsi = (df['rsi'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['rsi'].rolling(window=60).std()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['momentum'] * sharpe_ratios_momentum +
+                         df['ema_crossover'] * sharpe_ratios_ema_crossover +
+                         df['rsi'] * sharpe_ratios_rsi)
+    
+    return heuristics_matrix

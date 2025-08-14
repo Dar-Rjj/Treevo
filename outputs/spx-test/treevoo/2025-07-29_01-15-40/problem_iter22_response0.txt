@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate short and long moving averages
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+
+    # Compute the difference between the short and long moving averages as a trend indicator
+    df['trend_indicator'] = df['5_day_MA'] - df['20_day_MA']
+
+    # Calculate average daily trading volume over a specific period (e.g., 14 days)
+    df['avg_volume_14'] = df['volume'].rolling(window=14).mean()
+
+    # Compare current day's volume with the average volume to determine relative activity
+    df['volume_activity'] = df['volume'] / df['avg_volume_14']
+
+    # Measure volatility by calculating the standard deviation of daily returns over a set window (e.g., 20 days)
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility_20'] = df['daily_returns'].rolling(window=20).std()
+
+    # Use the ratio of the high-low range to the close price as an additional volatility measure
+    df['range_to_close_volatility'] = (df['high'] - df['low']) / df['close']
+
+    # Calculate momentum by finding the percentage change in closing price from a past period (e.g., 1 month)
+    df['momentum_30'] = df['close'].pct_change(periods=30)
+
+    # Consider the rate of change in momentum over consecutive periods for acceleration
+    df['momentum_acceleration'] = df['momentum_30'].diff()
+
+    # Count the number of consecutive days with higher closes (uptrend) or lower closes (downtrend)
+    df['uptrend_days'] = (df['close'] > df['close'].shift()).astype(int).cumsum() * (df['close'] > df['close'].shift())
+    df['downtrend_days'] = (df['close'] < df['close'].shift()).astype(int).cumsum() * (df['close'] < df['close'].shift())
+
+    # Identify significant price levels (support and resistance) using historical highs and lows
+    df['support_level'] = df['low'].rolling(window=10).min()
+    df['resistance_level'] = df['high'].rolling(window=10).max()
+
+    # Calculate the distance of the current close to these support and resistance levels
+    df['distance_to_support'] = df['close'] - df['support_level']
+    df['distance_to_resistance'] = df['resistance_level'] - df['close']
+
+    # Analyze the relationship between traded amount and volume to infer market sentiment
+    df['avg_trade_size'] = df['amount'] / df['volume']
+
+    # Compute the average trade size and compare it with the overall volume
+    df['trade_size_ratio'] = df['avg_trade_size'] / df['amount']
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['trend_indicator'] + 
+        df['volume_activity'] + 
+        df['volatility_20'] + 
+        df['range_to_close_volatility'] + 
+        df['momentum_30'] + 
+        df['momentum_acceleration'] + 
+        df['uptrend_days'] - 
+        df['downtrend_days'] + 
+        df['distance_to_support'] - 
+        df['distance_to_resistance'] + 
+        df['trade_size_ratio']
+    )
+
+    return alpha_factor
+```

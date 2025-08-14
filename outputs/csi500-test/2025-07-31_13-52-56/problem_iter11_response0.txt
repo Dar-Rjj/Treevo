@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 30-day Price Momentum
+    df['30_day_momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Enhance Price Momentum with High-Low Range
+    df['highest_high_30'] = df['high'].rolling(window=30).max()
+    df['lowest_low_30'] = df['low'].rolling(window=30).min()
+    df['high_low_range_30'] = df['highest_high_30'] - df['lowest_low_30']
+    df['enhanced_momentum'] = df['30_day_momentum'] / df['high_low_range_30']
+    
+    # Identify Volume Shock
+    df['avg_volume_30'] = df['volume'].rolling(window=30).mean().shift(1)  # Exclude day t
+    df['volume_shock'] = (df['volume'] > 2 * df['avg_volume_30']).astype(int)
+    
+    # Calculate Intraday Volatility Adjusted
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    df['intraday_volatility'] = (df['high'] + df['low'] + df['close'] + df['open']) / 4
+    df['intraday_volatility_adjusted'] = df['intraday_return'] / df['intraday_volatility']
+    
+    # Combine Enhanced Momentum, Volume Shock, and Intraday Volatility Adjusted
+    df['combined_factor'] = df['enhanced_momentum'] * df['volume_shock'] * df['intraday_volatility_adjusted']
+    
+    # Calculate Cumulative High-Low Range
+    df['daily_high_low_range'] = df['high'] - df['low']
+    N = 30
+    df['cumulative_high_low_range'] = df['daily_high_low_range'].rolling(window=N).sum()
+    
+    # Calculate Cumulative Open-to-Close Price Change
+    df['daily_open_close_change'] = df['close'] - df['open']
+    df['cumulative_open_close_change'] = df['daily_open_close_change'].rolling(window=N).sum()
+    
+    # Final Combined Alpha Factor
+    df['high_low_range_momentum'] = df['cumulative_high_low_range'] / df['cumulative_open_close_change']
+    df['final_alpha_factor'] = df['high_low_range_momentum'] * df['combined_factor']
+    
+    # Adjust for Recent Volume Impact
+    df['recent_volume_impact'] = df['daily_high_low_range'].iloc[-1] - df['daily_high_low_range'].iloc[0]
+    df['final_alpha_factor'] *= df['recent_volume_impact']
+    
+    return df['final_alpha_factor']
+```

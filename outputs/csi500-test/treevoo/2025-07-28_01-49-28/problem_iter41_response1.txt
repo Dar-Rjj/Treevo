@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength and Momentum
+    daily_range_expansion = df['high'] - df['low']
+    open_to_close_movement = (df['close'] - df['open']) * df['volume']
+    
+    # High-Low Spread Momentum Analysis
+    moving_sum_20_days = (df['high'] - df['low']).rolling(window=20).sum()
+    previous_moving_sum = moving_sum_20_days.shift(1)
+    
+    # Enhance with Dynamic High and Low Prices
+    high_10d = df['high'].rolling(window=10).max()
+    low_10d = df['low'].rolling(window=10).min()
+    proximity_to_high = (high_10d - df['close']) / (high_10d - low_10d)
+    proximity_to_low = (df['close'] - low_10d) / (high_10d - low_10d)
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    inverted_min_proximity = 1 / min_proximity
+    volatility_adjustment = df['close'].rolling(window=20).std()
+    adjusted_proximity = inverted_min_proximity / volatility_adjustment
+    
+    # Open-High-Low Volatility and Momentum
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    open_high_weighted = open_high_diff * df['volume']
+    open_low_weighted = open_low_diff * df['volume']
+    weighted_avg = (open_high_weighted + open_low_weighted) / df['volume']
+    
+    # Amount per Unit Close Price Rate of Change
+    sum_amounts_5d = df['amount'].rolling(window=5).sum()
+    sum_amounts_10d = df['amount'].rolling(window=10).sum().shift(5)
+    ratio_5d = sum_amounts_5d / (df['close'] * 5)
+    ratio_10d = sum_amounts_10d / (df['close'] * 10)
+    amount_per_unit_change = ratio_5d - ratio_10d
+    
+    # Volume-Weighted Moving Average Crossover Signal
+    short_term_vwma_5d = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    long_term_vwma_20d = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    vwma_crossover_signal = short_term_vwma_5d - long_term_vwma_20d
+    
+    # Final Synthesized Alpha Factor
+    strong_move_indicator = (daily_range_expansion + open_to_close_movement) / (moving_sum_20_days - previous_moving_sum)
+    alpha_factor = (strong_move_indicator * amount_per_unit_change * vwma_crossover_signal * adjusted_proximity)
+    
+    return alpha_factor
+```

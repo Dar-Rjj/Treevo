@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the relative strength (RS) by dividing today's close by the SMA of past n days
+    n = 14
+    df['SMA'] = df['close'].rolling(window=n).mean()
+    df['Relative_Strength'] = df['close'] / df['SMA']
+    
+    # Develop a momentum ratio by comparing today's close with the close n days ago
+    df['Momentum_Ratio'] = df['close'] / df['close'].shift(n)
+    
+    # Create a volume surge factor that identifies significant increases in volume over a rolling period
+    df['Volume_Surge'] = (df['volume'] - df['volume'].rolling(window=n).mean()) / df['volume'].rolling(window=n).std()
+    
+    # Formulate a volume accumulation factor that tracks the cumulative sum of positive and negative volume changes
+    df['Volume_Change'] = df['volume'].diff()
+    df['Volume_Accumulation'] = df['Volume_Change'].apply(lambda x: x if x > 0 else 0).cumsum() - df['Volume_Change'].apply(lambda x: -x if x < 0 else 0).cumsum()
+    
+    # Construct a normalized daily price range by dividing the day's high minus low by the closing price
+    df['Normalized_Price_Range'] = (df['high'] - df['low']) / df['close']
+    
+    # Define a breakout probability factor based on the frequency of recent highs or lows being exceeded
+    df['Breakout_Probability'] = ((df['high'] == df['high'].rolling(window=n).max()) | (df['low'] == df['low'].rolling(window=n).min())).astype(int)
+    
+    # Generate an intraday momentum factor by calculating the difference between the day's high and the opening price
+    df['Intraday_Momentum'] = df['high'] - df['open']
+    
+    # Design a liquidity trend factor by analyzing the moving average of the total amount traded
+    df['Liquidity_Trend'] = df['amount'].rolling(window=n).mean()
+    
+    # Create an amount-weighted price change by summing the product of the price change and the amount, divided by the total amount
+    df['Price_Change'] = df['close'].pct_change()
+    df['Amount_Weighted_Price_Change'] = (df['Price_Change'] * df['amount']).cumsum() / df['amount'].cumsum()
+    
+    # Build a composite score by summing up the values of all individual factors, weighted dynamically based on their recent performance
+    factors = ['Relative_Strength', 'Momentum_Ratio', 'Volume_Surge', 'Volume_Accumulation', 'Normalized_Price_Range', 'Breakout_Probability', 'Intraday_Momentum', 'Liquidity_Trend', 'Amount_Weighted_Price_Change']
+    weights = [1] * len(factors)  # Simple equal weighting, can be replaced with more dynamic weighting
+    df['Composite_Score'] = (df[factors].fillna(0) * weights).sum(axis=1)
+    
+    return df['Composite_Score']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

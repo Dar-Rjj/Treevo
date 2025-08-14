@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']) / df['volume'].rolling(window=7, min_periods=1).sum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['deviation'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = (df['deviation'] > df['deviation'].shift(1)) & (df['volume'] > df['volume'].rolling(window=5, min_periods=1).mean())
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_adjustment'] = (df['volume'] - df['volume'].rolling(window=7, min_periods=1).mean()) * df['intraday_return']
+    
+    # Incorporate Price Volatility
+    close_std_7 = df['close'].rolling(window=7, min_periods=1).std()
+    df['volatility_adjusted_intraday_return'] = df['intraday_return'].apply(lambda x: x * 1.5 if close_std_7.iloc[-1] > close_std_7.mean() else x * 0.5)
+    
+    # Incorporate Momentum Shift
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_shift'] = 0
+    df.loc[df['ema_5'] > df['ema_20'], 'momentum_shift'] += 0.8
+    df.loc[df['ema_5'] < df['ema_20'], 'momentum_shift'] -= 0.8
+    
+    # Evaluate Price Movement Relative to Open
+    df['high_open_pct'] = (df['high'] - df['open']) / df['open']
+    df['low_open_pct'] = (df['low'] - df['open']) / df['open']
+    df['strong_intraday_movement'] = ((df['high_open_pct'] > 0.015) & (df['low_open_pct'] < -0.015)).astype(int) * 0.5
+    
+    # Combine Indicators
+    df['score'] = 0
+    df.loc[df['trend_reversal'] & df['volume_increase'], 'score'] += df['volume_adjusted_intraday_return']
+    df['score'] += df['momentum_shift']
+    df['score'] += df['strong_intraday_movement']
+    
+    # Smoothing factor
+    df['final_score'] = df['score'].ewm(alpha=0.2, adjust=False).mean()
+    
+    return df['final_score']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

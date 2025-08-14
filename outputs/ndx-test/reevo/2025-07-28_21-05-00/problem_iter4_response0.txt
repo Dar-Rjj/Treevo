@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Integrate multiple indicators to create a robust factor
+    factor = (price_change * volume_change + diff_close_avg + momentum_5d + rsi)
+
+    # Apply exponential smoothing to the factor
+    smoothed_factor = factor.ewm(span=5, adjust=False).mean()
+
+    # Consider interaction effects by multiplying the smoothed factor with its lagged value
+    lagged_factor = smoothed_factor.shift(1)
+    interaction_effect = smoothed_factor * lagged_factor
+
+    # Combine the interaction effect with the original smoothed factor
+    combined_factor = (smoothed_factor + interaction_effect).ewm(span=5, adjust=False).mean()
+
+    # Incorporate sentiment data (e.g., sentiment score from news articles or social media)
+    sentiment_score = df['sentiment_score']  # Assume this column exists in the DataFrame
+    sentiment_weight = (sentiment_score - sentiment_score.mean()) / sentiment_score.std()
+
+    # Incorporate macroeconomic data (e.g., interest rates, GDP growth rate)
+    macro_data = df['macro_data']  # Assume this column exists in the DataFrame
+    macro_weight = (macro_data - macro_data.mean()) / macro_data.std()
+
+    # Combine the factors with sentiment and macroeconomic data
+    final_factor = combined_factor * (1 + sentiment_weight) * (1 + macro_weight)
+
+    return final_factor
+```

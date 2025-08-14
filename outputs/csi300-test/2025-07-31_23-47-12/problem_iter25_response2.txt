@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    upper_threshold = cum_log_returns.mean() + 2 * cum_log_returns.std()
+    lower_threshold = cum_log_returns.mean() - 2 * cum_log_returns.std()
+    momentum = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * (volumes / mean_volume)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    volatility_measures = (std_abs_price_changes + ema_abs_price_changes + iqr_abs_price_changes) / 3
+    
+    # Final Factor Calculation
+    weights = np.array([0.5, 0.3, 0.2])  # Weights for Momentum, Volume, and Volatility
+    weighted_momentum = volume_adjusted_momentum * weights[0]
+    weighted_volatility = volatility_measures * weights[1]
+    final_factor = weighted_momentum + weighted_volatility  # Combine the components
+    
+    return final_factor
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

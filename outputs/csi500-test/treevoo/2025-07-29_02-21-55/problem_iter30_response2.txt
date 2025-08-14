@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, M=10, R=10, S=10, T=10, P=14, Q=10, U=10, V=10, W=10):
+    # Calculate Momentum Indicators
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['Momentum_SMA'] = df['close'] - df['SMA']
+    
+    df['EMA'] = df['close'].ewm(span=N, adjust=False).mean()
+    df['Momentum_EMA'] = df['close'] - df['EMA']
+    
+    df['N_High'] = df['high'].rolling(window=N).max()
+    df['Momentum_N_High'] = df['close'] - df['N_High']
+    
+    # Develop Reversal Indicators
+    df['Reversal_PCT_Change'] = df['close'].pct_change()
+    
+    df['N_Low'] = df['low'].rolling(window=N).min()
+    df['Reversal_Below_N_Low'] = (df['close'] < df['N_Low']).astype(int)
+    
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=N).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=N).mean()
+    df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+    
+    # Explore Volume-Based Indicators
+    df['Volume_Sum_M'] = df['volume'].rolling(window=M).sum()
+    
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+    
+    df['Volume_Ratio_R'] = df['volume'] / df['volume'].rolling(window=R).mean()
+    
+    df['Volume_Surge_S'] = df['volume'] / df['volume'].rolling(window=S).max()
+    
+    df['Volume_Ratio_T'] = df['volume'] / df['volume'].rolling(window=T).min()
+    
+    # Create Range-Based Indicators
+    df['True_Range'] = df[['high', 'low', 'close']].diff().abs().max(axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=P).mean()
+    df['Relative_Range'] = df['ATR'] / (df['high'] - df['low'])
+    
+    df['Range_Expansion_Q'] = df['ATR'] / df['ATR'].rolling(window=Q).mean()
+    
+    df['Std_True_Range_U'] = df['True_Range'].rolling(window=U).std()
+    
+    # Utilize Open, High, Low, Close Combinations
+    df['Intraday_Performance'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    df['Bullish_Days'] = ((df['close'] > df['open']) & (df['close'] > df['close'].shift(1))).astype(int)
+    df['Trend_Strength'] = df['Intraday_Performance'].rolling(window=T).mean()
+    
+    df['Gap_Indicator'] = df['open'] - df['close'].shift(1)
+    
+    df['Upper_Shadow'] = (df['high'] - df['close']) / (df['high'] - df['low'])
+    
+    # Leverage Amount Data for Indicators
+    df['Total_Amount_Q'] = df['amount'].rolling(window=Q).sum()
+    
+    df['Amount_Volume_Ratio'] = df['amount'] / df['volume']
+    
+    df['Amount_Ratio_S'] = df['amount'] / df['amount'].rolling(window=S).mean()
+    
+    df['Large_Trade_Indicator'] = (df['amount'] > df['amount'].rolling(window=V).median()).astype(int)
+    
+    df['Amount_Ratio_W'] = df['amount'] / df['amount'].rolling(window=W).min()
+
+    # Combine all the indicators into a single alpha factor
+    alpha_factor = (
+        df['Momentum_SMA'] +
+        df['Momentum_EMA'] +
+        df['Momentum_N_High'] +
+        df['Revers

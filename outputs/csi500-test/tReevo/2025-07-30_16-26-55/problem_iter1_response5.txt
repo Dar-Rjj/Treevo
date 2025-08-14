@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 20-day Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate Upper and Lower Price Envelopes
+    std_dev = df['close'].rolling(window=20).std()
+    df['Upper_Envelope'] = df['SMA'] + std_dev
+    df['Lower_Envelope'] = df['SMA'] - std_dev
+    
+    # Identify Breakouts
+    df['Upper_Breakout'] = (df['close'] > df['Upper_Envelope']).astype(int)
+    df['Lower_Breakout'] = (df['close'] < df['Lower_Envelope']).astype(int)
+    
+    # Calculate Volume-Adjusted Momentum
+    df['Momentum'] = (df['close'] - df[['high', 'low']].mean(axis=1)) * df['volume']
+    
+    # Generate Alpha Factor Signal
+    df['Alpha_Factor'] = np.where(
+        df['Upper_Breakout'] == 1, 
+        df['Momentum'],
+        np.where(
+            df['Lower_Breakout'] == 1, 
+            -df['Momentum'],
+            0
+        )
+    )
+    
+    # Assign No-Signal for Intraday Traps
+    # Ensure no signal is given when price reverts within the same day
+    df['Alpha_Factor'] = np.where(
+        (df['close'] <= df['Upper_Envelope']) & (df['close'] >= df['Lower_Envelope']),
+        0,
+        df['Alpha_Factor']
+    )
+    
+    return df['Alpha_Factor']
+```

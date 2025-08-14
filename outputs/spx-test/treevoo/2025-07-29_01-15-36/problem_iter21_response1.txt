@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['price_momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['volume_momentum'] = (df['volume'] - df['volume'].shift(10)) / df['volume'].shift(10)
+
+    # Trend Indicators
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_crossover'] = short_ema - long_ema
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Volatility Indicators
+    df['true_range'] = df.apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), 
+        axis=1
+    )
+    df['price_change_variance'] = df['close'].rolling(window=10).var()
+
+    # Relative Strength Indicators
+    df['positive_changes'] = df['close'].diff().apply(lambda x: max(x, 0))
+    df['abs_changes'] = df['close'].diff().abs()
+    df['modified_rsi'] = df['positive_changes'].rolling(window=14).sum() / df['abs_changes'].rolling(window=14).sum()
+
+    # Money Flow Indicators
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(df['close'] > df['close'].shift(), 0)
+    negative_money_flow = money_flow.abs().where(df['close'] < df['close'].shift(), 0)
+    sum_positive_money_flow = positive_money_flow.rolling(window=14).sum()
+    sum_abs_money_flow = (positive_money_flow + negative_money_flow).rolling(window=14).sum()
+    df['modified_mfi'] = sum_positive_money_flow / sum_abs_money_flow
+
+    # Volume-Weighted Price
+    df['vwap_inspired'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Market Sentiment
+    df['open_close_spread'] = df['close'] - df['open']
+    df['gap_analysis'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # New Indicator: Price-to-Volume Ratio
+    df['price_to_volume_ratio'] = (df['close'] - df['close'].shift(1)) / (df['volume'] - df['volume'].shift(1))
+
+    # New Indicator: Volume Weighted Price Change
+    df['volume_weighted_price_change'] = (df['close'] - df['close'].shift(1)) * (df['volume'] / df['volume'].shift(1))
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['price_momentum'] +
+        df['volume_momentum'] +
+        df['ema_crossover'] +
+        df['high_low_range'] +
+        df['true_range'] +
+        df['price_change_variance'] +
+        df['modified_rsi'] +
+        df['modified_mfi'] +
+        df['vwap_inspired'] +
+        df['open_close_spread'] +
+        df['gap_analysis'] +
+        df['price_to_volume_ratio'] +
+        df['volume_weighted_price_change']
+    )
+
+    return alpha_factor
+```

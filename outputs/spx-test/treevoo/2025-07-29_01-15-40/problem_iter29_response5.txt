@@ -1,0 +1,60 @@
+```python
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = (df['intraday_high_low_spread'] - df['intraday_high_low_spread'].shift(1)).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    df['high_low_momentum_score'] *= df['volume']
+    
+    # Calculate Price Momentum
+    period = 5
+    df['price_change'] = df['close'] - df['close'].shift(period)
+    df['price_momentum'] = df['price_change'].rolling(window=period).sum()
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(period)
+    df['volume_trend'] = df['volume_change'].rolling(window=period).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['range_momentum'] = (df['intraday_high_low_spread'] - df['intraday_high_low_spread'].shift(1)).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Integrate Open-Price and Close-Price Movement
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_close_momentum'] = df['open_close_diff'].rolling(window=period).sum()
+    
+    # Calculate Intraday Price Volatility
+    rolling_window = 5
+    df['intraday_volatility'] = df[['open', 'high', 'low', 'close']].std(axis=1, ddof=0).rolling(window=rolling_window).mean()
+    
+    # Compute Price Volatility Score
+    df['volatility_score'] = (df['intraday_volatility'] - df['intraday_volatility'].rolling(window=rolling_window).mean()).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    df['volatility_score'] *= df['volume']
+    
+    # Calculate Intraday Open-High Spread
+    df['intraday_open_high_spread'] = df['high'] - df['open']
+    
+    # Compute Open-High Momentum Score
+    avg_open_high_spread = df['intraday_open_high_spread'].rolling(window=rolling_window).mean()
+    df['open_high_momentum_score'] = (df['intraday_open_high_spread'] - avg_open_high_spread).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    df['open_high_momentum_score'] *= df['volume']
+    
+    # Combine Factors
+    weight_high_low = 1.0
+    weight_price_momentum = 1.0
+    weight_volume_trend = 1.0
+    weight_range_momentum = 1.0
+    weight_open_close_momentum = 1.0
+    weight_volatility_score = 1.0
+    weight_open_high_momentum = 1.0
+    
+    df['alpha_factor'] = (weight_high_low * df['high_low_momentum_score'] +
+                          weight_price_momentum * df['price_momentum'] +
+                          weight_volume_trend * df['volume_trend'] +
+                          weight_range_momentum * df['range_momentum'] +
+                          weight_open_close_momentum * df['open_close_momentum'] +
+                          weight_volatility_score * df['volatility_score'] +
+                          weight_open_high_momentum * df['open_high_momentum_score'])
+    
+    return df['alpha_factor']
+```

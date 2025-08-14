@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic and Intraday Movement
+    high_low_spread = df['high'] - df['low']
+    close_open_spread = df['close'] - df['open']
+    intraday_movement = high_low_spread + close_open_spread
+
+    # Synthesize Momentum Indicators
+    ema_7_high_low = high_low_spread.ewm(span=7, adjust=False).mean()
+    ema_21_high_low = high_low_spread.ewm(span=21, adjust=False).mean()
+    
+    raw_momentum = high_low_spread.rolling(window=14).mean()
+    smoothed_momentum = 0.2 * high_low_spread + (1 - 0.2) * raw_momentum.shift(1)
+    
+    momentum_ratio = ema_7_high_low / ema_21_high_low
+    combined_momentum = momentum_ratio * intraday_movement
+    
+    accumulated_momentum = combined_momentum.rolling(window=14).sum()
+    
+    # Combine with Volume-Weighted Close Price
+    vwcp = (df['close'] * df['volume']).rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    short_term_momentum = 0.5 * combined_momentum * vwcp
+
+    # Long-Term Price Momentum Adjustment
+    long_term_avg_close = df['close'].rolling(window=20).mean()
+    adjusted_close_diff = df['close'] - long_term_avg_close
+    long_term_adjustment = 0.4 * (adjusted_close_diff / accumulated_momentum)
+
+    # Final Alpha Factor
+    alpha_factor = short_term_momentum + long_term_adjustment
+    return alpha_factor
+```

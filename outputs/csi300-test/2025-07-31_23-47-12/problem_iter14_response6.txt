@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=20, alpha=0.5, beta=0.3, gamma=0.2):
+    # Ensure the DataFrame is sorted by date
+    df = df.sort_index()
+    
+    # Calculate Log Returns
+    log_returns = np.log(df['close']).diff().fillna(0)
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = momentum.quantile(0.95)
+    lower_threshold = momentum.quantile(0.05)
+    
+    # Clip Log Returns to Thresholds
+    momentum = np.clip(momentum, lower_threshold, upper_threshold)
+    
+    # Adjust for Volume
+    volume_mean = df['volume'].rolling(window=M).mean()
+    volume_adjusted_momentum = momentum * (df['volume'] / volume_mean)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = df['close'].diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine Weighted Momentum, Volume, and Volatility Components
+    factor = (alpha * volume_adjusted_momentum + 
+              beta * ema_abs_price_changes + 
+              gamma * iqr_abs_price_changes)
+    
+    # Ensure Weights Sum to 1
+    assert np.isclose(alpha + beta + gamma, 1.0), "Weights must sum to 1"
+    
+    return factor
+```

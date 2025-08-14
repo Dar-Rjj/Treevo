@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    volume_change_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    combined_indicator = intraday_pct_change * volume_change_ratio
+    
+    # Apply Threshold to Identify Significant Movements
+    threshold = 1.5
+    std_dev_20 = df['close'].pct_change().rolling(window=20).std()
+    significant_movements = (combined_indicator > threshold) & (combined_indicator > std_dev_20)
+    
+    # Confirm with Price Momentum
+    lookback_period = 20
+    ema_close = df['close'].ewm(span=lookback_period, adjust=False).mean()
+    momentum_score = df['close'] - ema_close
+    
+    # Combine Momentum and Volume Indicators
+    volume_threshold = 1.5 * df['volume'].rolling(window=lookback_period).mean()
+    final_indicator = (significant_movements * combined_indicator + momentum_score) * (df['volume'] > volume_threshold)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    ma_20_log_returns = daily_log_return.rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    adjusted_ma_return = ma_20_log_returns * ema_volume / df['volume'].rolling(window=20).mean()
+    
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_ma_return.rolling(window=5).mean()
+    
+    # Introduce Non-Linear Transformation
+    transformed_alpha_factor = np.sqrt(smoothed_adjusted_return)
+    
+    return transformed_alpha_factor
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low and Close-Open Momentum
+    high_low_range = df['high'] - df['low']
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    five_day_rolling_momentum = (price_movement_ratio.rolling(window=5).sum() 
+                                 / high_low_range.rolling(window=5).sum())
+    adjusted_five_day_momentum = five_day_rolling_momentum * df['volume']
+
+    # Calculate 10-Day Price and Intraday Momentum
+    ten_day_price_momentum = df['close'] - df['close'].shift(10)
+    intraday_return = (df['high'] - df['low']) / df['low']
+    combined_momentum = ten_day_price_momentum + intraday_return
+    
+    # Adjust by Volume
+    volume_change_indicator = np.where(df['volume'] > df['volume'].shift(1), 1, 0)
+    combined_momentum_adjusted = combined_momentum * volume_change_indicator
+
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Calculate Price Trend Indicator
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    price_trend_indicator = np.where(short_ema > long_ema, 1, -1)
+
+    # Combine Factors
+    close_open_return_by_volume = (df['close'] - df['open']) / df['open'] * df['volume']
+    combined_factor = close_open_return_by_volume / daily_volatility
+    final_alpha_factor = (adjusted_five_day_momentum 
+                          + combined_momentum_adjusted 
+                          + combined_factor * price_trend_indicator)
+    
+    # Smooth the Result
+    smoothed_result = final_alpha_factor.rolling(window=10).mean()
+    
+    return smoothed_result
+```

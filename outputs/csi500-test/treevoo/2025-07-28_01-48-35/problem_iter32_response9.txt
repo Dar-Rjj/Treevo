@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    df['close_to_intraday_ratio'] = df['close'] / df['intraday_range']
+    
+    # Short-Term Price Change
+    df['short_term_price_change'] = df['close'] - df['close'].shift(5)
+    
+    # Adjust for Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    df['combined_high_low_open_close'] = df['intraday_range'] + df['opening_gap']
+    
+    # Measure Closing Behavior
+    df['closing_behavior'] = df['close'] / df['close'].shift(1)
+    
+    # Final Combined Factor
+    df['final_combined_factor'] = (df['combined_high_low_open_close'] * df['closing_behavior']).clip(lower=0)
+    
+    # Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = (df['high'] - df['low']) / df['low'] * df['volume']
+    
+    # Volume-Weighted High-Low Spread
+    df['avg_volume_5_days'] = df['volume'].rolling(window=5).mean()
+    df['volume_weighted_high_low_spread'] = (df['high'] - df['low']) * (df['volume'] / df['avg_volume_5_days'])
+    
+    # Price Momentum
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_momentum'] = df['close'] - df['ema_20']
+    
+    # Volume Trend Indicator
+    df['volume_trend_score'] = (df['volume'] - df['volume'].shift(10)).apply(lambda x: 2 if x > 0 else -2)
+    
+    # Composite Factor
+    df['composite_factor'] = (df['final_combined_factor'] * df['price_momentum'] + 
+                              df['volume_weighted_intraday_return']).clip(lower=0)
+    
+    # Smooth the Composite Factor
+    df['smoothed_composite_factor'] = df['composite_factor'].rolling(window=5).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_composite_factor'] * df['volume_trend_score']
+    
+    # Final Factor
+    df['avg_volume_10_days'] = df['volume'].rolling(window=10).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_10_days']
+    df['final_factor'] = df['final_alpha_factor'] * df['scaled_volume']
+    
+    return df['final_factor']
+```

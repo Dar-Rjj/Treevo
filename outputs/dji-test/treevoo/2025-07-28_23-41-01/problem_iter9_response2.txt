@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['hl_range'] = df['high'] - df['low']
+    
+    # Calculate 21-Day Rolling Sum of High-Low Range and Volume
+    df['rolling_hl_sum'] = df['hl_range'].rolling(window=21).sum()
+    df['rolling_volume_sum'] = df['volume'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = df['hl_range'] / (df['rolling_hl_sum'] / df['rolling_volume_sum'])
+    
+    # Calculate Volume Weighted Momentum
+    df['price_change'] = df['close'].diff()
+    df['volume_weighted_momentum'] = df['price_change'] * df['volume']
+    
+    # Combine Breakout Strength with Volume Weighted Momentum
+    df['combined_breakout_vol_momentum'] = df['breakout_strength'] * df['volume_weighted_momentum']
+    
+    # Calculate Price Momentum
+    df['7_day_return'] = df['close'].pct_change(7)
+    df['21_day_return'] = df['close'].pct_change(21)
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+    
+    # Calculate Volume Activity
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).mean()
+    df['21_day_avg_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_activity'] = df['7_day_avg_volume'] / df['21_day_avg_volume']
+    
+    # Calculate Momentum Indicators
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['roc_21'] = df['close'].pct_change(21)
+    
+    # Determine Volume Impact
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=21).mean()
+    df['weighted_sma'] = df['sma_50'] * df['volume_ratio']
+    df['weighted_ema'] = df['ema_50'] * df['volume_ratio']
+    df['weighted_roc'] = df['roc_21'] * df['volume_ratio']
+    
+    # Introduce Trend Indicator
+    df['dmi_plus'] = 100 * (df['high'] - df['high'].shift(1)).abs() / (df['high'] - df['low'])
+    df['dmi_minus'] = 100 * (df['low'] - df['low'].shift(1)).abs() / (df['high'] - df['low'])
+    df['adx'] = (df['dmi_plus'] - df['dmi_minus']).abs().rolling(window=14).mean()
+    
+    # Combine Adjusted Momentum Indicators with Trend Indicator
+    df['adjusted_momentum'] = df['weighted_sma'] + df['weighted_ema'] + df['weighted_roc'] + df['adx']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['combined_breakout_vol_momentum'] 
+                                * df['price_momentum'] * df['volume_activity'] 
+                                * df['adjusted_momentum'])
+    
+    return df['final_alpha_factor']
+```

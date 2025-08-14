@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Adjust for Opening Gap
+    df['open_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_range'] = df['high_low_range'] - df['open_gap'].abs()
+    
+    # Incorporate Volume Momentum
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_weighted_range'] = df['adjusted_range'] * df['volume_change']
+    
+    # Apply Time Series Momentum
+    lookback_period = 10
+    df['range_moving_avg'] = df['volume_weighted_range'].rolling(window=lookback_period).mean()
+    df['momentum'] = df['volume_weighted_range'] - df['range_moving_avg']
+    
+    # Calculate High-Low Spread Change
+    df['high_low_spread_change'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Calculate Momentum of High-Low Spread Change
+    df['spread_momentum'] = df['high_low_spread_change'].rolling(window=5).sum()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4 * df['volume']
+    df['vwap'] = df['vwap'].cumsum() / df['volume'].cumsum()
+    
+    # Introduce Price Reversion Component
+    df['price_reversion'] = (df['close'] - df['close'].shift(1)).abs() * df['vwap']
+    
+    # Combine VWAP, High-Low Spread Momentum, Adjusted Range, and Price Reversion
+    df['alpha_factor'] = df['vwap'] * df['spread_momentum'] * df['volume_weighted_range'] * df['price_reversion']
+    
+    return df['alpha_factor']
+```

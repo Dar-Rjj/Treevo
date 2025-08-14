@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Logarithmic Return
+    short_term_return = df['close'].pct_change(5).apply(lambda x: 0 if pd.isna(x) else x)
+    long_term_return = df['close'].pct_change(20).apply(lambda x: 0 if pd.isna(x) else x)
+    
+    # Volume-Weighted Short-Term and Long-Term Logarithmic Return
+    vol_weighted_short_term = short_term_return * df['volume']
+    vol_weighted_long_term = long_term_return * df['volume']
+    
+    # Calculate Short-Term Volatility (Average True Range over last 5 days)
+    atr = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    adjusted_return = (vol_weighted_short_term / atr) - vol_weighted_long_term
+    
+    # Determine Gain and Loss
+    gain = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    loss = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    
+    # Aggregate Gains and Losses
+    sum_gains = gain.rolling(window=14).sum()
+    sum_losses = loss.rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    rs = sum_gains / sum_losses.replace(0, 1)
+    
+    # Convert to ARSI
+    rsi = 100 - (100 / (1 + rs))
+    avg_volume = df['volume'].rolling(window=14).mean()
+    arsi = rsi * avg_volume * (df['close'] / df['open'])
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    combined_intraday = intraday_volatility * close_to_close_return
+    
+    # Calculate Daily Volume Change
+    daily_volume_change = (df['volume'] / df['volume'].shift(1)) - 1
+    
+    # Aggregate Volume Changes
+    aggregated_volume_changes = daily_volume_change.rolling(window=5).sum()
+    
+    # Calculate Price Oscillator
+    price_oscillator = short_term_return - long_term_return
+    
+    # Calculate Price Range Ratio
+    price_range_ratio = df['high'] / df['low']
+    
+    # Combine ARSI, Adjusted Returns, and Price Oscillator
+    combined_factor = (arsi * adjusted_return) + price_oscillator - vol_weighted_long_term
+    
+    # Final Adjustment
+    final_factor = (adjusted_return + combined_intraday) * aggregated_volume_changes * price_range_ratio
+    
+    return final_factor
+```

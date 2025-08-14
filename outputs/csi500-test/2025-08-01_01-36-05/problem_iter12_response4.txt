@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Return
+    df['ewma_vwir'] = df['volume_weighted_intraday_return'].ewm(span=20, min_periods=20).mean()
+    
+    # Calculate Intraday Volatility
+    df['squared_intraday_return'] = df['intraday_return'] ** 2
+    df['intraday_volatility'] = np.sqrt(df['squared_intraday_return'].rolling(window=20, min_periods=20).sum())
+    
+    # Calculate Simple Moving Average of Intraday Volatility
+    df['sma_iv'] = df['intraday_volatility'].rolling(window=20, min_periods=20).mean()
+    
+    # Adjust for Recent Volatility
+    df['recent_volatility'] = df['intraday_volatility'].rolling(window=5, min_periods=5).mean()
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    df['volume_weighted_intraday_momentum'] = df['intraday_return'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Momentum
+    df['ewma_vwim'] = df['volume_weighted_intraday_momentum'].ewm(span=20, min_periods=20).mean()
+    
+    # Incorporate Relative Strength
+    df['relative_strength'] = df['close'] / df['close'].shift(1)
+    df['ewma_rs'] = df['relative_strength'].ewm(span=20, min_periods=20).mean()
+    
+    # Adjust for Market Trends
+    df['market_trend_indicator'] = df['close'].diff().rolling(window=20, min_periods=20).mean()
+    df['adjusted_vwim'] = df['ewma_vwim'] * df['market_trend_indicator']
+    
+    # Refine Volatility Measures
+    df['adjusted_intraday_volatility'] = df['intraday_volatility'] * df['market_trend_indicator']
+    df['sma_aiv'] = df['adjusted_intraday_volatility'].rolling(window=20, min_periods=20).mean()
+    
+    # Combine Factors
+    df['final_factor'] = df['ewma_vwir'] + df['sma_aiv'] + df['ewma_rs'] + df['adjusted_vwim']
+    
+    return df['final_factor']
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Long-Term (10-day) Metrics
+    df['High_Low_Vol_10'] = (df['high'] - df['low']) * df['volume']
+    df['Volume_10'] = df['volume']
+    df['Weighted_Price_Diff_10'] = df['High_Low_Vol_10'].rolling(window=10).sum()
+    df['Total_Volume_10'] = df['Volume_10'].rolling(window=10).sum()
+    df['Long_Term_Open_Close_Momentum_10'] = df['close'] - df['open'].shift(10)
+    df['Long_Term_Cumulative_Weighted_Avg_10'] = df['Weighted_Price_Diff_10'] / df['Total_Volume_10']
+    df['Long_Term_Average_Daily_Return_10'] = (df['close'] - df['close'].shift(1)).rolling(window=10).sum() / 10
+    df['Daily_Returns_10'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['10-Day_EWSD_10'] = df['Daily_Returns_10'].ewm(span=10, adjust=False).std()
+    df['10_Day_Alpha_Factor'] = (df['Long_Term_Cumulative_Weighted_Avg_10'] - df['Long_Term_Average_Daily_Return_10']) / df['10-Day_EWSD_10']
+
+    # Calculate Short-Term (5-day) Metrics
+    df['High_Low_Vol_5'] = (df['high'] - df['low']) * df['volume']
+    df['Volume_5'] = df['volume']
+    df['Weighted_Price_Diff_5'] = df['High_Low_Vol_5'].rolling(window=5).sum()
+    df['Total_Volume_5'] = df['Volume_5'].rolling(window=5).sum()
+    df['Short_Term_Open_Close_Momentum_5'] = df['close'] - df['open'].shift(5)
+    df['Short_Term_Cumulative_Weighted_Avg_5'] = df['Weighted_Price_Diff_5'] / df['Total_Volume_5']
+    df['Short_Term_Average_Daily_Return_5'] = (df['close'] - df['close'].shift(1)).rolling(window=5).sum() / 5
+    df['Daily_Returns_5'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5-Day_EWSD_5'] = df['Daily_Returns_5'].ewm(span=5, adjust=False).std()
+    df['5_Day_Alpha_Factor'] = (df['Short_Term_Cumulative_Weighted_Avg_5'] - df['Short_Term_Average_Daily_Return_5']) / df['5-Day_EWSD_5']
+
+    # Combine 10-Day and 5-Day Metrics with Dynamic Weights
+    df['Relative_Volatility_Ratio'] = df['5-Day_EWSD_5'] / df['10-Day_EWSD_10']
+    df['10_Day_Metric_Weight'] = 1 / (1 + df['Relative_Volatility_Ratio'])
+    df['5_Day_Metric_Weight'] = df['Relative_Volatility_Ratio'] / (1 + df['Relative_Volatility_Ratio'])
+
+    # Integrate Trading Volume Effectively
+    df['5_Day_Average_Volume'] = df['volume'].rolling(window=5).mean()
+    df['Combined_Alpha_Factor'] = (df['10_Day_Metric_Weight'] * df['10_Day_Alpha_Factor'] + 
+                                   df['5_Day_Metric_Weight'] * df['5_Day_Alpha_Factor']) * df['5_Day_Average_Volume']
+
+    return df['Combined_Alpha_Factor']
+```

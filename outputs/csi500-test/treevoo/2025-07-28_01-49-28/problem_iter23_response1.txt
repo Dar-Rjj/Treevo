@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    volume_adjusted_breakout_strength = (df['high'] - df['low']) * df['volume']
+
+    # 10-Day High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    
+    # Proximity to 10-Day Range
+    proximity_to_high = df['close'] / ten_day_high
+    proximity_to_low = df['close'] / ten_day_low
+    
+    # Combine Proximity Metrics
+    min_proximity = np.minimum(proximity_to_high, proximity_to_low)
+    inverted_proximity = 1 / min_proximity
+    
+    # 20-Day Volatility
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    adjusted_reversion = inverted_proximity / twenty_day_volatility
+
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_average = (open_high_diff + open_low_diff) * df['volume']
+
+    # Moving Sum of 20-Day High-Low Spreads
+    moving_sum_high_low_spreads = (df['high'] - df['low']).rolling(window=20).sum()
+
+    # Spread Momentum
+    spread_momentum = moving_sum_high_low_spreads - moving_sum_high_low_spreads.shift(1)
+
+    # Volume-Adjusted Momentum with Open-to-Close Movement
+    simple_momentum = df['close'] - df['close'].shift(1)
+    average_volume = df['volume'].rolling(window=20).mean()
+    adjusted_momentum_by_volume = simple_momentum * (df['volume'] / average_volume)
+    open_to_close_movement = df['close'] - df['open']
+    combined_indicator = 0.5 * adjusted_momentum_by_volume + 0.5 * open_to_close_movement
+    strong_move_indicator = (combined_indicator > 0.05).astype(int)
+
+    # High-Low Return with Spread Momentum
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    sum_amounts = df['amount'].rolling(window=20).sum()
+    ratio = sum_amounts / df['close']
+    prev_ratio = (df['amount'].shift(21).rolling(window=20).sum()) / df['close'].shift(20)
+    differential_ratio = ratio - prev_ratio
+
+    # Final Alpha Factor
+    final_alpha_factor = (
+        volume_adjusted_breakout_strength *
+        adjusted_reversion *
+        weighted_average *
+        spread_momentum *
+        adjusted_momentum_by_volume *
+        high_low_return *
+        strong_move_indicator *
+        differential_ratio
+    )
+
+    return final_alpha_factor
+```

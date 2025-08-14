@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation from Close
+    df['daily_return'] = df['close'].diff()
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = (df['daily_return'] > df['daily_return'].shift(1)).astype(int)
+    df['volume_ma_14'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = (df['volume'] > df['volume_ma_14']).astype(int)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['daily_return_vwap'] = df['close'] - df['vwap']
+    
+    # Compute Price Momentum Factor
+    n = 5
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 5
+    df['volume_change'] = df['volume'].diff()
+    df['volume_momentum'] = df['volume_change'].rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.5
+    k2 = 0.5
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma_20']
+    df['volume_adjustment_factor'] = df['volume_deviation'] + 0.01  # Small constant to avoid division by zero
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Incorporate Price Volatility
+    df['std_close_7'] = df['close'].rolling(window=7).std()
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    df['intraday_return_adj'] = df['intraday_return'] * (1.5 if df['std_close_7'].iloc[-1] > df['std_close_7'].mean() else 0.8)
+    
+    # Incorporate Momentum Shift
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_shift'] = (df['ema_5'] > df['ema_20']).diff().fillna(0)
+    df['momentum_shift'] = df['momentum_shift'].apply(lambda x: 0.5 if x == 1 else -0.5 if x == -1 else 0)
+    
+    # Adjust for Volume
+    df['volume_ma_7'] = df['volume'].rolling(window=7).mean()
+    df['intraday_return_vol_adj'] = (df['volume'] - df['volume_ma_7']) * df['intraday_return_adj']
+    
+    # Combine Indicators
+    df['final_score'] = (
+        df['trend_reversal'] * df['volume_increase'] * df['intraday_return_vol_adj'] +
+        df['adjusted_combined_momentum'] + 
+        df['momentum_shift']
+    )
+    
+    # Final Composite Factor Calculation
+    df['alpha_factor'] = df['final_score'].rolling(window=3).mean()  # Smoothing factor
+    
+    return df['alpha_factor']
+```

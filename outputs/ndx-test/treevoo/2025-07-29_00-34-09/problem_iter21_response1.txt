@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price (VWP)
+    df['VWP'] = (df['High'] * df['Volume'] + df['Low'] * df['Volume']) / (2 * df['Volume'])
+    
+    # Assess Intraday Volatility
+    df['IntradayRange'] = df['High'] - df['Low']
+    df['MedianVolume'] = df['Volume'].rolling(window=14).median()
+    df['IntradayVolatility'] = df['IntradayRange'] / df['MedianVolume']
+    
+    # Integrate High-to-Low Range Momentum
+    df['Rolling20DayHLRangeSum'] = df['IntradayRange'].rolling(window=20).sum()
+    df['ConsecutiveVWPDiff'] = df['VWP'].diff(1)
+    df['HLMomentum'] = df['ConsecutiveVWPDiff'] / (df['IntradayVolatility'] + 1)  # +1 to avoid division by zero
+    
+    # Calculate Volume-Adjusted Momentum
+    df['VWP_25EMA'] = df['VWP'].ewm(span=25, adjust=False).mean()
+    df['VolumeAdjustedMomentum'] = df['VWP'] - df['VWP_25EMA']
+    
+    # Incorporate Recent Volatility
+    df['DailyReturns'] = df['Close'].pct_change()
+    df['20DayStdDev'] = df['DailyReturns'].rolling(window=20).std()
+    df['VolumeAdjustedMomentum_Adjusted'] = df['VolumeAdjustedMomentum'] / (df['20DayStdDev'] + 1)  # +1 to avoid division by zero
+    
+    # Calculate High-Low Range Volatility
+    df['DailyHighLowRange'] = df['High'] - df['Low']
+    df['30DayHLRangeMA'] = df['DailyHighLowRange'].rolling(window=30).mean()
+    
+    # Calculate Open-Close Range Volatility
+    df['DailyOpenCloseRange'] = df['Open'] - df['Close']
+    df['30DayOCRangeMA'] = df['DailyOpenCloseRange'].rolling(window=30).mean()
+    
+    # Combine Volume-Adjusted Momentum and Enhanced Composite Volatility
+    df['EnhancedCompositeVolatility'] = 0.7 * df['30DayHLRangeMA'] + 0.3 * df['30DayOCRangeMA']
+    df['AlphaFactor'] = df['VolumeAdjustedMomentum_Adjusted'] - df['EnhancedCompositeVolatility']
+    
+    return df['AlphaFactor']
+```

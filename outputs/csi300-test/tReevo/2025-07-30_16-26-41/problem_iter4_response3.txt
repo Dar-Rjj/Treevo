@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Multi-Period Weighted Price Difference
+    df['weighted_price_diff'] = (df['high'] - df['low']) * df['volume']
+    weighted_price_diff_sum = df['weighted_price_diff'].rolling(window=20).sum()
+    volume_sum = df['volume'].rolling(window=20).sum()
+    multi_period_weighted_price_diff = weighted_price_diff_sum / volume_sum
+
+    # Determine Multi-Period Open to Close Momentum
+    open_t_minus_20 = df['open'].shift(20)
+    close_t = df['close']
+    multi_period_momentum = close_t - open_t_minus_20
+
+    # Calculate the Multi-Period Cumulative Weighted Average
+    multi_period_cwa = multi_period_weighted_price_diff / volume_sum
+
+    # Subtract Multi-Period Average Daily Return
+    daily_returns = df['close'].pct_change()
+    average_daily_return = daily_returns.rolling(window=20).mean()
+    adjusted_multi_period_momentum = multi_period_momentum - (average_daily_return * 20)
+
+    # Adjust for Multi-Period Volatility
+    daily_returns = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    volatility = daily_returns.rolling(window=20).std()
+    volatility_adjusted_momentum = adjusted_multi_period_momentum / volatility
+
+    # Incorporate Intraday Reversal Signal
+    intraday_range = df['high'] - df['low']
+    intraday_midpoint = (df['open'] + df['close']) / 2
+    intraday_direction = np.where(df['open'] > df['close'], -1, 1)
+    intraday_momentum_reversal_score = intraday_range * intraday_direction
+    volume_weighted_score = intraday_momentum_reversal_score * df['volume']
+    intraday_volatility = df['high'] - df['low']
+    adjusted_intraday_score = volume_weighted_score / intraday_volatility
+
+    # Combine Multi-Period and Intraday Signals
+    final_alpha_factor = (volatility_adjusted_momentum + adjusted_intraday_score) / 2
+
+    return final_alpha_factor
+```

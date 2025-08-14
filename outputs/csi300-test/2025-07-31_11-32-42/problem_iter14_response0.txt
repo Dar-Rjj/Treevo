@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Integrated Momentum
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    df['integrated_momentum'] = df['close'] - df['20_day_avg_close']
+    
+    df['5_day_avg_high'] = df['high'].rolling(window=5).mean()
+    df['5_day_avg_low'] = df['low'].rolling(window=5).mean()
+    df['high_low_momentum'] = (df['high'] - df['5_day_avg_high']) + (df['low'] - df['5_day_avg_low'])
+    df['integrated_momentum'] += df['high_low_momentum']
+    
+    # Calculate Intraday Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['high_low_diff'].rolling(window=5).mean()
+    
+    # Measure Volume Trend
+    df['3_day_avg_volume'] = df['volume'].rolling(window=3).mean()
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).mean()
+    df['volume_trend'] = df['3_day_avg_volume'] - df['7_day_avg_volume']
+    
+    # Evaluate Open-to-Close Movement
+    df['open_to_close'] = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    df['intraday_open_gap'] = df['high_low_diff'] - df['open_to_close']
+    
+    # Incorporate Advanced Volume Impact
+    df['volume_adjusted_metric'] = df['intraday_open_gap'] * (df['volume'] ** 0.5)
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    df['price_range_ratio'] = (df['high'] - df['low']) / (df['open'] + df['close'])
+    df['stability_adjusted_metric'] = df['volume_adjusted_metric'] / df['price_range_ratio']
+    
+    # Calculate Volume-Weighted Prices
+    df['vol_weighted_close'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vol_weighted_open'] = (df['open'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Synthesize VWAPCHL into the Model
+    df['vwapchl'] = (df['vol_weighted_close'] - df['vol_weighted_open']) / (df['high'] - df['low'])
+    
+    # Final Integration
+    df['factor'] = df['stability_adjusted_metric'] * df['vwapchl']
+    df['factor'] += df['integrated_momentum']
+    df['factor'] += df['intraday_volatility']
+    df['factor'] *= df['volume_trend']
+    
+    # Additional Price Returns
+    df['5_day_price_return'] = df['close'].pct_change(5)
+    df['10_day_price_return'] = df['close'].pct_change(10)
+    df['20_day_price_return'] = df['close'].pct_change(20)
+    df['50_day_price_return'] = df['close'].pct_change(50)
+    
+    df['short_term_momentum_diff'] = df['5_day_price_return'] - df['10_day_price_return']
+    df['long_term_momentum_diff'] = df['20_day_price_return'] - df['50_day_price_return']
+    
+    df['factor'] *= df['short_term_momentum_diff'] * df['long_term_momentum_diff']
+    
+    # Volume Surge Difference
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_surge_diff'] = df['5_day_avg_volume'] - df['10_day_avg_volume']
+    
+    df['factor'] *= df['volume_surge_diff']
+    
+    # Volume Adjusted Momentum
+    df['volume_adjusted_momentum'] = df['volume'] * (df['close'] - df['open'])
+    df['factor'] *= df['volume_adjusted_momentum']
+    
+    return df['factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

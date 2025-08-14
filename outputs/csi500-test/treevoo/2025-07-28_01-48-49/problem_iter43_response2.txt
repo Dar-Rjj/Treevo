@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate price changes
+    df['daily_price_change'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['open_close_range'] = df['close'] - df['open']
+
+    # Analyze volume and amount
+    df['daily_volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['daily_amount_change'] = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    df['volume_to_amount_ratio'] = df['volume'] / df['amount']
+
+    # Identify price patterns
+    short_window, long_window = 5, 20
+    df['moving_average_crossover'] = df['close'].rolling(window=short_window).mean() - df['close'].rolling(window=long_window).mean()
+    
+    def rsi(series, periods=14):
+        delta = series.diff().dropna()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=periods, min_periods=periods).mean()
+        avg_loss = loss.rolling(window=periods, min_periods=periods).mean()
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    df['rsi'] = rsi(df['close'])
+
+    def bollinger_bands(series, window=20):
+        ma = series.rolling(window=window).mean()
+        std = series.rolling(window=window).std()
+        upper_band = ma + (2 * std)
+        lower_band = ma - (2 * std)
+        bb = (series - ma) / (2 * std)
+        return bb
+    df['bollinger_bands'] = bollinger_bands(df['close'])
+
+    # Analyze volatility
+    df['simple_volatility'] = df['close'].rolling(window=20).std()
+    def atr(high, low, close, window=14):
+        tr1 = abs(high - low)
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        return tr.rolling(window=window).mean()
+    df['atr'] = atr(df['high'], df['low'], df['close'])
+    df['historical_volatility'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Evaluate market sentiment
+    def mfi(high, low, close, volume, window=14):
+        typical_price = (high + low + close) / 3
+        raw_money_flow = typical_price * volume
+        positive_flow = raw_money_flow.copy()
+        negative_flow = raw_money_flow.copy()
+        positive_flow[typical_price <= typical_price.shift(1)] = 0
+        negative_flow[typical_price > typical_price.shift(1)] = 0
+        money_ratio = positive_flow.rolling(window=window).sum() / negative_flow.rolling(window=window).sum()
+        return 100 - (100 / (1 + money_ratio))
+    df['mfi'] = mfi(df['high'], df['low'], df['close'], df['volume'])
+
+    def chaikin_oscillator(high, low, close, volume, short_window=3, long_window=10):
+        adl = ((close - low) - (high - close)) / (high - low) * volume
+        short_adl_ma = adl.rolling(window=short_window).mean()
+        long_adl_ma = adl.rolling(window=long_window).mean()
+        return short_adl_ma - long_adl_ma
+    df['chaikin_oscillator'] = chaikin_oscillator(df['high'], df['low'], df['close'], df['volume'])
+
+    # Combine factors
+    weights = {
+        'daily_price_change': 0.2,
+        'high_low_range': 0.1,
+        'open_close_range': 0.1,
+        'daily_volume_change': 0.1,
+        'daily_amount_change': 0.1,
+        'volume_to_amount_ratio': 0.1,
+        'moving_average_crossover': 0.1,
+        'rsi': 0.1,
+        'bollinger_bands':

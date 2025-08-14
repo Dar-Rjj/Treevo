@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Integrated Intraday Momentum with Volume Adjustment
+    df['close_to_open_return'] = df['open'] / df['close'].shift(1) - 1
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    df['intraday_high_low_ratio'] = (df['high'] - df['close']) / (df['high'] - df['low'])
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    df['intraday_return'] = df['close'] / df['open'] - 1
+    df['intraday_momentum_vol_adj'] = df['intraday_high_low_ratio'] * df['intraday_return'] * df['volume_change']
+    
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_volatility'] = df['volume'].rolling(window=20).std()
+    df['volume_volatility_adj'] = df['intraday_momentum_vol_adj'] / df['volume_volatility']
+
+    # Cumulative Log Return with VWAP Integration
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['cumulative_log_return_20'] = df['daily_log_return'].rolling(window=20).sum()
+    
+    df['vwap'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['vwap_ma_20'] = df['vwap'].rolling(window=20).mean()
+    df['weighted_intraday_momentum'] = df['intraday_high_low_ratio'] * df['intraday_return']
+    
+    # PMI Score
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    df['sum_daily_price_changes_20'] = df['daily_price_change'].rolling(window=20).sum()
+    df['pmi_score'] = df['sum_daily_price_changes_20'] * df['vwap']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['pmi_score'] * df['cumulative_log_return_20'] + 
+                                df['volume_volatility_adj'] + 
+                                df['cumulative_log_return_20'])
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['price_oscillator'] = df['sma_5'] - df['sma_20']
+    df['final_alpha_factor'] += df['price_oscillator']
+    
+    return df['final_alpha_factor']
+```

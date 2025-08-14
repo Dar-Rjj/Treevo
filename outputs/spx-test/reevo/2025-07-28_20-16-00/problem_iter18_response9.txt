@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to gauge the day's volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Calculate an exponentially weighted moving average for the close price to focus on recent data
+    ewma_5 = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Determine if today's close is above the 5-day EWMA, indicating an upward momentum
+    momentum = (df['close'] > ewma_5).astype(int)
+    
+    # Calculate the volume-weighted return of the last 3 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=3).sum() / df['volume'].rolling(window=3).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 14 days using exponential smoothing
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Integrate macroeconomic indicators (e.g., interest rates, GDP growth)
+    # For simplicity, assume 'interest_rate' and 'gdp_growth' are available in the DataFrame
+    interest_rate_impact = (df['interest_rate'] - df['interest_rate'].mean()) / df['interest_rate'].std()
+    gdp_growth_impact = (df['gdp_growth'] - df['gdp_growth'].mean()) / df['gdp_growth'].std()
+    
+    # Use adaptive windows for EMA and RSI based on the current market conditions
+    # For simplicity, use a fixed window size but this can be adjusted dynamically
+    ewma_5_adaptive = df['close'].ewm(span=5, adjust=False).mean()
+    rsi_14_adaptive = 100 - (100 / (1 + (gain / loss).ewm(span=14, adjust=False).mean()))
+    
+    # Combine factors into a single feature matrix
+    features = pd.DataFrame({
+        'inverse_volatility': 1 / (daily_volatility + 1e-7),
+        'momentum': momentum,
+        'rsi': rsi / 100,
+        'weighted_return': weighted_return,
+        'interest_rate_impact': interest_rate_impact,
+        'gdp_growth_impact': gdp_growth_impact
+    }).fillna(0)
+    
+    # Use machine learning to determine dynamic factor weights
+    X = features.shift(1).dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index].dropna()
+    
+    model = LinearRegression()
+    model.fit(X, y)
+    dynamic_weights = pd.Series(model.coef_, index=X.columns)
+    
+    # Create the alpha factor using the dynamic weights
+    alpha_factor = (features * dynamic_weights).sum(axis=1)
+    
+    return alpha_factor
+```

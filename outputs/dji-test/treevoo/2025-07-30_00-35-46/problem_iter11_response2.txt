@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = 0.5 * (high_low_diff + open_close_return)
+    
+    # Volume and Amount Shock Filter
+    volume_change = df['volume'] / df['volume'].shift(1)
+    amount_change = df['amount'] / df['amount'].shift(1)
+    volume_shock_threshold = 1.5
+    amount_shock_threshold = 1.5
+    shock_filter = (volume_change > volume_shock_threshold) & (amount_change > amount_shock_threshold)
+    intraday_momentum = intraday_momentum * shock_filter
+    
+    # Trend Confirmation
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    crossover_signal = (short_term_ma > long_term_ma) * 2 - 1
+    intraday_momentum = intraday_momentum * crossover_signal
+    
+    # Adjust for Volume
+    volume_adjustment = (df['volume'] / df['volume'].rolling(window=5).mean()).fillna(1)
+    intraday_range = df['high'] - df['low']
+    intraday_range_adjusted = intraday_range * volume_adjustment
+    
+    # Smoothing
+    smoothed_intraday_momentum = intraday_range_adjusted.ewm(span=5).mean()
+    
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5).mean()
+    long_ema = df['close'].ewm(span=20).mean()
+    ema_cross_signal = (short_ema > long_ema) * 2 - 1
+    
+    # Calculate OBV
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Weight OBV by EMA difference
+    ema_diff = (short_ema - long_ema).abs()
+    weighted_obv = obv * ema_diff
+    
+    # Final Alpha Factor
+    final_alpha_factor = smoothed_intraday_momentum * weighted_obv
+    
+    return final_alpha_factor
+```

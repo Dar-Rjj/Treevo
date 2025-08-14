@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = df['volume'].diff().apply(lambda x: 1 if x > 0 else 0)
+    
+    # Identify Price Spikes
+    df['price_spike'] = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if abs(x) > 0.01 * df['close'].shift(1) else 0)
+    
+    # Introduce Volatility Adjustment
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    df['volatility'] = df['log_returns'].rolling(window=20).std()
+    df['intraday_momentum_vol_adj'] = df['intraday_range'] / df['volatility']
+    
+    # Scale Intraday Momentum
+    df['combined_spike'] = df['volume_spike'] + df['price_spike']
+    df['intraday_momentum_scaled'] = df['intraday_momentum_vol_adj'] / df['combined_spike']
+    df['intraday_momentum_scaled'] = df['intraday_momentum_scaled'].apply(lambda x: min(x, 10))
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['intraday_features'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Combine Factors
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=5).mean()
+    df['combined_factors'] = df['avg_intraday_range'] * (df['close_to_open_return'] + df['price_change'])
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = (df['close'] - df['close'].shift(1)).abs()
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=10).mean()
+    df['enhanced_feature'] = df['combined_factors'] * df['avg_abs_price_change']
+    
+    # Adjust for Volume Spikes
+    df['volume_spike_factor'] = (df['volume'] / df['volume'].shift(1)).apply(lambda x: min(x, 3))
+    df['adjusted_feature'] = df['enhanced_feature'] * df['volume_spike_factor']
+    
+    # Weight by Volume
+    df['alpha_factor'] = df['adjusted_feature'] * df['volume']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,23 @@
+def heuristics_v2(df):
+    def compute_macd(series, short_window=12, long_window=26, signal_window=9):
+        ema_short = series.ewm(span=short_window, adjust=False).mean()
+        ema_long = series.ewm(span=long_window, adjust=False).mean()
+        macd_line = ema_short - ema_long
+        signal_line = macd_line.ewm(span=signal_window, adjust=False).mean()
+        return macd_line - signal_line
+
+    def compute_mfi(high, low, close, volume, period=14):
+        typical_price = (high + low + close) / 3
+        raw_money_flow = typical_price * volume
+        positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+        negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+        positive_money_flow_sum = positive_money_flow.rolling(window=period).sum()
+        negative_money_flow_sum = negative_money_flow.rolling(window=period).sum()
+        money_ratio = positive_money_flow_sum / negative_money_flow_sum
+        mfi = 100 - (100 / (1 + money_ratio))
+        return mfi
+
+    df['macd'] = compute_macd(df['close'])
+    df['mfi'] = compute_mfi(df['high'], df['low'], df['close'], df['volume'])
+    heuristics_matrix = df['macd'] + df['mfi']
+    return heuristics_matrix

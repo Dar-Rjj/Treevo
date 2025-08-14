@@ -1,0 +1,54 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['total_dollar_value'] = df['close'] * df['volume']
+    df['vwap'] = df['total_dollar_value'].cumsum() / df['total_volume'].cumsum()
+    
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+    
+    # Integrate Short-Term Momentum
+    short_term_momentum_period = 5
+    df['short_term_momentum'] = df['close'].pct_change(short_term_momentum_period)
+    
+    # Integrate Medium-Term Momentum
+    medium_term_momentum_period = 10
+    df['medium_term_momentum'] = df['close'].pct_change(medium_term_momentum_period)
+    
+    # Incorporate Adaptive Exponential Moving Average (EMA)
+    ema_span = 20
+    df['close_ema'] = df['close'].ewm(span=ema_span, adjust=False).mean()
+    
+    # Adjust EMA based on recent volatility
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility'] = df['daily_returns'].rolling(window=20).std()
+    df['adjusted_ema_span'] = ema_span + df['volatility'] * 10  # Example adjustment
+    df['adaptive_ema'] = df['close'].ewm(span=df['adjusted_ema_span'], adjust=False).mean()
+    
+    # Combine Cumulative VWAP Deviation with Adaptive EMA
+    df['combined_factor'] = df['cumulative_vwap_deviation'] * df['adaptive_ema']
+    
+    # Incorporate Volume-Adjusted Returns
+    df['volume_adjusted_returns'] = df['daily_returns'] * df['volume']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['combined_factor'] 
+        + df['short_term_momentum'] 
+        + df['medium_term_momentum'] 
+        + df['volume_adjusted_returns']
+    )
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)

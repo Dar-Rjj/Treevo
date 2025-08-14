@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Volume into Intraday Return
+    volume_adjusted_intraday_return = (df['close'] - df['open']) * np.sqrt(df['volume'])
+    
+    # Enhance Volatility Correction
+    price_volatility = df['close'].pct_change().rolling(window=20).std()
+    volume_volatility = df['volume'].rolling(window=20).std()
+    corrected_intraday_momentum = volume_adjusted_intraday_return - price_volatility - volume_volatility
+    
+    # Incorporate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Combine High-Low Spread Ratio and Corrected Intraday Momentum
+    combined_factor_1 = high_low_spread_ratio + corrected_intraday_momentum
+    
+    # Intraday Log-Return Scaled by True Range
+    intraday_log_return = np.log(df['close'] / df['open'])
+    true_range = df[['high', 'low', df['close'].shift(1)]].max(axis=1) - df[['high', 'low', df['close'].shift(1)]].min(axis=1)
+    log_return_scaled_by_true_range = intraday_log_return / true_range
+    
+    # Composite Alpha Factor
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    ema_close = df['close'].ewm(span=21, adjust=False).mean()
+    volume_weighted_close = df['close'] * df['volume']
+    composite_alpha_factor = volume_weighted_close - ema_close + df['close'].pct_change().rolling(window=10).sum()
+    
+    # Generate Adjusted Return
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_return = log_return_scaled_by_true_range + volume_change / avg_volume
+    
+    # Final Integration
+    final_factor = combined_factor_1 + composite_alpha_factor + adjusted_return
+    
+    # Incorporate Trend Adjustment
+    long_term_trend = df['close'].rolling(window=100).mean()
+    short_term_trend = df['close'].ewm(span=20, adjust=False).mean()
+    trend_difference = long_term_trend - short_term_trend
+    final_factor = final_factor * (1.5 if trend_difference > 0 else 0.5)
+    
+    return final_factor
+```

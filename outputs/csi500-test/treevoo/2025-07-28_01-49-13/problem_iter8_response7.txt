@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df, N=10, M=30, K=1.5):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_open_return = df['close'] / df['open'] - 1
+    
+    # Combine High-Low Range and Close-Open Return
+    combined_return = high_low_range + close_open_return
+    
+    # Calculate Volume-Weighted High-Low Spread
+    volume_weighted_spread = (df['high'] - df['low']) * df['volume']
+    
+    # Exponential Moving Average (EMA) of Weighted High-Low Spread
+    ema_window = 10
+    ema = volume_weighted_spread.ewm(span=ema_window).mean()
+    ema_diff = ema - ema.shift(5)
+    
+    # Identify Volume Spike
+    volume_ma = df['volume'].rolling(window=M).mean()
+    volume_std = df['volume'].rolling(window=M).std()
+    volume_spike = (df['volume'] > (volume_ma + 2 * volume_std)).astype(int)
+    
+    # Calculate N-day Price Momentum
+    n_day_momentum = df['close'] / df['close'].shift(N) - 1
+    
+    # Calculate Volume Weighted Adjusted Return
+    adjusted_return = combined_return * df['volume']
+    
+    # Calculate Moving Average of Adjusted Return
+    ma_lookback = 20
+    ma_adjusted_return = adjusted_return.rolling(window=ma_lookback).mean()
+    
+    # Calculate Intraday Range to Open Ratio
+    intraday_range_to_open = high_low_range / df['open']
+    
+    # Calculate Volume Momentum
+    close_close_return = df['close'] / df['close'].shift(1) - 1
+    volume_momentum = (df['volume'] * close_close_return).sum()
+    
+    # Calculate High-Low Envelope
+    max_high = df['high'].rolling(window=N).max()
+    min_low = df['low'].rolling(window=N).min()
+    
+    # Introduce Trend Strength Indicator
+    slope, _, _, _, _ = linregress(range(N), df['close'])
+    trend_strength = slope
+    
+    # Combine Factors
+    factor = adjusted_return / ma_adjusted_return
+    n_day_momentum_adjusted = n_day_momentum.copy()
+    n_day_momentum_adjusted[volume_spike == 1] *= K
+    combined_return_factor = (
+        combined_return * 
+        close_open_return * 
+        intraday_range_to_open * 
+        volume_momentum * 
+        (max_high - min_low) * 
+        trend_strength
+    )
+    factor = factor * combined_return_factor
+    
+    return factor
+```

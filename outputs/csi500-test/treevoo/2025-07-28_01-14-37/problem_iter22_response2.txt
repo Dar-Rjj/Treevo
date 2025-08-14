@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Compute Weighted Momentum
+    weighted_price = (df['high'] + df['low'] + 2 * df['close']) / 4 * df['volume']
+    price_change = df['close'].diff()
+    weighted_momentum = price_change / weighted_price
+    
+    # Adjust for Volatility
+    adjusted_momentum = weighted_momentum / high_to_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = np.where(short_term_ma > long_term_ma, 1, -1)
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Cumulative Return over a 5-day window
+    cumulative_return = daily_return.rolling(window=5).sum()
+    
+    # Adjust by Average Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    adjusted_cumulative_return = (cumulative_return * average_volume) / 5
+    
+    # Adjust by Price Volatility
+    price_volatility = df['close'].rolling(window=5).std()
+    final_adjusted_cumulative_return = (adjusted_cumulative_return / price_volatility) + 1
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_to_low_range.rolling(window=5).mean()
+    
+    # Calculate Weighted Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+    weights = np.exp(np.linspace(0, -1, 5))
+    weighted_log_returns = (log_returns.rolling(window=5).apply(lambda x: np.sum(x * weights), raw=False))
+    volatility_adjusted_weighted_momentum = weighted_log_returns / intraday_volatility
+    
+    # Final Factor
+    final_factor = (volatility_adjusted_weighted_momentum * volume_change * trend_direction) + (final_adjusted_cumulative_return * trend_direction)
+    
+    return final_factor
+```

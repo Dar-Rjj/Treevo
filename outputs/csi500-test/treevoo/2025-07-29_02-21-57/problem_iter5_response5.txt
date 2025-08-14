@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5D_Close_Return'] = df['close'].pct_change(5)
+    avg_5d_vol = df['volume'].rolling(window=5).mean()
+    df['5D_Volume_Ratio'] = df['volume'].rolling(window=5).sum() / avg_5d_vol
+    df['5D_Volume_Adjusted_Momentum'] = df['5D_Close_Return'] * df['5D_Volume_Ratio']
+
+    # Calculate High-Low Price Oscillation
+    df['High_Low_Range'] = df['high'] - df['low']
+    mean_high_low_range = df['High_Low_Range'].rolling(window=5).mean()
+    std_high_low_range = df['High_Low_Range'].rolling(window=5).std()
+    df['Price_Oscillation'] = (df['High_Low_Range'] - mean_high_low_range) / std_high_low_range
+
+    # Calculate Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+
+    # Calculate 20-Day Moving Average of Daily Range
+    df['20D_Avg_Daily_Range'] = df['Daily_Range'].rolling(window=20).mean()
+
+    # Identify Breakouts
+    df['Upward_Breakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['Downward_Breakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+
+    # Calculate Breakout Strength
+    df['Breakout_Strength'] = 0
+    df.loc[df['Upward_Breakout'] == 1, 'Breakout_Strength'] = (df['close'] - df['high'].shift(1)) / df['20D_Avg_Daily_Range']
+    df.loc[df['Downward_Breakout'] == 1, 'Breakout_Strength'] = (df['low'].shift(1) - df['close']) / df['20D_Avg_Daily_Range']
+
+    # Cumulate Breakout Strength
+    df['Cumulative_Positive_BS'] = df['Breakout_Strength'].apply(lambda x: x if x > 0 else 0).rolling(window=10).sum()
+    df['Cumulative_Negative_BS'] = df['Breakout_Strength'].apply(lambda x: abs(x) if x < 0 else 0).rolling(window=10).sum()
+    df['Cumulative_BS'] = df['Cumulative_Positive_BS'] - df['Cumulative_Negative_BS']
+
+    # Integrate Price Momentum Components
+    df['20D_Price_Return'] = df['close'].pct_change(20)
+    df['Integrated_Momentum'] = 0.7 * df['5D_Volume_Adjusted_Momentum'] + 0.3 * df['20D_Price_Return']
+
+    # Calculate Liquidity Components
+    df['Volume_to_Price_Ratio'] = df['volume'] / df['close']
+    df['True_Range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['14D_ATR'] = df['True_Range'].rolling(window=14).mean()
+    df['Integrated_Liquidity'] = 0.6 * df['Volume_to_Price_Ratio'] + 0.4 * df['14D_ATR']
+
+    # Combine Integrated Momentum, Liquidity, and Breakout Strength
+    df['Final_Alpha_Factor'] = 0.5 * df['Integrated_Momentum'] + 0.3 * df['Integrated_Liquidity'] + 0.2 * df['Cumulative_BS']
+
+    return df['Final_Alpha_Factor']
+```

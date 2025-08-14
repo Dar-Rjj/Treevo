@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Factors
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+    df['MA_crossover'] = df['5_day_MA'] - df['20_day_MA']
+    
+    df['ROC_12'] = df['close'].pct_change(12)
+    
+    # Volume Based Momentum
+    df['volume_ratio'] = df['volume'].rolling(window=5).mean() / df['volume'].rolling(window=20).mean()
+    
+    # Reversal Factors
+    def RSI(series, period=14):
+        delta = series.diff(1)
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        RS = gain / loss
+        return 100 - (100 / (1 + RS))
+    
+    df['RSI'] = RSI(df['close'])
+    
+    df['BB_width'] = df['close'].rolling(window=20).std()
+    
+    # Market Sentiment Indicators
+    df['MFI'] = (df['high'] - df['low']) * df['volume'] / (df['high'] + df['low'] + df['close'])
+    df['MFI'] = df['MFI'].rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    
+    df['Acc/Dis'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['Acc/Dis'] = df['Acc/Dis'] * df['volume']
+    df['Acc/Dis'] = df['Acc/Dis'].cumsum()
+    
+    # Hybrid Factors
+    df['momentum_breakout'] = (df['MA_crossover'] > 0) & (df['close'] > df['high'].shift(1))
+    
+    # Seasonality & Calendar Effects
+    df['month'] = df.index.month
+    df['january_effect'] = (df['month'] == 1) * 1
+    df['turn_of_month'] = ((df.index.day <= 7) | (df.index.day >= 24)) * 1
+    
+    # Volatility Based Strategies
+    df['realized_volatility'] = df['close'].rolling(window=20).std()
+    
+    # Earnings and News Impact Assessment
+    # Assuming 'abnormal_returns' and 'news_sentiment' are provided in the DataFrame
+    # df['abnormal_returns'] = ...
+    # df['news_sentiment'] = ...
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['MA_crossover'] +
+        df['ROC_12'] +
+        df['volume_ratio'] -
+        df['RSI'] +
+        df['BB_width'] +
+        df['MFI'] +
+        df['Acc/Dis'] +
+        df['momentum_breakout'] +
+        df['january_effect'] +
+        df['turn_of_month'] +
+        df['realized_volatility']
+    )
+    
+    return df['alpha_factor']
+
+# Example usage:
+# data = pd.read_csv('stock_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(data)
+# print(alpha_factor)
+```

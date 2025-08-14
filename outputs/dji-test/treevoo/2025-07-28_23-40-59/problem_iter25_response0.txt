@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(df):
+    # Intraday Spread
+    df['intraday_spread'] = df['high'] - df['low']
+    
+    # Intraday Range Weighted Average Price (IRWAP)
+    total_volume = df['volume'].sum()
+    df['irwap'] = (df['close'] * df['volume']) / total_volume
+    
+    # IRWAP Difference
+    df['irwap_diff'] = df['close'] - df['irwap']
+    
+    # Adjusted Return by Intraday Volatility
+    df['adjusted_return'] = (df['close'].pct_change()) / df['intraday_spread']
+    
+    # Smoothed Adjusted Return
+    df['smoothed_adjusted_return'] = df['adjusted_return'].rolling(window=5).mean()
+    
+    # Momentum
+    df['log_returns'] = np.log(df['close']).diff()
+    df['short_term_momentum'] = df['log_returns'].rolling(window=7).sum()
+    df['long_term_momentum'] = df['log_returns'].rolling(window=25).sum()
+    df['combined_momentum'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Adjusted Momentum with Price Volatility
+    df['intraday_volatility'] = df['intraday_spread'].rolling(window=10).std()
+    df['adjusted_momentum'] = df['combined_momentum'] * (1 / df['intraday_volatility'])
+    
+    # Volume Trend Confirmation
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_trend'] = np.where(df['volume'] > df['avg_volume_20'], 1, -1)
+    
+    # Intraday Strength
+    df['intraday_strength'] = (df['close'] - df['open']) / df['intraday_spread']
+    
+    # Smoothed Intraday Strength
+    df['smoothed_intraday_strength'] = df['intraday_strength'].rolling(window=5).mean()
+    
+    # Final Factor
+    df['final_factor'] = (
+        df['irwap_diff'] +
+        df['smoothed_adjusted_return'] +
+        df['adjusted_momentum'] +
+        df['smoothed_intraday_strength'] +
+        df['volume_trend']
+    )
+    
+    return df['final_factor']
+```

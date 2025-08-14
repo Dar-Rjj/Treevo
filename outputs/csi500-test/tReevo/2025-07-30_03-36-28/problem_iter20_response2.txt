@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Parameters
+    short_sma_lookback = 20
+    long_sma_lookback = 100
+    vol_lookback = 30
+    momentum_lookback = 60
+    percentage_change_lookback = 5
+    daily_turnover_lookback = 30
+    avg_dollar_volume_lookback = 30
+    liquidity_ratio_lookback = 30
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=short_sma_lookback).mean()
+    df['SMA_Long'] = df['close'].rolling(window=long_sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(periods=percentage_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)  # Bullish: 1, Bearish: 0
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=daily_turnover_lookback).mean()
+    
+    df['Average_Dollar_Volume'] = (df['volume'] * df['close']).rolling(window=avg_dollar_volume_lookback).mean()
+    
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    df['Rolling_Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_ratio_lookback).mean()
+    
+    # Adjust Weights Based on Liquidity and Average Dollar Volume
+    df['Weight_Adjustment'] = (df['Rolling_Avg_Daily_Turnover'] + df['Average_Dollar_Volume'] + df['Rolling_Avg_Liquidity_Ratio']) / 3.0
+    
+    # Final Alpha Factor
+    weights = {
+        'Price_Momentum': 0.4,
+        'Volume_Adjusted_Volatility': -0.2,
+        'Percentage_Change': 0.1,
+        'High_Low_Range': 0.1,
+        'Trend_Indicator': 0.1,
+        'Weight_Adjustment': 0.1
+    }
+    
+    df['Alpha_Factor'] = (
+        weights['Price_Momentum'] * df['Price_Momentum'] +
+        weights['Volume_Adjusted_Volatility'] * df['Volume_Adjusted_Volatility'] +
+        weights['Percentage_Change'] * df['Percentage_Change'] +
+        weights['High_Low_Range'] * df['High_Low_Range'] +
+        weights['Trend_Indicator'] * df['Trend_Indicator'] +
+        weights['Weight_Adjustment'] * df['Weight_Adjustment']
+    )
+    
+    return df['Alpha_Factor']
+```

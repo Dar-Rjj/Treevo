@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Momentum Component
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_scaled_intraday_movement = intraday_return * df['volume']
+
+    # Historical Momentum Component
+    historical_momentum = df['close'] - df['close'].shift(15)
+
+    # Combine Momentum Components
+    combined_momentum = volume_scaled_intraday_movement + historical_momentum
+
+    # Smooth Combined Momentum
+    smoothed_momentum = combined_momentum.rolling(window=5).mean()
+
+    # Incorporate Volume Influence
+    n = 15
+    weights = np.arange(1, n + 1)
+    weighted_avg_volume = (df['volume'].rolling(window=n).apply(lambda x: sum(x / weights), raw=True)) / sum(1 / weights)
+    momentum_with_volume = smoothed_momentum * weighted_avg_volume
+
+    # Advanced Volatility Adjustment
+    daily_high_low_range = df['high'] - df['low']
+    ema_daily_range = daily_high_low_range.ewm(span=10, adjust=False).mean()
+    volatility_multiplier = 1 / (ema_daily_range + 1)
+    adjusted_momentum = momentum_with_volume * volatility_multiplier
+
+    # Calculate Short-Term and Long-Term Returns
+    short_term_return = (df['close'] / df['close'].shift(5)) - 1
+    long_term_return = (df['close'] / df['close'].shift(20)) - 1
+    relative_strength = short_term_return - long_term_return
+
+    # Intraday and Open-to-Close Returns
+    intraday_open_close_return = (df['high'] - df['low']) + (df['close'] - df['open'])
+
+    # Identify Volume Spikes
+    std_volume = df['volume'].rolling(window=n).std()
+    mean_volume = df['volume'].rolling(window=n).mean()
+    volume_spike_indicator = (df['volume'] > (mean_volume + 2 * std_volume)).astype(int)
+
+    # Multiply Combined Return by Volume Spike Indicator
+    combined_return_with_volume_spike = relative_strength * volume_spike_indicator
+
+    # Integrate Factors
+    volume_difference = 0.4 * (df['volume'] - df['volume'].shift(1))
+    average_high_low_range = 0.2 * (df['high'] - df['low'])
+    close_price_change = df['close'] - df['close'].shift(1)
+    integrated_factor = combined_return_with_volume_spike + volume_difference + average_high_low_range + close_price_change
+
+    # Final Integrated Factor
+    final_factor = integrated_factor * adjusted_momentum
+    volume_average = df['volume'].rolling(window=5).mean()
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volatility = daily_returns.rolling(window=20).std()
+    final_factor = final_factor * (volume_average * volatility)
+
+    # Integrate Momentum and Reversal Signals
+    momentum_signal = (df['close'] / df['close'].shift(120)) - 1
+    reversal_signal = (df['close'] / df['close'].shift(7)) - 1
+    combined_signal = momentum_signal - reversal_signal
+    final_factor += combined_signal
+
+    return final_factor
+```

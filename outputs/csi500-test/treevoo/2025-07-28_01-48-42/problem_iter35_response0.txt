@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_30 = df['close'].rolling(window=30).mean()
+    sma_ratio = sma_10 / sma_30
+
+    # Calculate Exponential Moving Averages (EMA)
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ema_30 = df['close'].ewm(span=30, adjust=False).mean()
+    ema_ratio = ema_10 / ema_30
+
+    # Calculate Rate of Change (ROC)
+    roc_close = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    roc_high = (df['high'] - df['high'].shift(10)) / df['high'].shift(10)
+    roc_low = (df['low'] - df['low'].shift(10)) / df['low'].shift(10)
+
+    # Calculate Moving Average Convergence Divergence (MACD)
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+
+    # Calculate Directional Movement Index (DMI)
+    dm_plus = (df['high'] - df['high'].shift(1)).clip(lower=0).ewm(span=14, adjust=False).mean()
+    dm_minus = (df['low'].shift(1) - df['low']).clip(lower=0).ewm(span=14, adjust=False).mean()
+    tr = pd.concat([(df['high'] - df['low']), 
+                    (df['high'] - df['close'].shift(1)).abs(), 
+                    (df['low'] - df['close'].shift(1)).abs()], axis=1).max(axis=1)
+    atr = tr.ewm(span=14, adjust=False).mean()
+    dx = 100 * (dm_plus - dm_minus).abs() / (dm_plus + dm_minus)
+    adx = dx.ewm(span=14, adjust=False).mean()
+
+    # Calculate Bollinger Bands
+    middle_band = df['close'].rolling(window=20).mean()
+    upper_band = middle_band + 2 * df['close'].rolling(window=20).std()
+    lower_band = middle_band - 2 * df['close'].rolling(window=20).std()
+    bband_width = (upper_band - lower_band) / middle_band
+
+    # Calculate On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+
+    # Calculate Chaikin Money Flow (CMF)
+    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    cmf = (mf_multiplier * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Composite Momentum Indicator (CMI)
+    cmi = (sma_ratio + ema_ratio + roc_close) / 3
+
+    # Composite Trend Indicator (CTI)
+    cti = (macd_histogram + adx + (dm_plus - dm_minus) / (dm_plus + dm_minus)) / 3
+
+    # Composite Volatility Indicator (CVI)
+    cvi = (atr + bband_width) / 2
+
+    # Composite Volume Indicator (CVoI)
+    cvoi = (obv + cmf) / 2
+
+    # Final Alpha Factor (FAF)
+    faf = (cmi + cti + cvi + cvoi) / 4
+
+    return faf
+```

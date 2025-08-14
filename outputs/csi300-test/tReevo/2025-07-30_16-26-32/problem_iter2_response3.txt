@@ -1,0 +1,32 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['intraday_price_movement'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday Price Movement (Last 10 days)
+    df['avg_intraday_price_movement'] = df['intraday_price_movement'].rolling(window=10).mean()
+    
+    # Detect Volume Spike
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    avg_volume_change = df['volume_change'].rolling(window=10).mean()
+    threshold = 2 * avg_volume_change
+    df['volume_spike'] = (df['volume_change'] > threshold).astype(int)
+    
+    # Calculate Volatility (Standard Deviation of Daily Returns, Last 30 days)
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    
+    # Combine Intraday Price Movement, Volume Spike, and Volatility
+    df['combined_factor'] = (df['intraday_price_movement'] * df['volume_spike']) / (df['volatility'] + 1e-6)
+    
+    # Apply Weighted Average to Recent Data (Last 5 days)
+    weights = np.array([5, 4, 3, 2, 1])
+    df['weighted_combined_factor'] = df['combined_factor'].rolling(window=5).apply(
+        lambda x: np.sum(x * weights) / np.sum(weights), raw=True
+    )
+    
+    return df['weighted_combined_factor']
+```

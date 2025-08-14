@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate short and long SMAs for momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Momentum'] = df['SMA_5'] - df['SMA_20']
+    
+    # Calculate ATR for volatility
+    df['TrueRange'] = df[['high', 'low']].apply(lambda x: max(x) - min(x), axis=1)
+    df['ATR_14'] = df['TrueRange'].rolling(window=14).mean()
+    
+    # Calculate On-Balance Volume (OBV)
+    df['OBV'] = ((df['close'] > df['close'].shift()).astype(int) - (df['close'] < df['close'].shift()).astype(int)) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Analyze gap opening patterns
+    df['Gap'] = (df['open'] - df['close'].shift()) / df['close'].shift() * 100
+    
+    # Recognize candlestick patterns and assign scores
+    df['Doji'] = (abs(df['close'] - df['open']) / (df['high'] - df['low']) < 0.1).astype(int) * ((df['close'] > df['open']).astype(int) * 1 + (df['close'] < df['open']).astype(int) * -1)
+    df['Hammer'] = ((df['close'] - df['low']) / (df['high'] - df['low']) > 0.6) & (df['open'] - df['low'] > (df['high'] - df['open'])) & (df['close'] - df['open'] > 0) 
+    df['Engulfing'] = (df['close'] > df['open']) & (df['close'].shift() < df['open'].shift()) & (df['close'] > df['open'].shift()) & (df['open'] < df['close'].shift())
+    
+    # Implement trend following strategies using moving averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['GoldenCross'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift() <= df['SMA_200'].shift())
+    df['DeathCross'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift() >= df['SMA_200'].shift())
+    
+    # Build support and resistance levels
+    df['Support'] = df['low'].rolling(window=20).min()
+    df['Resistance'] = df['high'].rolling(window=20).max()
+    df['ProximityToSupport'] = (df['close'] - df['Support']) / (df['Resistance'] - df['Support'])
+    
+    # Incorporate price range analysis
+    df['DailyRange'] = df['high'] - df['low']
+    df['CloseToRange'] = (df['close'] - df['low']) / df['DailyRange']
+    
+    # Generate the alpha factor by combining all the heuristics
+    df['AlphaFactor'] = df['Momentum'] + df['ATR_14'] + df['OBV'] + df['Gap'] + df['Doji'] + df['Hammer'].astype(int) + df['Engulfing'].astype(int) + df['GoldenCross'].astype(int) - df['DeathCross'].astype(int) + df['ProximityToSupport'] + df['CloseToRange']
+    
+    return df['AlphaFactor']
+```

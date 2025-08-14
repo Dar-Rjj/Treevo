@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    close_price_change = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    weighted_momentum_sum = (df['high'] + df['low'] + 2 * df['close']) / 4
+    weighted_momentum = close_price_change / (weighted_momentum_sum * np.sqrt(df['volume']))
+    
+    # Adjust for Volatility
+    adjusted_momentum = weighted_momentum / high_to_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = np.where(short_term_ma > long_term_ma, 1, -1)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_to_low_range.rolling(window=5).mean()
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Cumulative Return
+    cumulative_return = daily_return.rolling(window=5).sum()
+    
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Momentum and Volatility
+    combined_intraday_factor = (intraday_return * df['volume']).ewm(span=5).mean() + (high_to_low_range * df['volume']).ewm(span=5).mean()
+    
+    # Calculate Price Momentum
+    log_return = np.log(df['close'] / df['close'].shift(20))
+    price_momentum = log_return.rolling(window=20).sum()
+    
+    # Adjust by Intraday Volatility and Volume
+    adjusted_price_momentum = price_momentum * df['volume'] / intraday_volatility
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    confirmed_momentum = trend_direction * volume_change
+    
+    # Calculate Relative Strength
+    relative_strength = price_momentum - long_term_ma
+    volume_weighted_price_movement = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    relative_strength_normalized = relative_strength / volume_weighted_price_movement
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    integrated_factor = relative_strength_normalized + adjusted_cumulative_return + combined_intraday_factor * volume_weighted_price_movement
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = integrated_factor + confirmed_momentum
+    
+    return final_alpha_factor
+```

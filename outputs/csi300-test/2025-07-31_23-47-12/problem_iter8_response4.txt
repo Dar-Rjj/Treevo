@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices).diff().dropna()
+    
+    # Compute Dynamic Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    upper_threshold = cum_log_returns.quantile(0.75)
+    lower_threshold = cum_log_returns.quantile(0.25)
+    clipped_log_returns = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = (clipped_log_returns * (volumes / mean_volume)).dropna()
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev_abs_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Final Factor Calculation
+    weights = [0.5, 0.3, 0.2]  # Example weights for momentum, volume, and volatility components
+    combined_factor = (
+        weights[0] * volume_adjusted_momentum + 
+        weights[1] * std_dev_abs_changes + 
+        weights[2] * ema_abs_changes
+    ).dropna()
+    
+    # Integrate Market Breadth and Economic Indicators
+    adv_decline_line = (df['close'] > df['close'].shift(1)).rolling(window=N).sum() - (df['close'] < df['close'].shift(1)).rolling(window=N).sum()
+    new_highs = (df['high'] == df['high'].rolling(window=N).max()).astype(int)
+    new_lows = (df['low'] == df['low'].rolling(window=N).min()).astype(int)
+    market_breadth = (adv_decline_line + new_highs - new_lows).dropna()
+    
+    # Example: Incorporate Interest Rates and GDP Growth Rate
+    # interest_rates = ...  # Placeholder for actual interest rates data
+    # gdp_growth_rate = ...  # Placeholder for actual GDP growth rate data
+    
+    final_factor = (combined_factor * 0.8 + market_breadth * 0.2).dropna()
+    
+    return final_factor
+```

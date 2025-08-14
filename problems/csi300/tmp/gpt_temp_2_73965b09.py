@@ -1,0 +1,52 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+from arch import arch_model
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum'] = (df['High_Low_Range'] + df['Close_Open_Diff']) * df['volume']
+    df['Vol_Adj_Mom_10d_EMA'] = df['Volume_Adjusted_Momentum'].ewm(span=10).mean()
+    
+    # Adjust for Market Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Abs_Return_Diff'] = df['Daily_Return'].abs()
+    df['Std_Dev_30d'] = df['Daily_Return'].rolling(window=30).std()
+    
+    # Estimate GARCH(1,1) Volatility
+    garch_vol = []
+    for i in range(len(df)):
+        if i < 30:
+            garch_vol.append(np.nan)
+        else:
+            returns = df['Daily_Return'].iloc[i-30:i]
+            model = arch_model(returns.dropna(), vol='Garch', p=1, q=1)
+            res = model.fit(update_freq=5, disp='off')
+            garch_vol.append(res.conditional_volatility[-1])
+    df['GARCH_Vol'] = garch_vol
+    
+    # Modify Intraday Momentum with Dynamic Volatility Measures
+    df['Adj_Mom_with_GARCH'] = df['Vol_Adj_Mom_10d_EMA'] - df['GARCH_Vol']
+    
+    # Enhance Trend Reversal Signal
+    df['Short_Term_Momentum'] = df['close'].ewm(span=5).mean()
+    df['Long_Term_Momentum'] = df['close'].ewm(span=20).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    df['Reversal_Signal'] = np.where(df['Momentum_Reversal'] > 0, 1, -1)
+    
+    # Integrate Reversal Signal into Final Factor
+    df['Interim_Alpha_Factor'] = df['Adj_Mom_with_GARCH'] + df['Reversal_Signal']
+    
+    # Refine Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Interim_Alpha_Factor'].ewm(span=5).mean()
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Your DataFrame here
+# alpha_factor = heuristics_v2(df)

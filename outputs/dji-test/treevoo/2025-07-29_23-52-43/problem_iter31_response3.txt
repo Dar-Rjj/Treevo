@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+
+    # Calculate Close-to-PreviousClose Return
+    df['previous_close'] = df['close'].shift(1)
+    close_to_previous_close_return = (df['close'] - df['previous_close']) / df['previous_close']
+
+    # Calculate High-Low Breakout Intensity
+    breakout_intensity = (df['high'] - df['low']) / df['close']
+    breakout_intensity[breakout_intensity < 0] = 0
+
+    # Volume Weighted Intraday Return
+    volume_weighted_intraday_return = ((df['close'] - df['open']) / df['open']) * (df['volume'] / df['volume'].rolling(window=5).mean().shift(1))
+
+    # Volume Spike Detection
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    spike_threshold = daily_volume_change.rolling(window=21).quantile(0.8) * 1.6
+    volume_spike = (daily_volume_change > spike_threshold).astype(int)
+
+    # Price Volatility
+    price_volatility = df['close'].rolling(window=5).std() / df['close'].shift(1)
+
+    # Intermediate Factor
+    intermediate_factor = (df['volume'] / df['volume'].shift(1)) * (df['close'] - df['close'].rolling(window=5).mean().shift(1)) * price_volatility
+
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    combined_returns = (intraday_return + close_to_previous_close_return + breakout_intensity) * df['volume']
+
+    # Daily High-Low Difference
+    daily_high_low_diff = df['high'] - df['low']
+
+    # Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) - (df['high'].shift(1) - df['low'].shift(1))
+
+    # Volume Weighted Average Price (VWAP)
+    vwap_daily = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_previous_day = (df['close'].shift(1) * df['volume'].shift(1)).cumsum() / df['volume'].shift(1).cumsum()
+
+    # VWAP Difference
+    vwap_difference = vwap_daily - vwap_previous_day
+
+    # Final Combined Indicator
+    final_combined_indicator = intraday_momentum * vwap_difference
+
+    # Generate Crossover Alpha Factor
+    crossover_alpha_factor = combined_returns + final_combined_indicator + intermediate_factor
+
+    return crossover_alpha_factor
+```

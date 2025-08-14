@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+
+    # Calculate Previous Day's Close-to-Open Return
+    df['prev_close_to_open_return'] = (df['open'].shift(1) - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['prev_close_to_open_return']
+
+    # Volume Surge Indicator
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_surge'] = df['volume'] > df['5_day_avg_volume']
+
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+
+    # Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Integrate Factors
+    df['integrated_factor'] = df['intraday_return'] * df['prev_close_to_open_return'] * df['price_momentum_ratio']
+    df['integrated_factor'] = df['integrated_factor'].where(df['volume_surge'], df['integrated_factor'] * 0.5)
+    df['integrated_factor'] = df['integrated_factor'].where(~df['volume_surge'], df['integrated_factor'] * 1.5)
+
+    # Volume-Weighted High-Low Range
+    df['volume_weighted_high_low'] = df['high_low_range'] * df['volume']
+    df['avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volatility_adjusted_returns'] = df['aggregate_returns'] * df['volume_weighted_high_low'] / df['avg_volume']
+
+    # Smoothed Moving Average
+    df['sma_5_days'] = df['volatility_adjusted_returns'].rolling(window=5).mean()
+    df['ema_smoothed'] = df['sma_5_days'].ewm(span=5, adjust=False).mean()
+
+    # Integrate Amount Data
+    df['daily_dollar_volume'] = df['volume'] * df['close']
+    df['final_factor'] = df['ema_smoothed'] * df['daily_dollar_volume']
+
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

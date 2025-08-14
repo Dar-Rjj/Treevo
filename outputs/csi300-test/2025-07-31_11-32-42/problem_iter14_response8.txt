@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Evaluate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    integrated_metric = intraday_high_low_spread - close_to_open_change
+    
+    # Incorporate Advanced Volume Impact
+    volume_impact = np.sqrt(df['volume']) * integrated_metric
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range_stability = (df['high'] - df['low']) / (df['open'] + df['close'])
+    adjusted_volume_impact = volume_impact / price_range_stability
+    
+    # Weight by Volume
+    combined_change = df['volume'] * adjusted_volume_impact
+    
+    # Calculate Volume-Weighted Prices
+    vwap_close = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    vwap_open = (df['open'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Synthesize VWAPCHL into the Model
+    vwapchl = (vwap_close - vwap_open) / (df['high'] - df['low'])
+    
+    # Calculate 20-Day Average Close
+    avg_20_day_close = df['close'].rolling(window=20).mean()
+    
+    # Subtract 20-Day Average Close from Today's Close
+    diff_20_day_close = df['close'] - avg_20_day_close
+    
+    # Compute 5-day Price Return
+    price_return_5d = df['close'].pct_change(periods=5)
+    
+    # Compute 20-day Price Return
+    price_return_20d = df['close'].pct_change(periods=20)
+    
+    # Calculate Intraday Volatility
+    high_low_diff = df['high'] - df['low']
+    intraday_volatility = high_low_diff.rolling(window=5).mean()
+    
+    # Combine Momentum and Intraday Volatility
+    daily_momentum = -1 * (price_return_5d + price_return_20d)
+    combined_momentum_volatility = daily_momentum + intraday_volatility
+    
+    # Measure Close Location within Intraday Range
+    close_location = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Adjust for Volume Intensity
+    weighted_intraday_reversal_potential = df['volume'] * close_location
+    
+    # Calculate Volume Surge
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    avg_10d_volume = df['volume'].rolling(window=10).mean()
+    
+    # Calculate Volume Adjusted Momentum
+    close_to_close_return = df['close'].pct_change()
+    volume_adjusted_momentum = close_to_close_return * df['volume']
+    
+    # Synthesize All Factors
+    factor = (
+        combined_momentum_volatility
+        + weighted_intraday_reversal_potential
+        - (price_return_5d - price_return_20d)
+        - (price_return_20d - df['close'].pct_change(periods=50))
+        * (price_return_5d - price_return_20d)
+        * volume_adjusted_momentum
+    )
+    
+    return factor
+```

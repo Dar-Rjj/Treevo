@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day simple moving average of closing prices to capture momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum factor: difference between 5-day and 20-day moving averages
+    df['momentum_factor'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day SMA
+    df['relative_strength'] = df['close'] / df['SMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = df['high'].rolling(window=5).mean() - df['low'].rolling(window=5).mean()
+    df['range_20'] = df['high'].rolling(window=20).mean() - df['low'].rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Calculate mean reversion factor: difference between current close and 20-day SMA
+    df['mean_reversion_factor'] = df['close'] - df['SMA_20']
+
+    # Adaptive weights for momentum, mean reversion, and market breadth based on volatility
+    df['adaptive_momentum_weight'] = 1 / (df['volatility_factor'] + 1e-7)
+    df['adaptive_mean_reversion_weight'] = 1 - df['adaptive_momentum_weight']
+    df['adaptive_market_breadth_weight'] = df['market_breadth'] / (abs(df['market_breadth']) + 1e-7)
+
+    # Combine the factors: momentum, mean reversion, volatility, liquidity, relative strength, and market breadth with adaptive weights
+    heuristic_factor = (
+        df['momentum_factor'] * df['adaptive_momentum_weight'] +
+        df['mean_reversion_factor'] * df['adaptive_mean_reversion_weight'] +
+        (df['liquidity_factor'] + 1e-7) * df['relative_strength'] *
+        df['adaptive_market_breadth_weight']
+    ) / (df['volatility_factor'] + 1e-7)
+
+    return heuristic_factor
+```

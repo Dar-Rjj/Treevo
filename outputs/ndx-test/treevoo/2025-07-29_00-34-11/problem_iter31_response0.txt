@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Count Consecutive Positive Returns
+    df['consecutive_positive_returns'] = (df['daily_return'] > 0).astype(int).groupby((df['daily_return'] <= 0).cumsum()).cumsum()
+    
+    # Count Consecutive Negative Returns
+    df['consecutive_negative_returns'] = (df['daily_return'] < 0).astype(int).groupby((df['daily_return'] >= 0).cumsum()).cumsum()
+    
+    # Calculate Average True Range (ATR)
+    df['high_low'] = df['high'] - df['low']
+    df['high_close_prev'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close_prev'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['high_low', 'high_close_prev', 'low_close_prev']].max(axis=1)
+    df['average_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = (df['volume_change'] > 3 * df['volume_change'].std()).astype(int)
+    
+    # Flag Days with High Volume and Large Price Changes
+    df['price_change'] = df['close'].pct_change()
+    df['high_vol_large_price_change'] = ((df['volume_change'] > 2 * df['volume_change'].std()) & 
+                                         (df['price_change'] > 2 * df['price_change'].std())).astype(int)
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = df['close'] - df['open']
+    
+    # Incorporate (High - Low) for Volatility Insight
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Detect Up Gaps
+    df['up_gap'] = (df['open'] > df['close'].shift(1)).astype(int)
+    
+    # Detect Down Gaps
+    df['down_gap'] = (df['open'] < df['close'].shift(1)).astype(int)
+    
+    # Combine Daily Return and ATR
+    df['return_atr_ratio'] = df['daily_return'] / df['average_true_range']
+    
+    # Integrate Intraday Momentum with Volume Spikes
+    df['momentum_volume_spike'] = df['intraday_momentum'] * df['volume_spike']
+    
+    # Composite Indicator
+    df['composite_indicator'] = (df['consecutive_positive_returns'] + 
+                                 df['consecutive_negative_returns'] + 
+                                 df['return_atr_ratio'] + 
+                                 df['momentum_volume_spike'])
+    
+    return df['composite_indicator']
+```

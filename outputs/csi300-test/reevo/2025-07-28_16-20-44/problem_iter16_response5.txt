@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days)
+    momentum_10 = np.log(df['close']).diff(periods=10)
+    momentum_20 = np.log(df['close']).diff(periods=20)
+    momentum_30 = np.log(df['close']).diff(periods=30)
+    momentum_combined = (momentum_10 + momentum_20 + momentum_30) / 3
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days)
+    liquidity_10 = df['volume'].rolling(window=10).mean()
+    liquidity_20 = df['volume'].rolling(window=20).mean()
+    liquidity_30 = df['volume'].rolling(window=30).mean()
+    liquidity_40 = df['volume'].rolling(window=40).mean()
+    liquidity_combined = (liquidity_10 + liquidity_20 + liquidity_30 + liquidity_40) / 4
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment_5 = money_flow_ratio.rolling(window=5).mean()
+    market_sentiment_10 = money_flow_ratio.rolling(window=10).mean()
+    market_sentiment_15 = money_flow_ratio.rolling(window=15).mean()
+    market_sentiment_combined = (market_sentiment_5 + market_sentiment_10 + market_sentiment_15) / 3
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility_20 = np.log(df['close']).diff().rolling(window=20).std()
+    volatility_30 = np.log(df['close']).diff().rolling(window=30).std()
+    volatility_40 = np.log(df['close']).diff().rolling(window=40).std()
+    volatility_50 = np.log(df['close']).diff().rolling(window=50).std()
+    volatility_combined = (volatility_20 + volatility_30 + volatility_40 + volatility_50) / 4
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5 days
+    intraday_dynamics = (df['high'] / df['low']).rolling(window=5).mean()
+    
+    # Calculate the RSI factor
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Additional factor: Average True Range (ATR) over the last 14 days
+    tr = pd.Series(0.0, index=df.index)
+    tr[1:] = np.maximum(np.abs(df['high'] - df['low']), 
+                        np.maximum(np.abs(df['high'] - df['close'].shift()), 
+                                   np.abs(df['close'].shift() - df['low'])))
+    atr = tr.rolling(window=14).mean()
+    
+    # Combine the factors without normalization, but with a slight adjustment for stability
+    factor = (momentum_combined * liquidity_combined * market_sentiment_combined * intraday_dynamics * rsi) / (volatility_combined * atr + 1e-6)
+    
+    return factor
+```

@@ -1,0 +1,31 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum with a focus on different time horizons
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    mid_term_momentum = df['close'].pct_change(periods=20).ewm(span=20, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=60).ewm(span=60, adjust=False).mean()
+    adaptive_momentum = 0.4 * short_term_momentum + 0.3 * mid_term_momentum + 0.3 * long_term_momentum
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over the last 14 days
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Volume trend analysis using the difference between current and average volume
+    volume_trend = df['volume'] - df['volume'].rolling(window=14).mean()
+
+    # Market sentiment using the ratio of high to low prices as a proxy, adjusted for volatility
+    market_sentiment = (df['high'] - df['low']) / df['close'] / dynamic_volatility
+
+    # Seasonality adjustment based on the day of the week
+    seasonality_adjustment = df.index.dayofweek.map({0: 1.1, 1: 1.05, 2: 1.0, 3: 1.05, 4: 1.1, 5: 1.05, 6: 1.0})
+
+    # Combining the factors into a single alpha factor
+    factor_values = (
+        0.4 * adaptive_momentum
+        - 0.2 * dynamic_volatility
+        + 0.2 * volume_trend
+        + 0.1 * market_sentiment
+    ) * seasonality_adjustment
+
+    return factor_values

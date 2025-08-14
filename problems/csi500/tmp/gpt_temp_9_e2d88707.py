@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, total_n_days=len):
+    # Calculate Daily Price Movement and Price Gap
+    df['daily_price_movement'] = df['high'] - df['low']
+    df['price_gap'] = df['open'] - df['close']
+
+    # Calculate Raw Momentum over n days
+    df['raw_momentum'] = df['daily_price_movement'].rolling(window=n).sum()
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Incorporate Market Depth
+    df['market_depth'] = df['amount'] / df['volume']
+
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+
+    # Adjust Raw Momentum
+    df['adjusted_momentum'] = df['raw_motion'] * (df['vwap'] + df['market_depth']) / df['intraday_volatility']
+
+    # Calculate Final Volume-Adjusted Momentum
+    average_volume = df['volume'].rolling(window=n).mean()
+    total_average_volume = df['volume'].expanding().mean()
+    df['final_volume_adjusted_momentum'] = df['adjusted_momentum'] * (average_volume / total_average_volume)
+
+    # Integrate Multi-Day Momentum
+    df['5_day_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10_day_return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['multi_day_momentum'] = (df['5_day_return'] + df['10_day_return']) / 2
+    df['final_volume_adjusted_momentum'] += df['multi_day_momentum']
+
+    # Incorporate Liquidity
+    df['liquidity'] = average_volume / total_average_volume
+    df['final_volume_adjusted_momentum'] *= df['liquidity']
+
+    # Consider Volatility Clustering
+    df['ema_intraday_volatility'] = df['intraday_volatility'].ewm(span=n, adjust=False).mean()
+    average_intraday_volatility = df['intraday_volatility'].rolling(window=n).mean()
+    df['final_volume_adjusted_momentum'] *= (df['ema_intraday_volatility'] / average_intraday_volatility)
+
+    # Incorporate Short-Term Reversal
+    df['2_day_return'] = (df['close'] - df['close'].shift(2)) / df['close'].shift(2)
+    df['final_volume_adjusted_momentum'] *= (1 + df['2_day_return'])
+
+    # Final Alpha Factor
+    alpha_factor = df['final_volume_adjusted_momentum']
+
+    return alpha_factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

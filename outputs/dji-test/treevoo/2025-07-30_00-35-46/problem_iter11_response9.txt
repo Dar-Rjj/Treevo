@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Open-Close Return
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Historical Volatility
+    daily_returns = (df['close'] / df['close'].shift(1)) - 1
+    volatility = daily_returns.rolling(window=20).std()
+    
+    # Assign Weights based on Volatility
+    high_low_weight = 1 / (volatility + 1e-6)
+    open_close_weight = 1 / (volatility + 1e-6)
+    
+    # Combine High-Low and Open-Close Returns
+    intraday_momentum = (high_low_diff * high_low_weight + open_close_return * open_close_weight) / (high_low_weight + open_close_weight)
+    
+    # Apply Enhanced Volume and Price Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    price_shock = abs(df['close'] - df['close'].shift(1)) / (df['high'] - df['low']).rolling(window=20).max()
+    
+    # Threshold Filter
+    volume_threshold = 1.5
+    amount_threshold = 1.5
+    price_shock_threshold = 0.05
+    
+    shock_filter = (volume_ratio > volume_threshold) & (amount_ratio > amount_threshold) & (price_shock > price_shock_threshold)
+    intraday_momentum_filtered = intraday_momentum * shock_filter
+    
+    # Adjust for Volume
+    volume_adjusted_momentum = intraday_momentum_filtered / df['volume']
+    
+    # Measure Volume Synchronization
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_product = volume_change * price_change
+    synchronization_value = np.sign(synchronized_product)
+    
+    # Synthesize Combined Factor
+    combined_factor = volume_adjusted_momentum + synchronization_value
+    final_alpha_factor = np.maximum(combined_factor, 0)
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, w1=0.4, w2=0.3, w3=0.3, n_days=50):
+    # Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+
+    # Subtract longer SMA from shorter SMA
+    df['SMA_100_200'] = df['SMA_100'] - df['SMA_200']
+    df['SMA_50_100'] = df['SMA_50'] - df['SMA_100']
+
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+
+    # Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal Signals
+    df['combined_signal_100_200'] = df['SMA_100_200'] * df['reversal_signal']
+    df['combined_signal_50_100'] = df['SMA_50_100'] * df['reversal_signal']
+
+    # Average True Range (ATR)
+    df['tr'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+
+    # Integrate ATR with Combined Signal
+    df['atr_combined_signal_100_200'] = df['atr'] * df['combined_signal_100_200']
+    df['atr_combined_signal_50_100'] = df['atr'] * df['combined_signal_50_100']
+
+    # Smooth result with EMA
+    df['ema_atr_combined_signal_100_200'] = df['atr_combined_signal_100_200'].ewm(span=10, adjust=False).mean()
+    df['ema_atr_combined_signal_50_100'] = df['atr_combined_signal_50_100'].ewm(span=10, adjust=False).mean()
+
+    # High-Low Range Momentum with Volume Adjustment
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    df['avg_volume'] = df['volume'].rolling(window=n_days).mean()
+    df['adjusted_high_low_momentum'] = df['high_low_momentum'] / df['avg_volume']
+
+    # Price Oscillation
+    df['price_oscillation'] = df['close'] - df['open']
+    df['smoothed_price_oscillation'] = df['price_oscillation'].ewm(span=20, adjust=False).mean()
+
+    # Final Alpha Factor Combination
+    df['price_momentum_intraday_reversal'] = df['SMA_50_100'] + df['SMA_100_200'] + df['ema_atr_combined_signal_100_200'] + df['ema_atr_combined_signal_50_100']
+    df['final_alpha_factor'] = (df['price_momentum_intraday_reversal'] * w1) + (df['adjusted_high_low_momentum'] * w2) + (df['smoothed_price_oscillation'] * w3)
+
+    return df['final_alpha_factor']
+```

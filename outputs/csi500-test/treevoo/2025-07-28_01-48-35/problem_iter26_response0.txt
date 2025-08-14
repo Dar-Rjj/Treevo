@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_range_ratio = df['close'] / intraday_range
+    
+    # Adjust for Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    combined_high_low_open_close = (intraday_range + opening_gap).fillna(0)
+    
+    # Measure Closing Behavior
+    close_to_prev_close_return = df['close'] / df['close'].shift(1)
+    final_combined_factor = combined_high_low_open_close * close_to_prev_close_return
+    final_combined_factor = final_combined_factor.where(final_combined_factor > 0, 0)
+    
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = (df['high'] - df['low']) / df['low'] * df['volume']
+    
+    # Calculate Short-Term Price Change
+    short_term_price_change = df['close'] - df['close'].shift(5)
+    
+    # Calculate Volume Trend Indicator
+    volume_trend_indicator = (df['volume'].rolling(window=10).sum().diff() > 0).astype(int) * 2 - 2
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    volume_weighted_close_to_open_return = close_to_open_return * df['volume']
+    
+    # Calculate Price Momentum
+    ema_10_day = df['close'].ewm(span=10, adjust=False).mean()
+    price_momentum = df['close'] - ema_10_day
+    
+    # Composite Factor
+    composite_factor = (volume_weighted_close_to_open_return * price_momentum).add(final_combined_factor, fill_value=0)
+    
+    # Smooth the Composite Factor
+    smoothed_composite_factor = composite_factor.rolling(window=5).mean()
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = smoothed_composite_factor * volume_trend_indicator
+    
+    # Adjust for Volume Activity
+    volume_change = df['volume'] - df['volume'].shift(5)
+    avg_volume = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change / avg_volume
+    volume_trend_coefficient = ((volume_change_rate > 1) * 2.0 + (volume_change_rate < -1) * -1.5).fillna(0)
+    final_alpha_factor = final_alpha_factor * volume_trend_coefficient
+    
+    # Integrate Price Trend
+    price_trend = df['close'] - ema_10_day
+    
+    # Combine Components
+    momentum_component = price_momentum * volume_trend_indicator
+    final_alpha_factor = momentum_component.add(price_trend, fill_value=0).add(volume_weighted_intraday_return, fill_value=0).add(short_term_price_change, fill_value=0).add(high_low_spread, fill_value=0)
+    
+    # Opening Impact and Gap Adjustment
+    open_to_close_return = (df['close'] - df['open']).fillna(0)
+    overnight_gap = df['open'] - df['close'].shift(1)
+    final_alpha_factor = final_alpha_factor - open_to_close_return - overnight_gap
+    
+    return final_alpha_factor
+```

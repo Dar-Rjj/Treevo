@@ -1,0 +1,53 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change (close - open)
+    price_change = df['close'] - df['open']
+    
+    # Calculate the average of high and low
+    avg_high_low = (df['high'] + df['low']) / 2
+    
+    # Calculate the standard deviation of the price change to measure volatility over an adaptive 5-day window
+    volatility = price_change.rolling(window=5).std()
+    
+    # Calculate the exponential moving average (EMA) of the close price to measure trend strength over a 10-day span
+    trend_strength = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Detect volume spikes by comparing the current volume to the rolling mean of the last 5 days
+    volume_spike = (df['volume'] - df['volume'].rolling(window=5).mean()) / df['volume'].rolling(window=5).std()
+    
+    # Calculate the weighted price movement relative to the average high and low
+    weighted_price_movement = (price_change * df['volume']) / (avg_high_low * df['volume'].rolling(window=5).mean())
+    
+    # Calculate the rolling correlation between price change and volume over a 5-day window
+    price_vol_corr = price_change.rolling(window=5).corr(df['volume'])
+    
+    # Add a new technical indicator: Relative Strength Index (RSI) with a 14-day span
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Integrate multi-timeframe analysis by adding a longer-term EMA
+    long_trend_strength = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the Moving Average Convergence Divergence (MACD) with a 12/26/9 EMA periods
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_hist = macd_line - signal_line
+    
+    # Combine the factors into a single alpha factor with dynamic contributions
+    alpha_factor = (
+        0.3 * weighted_price_movement + 
+        0.2 * (trend_strength - long_trend_strength) - 
+        0.1 * volatility + 
+        0.1 * volume_spike + 
+        0.1 * price_vol_corr + 
+        0.2 * rsi + 
+        0.1 * macd_hist
+    )
+    
+    return alpha_factor.fillna(0)
+```

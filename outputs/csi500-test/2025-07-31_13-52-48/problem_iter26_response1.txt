@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['intraday_momentum'] = df['high_low_diff'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust by Volume Volatility
+    df['volume_change'] = df['volume'].diff()
+    df['volume_volatility'] = df['volume_change'].rolling(window=20).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    df['intraday_adjusted_momentum'] = df['intraday_momentum'] / (df['volume_volatility'] + 1e-6)  # Adding small constant to avoid division by zero
+    
+    # Calculate Volume-Weighted Momentum
+    df['price_change'] = df['close'] - df['open']
+    df['volume_weighted_momentum'] = df['price_change'] * np.log(df['volume'])
+    df['intraday_volume_weighted_momentum'] = df['volume_weighted_momentum'] * df['intraday_adjusted_momentum']
+    
+    # Incorporate Price Trend
+    df['long_term_trend'] = df['close'].rolling(window=200).mean()
+    df['price_change_trend'] = (df['close'] - df['open'].shift(1)) * df['long_term_trend']
+    df['intraday_price_trend_adjusted'] = df['intraday_volume_weighted_momentum'] * df['price_change_trend']
+    
+    # Compute Dynamic Momentum Oscillator
+    df['dynamic_momentum_oscillator'] = df['intraday_price_trend_adjusted'] - df['intraday_price_trend_adjusted'].rolling(window=50).mean()
+    
+    # Analyze Simple Moving Averages (SMA)
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    
+    # Examine Rate of Change (ROC)
+    df['roc_5'] = df['close'].pct_change(5)
+    df['roc_20'] = df['close'].pct_change(20)
+    
+    # Examine Trading Volume
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Investigate Historical Volatility
+    df['historical_volatility'] = df['close'].pct_change().rolling(window=20).std() * np.sqrt(252)
+    
+    # Combine Signals for Composite Factor
+    df['composite_factor'] = (df['sma_5'] * 0.3 + 
+                              df['sma_20'] * 0.2 + 
+                              df['roc_5'] * 0.2 + 
+                              df['roc_20'] * 0.1 + 
+                              df['volume_ma_5'] * 0.1 + 
+                              df['volume_ma_20'] * 0.1)
+    
+    return df['composite_factor']
+```

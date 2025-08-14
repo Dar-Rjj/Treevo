@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=10, k=10):
+    # Intraday Range
+    intraday_range = df['high'] - df['low']
+
+    # Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+
+    # Price Change
+    price_change = df['close'].diff()
+
+    # Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+
+    # Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+
+    # Combined Intraday Features
+    combined_intraday_features = (df['open'] - intraday_midpoint) - opening_gap
+
+    # Enhanced Intraday Factor
+    avg_intraday_range = intraday_range.rolling(window=n).mean()
+    enhanced_intraday_factor = avg_intraday_range * (close_to_open_return + price_change) + combined_intraday_features
+
+    # Recent Volatility
+    abs_price_change = price_change.abs()
+    recent_volatility = abs_price_change.rolling(window=m).mean()
+    enhanced_intraday_factor *= recent_volatility
+
+    # Volume Adjusted Factor
+    avg_volume = df['volume'].rolling(window=k).mean()
+    volume_adjusted_factor = (df['volume'] > avg_volume).astype(float) * 0.5 + 0.5
+    enhanced_intraday_factor *= volume_adjusted_factor
+
+    # Adjust for Combined Volume and Price Spikes
+    volume_spike = (df['volume'] / df['volume'].shift(1)).fillna(1)
+    price_spike = (price_change / price_change.shift(1)).fillna(1).abs()
+    combined_spike = volume_spike + price_spike
+
+    # Introduce Volatility Adjustment
+    log_returns = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+    std_log_returns = log_returns.rolling(window=20).std()
+    volatility_adjustment = 1 / std_log_returns.replace(0, 1)  # Avoid division by zero
+    enhanced_intraday_factor *= volatility_adjustment
+
+    # Scale Enhanced Intraday Factor
+    enhanced_intraday_factor /= combined_spike
+    threshold = 5  # Set a threshold to avoid extreme values
+    enhanced_intraday_factor = enhanced_intraday_factor.clip(lower=-threshold, upper=threshold)
+
+    return enhanced_intraday_factor
+```

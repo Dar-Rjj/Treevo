@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=14, M=10, R=10, S=10, P=14, Q=14, T=10, V=10):
+    # Momentum Indicators
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['Momentum_SMA'] = df['close'] - df['SMA']
+    
+    df['EMA'] = df['close'].ewm(span=N, adjust=False).mean()
+    df['Momentum_EMA'] = df['close'] - df['EMA']
+    
+    df['Highest_High'] = df['high'].rolling(window=N).max()
+    df['Momentum_Highest_High'] = df['close'] - df['Highest_High']
+
+    # Reversal Indicators
+    df['Pct_Change_Close'] = df['close'].pct_change()
+    
+    df['Low_N_Days'] = df['low'].rolling(window=N).min()
+    df['Reversal_Below_Low'] = (df['close'] < df['Low_N_Days']).astype(int)
+    
+    df['RSI'] = 100 - (100 / (1 + ((df['close'].diff() > 0).rolling(window=N).sum() / (df['close'].diff() < 0).rolling(window=N).sum())))
+
+    # Volume-Based Indicators
+    df['Volume_Sum_M'] = df['volume'].rolling(window=M).sum()
+    
+    df['OBV'] = np.where(df['close'] > df['close'].shift(1), df['volume'], 
+                         np.where(df['close'] < df['close'].shift(1), -df['volume'], 0)).cumsum()
+    
+    df['Avg_Volume_R'] = df['volume'].rolling(window=R).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume_R']
+    
+    df['Max_Volume_S'] = df['volume'].rolling(window=S).max()
+    df['Volume_Surge'] = df['volume'] / df['Max_Volume_S']
+
+    # Range-Based Indicators
+    df['True_Range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], 
+                                                                abs(x['high'] - df['close'].shift(1)), 
+                                                                abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['ATR_P'] = df['True_Range'].rolling(window=P).mean()
+    df['Relative_Range'] = df['ATR_P'] / (df['high'] - df['low'])
+    df['Avg_ATR_Q'] = df['ATR_P'].rolling(window=Q).mean()
+    df['Range_Expansion'] = df['ATR_P'] / df['Avg_ATR_Q']
+
+    # Open, High, Low, Close Combinations
+    df['Intraday_Performance'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['Trend_Strength'] = df['Intraday_Performance'].rolling(window=T).mean()
+    df['Close_Above_Open'] = ((df['close'] > df['open']) & (df['close'] > df['close'].shift(1))).astype(int)
+    df['Gap_Indicator'] = df['open'] - df['close'].shift(1)
+
+    # Amount Data for Indicators
+    df['Total_Amount_Q'] = df['amount'].rolling(window=Q).sum()
+    
+    df['Amount_Volume_Ratio'] = df['amount'] / df['volume']
+    df['Avg_Amount_S'] = df['amount'].rolling(window=S).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Avg_Amount_S']
+    
+    df['Median_Amount_V'] = df['amount'].rolling(window=V).median()
+    df['Large_Trade_Indicator'] = (df['amount'] > df['Median_Amount_V']).astype(int)
+
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['Momentum_SMA'] + 
+        df['Momentum_EMA'] + 
+        df['Momentum_Highest_High'] + 
+        df['Pct_Change_Close'] + 
+        df['Reversal_Below_Low'] + 
+        df['RSI'] + 
+        df['Volume_Sum_M'] + 
+        df['OBV'] + 
+        df['Volume_Ratio'] + 
+        df['Volume_Surge'] + 
+        df['Relative_Range'] + 
+       

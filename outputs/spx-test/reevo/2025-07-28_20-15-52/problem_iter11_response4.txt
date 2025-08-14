@@ -1,0 +1,67 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day, 20-day, and 60-day returns
+    five_day_return = df['close'].pct_change(periods=5)
+    twenty_day_return = df['close'].pct_change(periods=20)
+    sixty_day_return = df['close'].pct_change(periods=60)
+
+    # Calculate adaptive windows based on volatility
+    short_volatility = df['close'].rolling(window=10).std()
+    long_volatility = df['close'].rolling(window=30).std()
+
+    adaptive_short_window = (short_volatility * 10).astype(int).clip(lower=5, upper=20)
+    adaptive_long_window = (long_volatility * 30).astype(int).clip(lower=40, upper=80)
+
+    # Calculate adaptive returns
+    adaptive_short_return = df['close'].pct_change(periods=adaptive_short_window)
+    adaptive_long_return = df['close'].pct_change(periods=adaptive_long_window)
+
+    # Calculate the 20-day and 60-day average volume
+    avg_20_day_volume = df['volume'].rolling(window=20).mean()
+    avg_60_day_volume = df['volume'].rolling(window=60).mean()
+
+    # Calculate the 60-day relative strength compared to the 20-day
+    rs_60_over_20 = df['close'].rolling(window=60).mean() / df['close'].rolling(window=20).mean()
+
+    # Calculate the 20-day trend of the 5-day volume
+    vol_trend = df['volume'].rolling(window=5).mean().pct_change(periods=20)
+
+    # Calculate the 10-day and 30-day relative strength
+    rs_30_over_10 = df['close'].rolling(window=30).mean() / df['close'].rolling(window=10).mean()
+
+    # Calculate the volatility adjusted 5-day return
+    vol_adj_five_day_return = five_day_return / (short_volatility + 1e-7)
+
+    # Calculate the volatility adjusted 20-day return
+    vol_adj_twenty_day_return = twenty_day_return / (long_volatility + 1e-7)
+
+    # Calculate the volatility adjusted 60-day return
+    vol_adj_sixty_day_return = sixty_day_return / (long_volatility.rolling(window=60).std() + 1e-7)
+
+    # Calculate the 14-day RSI
+    delta = df['close'].diff()
+    up = delta.clip(lower=0)
+    down = -delta.clip(upper=0)
+    avg_gain = up.rolling(window=14).mean()
+    avg_loss = down.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Construct an alpha factor that combines multi-period returns, relative strength, and volume trends,
+    # adjusting for volatility and incorporating RSI to enhance predictive power
+    alpha_factor = (five_day_return * 
+                    twenty_day_return * 
+                    sixty_day_return * 
+                    (avg_20_day_volume / avg_60_day_volume) * 
+                    rs_60_over_20 * 
+                    (1 + vol_trend) * 
+                    rs_30_over_10 * 
+                    vol_adj_five_day_return * 
+                    vol_adj_twenty_day_return * 
+                    vol_adj_sixty_day_return * 
+                    (1 + rsi / 100) * 
+                    adaptive_short_return * 
+                    adaptive_long_return)
+
+    return alpha_factor
+```

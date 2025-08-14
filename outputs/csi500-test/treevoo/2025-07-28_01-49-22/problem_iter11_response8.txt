@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    hl_ratio = high_low_range / high_low_range.shift(1)
+    
+    # Smooth High-Low Range Ratio with EMA
+    ema_window = 10
+    smoothed_hl_ratio = hl_ratio.ewm(span=ema_window, min_periods=ema_window).mean()
+    
+    # Generate Alpha Factor from Momentum
+    baseline = smoothed_hl_ratio.mean()
+    momentum_signal = np.where(smoothed_hl_ratio > baseline, 1, -1)
+    alpha_factor = momentum_signal * df['volume']
+    
+    # Calculate Daily Close-Price Change
+    close_price_change = df['close'].pct_change()
+    
+    # Adjust Alpha Factor by Close-Price Change
+    alpha_factor *= close_price_change
+    
+    # Calculate High-Low Range Volatility
+    n_period = 30
+    hl_volatility = (high_low_range.rolling(window=n_period, min_periods=n_period).sum()) / n_period
+    
+    # Adjust Volatility by Volume
+    avg_volume = df['volume'].rolling(window=n_period, min_periods=n_period).mean()
+    adjusted_volatility = hl_volatility * avg_volume
+    
+    # Incorporate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    fixed_weight = 0.1  # Example of a fixed weight
+    combined_volatility = adjusted_volatility + (fixed_weight * close_open_diff)
+    
+    # Final Alpha Factor
+    final_alpha_factor = alpha_factor + combined_volatility
+    
+    return final_alpha_factor
+```

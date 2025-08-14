@@ -1,0 +1,59 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Log Return over N Days
+    log_returns_N = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    
+    # Clip Log Returns to Thresholds
+    log_returns_clipped = log_returns_N.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Compute Momentum
+    momentum = log_returns_clipped.rolling(window=N).sum()
+    
+    # Adjust for Volume
+    volume = df['volume']
+    volume_relative = volume / volume.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * volume_relative
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    ema_volatility = abs_price_changes.ewm(span=M).mean()
+    iqr_volatility = abs_price_changes.rolling(window=N).quantile(0.75) - abs_price_changes.rolling(window=N).quantile(0.25)
+    
+    # Final Factor Calculation
+    weights = {
+        'momentum': 0.4,
+        'volume_adjustment': 0.3,
+        'volatility_ema': 0.2,
+        'volatility_iqr': 0.1
+    }
+    
+    factor = (weights['momentum'] * volume_adjusted_momentum +
+              weights['volume_adjustment'] * volume_relative +
+              weights['volatility_ema'] * ema_volatility +
+              weights['volatility_iqr'] * iqr_volatility)
+    
+    # Ensure Weights Sum to 1
+    assert sum(weights.values()) == 1.0
+    
+    return factor
+
+# Example usage:
+# df = pd.read_csv('your_market_data.csv', index_col='date', parse_dates=True)
+# factor = heuristics_v2(df)
+# print(factor)

@@ -1,0 +1,56 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Volatility factor: Standard deviation of closing prices with a short-term window
+    volatility = df['close'].rolling(window=5).std()
+
+    # VWAP (Volume-Weighted Average Price) with a short-term window
+    vwap = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Momentum factor: 5-day return
+    momentum = df['close'].pct_change(periods=5)
+
+    # Mean reversion factor: Difference between current close and 5-day moving average
+    mean_reversion = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Exponential smoothing of the mean reversion factor with a shorter span for more recent data
+    mean_reversion_smoothed = mean_reversion.ewm(span=3, adjust=False).mean()
+
+    # Factor: ratio of positive sum to absolute negative sum with a short-term window
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+    liquidity_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Dynamic weighting: Use exponential smoothing on the factors
+    volatility_smoothed = volatility.ewm(span=3, adjust=False).mean()
+    vwap_smoothed = vwap.ewm(span=3, adjust=False).mean()
+    momentum_smoothed = momentum.ewm(span=3, adjust=False).mean()
+    liquidity_factor_smoothed = liquidity_factor.ewm(span=3, adjust=False).mean()
+
+    # Adaptive weights based on recent volatility
+    adaptive_weight_volatility = 1 / (volatility_smoothed + 1e-7)
+    adaptive_weight_vwap = 1 / (vwap_smoothed + 1e-7)
+    adaptive_weight_momentum = 1 / (momentum_smoothed.abs() + 1e-7)
+    adaptive_weight_mean_reversion = 1 / (mean_reversion_smoothed.abs() + 1e-7)
+    adaptive_weight_liquidity = 1 / (liquidity_factor_smoothed + 1e-7)
+
+    # Normalize adaptive weights
+    total_weight = adaptive_weight_volatility + adaptive_weight_vwap + adaptive_weight_momentum + adaptive_weight_mean_reversion + adaptive_weight_liquidity
+    weight_volatility = adaptive_weight_volatility / total_weight
+    weight_vwap = adaptive_weight_vwap / total_weight
+    weight_momentum = adaptive_weight_momentum / total_weight
+    weight_mean_reversion = adaptive_weight_mean_reversion / total_weight
+    weight_liquidity = adaptive_weight_liquidity / total_weight
+
+    # Combine factors with adaptive weights
+    combined_factor = (weight_volatility * volatility_smoothed +
+                       weight_vwap * vwap_smoothed +
+                       weight_momentum * momentum_smoothed +
+                       weight_mean_reversion * mean_reversion_smoothed +
+                       weight_liquidity * liquidity_factor_smoothed)
+
+    return combined_factor
+```

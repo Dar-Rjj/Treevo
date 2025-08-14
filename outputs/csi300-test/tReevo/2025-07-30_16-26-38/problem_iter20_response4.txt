@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Volume_Weighted_Return'] * df['volume']
+    
+    # Adaptive Window Calculation
+    def calculate_volatility(high, low, close, window=20):
+        high_low = high - low
+        high_close = np.abs(high - close.shift(1))
+        low_close = np.abs(low - close.shift(1))
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.rolling(window=window).mean()
+        return atr
+    
+    df['Volatility'] = calculate_volatility(df['high'], df['low'], df['close'])
+    volatility_mean = df['Volatility'].mean()
+    df['Adaptive_Window'] = np.where(df['Volatility'] > volatility_mean, 5, 20)
+    
+    # Momentum Signal
+    n = 20
+    df['Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Liquidity Signal
+    df['Dollar_Volume'] = df['close'] * df['volume']
+    
+    # Integrate Momentum and Liquidity into Volume Weighted Close-to-Open Return
+    df['Enhanced_Volume_Weighted_Return'] = df['Volume_Weighted_Return'] * df['Momentum'] * df['Dollar_Volume']
+    
+    # Rolling Statistics
+    df['Rolling_Mean'] = df.groupby('Adaptive_Window')['Enhanced_Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).mean())
+    df['Rolling_Std'] = df.groupby('Adaptive_Window')['Enhanced_Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).std())
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Enhanced_Volume_Weighted_Return'] - df['Rolling_Mean']) / df['Rolling_Std']
+    
+    return df['Alpha_Factor']
+```

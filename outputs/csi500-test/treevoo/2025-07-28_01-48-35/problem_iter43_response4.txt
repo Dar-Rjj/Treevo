@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, sma_short_period=50, sma_long_period=200, ema_short_period=20, ema_long_period=50):
+    # Calculate daily returns
+    df['daily_returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Simple Moving Averages
+    df[f'sma_{sma_short_period}'] = df['close'].rolling(window=sma_short_period).mean()
+    df[f'sma_{sma_long_period}'] = df['close'].rolling(window=sma_long_period).mean()
+    df['sma_crossover'] = (df[f'sma_{sma_short_period}'] > df[f'sma_{sma_long_period}']).astype(int)
+    
+    # Calculate Exponential Moving Averages
+    df[f'ema_{ema_short_period}'] = df['close'].ewm(span=ema_short_period, adjust=False).mean()
+    df[f'ema_{ema_long_period}'] = df['close'].ewm(span=ema_long_period, adjust=False).mean()
+    df['ema_crossover'] = (df[f'ema_{ema_short_period}'] > df[f'ema_{ema_long_period}']).astype(int)
+    
+    # Volume-Price Correlation
+    df['volume_price_corr'] = df['close'].rolling(window=n).corr(df['volume'])
+    
+    # Amount-Price Correlation
+    df['amount_price_corr'] = df['close'].rolling(window=n).corr(df['amount'])
+    
+    # True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'], x['low']) - min(x['high'], x['low']), axis=1)
+    df['true_range'] = df.apply(lambda x: max(x['true_range'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Average True Range
+    df['atr'] = df['true_range'].ewm(span=n, adjust=False).mean()
+    
+    # Gap Up
+    df['gap_up'] = (df['open'] > df['close'].shift(1)).astype(int)
+    
+    # Gap Down
+    df['gap_down'] = (df['open'] < df['close'].shift(1)).astype(int)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['daily_returns'] + 
+        df['sma_crossover'] + 
+        df['ema_crossover'] + 
+        df['volume_price_corr'] + 
+        df['amount_price_corr'] + 
+        df['atr'] + 
+        df['gap_up'] - 
+        df['gap_down']
+    )
+    
+    return alpha_factor.dropna()
+```

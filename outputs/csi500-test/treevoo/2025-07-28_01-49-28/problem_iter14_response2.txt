@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Adjust for Volume
+    volume_adjusted_range = daily_range * (df['volume'] ** 0.5)
+    
+    # Calculate 5-day Momentum
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    momentum = (df['close'] > df['5_day_MA']).astype(int) * 2 - 1
+    
+    # Combine Indicators
+    combined_indicator = volume_adjusted_range + open_to_close_movement
+    combined_indicator_with_momentum = combined_indicator * momentum
+    
+    # Filter for Strong Moves
+    strong_move_threshold = combined_indicator_with_momentum.mean() + combined_indicator_with_momentum.std()
+    strong_move = (combined_indicator_with_momentum > strong_move_threshold).astype(int)
+    
+    # Calculate Simple Moving Averages (SMA)
+    short_term_sma = df['close'].rolling(window=5).mean()
+    long_term_sma = df['close'].rolling(window=20).mean()
+    
+    # Trend-Following Signal
+    trend_following_signal = short_term_sma - long_term_sma
+    
+    # Analyze Past Returns
+    df['daily_return'] = df['close'].pct_change()
+    df['weekly_return'] = df['close'].pct_change(periods=5)
+    df['monthly_return'] = df['close'].pct_change(periods=20)
+    weighted_sum_of_returns = (df['daily_return'] * 0.4 + 
+                               df['weekly_return'] * 0.3 + 
+                               df['monthly_return'] * 0.3)
+    
+    # Measure Overnight Sentiment
+    overnight_sentiment = df['open'] - df['close'].shift(1)
+    
+    # Evaluate Volume-Based Factors
+    obv = (df['close'].diff() > 0).astype(int) * df['volume'] - (df['close'].diff() < 0).astype(int) * df['volume']
+    obv_factor = obv * df['close'].pct_change()
+    
+    # Synthesize Final Alpha Factor
+    alpha_factor = (strong_move * 0.3 + 
+                    trend_following_signal * 0.3 + 
+                    weighted_sum_of_returns * 0.2 + 
+                    overnight_sentiment * 0.1 + 
+                    obv_factor * 0.1)
+    
+    return alpha_factor
+```

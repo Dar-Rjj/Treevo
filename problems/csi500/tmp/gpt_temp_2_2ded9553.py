@@ -1,0 +1,30 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum considering both short and long-term trends with exponential smoothing
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_momentum = 0.6 * short_term_momentum + 0.4 * long_term_momentum
+
+    # Dynamic volatility using the GARCH(1,1) model to capture time-varying volatility
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    garch_model = arch_model(log_returns.dropna(), vol='Garch', p=1, q=1, dist='Normal')
+    garch_results = garch_model.fit(disp='off')
+    dynamic_volatility = garch_results.conditional_volatility
+
+    # Normalized volume to account for varying liquidity conditions
+    normalized_volume = (df['volume'] - df['volume'].rolling(window=30).mean()) / df['volume'].rolling(window=30).std()
+
+    # Market sentiment using the ratio of high to low prices as a proxy
+    market_sentiment = (df['high'] - df['low']) / df['close']
+
+    # Sector-specific trend analysis using the difference between the asset's return and the sector's return
+    sector_return = df.groupby(level=0)['close'].pct_change().groupby(level=0).mean()
+    asset_return = df['close'].pct_change()
+    sector_trend = asset_return - sector_return
+
+    # Combining the five factors into a single alpha factor
+    # Weights are adjusted based on their perceived importance
+    factor_values = 0.3 * adaptive_momentum - 0.2 * dynamic_volatility + 0.2 * normalized_volume + 0.1 * market_sentiment + 0.2 * sector_trend
+
+    return factor_values

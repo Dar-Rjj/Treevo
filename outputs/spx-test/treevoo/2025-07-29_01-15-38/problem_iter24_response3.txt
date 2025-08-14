@@ -1,0 +1,59 @@
+```python
+def heuristics_v2(df):
+    # Calculate 5-Day Price Momentum
+    df['5DayPriceMomentum'] = df['close'].rolling(window=5).sum() / 5
+    
+    # Incorporate Volume Influence
+    df['5DayAvgVolume'] = df['volume'].rolling(window=5).sum() / 5
+    df['RelativeVolume'] = df['volume'] / df['5DayAvgVolume']
+    df['Adjusted5DayMomentum'] = df['5DayPriceMomentum'] * df['RelativeVolume']
+    
+    # Calculate Intraday Returns
+    df['IntradayReturns'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    df['OpenToCloseReturns'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['CombinedReturns'] = df['IntradayReturns'] + df['OpenToCloseReturns']
+    
+    # Analyze Volume Change
+    df['VolumeRatio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    conditions = [
+        (df['VolumeRatio'] > 2.0), 
+        (df['VolumeRatio'] >= 1.8) & (df['VolumeRatio'] <= 2.0),
+        (df['VolumeRatio'] >= 1.6) & (df['VolumeRatio'] < 1.8),
+        (df['VolumeRatio'] >= 0.9) & (df['VolumeRatio'] < 1.6),
+        (df['VolumeRatio'] >= 0.7) & (df['VolumeRatio'] < 0.9),
+        (df['VolumeRatio'] >= 0.5) & (df['VolumeRatio'] < 0.7),
+        (df['VolumeRatio'] < 0.5)
+    ]
+    choices = [3, 2, 1, 0, -1, -2, -3]
+    df['VolumeTrendClassification'] = np.select(conditions, choices, default=np.nan)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['AdjustedCombinedReturns'] = df['CombinedReturns'] * df['VolumeTrendClassification']
+    
+    # Calculate Short-Term Momentum
+    df['ShortTermMomentum'] = df['close'].rolling(window=8).mean()
+    
+    # Calculate Long-Term Momentum
+    df['LongTermMomentum'] = df['close'].rolling(window=26).mean()
+    
+    # Calculate Momentum Oscillator
+    df['MomentumOscillator'] = df['ShortTermMomentum'] - df['LongTermMomentum']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['HighLowSpreadAdjVol'] = (df['high'] - df['low']) * df['RelativeVolume']
+    
+    # Final Alpha Factor
+    df['AlphaFactor'] = (df['AdjustedCombinedReturns'] * df['MomentumOscillator'] + 
+                         df['HighLowSpreadAdjVol'] * df['VolumeTrendClassification'])
+    
+    # Apply Cumulative Movement
+    df['FinalAlphaFactor'] = df['AlphaFactor'].rolling(window=5).sum()
+    
+    return df['FinalAlphaFactor']
+```

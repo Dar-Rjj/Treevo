@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    This function calculates a novel alpha factor based on the provided DataFrame.
+    The factor is a combination of price and volume features, designed to predict future stock returns.
+    
+    Parameters:
+    df (pd.DataFrame): A DataFrame with columns (open, high, low, close, amount, volume) indexed by date.
+    
+    Returns:
+    pd.Series: A Series representing the alpha factor values indexed by date.
+    """
+    
+    # Calculate the daily return
+    df['daily_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate the 20-day moving average of the closing price
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate the 60-day moving average of the closing price
+    df['ma_60'] = df['close'].rolling(window=60).mean()
+    
+    # Calculate the 20-day moving average of the volume
+    df['vol_ma_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Calculate the 60-day moving average of the volume
+    df['vol_ma_60'] = df['volume'].rolling(window=60).mean()
+    
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the price momentum over the last 10 days
+    df['momentum_10'] = df['close'] / df['close'].shift(10) - 1
+    
+    # Calculate the volume momentum over the last 10 days
+    df['vol_momentum_10'] = df['volume'] / df['volume'].shift(10) - 1
+    
+    # Combine the factors into a single alpha factor
+    df['alpha_factor'] = (
+        (df['ma_20'] - df['ma_60']) / df['close'] +
+        (df['vol_ma_20'] - df['vol_ma_60']) / df['volume'] +
+        (df['rsi_14'] - 50) / 50 +
+        df['momentum_10'] +
+        df['vol_momentum_10']
+    )
+    
+    # Return the alpha factor as a Series
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

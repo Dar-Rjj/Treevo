@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    volume_weighted_high_low = (high_low_spread * df['volume']).rolling(window=lookback_period).sum()
+    
+    # Calculate Momentum Component
+    current_volume_weighted_high_low = (high_low_spread * df['volume'])
+    past_average_volume_weighted_high_low = (high_low_spread * df['volume']).rolling(window=lookback_period).mean()
+    momentum_component = current_volume_weighted_high_low - past_average_volume_weighted_high_low
+    
+    # Generate Final Factor
+    combined_factor = (volume_weighted_high_low + momentum_component) / df['close']
+    
+    # Incorporate Price Trend
+    moving_average_close = df['close'].rolling(window=lookback_period).mean()
+    price_trend = df['close'] - moving_average_close
+    final_factor = combined_factor * price_trend
+    
+    # Calculate Price Momentum
+    price_momentum = np.log(df['close']) - np.log(df['close'].shift(lookback_period))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    volatility = df[['open', 'high', 'low', 'close']].std(axis=1).rolling(window=lookback_period).std()
+    enhanced_volatility = volatility * np.log(df['volume'])
+    
+    # Calculate Trade Frequency Adjusted Return
+    trade_frequency = df['volume']**0.333
+    trade_frequency_adjusted_return = (df['close'] / df['close'].shift(lookback_period) - 1) / trade_frequency
+    
+    # Combine Factors
+    combined_price_volatility = price_momentum * enhanced_volatility
+    combined_factors = combined_price_volatility + trade_frequency_adjusted_return
+    transformed_factors = np.exp(combined_factors)
+    
+    # Final Alpha Factor
+    alpha_factor = final_factor * transformed_factors
+    return alpha_factor
+```

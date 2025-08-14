@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the 5-day return
+    df['5_day_return'] = df['close'].pct_change(5)
+    
+    # Calculate the average volume over the past 5 days
+    df['avg_5_day_volume'] = df['volume'].rolling(window=5).mean()
+    
+    # Volume-weighted 5-day return
+    df['vol_weighted_5_day_return'] = df['5_day_return'] * df['avg_5_day_volume']
+    
+    # Sum the volume-weighted returns over the past 20 days
+    df['agg_vol_weighted_20_day_return'] = df['vol_weighted_5_day_return'].rolling(window=4, min_periods=1).sum()  # 4 because we are using 5-day returns
+    
+    # Calculate the rolling standard deviation of returns over the past 20 days
+    df['20_day_std'] = df['5_day_return'].rolling(window=20).std()
+    
+    # Adjust the volume-weighted momentum by the inverse of the rolling standard deviation
+    df['adj_vol_weighted_momentum'] = df['agg_vol_weighted_20_day_return'] / (df['20_day_std'] + 1e-8)
+    
+    # Calculate the Exponential Moving Average (EMA) for each sector
+    df['5_day_ema'] = df.groupby('sector')['adj_vol_weighted_momentum'].transform(lambda x: x.ewm(span=5).mean())
+    df['20_day_ema'] = df.groupby('sector')['adj_vol_weighted_momentum'].transform(lambda x: x.ewm(span=20).mean())
+    
+    # Compute the difference between the short-term and long-term EMAs
+    df['ema_diff'] = df['5_day_ema'] - df['20_day_ema']
+    
+    # Calculate the liquidity ratio as the average trading amount divided by the average trading volume
+    df['avg_20_day_amount'] = df['amount'].rolling(window=20).mean()
+    df['avg_20_day_volume'] = df['volume'].rolling(window=20).mean()
+    df['liquidity_ratio'] = df['avg_20_day_amount'] / df['avg_20_day_volume']
+    
+    # Adjust the EMA difference by the liquidity ratio
+    df['liquidity_adj_ema_diff'] = df['ema_diff'] * df['liquidity_ratio']
+    
+    # Combine the factors with fixed weights
+    weight_momentum = 0.6
+    weight_liquidity = 0.4
+    df['alpha_factor'] = (weight_momentum * df['adj_vol_weighted_momentum']) + (weight_liquidity * df['liquidity_adj_ema_diff'])
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

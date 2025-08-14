@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Evaluate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    integrated_metric = intraday_volatility - open_to_close_movement
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range_ratio = (df['high'] - df['low']) / (df['open'] + df['close'])
+    stability_adjusted_metric = integrated_metric / price_range_ratio
+    
+    # Incorporate Advanced Volume Impact
+    volume_impact = np.cbrt(df['volume']) * stability_adjusted_metric
+    
+    # Calculate Volume-Weighted Prices
+    vwc = df['close'] * df['volume']
+    vwo = df['open'] * df['volume']
+    
+    # Synthesize VWAPCHL into the Model
+    vwapchl = (vwc.sum() - vwo.sum()) / (df['high'] - df['low']).sum()
+    
+    # Introduce Dynamic Price Momentum
+    close_5d_ma = df['close'].rolling(window=5).mean()
+    max_5d_close_range = df['close'].rolling(window=5).max() - df['close'].rolling(window=5).min()
+    dynamic_momentum_5d = (df['close'] - close_5d_ma) / max_5d_close_range
+    
+    # Enhance with Additional Momentum Indicators
+    close_10d_ema = df['close'].ewm(span=10, adjust=False).mean()
+    max_10d_close_range = df['close'].rolling(window=10).max() - df['close'].rolling(window=10).min()
+    dynamic_momentum_10d = (df['close'] - close_10d_ema) / max_10d_close_range
+    
+    # Integrate Momentum Indicators
+    balanced_momentum_signal = (dynamic_momentum_5d + dynamic_momentum_10d) / 2
+    
+    # Evaluate Volume-Weighted Momentum
+    vwap = (vwc + vwo) / (df['volume'] * 2)
+    vwap_change = vwap - vwap.shift(1)
+    
+    # Introduce Dynamic Weighting
+    volume_5d_std = df['volume'].rolling(window=5).std()
+    volume_5d_mean = df['volume'].rolling(window=5).mean()
+    z_score_volume = (df['volume'] - volume_5d_mean) / volume_5d_std
+    z_score_weighted_metric = z_score_volume * volume_impact
+    
+    # Final Integration
+    factor = (volume_impact * vwapchl * vwap_change * z_score_weighted_metric * balanced_momentum_signal).fillna(0)
+    
+    return factor
+```

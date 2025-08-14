@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    combined_factor = (close_to_open_return * df['volume']) / daily_volatility
+    
+    # Adjust for Momentum
+    momentum_adjustment = (df['close'].diff(periods=1).rolling(window=5).sum() * 
+                           df['volume'].rolling(window=5).mean())
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Compute 10-Day Price Momentum
+    price_momentum = (df['close'] - df['close'].shift(10))
+    
+    # Compute Volume Change Indicator
+    volume_change = df['volume'].diff().apply(lambda x: 1 if x > 0 else -1)
+    
+    # Apply Volume Confirmation
+    volume_confirmed_combined_factor = combined_factor * (volume_change > 0)
+    
+    # Integrate Both Metrics with Weighted Average
+    weight_close_to_open = 0.6
+    weight_intraday_return = 0.4
+    integrated_metrics = (weight_close_to_open * volume_confirmed_combined_factor + 
+                          weight_intraday_return * intraday_return)
+    
+    # Synthesize Final Alpha Factor
+    weight_momentum = 0.7
+    weight_integrated_metrics = 0.3
+    final_alpha_factor = (weight_momentum * momentum_adjustment + 
+                          weight_integrated_metrics * integrated_metrics)
+    
+    # Incorporate Volume and Amount Momentum
+    volume_change_momentum = df['volume'] - df['volume'].rolling(window=9).mean().shift(1)
+    amount_change_momentum = df['amount'] - df['amount'].rolling(window=9).mean().shift(1)
+    
+    combined_volume_amount_momentum = (volume_change_momentum + amount_change_momentum) / (df['high'] - df['low'])
+    
+    # Multiply Combined Momentum by Combined Volume-Amount Momentum
+    final_alpha_factor *= combined_volume_amount_momentum
+    
+    return final_alpha_factor
+```

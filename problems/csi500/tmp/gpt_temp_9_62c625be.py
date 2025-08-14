@@ -1,0 +1,74 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_avg = df['close'].rolling(window=10).mean()
+    short_term_momentum = short_term_avg - df['close']
+    
+    # Calculate Medium-Term Price Momentum
+    medium_term_avg = df['close'].rolling(window=30).mean()
+    medium_term_momentum = medium_term_avg - df['close']
+    
+    # Calculate Long-Term Price Momentum
+    long_term_avg = df['close'].rolling(window=50).mean()
+    long_term_momentum = long_term_avg - df['close']
+    
+    # Combine Multi-Period Momenta
+    combined_momentum = (short_term_momentum + medium_term_momentum + long_term_momentum) / 3
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Combined Momentum by Volume-Weighted Average Return
+    adjusted_momentum = combined_momentum * volume_weighted_returns
+    
+    # Assess Trend Following Potential
+    trend_50_day_ma = df['close'].rolling(window=50).mean()
+    dynamic_weight = np.where(trend_50_day_ma > df['close'], 1, 0.5)
+    trend_following_component = combined_momentum * dynamic_weight
+    
+    # Determine Initial Factor Value
+    initial_factor_value = adjusted_momentum + trend_following_component
+    
+    # Calculate Short-Term Volatility
+    short_term_volatility = (df['high'] - df['low']).rolling(window=10).mean()
+    
+    # Calculate Medium-Term Volatility
+    medium_term_volatility = (df['high'] - df['low']).rolling(window=30).mean()
+    
+    # Calculate Long-Term Volatility
+    long_term_volatility = (df['high'] - df['low']).rolling(window=50).mean()
+    
+    # Combine Multi-Period Volatilities
+    combined_volatility = (short_term_volatility + medium_term_volatility + long_term_volatility) / 3
+    
+    # Adjust Initial Factor Value by Combined Volatility
+    adjusted_factor_value = initial_factor_value / combined_volatility
+    
+    # Consider Macro Trends
+    macro_trend = df['macro_indicator']  # Assuming 'macro_indicator' is a column in the DataFrame
+    macro_adjustment = np.where(macro_trend.diff() > 0, 1.05, 0.95)
+    factor_with_macro = adjusted_factor_value * macro_adjustment
+    
+    # Enhance with Machine Learning
+    # Assuming you have a trained model and historical data
+    # For simplicity, we'll use a dummy model here
+    model = RandomForestRegressor()
+    X_train = df[['short_term_momentum', 'medium_term_momentum', 'long_term_momentum', 'volume_weighted_returns', 'combined_volatility', 'macro_trend']]
+    y_train = df['close'].shift(-1).dropna()
+    model.fit(X_train.dropna(), y_train)
+    
+    # Predict dynamic adjustments to the factor weights
+    predictions = model.predict(X_train)
+    final_factor_value = factor_with_macro * predictions
+    
+    return pd.Series(final_factor_value, index=df.index)
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# df['factor'] = heuristics_v2(df)

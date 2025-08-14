@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['prev_close'] = df['close'].shift(1)
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['price_volume'] = df['close'] * df['volume']
+    df['cumulative_pv'] = df['price_volume'].cumsum()
+    df['cumulative_volume'] = df['volume'].cumsum()
+    df['vwap'] = df['cumulative_pv'] / df['cumulative_volume']
+    
+    # Assign weights to recent and older data
+    recent_weights = [0.5, 0.3, 0.2]  # Intraday Range, Close-to-Open Return, VWAP
+    older_weights = [0.4, 0.4, 0.2]  # Intraday Range, Close-to-Open Return, VWAP
+    
+    # Apply the weights
+    df['factor_value'] = (df['intraday_range'] * recent_weights[0] +
+                          df['close_to_open_return'] * recent_weights[1] +
+                          df['vwap'] * recent_weights[2])
+    
+    # For older data, use different weights
+    df['factor_value'] = df['factor_value'].where(df.index >= df.index[-10], 
+                                                  other=(df['intraday_range'] * older_weights[0] +
+                                                         df['close_to_open_return'] * older_weights[1] +
+                                                         df['vwap'] * older_weights[2]))
+    
+    # Return the factor values as a Series
+    return df['factor_value']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# }, index=pd.to_datetime([...]))
+# factor_values = heuristics_v2(df)
+```

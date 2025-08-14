@@ -1,0 +1,76 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's close and yesterday's close for daily return
+    daily_return = df['close'].diff()
+    
+    # Calculate the 10-day exponential moving average of daily returns for volatility
+    ema_volatility = daily_return.ewm(span=10, adjust=False).std()
+    
+    # Calculate a momentum factor as the 30-day cumulative return
+    momentum = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Exponential smoothing for the momentum to add more stability
+    smoothed_momentum = momentum.ewm(span=5, adjust=False).mean()
+    
+    # Volume dynamics: calculate the 10-day exponential moving average of volume
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Market sentiment: ratio of volume to its 10-day EMA
+    market_sentiment = df['volume'] / ema_volume
+    
+    # Price range: calculate the 10-day exponential moving average of the high-low range
+    price_range = df['high'] - df['low']
+    ema_price_range = price_range.ewm(span=10, adjust=False).mean()
+    
+    # Adaptive weight for market sentiment based on the 10-day EMA of the close price
+    adaptive_weight = (df['close'].ewm(span=10, adjust=False).mean() / df['close'])
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_hist = macd_line - signal_line
+    
+    # Bollinger Bands
+    bb_middle = df['close'].rolling(window=20).mean()
+    bb_std = df['close'].rolling(window=20).std()
+    bb_upper = bb_middle + 2 * bb_std
+    bb_lower = bb_middle - 2 * bb_std
+    bb_width = (bb_upper - bb_lower) / bb_middle
+    
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_flow = raw_money_flow.where(daily_return > 0, 0)
+    negative_flow = raw_money_flow.where(daily_return < 0, 0)
+    money_flow_ratio = positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Average True Range (ATR)
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[1]) - min(x[0], x[1]), axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # On-Balance Volume (OBV)
+    obv = (np.sign(daily_return) * df['volume']).cumsum()
+    
+    # Combine the factors with dynamic weights
+    factor = (smoothed_momentum 
+              - (ema_volatility / ema_volatility.mean()) 
+              + (market_sentiment - 1) * adaptive_weight 
+              - (ema_price_range / ema_price_range.mean())
+              + ((rsi - 50) / 50)  # RSI centered around 50
+              + (macd_hist / macd_hist.abs().mean())  # MACD histogram normalized by its mean absolute value
+              + (bb_width - bb_width.mean())  # Bollinger Bands width adjusted by its mean
+              + ((mfi - 50) / 50)  # MFI centered around 50
+              + (atr / atr.mean())  # ATR normalized by its mean
+              + (obv.diff() / obv.mean()))  # OBV change normalized by its mean
+    
+

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_momentum=10, lookback_volatility=10, lookback_consistency=20):
+    # Calculate Daily Open-Close Price Spread
+    spread = df['open'] - df['close']
+
+    # Calculate Momentum
+    momentum = df['close'] - df['close'].rolling(window=lookback_momentum).mean()
+
+    # Adjust Momentum by Absolute Daily Open-Close Spread
+    adjusted_momentum = momentum / spread.abs()
+
+    # Weight Adjusted Momentum by Volume
+    weighted_adjusted_momentum = adjusted_momentum * df['volume']
+    sum_weighted_adjusted_momentum = weighted_adjusted_momentum.rolling(window=lookback_momentum).sum()
+    total_volume_momentum = df['volume'].rolling(window=lookback_momentum).sum()
+    final_alpha_factor_1 = sum_weighted_adjusted_momentum / total_volume_momentum
+
+    # Calculate Intraday Volatility (High-Low Difference)
+    intraday_volatility = df['high'] - df['low']
+
+    # Calculate Average True Range (ATR) over a lookback period
+    true_range = df[['high' - 'low', 'high' - 'close'].shift(1), 'close'].shift(1) - df['low']].max(axis=1)
+    atr = true_range.rolling(window=lookback_volatility).mean()
+
+    # Weight Intraday Volatility by Volume
+    weighted_intraday_volatility = intraday_volatility * df['volume']
+    sum_weighted_intraday_volatility = weighted_intraday_volatility.rolling(window=lookback_volatility).sum()
+    total_volume_volatility = df['volume'].rolling(window=lookback_volatility).sum()
+    final_alpha_factor_2 = sum_weighted_intraday_volatility / total_volume_volatility
+
+    # Calculate Price Movement Consistency
+    moving_avg_close = df['close'].rolling(window=lookback_consistency).mean()
+    daily_returns = df['close'].pct_change()
+    std_daily_returns = daily_returns.rolling(window=lookback_consistency).std()
+    final_alpha_factor_3 = std_daily_returns / moving_avg_close
+
+    # Combine Final Alpha Factors
+    final_alpha_factor = final_alpha_factor_1 + final_alpha_factor_2 + final_alpha_factor_3
+
+    return final_alpha_factor
+```

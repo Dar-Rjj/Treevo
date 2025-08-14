@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Momentum
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Open_Close_Return'] = (df['close'] - df['open']) / df['open']
+    df['Intraday_Momentum'] = (df['High_Low_Diff'] + df['Open_Close_Return']) / 2
+    
+    # Synchronized Volume
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Apply Shock Filter
+    df['Shock_Filter'] = (df['Volume_Ratio'] > 1.5).astype(int)
+    df['Synchronized_Volume'] = df['Shock_Filter'] * (df['Volume_Ratio'] * df['Price_Change'])
+    
+    # EMA Cross Signal
+    df['Short_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_Momentum'] = (df['Short_EMA'] > df['Long_EMA']).astype(int)
+    
+    # On-Balance Volume (OBV)
+    df['Prev_Close'] = df['close'].shift(1)
+    df['OBV'] = 0
+    df.loc[df['close'] > df['Prev_Close'], 'OBV'] += df['volume']
+    df.loc[df['close'] < df['Prev_Close'], 'OBV'] -= df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Combined Alpha Factor
+    df['Alpha_Factor'] = df['Intraday_Momentum'] + df['Synchronized_Volume'] * df['EMA_Momentum'] + df['OBV']
+    
+    return df['Alpha_Factor']
+```

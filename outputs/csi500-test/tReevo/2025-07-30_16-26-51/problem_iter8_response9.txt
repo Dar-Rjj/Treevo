@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] / df['open'].shift(1)) - 1
+    
+    # Weight by Volume
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Short-Term Lookback (5 days)
+    short_term_window = 5
+    df['5_day_SMA_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=short_term_window).mean()
+    df['5_day_STD_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=short_term_window).std()
+    
+    # Long-Term Lookback (20 days)
+    long_term_window = 20
+    df['20_day_SMA_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=long_term_window).mean()
+    df['20_day_STD_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=long_term_window).std()
+    
+    # Stabilize with Volatility
+    df['Stable_5_day_SMA_VW_Return'] = df['5_day_SMA_VW_Return'] / (df['5_day_STD_VW_Return'] + 1e-6)
+    df['Stable_20_day_SMA_VW_Return'] = df['20_day_SMA_VW_Return'] / (df['20_day_STD_VW_Return'] + 1e-6)
+    
+    # Integrate Momentum
+    df['5_day_Momentum'] = (df['close'] / df['close'].shift(short_term_window)) - 1
+    df['20_day_Momentum'] = (df['close'] / df['close'].shift(long_term_window)) - 1
+    
+    # Adjust for Market Trends
+    market_trend_window = 50
+    df['50_day_MA'] = df['close'].rolling(window=market_trend_window).mean()
+    df['50_day_MA_Slope'] = df['50_day_MA'].diff() / df['50_day_MA'].shift(1)
+    
+    # Adaptive Volatility Scaling
+    combined_volatility = (df['5_day_STD_VW_Return'] * 0.6) + (df['20_day_STD_VW_Return'] * 0.4)
+    combined_vw_return = (df['5_day_SMA_VW_Return'] * 0.6) + (df['20_day_SMA_VW_Return'] * 0.4)
+    
+    # Final Factor
+    df['Final_Factor'] = (combined_vw_return / (combined_volatility + 1e-6)) \
+                         + df['5_day_Momentum'] \
+                         + df['20_day_Momentum'] \
+                         + (df['50_day_MA_Slope'] * 0.5)  # Adjust by Market Trend
+    
+    return df['Final_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

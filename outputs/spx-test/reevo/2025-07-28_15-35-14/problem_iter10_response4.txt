@@ -1,0 +1,56 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum - Calculate the 10-day and 30-day moving averages of the close price
+    df['ma_10d'] = df['close'].rolling(window=10).mean()
+    df['ma_30d'] = df['close'].rolling(window=30).mean()
+    # Calculate the momentum as the difference between the two moving averages
+    df['momentum'] = df['ma_10d'] - df['ma_30d']
+
+    # Volatility - Calculate the standard deviation of the daily close price over the last 30 days
+    df['volatility'] = df['close'].pct_change().rolling(window=30).std()
+
+    # Liquidity - Calculate the average volume over the last 20 days
+    df['avg_vol_20d'] = df['volume'].rolling(window=20).mean()
+
+    # Price-Volume Relationship - Calculate the 10-day change in volume
+    df['volume_change_10d'] = df['volume'].pct_change(periods=10)
+
+    # Relative Strength - Calculate the ratio of the daily close difference to the average volume
+    df['close_diff'] = df['close'].diff()
+    df['relative_strength'] = df['close_diff'] / (df['avg_vol_20d'] + 1e-7)
+
+    # Market Sentiment - Calculate the 10-day moving average of the high and low prices
+    df['ma_high_10d'] = df['high'].rolling(window=10).mean()
+    df['ma_low_10d'] = df['low'].rolling(window=10).mean()
+    df['market_sentiment'] = df['ma_high_10d'] - df['ma_low_10d']
+
+    # Trend Strength - Calculate the ADX (Average Directional Index) for trend strength
+    df['tr'] = df['high'] - df['low']
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    df['dm_plus'] = (df['high'].diff().clip(lower=0)).fillna(0)
+    df['dm_minus'] = (-df['low'].diff().clip(upper=0)).fillna(0)
+    df['di_plus'] = 100 * (df['dm_plus'].rolling(window=14).sum() / df['atr'])
+    df['di_minus'] = 100 * (df['dm_minus'].rolling(window=14).sum() / df['atr'])
+    df['adx'] = 100 * (abs(df['di_plus'] - df['di_minus']) / (df['di_plus'] + df['di_minus']))
+
+    # Adaptive Weights - Use a simple moving average cross-over to determine the trend direction
+    df['trend_direction'] = (df['ma_10d'] > df['ma_30d']).astype(int)
+
+    # Dynamic Price-Volume Interaction - Adjust relative strength based on the trend direction and ADX
+    df['dynamic_relative_strength'] = df['relative_strength'] * (1 + 0.5 * (df['trend_direction'] - 0.5)) * (1 + 0.5 * (df['adx'] - 50) / 50)
+
+    # Regime-Based Adjustments - Apply different weights based on the volatility regime
+    df['vol_regime'] = (df['volatility'] > df['volatility'].quantile(0.5)).astype(int)
+    
+    # Incorporate trend strength into the composite factor
+    df['composite_factor'] = (
+        df['momentum'] * (0.4 + 0.1 * (df['vol_regime'] - 0.5) + 0.1 * (df['adx'] - 50) / 50) -
+        df['volatility'] * (0.2 - 0.05 * (df['vol_regime'] - 0.5)) +
+        df['dynamic_relative_strength'] * (0.2 + 0.1 * (df['vol_regime'] - 0.5) + 0.1 * (df['adx'] - 50) / 50) +
+        df['volume_change_10d'] * (0.1 - 0.05 * (df['vol_regime'] - 0.5)) +
+        df['market_sentiment'] * (0.1 + 0.05 * (df['vol_regime'] - 0.5))
+    )
+
+    # Return the composite factor
+    return df['composite_factor']
+```

@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day Exponential Moving Averages (EMAs) of the closing price
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Calculate the difference between the 5-day and 20-day EMAs as a momentum factor
+    short_momentum_factor = ema_5 - ema_20
+
+    # Calculate the 50-day and 200-day EMAs of the closing price
+    ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+    ema_200 = df['close'].ewm(span=200, adjust=False).mean()
+
+    # Calculate the long-term momentum factor
+    long_momentum_factor = ema_50 - ema_200
+
+    # Calculate the Average True Range (ATR) with an adaptive window
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift())
+    tr3 = abs(df['low'] - df['close'].shift())
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.ewm(span=14, adjust=False).mean()
+
+    # Calculate the Relative Strength Index (RSI) with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the trade signal based on the RSI
+    trade_signal = (rsi < 30).astype(int) - (rsi > 70).astype(int)
+
+    # Integrate multi-period analysis
+    multi_period_analysis = (short_momentum_factor + long_momentum_factor).rolling(window=5).mean()
+
+    # Incorporate volume spikes
+    volume_spike = df['volume'] > df['volume'].rolling(window=10).mean() * 2
+
+    # Advanced volatility measures
+    realized_volatility = df['close'].pct_change().rolling(window=20).std()
+    adaptive_volatility = realized_volatility.ewm(span=10, adjust=False).mean()
+
+    # Dynamic factor weighting using machine learning
+    from sklearn.linear_model import LinearRegression
+    X = pd.concat([multi_period_analysis, atr, trade_signal, volume_spike, adaptive_volatility], axis=1).dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index]
+    model = LinearRegression().fit(X, y)
+    weights = model.coef_
+
+    # Calculate the final alpha factor
+    alpha_factor = (X * weights).sum(axis=1).rolling(window=5).mean()
+
+    return alpha_factor
+```

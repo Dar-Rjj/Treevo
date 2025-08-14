@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Open-to-Close Movement
+    df['Open-to-Close Movement'] = df['close'] - df['open']
+    
+    # Calculate Daily Range and Volume-Adjusted Breakout Strength
+    df['Daily Range'] = df['high'] - df['low']
+    df['Volume-Adjusted Breakout Strength'] = (df['Daily Range'] * df['volume']) + df['Open-to-Close Movement']
+    
+    # Calculate Spread Momentum
+    df['High-Low Spread'] = df['high'] - df['low']
+    df['Spread Momentum'] = df['High-Low Spread'].rolling(window=20).sum().diff()
+    
+    # Calculate Volume-Weighted Momentum
+    df['Simple Momentum'] = df['close'].diff()
+    df['Average Volume'] = (df['volume'] + df['volume'].shift(1)) / 2
+    df['Volume-Weighted Momentum'] = df['Simple Momentum'] * df['Average Volume']
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    df['Volume-Adjusted High-Low Spread'] = df['Daily Range'] * df['volume']
+    
+    # Calculate Adjusted High-Low Momentum
+    df['Volume-Adjusted High-Low Spread MA'] = df['Volume-Adjusted High-Low Spread'].rolling(window=20).mean()
+    df['Volume and Momentum Enhanced High-Low Spread'] = df['Volume-Adjusted High-Low Spread MA'].diff()
+    
+    # Integrate Momentum with Volume-Adjusted Close-Open Spread
+    df['Volume-Adjusted Close-Open Spread'] = (df['close'] - df['open']) * df['volume']
+    df['Volume-Adjusted Close-Open Integrated Spread'] = df['Volume-Adjusted Close-Open Spread'].rolling(window=10).sum().diff()
+    
+    # Smoothed Momentum
+    df['Smoothed Momentum'] = df['close'].pct_change().rolling(window=10).sum() / df['volume']
+    
+    # Price Change Ratio
+    df['Price Change Ratio'] = df['close'] / df['open']
+    
+    # Proximity to 10-Day Range
+    df['10-Day High'] = df['high'].rolling(window=10).max()
+    df['10-Day Low'] = df['low'].rolling(window=10).min()
+    df['Proximity to 10-Day High'] = (df['10-Day High'] - df['close'])
+    df['Proximity to 10-Day Low'] = (df['close'] - df['10-Day Low'])
+    df['Min Proximity'] = df[['Proximity to 10-Day High', 'Proximity to 10-Day Low']].min(axis=1)
+    df['10-Day Std Dev'] = df['close'].pct_change().rolling(window=10).std()
+    df['Adjusted Proximity'] = 1 / (df['Min Proximity'] / df['10-Day Std Dev'])
+    
+    # Combine Indicators
+    weights = [0.3, 0.2, 0.2, 0.1, 0.1, 0.1]
+    df['Combined Indicator'] = (
+        weights[0] * df['Volume-Adjusted Breakout Strength'] +
+        weights[1] * df['Spread Momentum'] +
+        weights[2] * df['Volume-Weighted Momentum'] +
+        weights[3] * df['Volume and Momentum Enhanced High-Low Spread'] +
+        weights[4] * df['Volume-Adjusted Close-Open Integrated Spread']
+    ) * df['Price Change Ratio'] * df['Smoothed Momentum'] * df['Adjusted Proximity']
+    
+    # Filter for Strong Moves
+    threshold = df['Combined Indicator'].quantile(0.75)
+    df['Alpha Factor'] = (df['Combined Indicator'] > threshold).astype(int)
+    
+    return df['Alpha Factor']
+```

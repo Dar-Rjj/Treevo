@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=10, k=10):
+    # Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Close-to-Open Return
+    close_to_open_return = df['close'] - df['open'].shift(1)
+    
+    # Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    combined_intraday_features = (intraday_midpoint - df['open']) - opening_gap
+    
+    # Enhanced Intraday Factor
+    avg_intraday_range = intraday_range.rolling(window=n).mean()
+    enhanced_intraday_factor = avg_intraday_range * (close_to_open_return + price_change) + combined_intraday_features
+    
+    # Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=m).mean()
+    recent_volatility_adjusted_factor = enhanced_intraday_factor * avg_abs_price_change
+    
+    # Adjust for Volume and Price Spikes
+    volume_spike = df['volume'] > df['volume'].shift(1)
+    price_spike = (df['close'] - df['close'].shift(1)).abs() > (df['close'].shift(1) * 0.05)
+    
+    # Introduce Volatility Adjustment
+    log_returns = (df['close'] / df['close'].shift(1)).apply(np.log)
+    std_log_returns = log_returns.rolling(window=n).std()
+    volatility_adjusted_factor = recent_volatility_adjusted_factor / std_log_returns
+    
+    # Scale Intraday Momentum
+    combined_spikes = volume_spike.astype(int) + price_spike.astype(int)
+    scaled_intraday_momentum = volatility_adjusted_factor / combined_spikes
+    
+    # Apply Non-Linear Transformation
+    smoothed_factor = np.tanh(scaled_intraday_momentum)
+    
+    # Volume Adjusted Factor
+    avg_volume = df['volume'].rolling(window=k).mean()
+    volume_factor = np.where(df['volume'] > avg_volume, 1, 0.5)
+    volume_adjusted_factor = smoothed_factor * volume_factor
+    
+    # Volume and Transaction Intensity Adjustment
+    avg_volume_n = df['volume'].rolling(window=n).mean()
+    volume_ratio = df['volume'] / avg_volume_n
+    transaction_intensity = df['amount'] / df['volume']
+    avg_transaction_intensity = transaction_intensity.rolling(window=n).mean()
+    intensity_ratio = transaction_intensity / avg_transaction_intensity
+    final_factor = volume_adjusted_factor * volume_ratio * intensity_ratio
+    
+    return final_factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

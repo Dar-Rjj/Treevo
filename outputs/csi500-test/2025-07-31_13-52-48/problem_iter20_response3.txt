@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute the difference between the current close and the close n periods ago
+    n = 10
+    df['close_diff'] = df['close'].diff(n)
+    
+    # Detect instances where the closing price crosses above or below a moving average
+    ma_period = 20
+    df['ma_close'] = df['close'].rolling(window=ma_period).mean()
+    df['cross_above_ma'] = (df['close'] > df['ma_close']) & (df['close'].shift(1) <= df['ma_close'].shift(1))
+    df['cross_below_ma'] = (df['close'] < df['ma_close']) & (df['close'].shift(1) >= df['ma_close'].shift(1))
+    
+    # Calculate the difference between the current volume and the volume n periods ago
+    df['volume_diff'] = df['volume'].diff(n)
+    
+    # Find significant increases in volume compared to the previous period
+    df['volume_increase'] = df['volume'] > df['volume'].shift(1) * 1.5
+    
+    # Calculate the range (High - Low)
+    df['range'] = df['high'] - df['low']
+    
+    # Identify bullish or bearish candlestick patterns (e.g., Doji, Hammer, Engulfing)
+    df['doji'] = (df['open'] == df['close']) | (np.abs(df['open'] - df['close']) < 0.005 * df['high'])
+    df['hammer'] = (df['close'] > df['open']) & (df['close'] - df['low'] > 2 * (df['high'] - df['close']))
+    df['engulfing_bullish'] = (df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+    df['engulfing_bearish'] = (df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))
+    
+    # Determine the difference between the current transaction amount and the amount n periods ago
+    df['amount_diff'] = df['amount'].diff(n)
+    
+    # Identify significantly large transactions compared to the historical average
+    df['large_transaction'] = df['amount'] > df['amount'].rolling(window=n).mean() * 1.5
+    
+    # Compute High-Low Difference: Subtract Low from High
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Average Over Period: Compute Arithmetic Mean of Differences
+    intraday_momentum_period = 10
+    df['intraday_momentum'] = df['high_low_diff'].rolling(window=intraday_momentum_period).mean()
+    
+    # Calculate Daily Volume Change: Subtract Yesterday's Volume from Today's
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Final Adjustment: Divide Intraday Momentum by Standard Deviation of Volume Changes
+    df['volume_volatility'] = df['volume_change'].rolling(window=30).std()
+    df['adjusted_intraday_momentum'] = df['intraday_momentum'] / df['volume_volatility']
+    
+    # Compute Price Change: Subtract Yesterday's Close from Today's
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Adjust Intraday Momentum: Multiply by Price Change
+    df['adjusted_intraday_momentum'] *= df['price_change']
+    
+    # Compute Dynamic Momentum Oscillator: Subtract Moving Average over 60 Days
+    df['dynamic_momentum_oscillator'] = df['adjusted_intraday_momentum'] - df['adjusted_intraday_momentum'].rolling(window=60).mean()
+    
+    # Calculate Daily Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['volume'] - df['volume'].shift(1)) * df['price_change']
+    
+    # Compute Rolling Sum of Volume-Adjusted Momentum
+    rolling_sum_period = 20
+    df['rolling_volume_adjusted_momentum'] = df['volume_adjusted_momentum'].rolling(window=rolling_sum_period).sum()
+    
+    # Determine Threshold for High Volume-Adjusted Momentum
+    threshold = df['volume_adjusted_momentum'].abs().quantile(0.80)
+    
+   

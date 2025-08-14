@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    N = 5  # N-Day Price Change
+    M = 10  # M-Day EMA Volume
+    K = 10  # K-Day EMA Amount
+    
+    # Calculate N-Day Price Change
+    df['N_Day_Price_Change'] = df['close'].pct_change(N)
+    
+    # Compute M-Day Exponential Moving Average (EMA) Volume
+    df['EMA_Volume'] = df['volume'].ewm(span=M, adjust=False).mean()
+    # Compare Latest Volume to EMA Volume
+    df['Volume_Score'] = np.where(df['volume'] > df['EMA_Volume'], 1, -1)
+    
+    # Calculate K-Day Exponential Moving Average (EMA) Amount
+    df['EMA_Amount'] = df['amount'].ewm(span=K, adjust=False).mean()
+    # Compare Latest Amount to EMA Amount
+    df['Amount_Score'] = np.where(df['amount'] > df['EMA_Amount'], 1, -1)
+    
+    # Calculate Intraday Range Indicator
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Integrate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Indicators for Intraday Analysis
+    df['Intraday_Analysis'] = df['Intraday_Range'] + (df['close'] - df['VWAP'])
+    
+    # Calculate Volume-Adjusted Log Return
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Adjusted_Volume'] = df['volume'] / df['High_Low_Spread']
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['Volume_Adjusted_Log_Return'] = df['Log_Return'] * df['Adjusted_Volume']
+    
+    # Calculate LMA-SMA Difference
+    df['LMA'] = df['close'].rolling(window=200).mean()
+    df['SMA'] = df['close'].rolling(window=50).mean()
+    df['LMA_SMA_Difference'] = df['LMA'] - df['SMA']
+    
+    # Apply EMA Smoothing
+    df['Smoothed_LMA_SMA_Difference'] = df['LMA_SMA_Difference'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Volume-Weighted Difference Between LMA and SMA
+    df['Volume_Weighted_Difference'] = df['LMA_SMA_Difference'] * df['volume']
+    df['Sum_Volume_Weighted_Difference'] = df['Volume_Weighted_Difference'].rolling(window=10).sum()
+    df['Smoothed_Sum_Volume_Weighted_Difference'] = df['Sum_Volume_Weighted_Difference'].ewm(span=10, adjust=False).mean()
+    
+    # Generate the final alpha factor
+    df['Alpha_Factor'] = (
+        df['N_Day_Price_Change'] +
+        df['Volume_Score'] +
+        df['Amount_Score'] +
+        df['Intraday_Analysis'] +
+        df['Volume_Adjusted_Log_Return'] +
+        df['Smoothed_Sum_Volume_Weighted_Difference']
+    )
+    
+    return df['Alpha_Factor']
+```

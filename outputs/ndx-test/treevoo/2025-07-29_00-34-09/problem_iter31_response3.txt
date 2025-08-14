@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Log Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # 20-Day EMA of Log Returns weighted by Volume
+    df['volume_weighted_log_returns'] = df['log_returns'] * df['volume']
+    df['ema_volume_weighted_log_returns'] = df['volume_weighted_log_returns'].ewm(span=20).mean()
+    
+    # 20-Day Moving SD of High-Low Ranges
+    df['high_low_range'] = df['high'] - df['low']
+    df['std_high_low_range'] = df['high_low_range'].rolling(window=20).std()
+    df['volume_adjusted_momentum'] = df['ema_volume_weighted_log_returns'] / df['std_high_low_range']
+    
+    # Calculate 10-day Simple Moving Average (SMA) of the Close Price
+    df['sma_close_10'] = df['close'].rolling(window=10).mean()
+    
+    # Define a Momentum Factor
+    df['momentum_factor'] = df['close'] - df['sma_close_10']
+    df['momentum_factor'] = df['momentum_factor'].apply(np.sign)
+    
+    # Identify High-Activity Days
+    df['volume_sma_30'] = df['volume'].rolling(window=30).mean()
+    df['is_high_activity_day'] = df['volume'] > df['volume_sma_30']
+    
+    # Calculate Percentage Change in Close Price on High-Activity Days
+    df['close_pct_change'] = df['close'].pct_change()
+    df['high_activity_close_pct_change'] = df['close_pct_change'] * df['is_high_activity_day']
+    
+    # Analyze Intraday Market Sentiment
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    df['directional_bias'] = np.where(df['close'] > df['midpoint'], 1, -1)
+    
+    # Combine Momentum and Sentiment for Composite Signal
+    df['composite_sentiment_adjusted_momentum'] = df['momentum_factor'] * df['directional_bias']
+    
+    # High-Low Range Volatility
+    df['high_low_volatility'] = df['std_high_low_range']
+    
+    # Opening Gap Volatility
+    df['open_prev_close_diff'] = df['open'] - df['close'].shift(1)
+    df['opening_gap_volatility'] = df['open_prev_close_diff'].rolling(window=20).std()
+    
+    # Combine Factors for Final Alpha
+    df['alpha'] = (
+        0.4 * df['volume_adjusted_momentum'] +
+        0.1 * df['momentum_factor'] +
+        0.1 * df['composite_sentiment_adjusted_momentum'] +
+        0.15 * df['high_low_volatility'] +
+        0.15 * df['opening_gap_volatility']
+    )
+    
+    return df['alpha']
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine the Difference between Short and Long-Term Momentum
+    momentum_diff = short_term_momentum - long_term_momentum
+    
+    # Incorporate Volume Trend
+    vol_short_term_ema = df['volume'].ewm(span=5, adjust=False).mean()
+    vol_long_term_ema = df['volume'].ewm(span=20, adjust=False).mean()
+    vol_diff = vol_short_term_ema - vol_long_term_ema
+    
+    # Calculate Adjusted High-Low Range
+    avg_volume_20_days = df['volume'].rolling(window=20).mean()
+    scaled_volume = df['volume'] / avg_volume_20_days
+    adjusted_high_low_range = (df['high'] - df['low']) * scaled_volume
+    
+    # Calculate Previous Day's Return
+    prev_day_return = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Adjust Momentum by Volatility
+    rolling_volatility = df['close'].rolling(window=20).std()
+    adjusted_momentum_by_volatility = prev_day_return / rolling_volatility
+    
+    # Combine Factors
+    inversed_intraday_range = 1 / (df['high'] - df['low'])
+    combined_factors = (adjusted_high_low_range * inversed_intraday_range + prev_day_return + 
+                        momentum_diff + adjusted_momentum_by_volatility)
+    
+    # Final Alpha Factor
+    alpha_factor = (momentum_diff / vol_diff) + adjusted_high_low_range + combined_factors * df['volume']
+    
+    # True Average Price
+    true_avg_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Adjusted True Average Price
+    price_range_volatility = (df['high'] - df['low']).rolling(window=20).std()
+    adjusted_true_avg_price = true_avg_price / price_range_volatility
+    
+    # Final Momentum Indicator
+    final_momentum_indicator = adjusted_true_avg_price * (df['close'] - df['open']) / df['volume']
+    
+    # Integrate with Combined Momentum and Volume Trends
+    final_alpha_factor = (momentum_diff / vol_diff) + adjusted_high_low_range + combined_factors * df['volume'] * final_momentum_indicator
+    
+    return final_alpha_factor
+```

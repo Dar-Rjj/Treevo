@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Moving Averages
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+
+    # Determine Trend Direction
+    trend_direction = (short_term_ma - long_term_ma).apply(lambda x: 1 if x > 0 else -1)
+
+    # Enhance with Volume Confirmation
+    volume_change = df['volume'] - df['volume'].shift(1)
+    trend_by_volume = trend_direction * volume_change
+    trend_by_volume = trend_by_volume.apply(lambda x: 0 if abs(x) < 1e6 else x)  # Threshold to exclude small changes
+
+    # Calculate Relative Strength
+    weighted_price = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    total_weighted_price = weighted_price.rolling(window=5).sum()
+    total_volume = df['volume'].rolling(window=5).sum()
+    volume_weighted_price_movement = total_weighted_price / total_volume
+    relative_strength = (short_term_ma - long_term_ma) / volume_weighted_price_movement
+
+    # Evaluate Intraday Dynamics
+    intraday_return = df['close'] - df['open']
+    daily_volatility = df['high'] - df['low']
+    daily_return = df['close'] - df['close'].shift(1)
+    cumulative_return = daily_return.rolling(window=5).sum()
+    intraday_reversal = df['high'].shift(1) - df['close'].shift(1) + df['close'].shift(1) - df['low'].shift(1)
+
+    # Integrate Volume and Transaction Value
+    avg_volume = df['volume'].rolling(window=5).mean()
+    high_volume_indicator = (df['volume'] > avg_volume).astype(int)
+    transaction_value = df['close'] * df['volume']
+    avg_transaction_value = transaction_value.rolling(window=5).mean()
+    transaction_value_indicator = (transaction_value > avg_transaction_value).astype(int)
+
+    # Adjust for Volatility
+    adjusted_momentum = (short_term_ma - long_term_ma) / daily_volatility
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    adjusted_cumulative_return = cumulative_return + (short_term_ma - long_term_ma)
+    combined_factor = adjusted_momentum + adjusted_cumulative_return + relative_strength
+
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = (adjusted_momentum + adjusted_cumulative_return + combined_factor) * relative_strength + intraday_reversal
+
+    return final_alpha_factor
+```

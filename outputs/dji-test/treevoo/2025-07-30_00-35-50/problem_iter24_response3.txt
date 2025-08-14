@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    df['adjusted_daily_return'] = df['daily_return']
+    df.loc[df['price_gap'] > 0, 'adjusted_daily_return'] -= df['price_gap']
+    df.loc[df['price_gap'] < 0, 'adjusted_daily_return'] += df['price_gap']
+    
+    # Evaluate Momentum Over Time (e.g., 10 days)
+    df['momentum_10d'] = df['adjusted_daily_return'].rolling(window=10).sum()
+    
+    # Compute Volume Weighted Momentum
+    average_volume = df['volume'].rolling(window=10).mean()
+    df['volume_weighted_momentum'] = (df['momentum_10d'] * df['volume']) / average_volume
+    
+    # Adjust for Volume Spike Indicator
+    moving_average_volume = df['volume'].rolling(window=10).mean()
+    df['volume_spike'] = (df['volume'] > 2 * moving_average_volume)
+    df['adjusted_volume_weighted_momentum'] = df['volume_weighted_momentum']
+    df.loc[df['volume_spike'], 'adjusted_volume_weighted_momentum'] *= 1.5
+    
+    # Adjust for Volatility
+    historical_volatility = df['daily_return'].rolling(window=10).std()
+    absolute_price_change = (df['high'] - df['low']).abs()
+    df['volatility_adjustment'] = (absolute_price_change > 2.5 * historical_volatility)
+    df['final_volume_weighted_momentum'] = df['adjusted_volume_weighted_momentum']
+    df.loc[df['volatility_adjustment'], 'final_volume_weighted_momentum'] *= 1.4
+    
+    # Calculate High-to-Low Price Range
+    df['price_range'] = df['high'] - df['low']
+    df['price_range_momentum'] = df['price_range'] - df['price_range'].shift(1)
+    
+    # Adjust by Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Price Range Momentum with Volume Change
+    df['integrated_price_range_momentum'] = df['price_range_momentum'] * df['volume_change']
+    
+    # Combine Adjusted Daily Return with Price Range Momentum
+    df['combined_adjusted_daily_return'] = (df['adjusted_daily_return'] * df['volume']) + df['integrated_price_range_momentum']
+    
+    # Calculate 5-day Exponential Moving Average for Price and Volume
+    df['ema_5d_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_5d_volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Price Momentum and Volume Acceleration
+    df['price_momentum'] = df['ema_5d_close'] - df['ema_5d_close'].shift(1)
+    df['volume_acceleration'] = df['ema_5d_volume'] - df['ema_5d_volume'].shift(1)
+    
+    # Combine Factors
+    df['combined_factor'] = (df['volume_acceleration'] * df['price_momentum']) + df['combined_adjusted_daily_return']
+    df['long_term_factor'] = df['final_volume_weighted_momentum'] * df['combined_factor']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['long_term_factor']
+    df.loc[df['alpha_factor'] < 0, 'alpha_factor'] = 0
+    
+    return df['alpha_factor']
+```

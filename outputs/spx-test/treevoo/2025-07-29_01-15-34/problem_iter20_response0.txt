@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(data):
+    # Intraday Range Intensity
+    intraday_range = data['high'] - data['low']
+    avg_price = (data['high'] + data['low']) / 2
+    intraday_range_intensity = intraday_range / avg_price
+
+    # Open-to-Close Momentum Shift
+    momentum_shift = (data['close'] - data['open']) / data['close'].shift(1)
+
+    # Volume Activity Ratio
+    n_period = 5
+    volume_trend = data['volume'].rolling(window=n_period).sum()
+    volume_ema = data['volume'].ewm(span=n_period, adjust=False).mean()
+    volume_activity_ratio = volume_trend / volume_ema
+
+    # Daily Return Volatility Adjusted
+    log_return = np.log(data['close'] / data['close'].shift(1))
+    atr = data['high'] - data['low']  # Simplified ATR calculation
+    daily_return_volatility_adjusted = log_return / atr.rolling(window=n_period).mean()
+
+    # Price Volatility Factor
+    log_return_std = log_return.rolling(window=n_period).std()
+
+    # RSI
+    gain = (data['close'] - data['close'].shift(1)).clip(lower=0)
+    loss = -(data['close'] - data['close'].shift(1)).clip(upper=0)
+    avg_gain = gain.rolling(window=n_period).mean()
+    avg_loss = loss.rolling(window=n_period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Intraday High-Low Range
+    high_low_range = data['high'] - data['low']
+
+    # Open to Close Movement
+    open_close_movement = data['close'] - data['open']
+
+    # Volume-Weighted Average Price (VWAP)
+    typical_price = (data['high'] + data['low'] + data['close']) / 3
+    vwap = (typical_price * data['volume']).cumsum() / data['volume'].cumsum()
+
+    # VWAP Deviation from Close
+    vwap_deviation = data['close'] - vwap
+
+    # Closing Position in Intraday Range
+    close_position_in_range = (data['close'] - data['open']) / high_low_range
+
+    # Intraday Volume Intensity
+    median_volume = data['volume'].rolling(window=10).median()
+    volume_intensity = data['volume'] / median_volume
+
+    # Adjust for Recent Price Trend
+    ema_20 = data['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = ema_20 - data['close']
+
+    # Incorporate Recent Volatility
+    recent_volatility = data['close'].rolling(window=20).std()
+    volatility_adjusted_trend = trend_adjustment / recent_volatility
+
+    # Composite Alpha Factor
+    weighted_sum = (0.3 * (high_low_range / open_close_movement.abs()) +
+                    0.3 * vwap_deviation +
+                    0.2 * volume_intensity +
+                    0.2 * close_position_in_range)
+    
+    final_alpha_factor = weighted_sum + volatility_adjusted_trend
+
+    return final_alpha_factor
+```

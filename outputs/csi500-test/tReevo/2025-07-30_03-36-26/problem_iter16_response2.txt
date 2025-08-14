@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['dollar_value'] = df['volume'] * df['close']
+    df['vwap'] = df['dollar_value'].cumsum() / df['total_volume'].cumsum()
+
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+
+    # Integrate Short-Term Momentum (5 days)
+    df['short_term_momentum'] = df['vwap_deviation'].rolling(window=5).sum()
+    df['cumulative_vwap_deviation'] += df['short_term_momentum']
+
+    # Integrate Medium-Term Momentum (10 days)
+    df['medium_term_momentum'] = df['vwap_deviation'].rolling(window=10).sum()
+    df['cumulative_vwap_deviation'] += df['medium_term_momentum']
+
+    # Integrate Long-Term Momentum (20 days)
+    df['long_term_momentum'] = df['vwap_deviation'].rolling(window=20).sum()
+    df['cumulative_vwap_deviation'] += df['long_term_momentum']
+
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['abs_vwap_deviation'] = abs(df['close'] - df['vwap'])
+    df['intraday_volatility'] = df['high_low_range'] + df['abs_vwap_deviation']
+
+    # Adaptive Weighting
+    historical_intraday_volatility = df['intraday_volatility'].expanding().mean()
+    df['volatility_ratio'] = df['intraday_volatility'] / historical_intraday_volatility
+
+    # Adjust Weights Based on Volatility Ratio
+    short_term_weight = 0.3 / (1 + df['volatility_ratio'])
+    medium_term_weight = 0.3 / (1 + df['volatility_ratio'])
+    long_term_weight = 0.3 / (1 + df['volatility_ratio'])
+    intraday_volatility_weight = 0.1 / (1 + df['volatility_ratio'])
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['cumulative_vwap_deviation'] * (short_term_weight + medium_term_weight + long_term_weight) +
+        df['intraday_volatility'] * intraday_volatility_weight
+    )
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Hammer and Inverted Hammer (Bullish)
+    df['is_hammer'] = ((df['close'] - df['low']) / (df['high'] - df['low']) > 0.6) & ((df['open'] - df['low']) / (df['high'] - df['low']) > 0.6) & (df['close'] > df['open'])
+    df['is_inverted_hammer'] = ((df['high'] - df['close']) / (df['high'] - df['low']) > 0.6) & ((df['high'] - df['open']) / (df['high'] - df['low']) > 0.6) & (df['close'] < df['open'])
+    bullish_reversals = (df['is_hammer'] | df['is_inverted_hammer']).rolling(window=14).sum()
+
+    # Calculate Shooting Star and Hanging Man (Bearish)
+    df['is_shooting_star'] = ((df['high'] - df['close']) / (df['high'] - df['low']) > 0.6) & ((df['high'] - df['open']) / (df['high'] - df['low']) > 0.6) & (df['close'] < df['open'])
+    df['is_hanging_man'] = ((df['close'] - df['low']) / (df['high'] - df['low']) > 0.6) & ((df['open'] - df['low']) / (df['high'] - df['low']) > 0.6) & (df['close'] < df['open'])
+    bearish_reversals = (df['is_shooting_star'] | df['is_hanging_man']).rolling(window=14).sum()
+
+    # Moving Averages Crossovers
+    df['50_MA'] = df['close'].rolling(window=50).mean()
+    df['200_MA'] = df['close'].rolling(window=200).mean()
+    ma_crossover_50_200 = (df['50_MA'] > df['200_MA']).astype(int)
+    ma_crossover_200_50 = (df['200_MA'] > df['50_MA']).astype(int)
+
+    # True Range and Average True Range
+    df['TR'] = pd.concat([df['high'] - df['low'], abs(df['high'] - df['close'].shift()), abs(df['low'] - df['close'].shift())], axis=1).max(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+
+    # Volume Trends
+    df['volume_20_MA'] = df['volume'].rolling(window=20).mean()
+    increasing_volume = (df['volume'] > df['volume_20_MA']).astype(int)
+    decreasing_volume = (df['volume'] < df['volume_20_MA']).astype(int)
+
+    # On Balance Volume (OBV)
+    df['OBV'] = (df['close'] > df['close'].shift()).astype(int) * df['volume'] - (df['close'] < df['close'].shift()).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(), 0)
+    MFI = 100 - (100 / (1 + (positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum())))
+
+    # Price Relative to a Benchmark
+    benchmark_close = df['close'].iloc[-1]  # Assuming the last close price is the benchmark
+    price_relative = df['close'] / benchmark_close
+
+    # Directional Movement Index (DMI)
+    df['up_move'] = df['high'].diff()
+    df['down_move'] = df['low'].diff().abs()
+    df['+DM'] = df['up_move'].where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), 0)
+    df['-DM'] = df['down_move'].where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), 0)
+    df['+

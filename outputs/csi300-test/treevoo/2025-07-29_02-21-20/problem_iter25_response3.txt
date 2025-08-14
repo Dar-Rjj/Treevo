@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, spike_threshold=2.0):
+    # Calculate Adjusted Close Price
+    adjusted_close = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    intraday_momentum = (high_indicator + low_indicator) / 2
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    moving_avg_volume = df['volume'].rolling(window=lookback_period).mean()
+    normalized_volume = df['volume'] / moving_avg_volume
+    volume_adjusted_intraday_momentum = intraday_momentum * normalized_volume
+    
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+    volume_ratio = df['volume'] / df['volume'].shift(lookback_period)
+    volume_adjusted_long_term_momentum = long_term_momentum * volume_ratio
+    
+    # Add Volume Spike Filter
+    volume_spike = df['volume'] / df['volume'].shift(1)
+    filtered_volume_spike = volume_spike < spike_threshold
+    
+    # Apply the spike filter
+    volume_adjusted_long_term_momentum[~filtered_volume_spike] = 0
+    
+    # Consolidate All Factors
+    total_factor = adjusted_close + volume_adjusted_intraday_momentum + volume_adjusted_long_term_momentum
+    final_alpha = total_factor / df['open']
+    
+    return final_alpha
+```

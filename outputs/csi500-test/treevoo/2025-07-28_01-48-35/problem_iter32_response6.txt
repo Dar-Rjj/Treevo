@@ -1,0 +1,89 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close to Intraday Range Ratio
+    df['close_to_range_ratio'] = df['close'] / df['intraday_range']
+    
+    # Calculate Momentum Component (Sum Returns of Close prices for last N days)
+    N = 5
+    df['returns'] = df['close'].pct_change()
+    df['momentum'] = df['returns'].rolling(window=N).sum() * df['close_to_range_ratio']
+    
+    # Adjust for Volume Activity
+    df['volume_change'] = df['volume'] - df['volume'].shift(5)
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    df['volume_change_rate'] = df['volume_change'] / df['avg_volume_10d']
+    df['dynamic_coefficient'] = np.where(df['volume_change_rate'] > 2, 1.7,
+                                         np.where(df['volume_change_rate'] < -2, -1.5, 0.8))
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    df['avg_volume_15d'] = df['volume'].rolling(window=15).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_15d']
+    df['volume_adjusted_high_low_spread'] = (df['high'] - df['low']) * df['scaled_volume']
+    
+    # Detect Volume Spikes
+    df['volume_spike'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Price Trend
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_trend'] = df['close'] - df['ema_20']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Volume-Weighted Close-to-Open Return
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['scaled_volume']
+    
+    # Intermediate Composite Factor
+    df['intermediate_composite'] = (
+        df['volume_adjusted_high_low_spread'] + 
+        df['volume_weighted_close_to_open_return'] * df['price_trend'] * df['scaled_volume']
+    )
+    
+    # Short-Term Price Change
+    df['short_term_price_change'] = df['close'] - df['close'].shift(5)
+    
+    # Volume Trend Indicator
+    df['volume_trend_indicator'] = np.where(df['volume_change'] > 0, 1, -1)
+    
+    # Integrated Composite Factor
+    df['integrated_composite'] = (
+        df['price_trend'] + 
+        df['short_term_price_change'] + 
+        df['volume_trend_indicator']
+    ) * df['scaled_volume']
+    
+    # Price Oscillator
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['price_oscillator'] = df['ema_5'] - df['ema_10']
+    
+    # Enhanced Composite Factor with Oscillator
+    df['sma_integrated_composite'] = df['integrated_composite'].rolling(window=5).mean()
+    df['enhanced_composite_with_oscillator'] = (
+        df['integrated_composite'] + 
+        df['price_oscillator']
+    ) * (df['volume'] / df['avg_volume_10d'])
+    
+    # Final Combined Factor
+    df['final_combined_factor'] = (
+        df['momentum'] * df['volume_trend_indicator'] + 
+        df['volume_weighted_intraday_return'] + 
+        df['volume_adjusted_high_low_spread']
+    )
+    
+    # Opening Impact Adjustment
+    df['open_to_close_return'] = df['close'] - df['open']
+    df['final_alpha_factor'] = df['final_combined_factor'] - df['open_to_close_return']
+    
+    return df['final_alpha_factor']
+```

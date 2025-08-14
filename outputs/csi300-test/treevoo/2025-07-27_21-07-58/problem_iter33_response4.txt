@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Momentum
+    df['PriceMomentum'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Daily Price Change Percentage
+    df['DailyPriceChange'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Compute Average Price Momentum over 5 Days
+    df['5DayAvgPriceMomentum'] = df['DailyPriceChange'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['DailyVolumeChange'] = df['volume'] - df['volume'].shift(1)
+    
+    # Compute Average Volume Change over 10 Days
+    df['10DayAvgVolumeChange'] = df['DailyVolumeChange'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['PriceVolSurge'] = df['5DayAvgPriceMomentum'] * df['10DayAvgVolumeChange']
+    
+    # Calculate High-Low Range
+    df['HighLowRange'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['ChangeInHighLowRange'] = df['HighLowRange'] - df['HighLowRange'].shift(1)
+    
+    # Combine High-Low Range and Volume
+    df['HLVolAdjust'] = (df['ChangeInHighLowRange'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['21DayAvgVolume'] = df['volume'].rolling(window=21).mean()
+    
+    # Adjust by Average Amount
+    df['21DayAvgAmount'] = df['amount'].rolling(window=21).mean()
+    
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['VolRatio'] = df['volume'] / df['21DayAvgVolume']
+    df['AmountRatio'] = df['amount'] / df['21DayAvgAmount']
+    df['AdjMomentum'] = df['PriceMomentum'] * df['VolRatio'] * df['AmountRatio']
+    
+    # Calculate Daily Return
+    df['DailyReturn'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Moving Average of Positive Returns
+    df['PosReturns'] = df['DailyReturn'].apply(lambda x: x if x > 0 else 0)
+    df['21DayMA_PosReturns'] = df['PosReturns'].rolling(window=21).mean()
+    
+    # Volume Adjusted Momentum
+    df['CumulativeVolume'] = df['volume'].rolling(window=21).sum()
+    df['VolumeAdjMomentum'] = (df['21DayMA_PosReturns'] * df['CumulativeVolume']) / 21
+    
+    # Introduce New Component: Price-Volume Divergence
+    df['DailyVolumeChangePct'] = df['DailyVolumeChange'] / df['volume'].shift(1)
+    df['PriceVolDivergence'] = df['DailyReturn'] - df['DailyVolumeChangePct']
+    
+    # Introduce New Component: Price-Amount Divergence
+    df['DailyAmountChangePct'] = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    df['PriceAmountDivergence'] = df['DailyReturn'] - df['DailyAmountChangePct']
+    
+    # Introduce New Component: Open-Close Spread
+    df['OpenCloseSpread'] = df['open'] - df['close']
+    
+    # Calculate 21-Day Price Volatility
+    df['21DayVolatility'] = df['close'].rolling(window=21).std()
+    
+    # Adjust by Price Volatility
+    df['VolatilityAdj'] = df['21DayVolatility'].apply(lambda x: 1.5 if x > 0.01 else 1.0)  # Threshold set to 0.01
+    
+    # Final Combined Alpha Factor
+    df['FinalAlphaFactor'] = (df['AdjMomentum'] + df['PriceVolSurge'] + df['VolumeAdjMomentum'] + 
+                               df['PriceVolDivergence'] + df['PriceAmountDivergence'] + df['OpenCloseSpread']) * df['VolatilityAdj']
+    
+    return df['FinalAlphaFactor']
+```

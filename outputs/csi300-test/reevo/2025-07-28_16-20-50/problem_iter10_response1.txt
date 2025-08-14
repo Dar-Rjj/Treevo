@@ -1,0 +1,61 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Exponential Moving Averages (EMA) for close prices with different periods
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Multi-period trends using EMAs
+    df['trend_5_20'] = df['ema_5'] - df['ema_20']
+
+    # Positive and negative parts of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor_positive_negative_ratio = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Factor: VWAP compared to the 20-day EMA
+    factor_vwap_ema = df['vwap'] - df['ema_20']
+
+    # Volatility
+    df['volatility'] = df['close'].rolling(window=20).std()
+
+    # Momentum adjusted by volatility
+    momentum_adjusted = df['trend_5_20'] / (df['volatility'] + 1e-7)
+
+    # Market sentiment: high minus low
+    df['market_sentiment'] = df['high'] - df['low']
+
+    # Relative Strength Index (RSI) for momentum
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Factor: RSI
+    factor_rsi = rsi
+
+    # Money Flow Index (MFI) for buying/selling pressure
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_flow_ratio = positive_money_flow.rolling(window=14).sum() / (negative_money_flow.rolling(window=14).sum() + 1e-7)
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+
+    # Factor: MFI
+    factor_mfi = mfi
+
+    # Combine factors
+    factor = (factor_positive_negative_ratio + factor_vwap_ema + momentum_adjusted + df['market_sentiment'] + factor_rsi + factor_mfi) / 6
+
+    return factor
+```

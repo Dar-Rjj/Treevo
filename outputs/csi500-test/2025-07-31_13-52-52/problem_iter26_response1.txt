@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-Day Rolling Momentum
+    rolling_high_low_range = high_low_range.rolling(window=5).sum()
+    rolling_price_movement_ratio = price_movement_ratio.rolling(window=5).sum()
+    five_day_rolling_momentum = rolling_price_movement_ratio / rolling_high_low_range
+    
+    # Adjust for Volume
+    volume_adjusted_momentum = five_day_rolling_momentum * df['volume']
+    
+    # Calculate 10-Day Price Momentum
+    ten_day_price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Compute Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Combine and Adjust Price and Intraday Momentum
+    combined_momentum = ten_day_price_momentum + intraday_return
+    volume_change_indicator = (df['volume'] > df['volume'].shift(1)).astype(int) - (df['volume'] <= df['volume'].shift(1)).astype(int)
+    adjusted_combined_momentum = combined_momentum * volume_change_indicator
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Calculate Price Trend Indicator
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    price_trend_indicator = (short_ema > long_ema).astype(int) - (short_ema <= long_ema).astype(int)
+    
+    # Combine Factors
+    combined_factors = adjusted_combined_momentum * price_trend_indicator
+    
+    # Final Alpha Factor
+    final_alpha_factor = volume_adjusted_momentum + combined_factors
+    smoothed_alpha_factor = final_alpha_factor.rolling(window=10).mean() * 0.7 + final_alpha_factor.ewm(span=10, adjust=False).mean() * 0.3
+    
+    # Final Adjustment for Volume
+    final_alpha_factor = smoothed_alpha_factor * df['volume']
+    
+    return final_alpha_factor
+```

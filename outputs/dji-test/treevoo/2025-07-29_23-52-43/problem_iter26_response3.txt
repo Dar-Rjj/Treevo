@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume Weighted Close Price Momentum
+    avg_close = df['close'].rolling(window=5).mean().shift(1)
+    avg_volume = df['volume'].rolling(window=6).mean().shift(1)
+    close_momentum = (df['close'] - avg_close) * (df['volume'] / avg_volume)
+
+    # Price Volatility
+    price_volatility = df['close'].rolling(window=6).std() / df['close'].shift(1)
+
+    # Intraday Return
+    intraday_return_high_low = (df['high'] - df['low']) / df['low']
+    intraday_return_close_open = (df['close'] - df['open']) / df['open']
+
+    # Volume Spike Detection
+    volume_change = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['volume'].pct_change().rolling(window=20).quantile(0.8).shift(1) * 1.7
+    volume_spike = (volume_change > spike_threshold).astype(int)
+
+    # Volume Increase Ratio
+    volume_increase_ratio = df['volume'] / df['volume'].shift(1)
+
+    # High-Low Breakout Intensity
+    high_low_breakout_intensity = (df['high'] - df['low']).div(df['close'].shift(1)).clip(lower=0)
+
+    # Moving Average of High-Low Differences (10-day period)
+    high_low_diff = df['high'] - df['low']
+    ma_high_low_diff = high_low_diff.rolling(window=10).mean()
+
+    # Intermediate Factor
+    intermediate_factor = (volume_increase_ratio * (df['close'] - avg_close) * (df['close'].rolling(window=6).std() / df['close'].shift(1)))
+
+    # Combined Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    close_to_prev_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    combined_metrics = intraday_return_high_low + intraday_return_close_open + high_low_breakout_intensity
+
+    # Adjust for Volatility
+    rolling_volatility = high_low_diff.rolling(window=14).std()
+    adjusted_combined_metrics = combined_metrics / rolling_volatility
+
+    # Final Composite Factor
+    final_composite_factor = (intermediate_factor + ma_high_low_diff + close_momentum + 
+                              price_volatility + combined_metrics + adjusted_combined_metrics)
+
+    # Moving Sum of High-Low Differences
+    moving_sum_high_low_diff = high_low_diff.rolling(window=14).sum()
+
+    # Intraday Momentum and VWAP
+    intraday_high_low_spread = df['high'] - df['low']
+    prev_day_high_low_spread = df['high'].shift(1) - df['low'].shift(1)
+    daily_vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    prev_day_vwap = daily_vwap.shift(1)
+    momentum_difference = intraday_high_low_spread - prev_day_high_low_spread
+    vwap_difference = daily_vwap - prev_day_vwap
+    final_combined_indicator = momentum_difference * vwap_difference
+
+    # Combine all factors into a single composite factor
+    composite_factor = (final_composite_factor + moving_sum_high_low_diff + final_combined_indicator)
+
+    return composite_factor
+```

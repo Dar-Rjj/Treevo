@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=20, k=10):
+    # Calculate High-Low Momentum
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    avg_intraday_high_low_spread = df['intraday_high_low_spread'].rolling(window=m).mean()
+    df['momentum_score'] = np.where(df['intraday_high_low_spread'] > avg_intraday_high_low_spread, 1, -1)
+    df['volume_adjusted_momentum'] = df['momentum_score'] * df['volume']
+    
+    # Calculate Price Momentum
+    price_change = df['close'] - df['close'].shift(n)
+    df['price_momentum'] = price_change.rolling(window=n).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['daily_range'] = df['high'] - df['low']
+    avg_daily_range = df['daily_range'].rolling(window=m).mean()
+    df['range_momentum'] = np.where(df['daily_range'] > avg_daily_range, 1, -1)
+    
+    open_close_diff = df['close'] - df['open']
+    df['open_close_movement'] = open_close_diff.rolling(window=n).sum()
+    
+    # Incorporate Intraday Volatility
+    def garman_klass_volatility(high, low, close, open_):
+        return np.sqrt(0.5 * (np.log(high / low) ** 2) - (2 * np.log(2) - 1) * (np.log(close / open_) ** 2))
+    
+    df['intraday_volatility'] = garman_klass_volatility(df['high'], df['low'], df['close'], df['open'])
+    avg_intraday_volatility = df['intraday_volatility'].rolling(window=k).mean()
+    df['volatility_score'] = np.where(df['intraday_volatility'] > avg_intraday_volatility, 1, -1)
+    
+    # Combine Factors
+    combined_factor = (
+        0.3 * df['volume_adjusted_momentum'] +
+        0.2 * df['price_momentum'] +
+        0.1 * df['range_momentum'] +
+        0.1 * df['open_close_movement'] +
+        0.3 * df['volatility_score']
+    )
+    
+    return combined_factor
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

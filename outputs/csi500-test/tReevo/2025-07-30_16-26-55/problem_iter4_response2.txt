@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Short-Term Price Momentum
+    df['10_sma_close'] = df['close'].rolling(window=10).mean()
+    df['short_term_mom'] = (df['close'] - df['10_sma_close']).apply(lambda x: x if x > 0 else 0)
+    df['short_term_mom_sum_5d'] = df['short_term_mom'].rolling(window=5).sum()
+    
+    # Calculate Long-Term Price Momentum
+    df['30_sma_close'] = df['close'].rolling(window=30).mean()
+    df['long_term_mom'] = (df['close'] - df['30_sma_close']).apply(lambda x: x if x > 0 else 0)
+    df['long_term_mom_sum_20d'] = df['long_term_mom'].rolling(window=20).sum()
+    
+    # Compute High-to-Low Range Momentum
+    df['range_rolling_std'] = df['high_low_range'].rolling(window=20).std()
+    df['range_mom'] = df['high_low_range'] / df['range_rolling_std']
+    
+    # Volume Adjust Factor
+    df['20_day_avg_vol'] = df['volume'].rolling(window=20).mean()
+    df['vol_adjust_factor'] = df['volume'] / df['20_day_avg_vol']
+    
+    # Incorporate Volatility
+    df['close_rolling_std'] = df['close'].rolling(window=20).std()
+    
+    # Weighted Momentum
+    short_term_weight = 0.6
+    long_term_weight = 0.4
+    df['weighted_mom'] = (df['short_term_mom_sum_5d'] * short_term_weight) + (df['long_term_mom_sum_20d'] * long_term_weight)
+    
+    # Adjust Combined Momentum by Volume
+    df['adj_combined_mom'] = (df['weighted_mom'] * df['vol_adjust_factor']) + df['range_mom']
+    
+    # Combine All Factors
+    df['alpha_factor'] = df['adj_combined_mom'] + df['close_rolling_std']
+    
+    return df['alpha_factor']
+```

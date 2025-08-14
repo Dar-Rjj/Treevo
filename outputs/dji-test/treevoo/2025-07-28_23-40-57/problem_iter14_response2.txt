@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data: pd.DataFrame, n_days=10, short_term_period=5) -> pd.Series:
+    # Calculate Intraday Return
+    intraday_return = (data['close'] - data['open']) / data['open']
+    
+    # Calculate Volume Impact Score
+    volume_sum_n_days = data['volume'].rolling(window=n_days).sum()
+    avg_high_n_days = data['high'].rolling(window=n_days).mean()
+    avg_low_n_days = data['low'].rolling(window=n_days).mean()
+    price_range_n_days = avg_high_n_days - avg_low_n_days
+    volume_impact_score = price_range_n_days / volume_sum_n_days
+    
+    # Multiply Intraday Return by Volume Impact Score for Factor 1a
+    factor_1a = intraday_return * volume_impact_score
+    
+    # Calculate Intraday Price Range
+    intraday_price_range = data['high'] - data['low']
+    
+    # Calculate Close-to-Open Price Change
+    close_open_change = data['close'] - data['open']
+    
+    # Calculate VWAP
+    vwap = ((data[['close', 'high', 'low', 'open']].mean(axis=1) * data['volume']).cumsum() / data['volume'].cumsum())
+    
+    # Adjust Intraday Price Range by VWAP
+    adjusted_intraday_price_range = intraday_price_range / vwap
+    
+    # Multiply by Close-to-Open Price Change
+    adjusted_factor = adjusted_intraday_price_range * close_open_change
+    
+    # Calculate Volume-Weighted Price Impact
+    volume_weighted_price_impact = price_range_n_days * volume_sum_n_days
+    
+    # Adjust Intraday Return by Volume-Weighted Price Impact for Factor 1b
+    factor_1b = intraday_return / volume_weighted_price_impact
+    
+    # Final Factor 1
+    final_factor_1 = factor_1a * factor_1b
+    
+    # Calculate Short-Term Volume Variability
+    short_term_vol_variability = data['volume'].rolling(window=short_term_period).std()
+    
+    # Calculate Cumulative Volume-Weighted Intraday Return for Final Factor 2
+    cum_vol_weighted_return = (intraday_return * data['volume']).rolling(window=n_days).sum()
+    final_factor_2 = cum_vol_weighted_return
+    
+    # Calculate High-Low Spread for Breakout Momentum
+    high_low_spread = data['high'] - data['low']
+    
+    # Adjust by Previous Close for Breakout Momentum
+    prev_close = data['close'].shift(1)
+    breakout_momentum = high_low_spread / prev_close
+    
+    # Adjust by Volume for Breakout Momentum
+    volume_adj_breakout_momentum = breakout_momentum * (data['volume'].rolling(window=n_days).sum() / n_days)
+    
+    # Incorporate Volume-Adjusted Breakout Momentum into the combined indicator
+    combined_indicator = final_factor_1 + final_factor_2 - short_term_vol_variability + volume_adj_breakout_momentum
+    
+    return combined_indicator
+```

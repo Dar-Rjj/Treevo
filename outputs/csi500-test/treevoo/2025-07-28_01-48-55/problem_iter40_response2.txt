@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, window=10):
+    """
+    Generate alpha factor based on the relationship between closing price and other prices.
+    
+    :param df: DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume']
+    :param window: Number of periods for rolling operations
+    :return: Series of alpha factor values
+    """
+    # Compute the difference between today's close and today's open
+    df['close_open_diff'] = df['close'] - df['open']
+    # Sum the difference over a period to find trend
+    df['close_open_trend'] = df['close_open_diff'].rolling(window=window).sum()
+    
+    # Identify the ratio of today's close to today's high
+    df['close_high_ratio'] = df['close'] / df['high']
+    # Track its change over time
+    df['close_high_change'] = df['close_high_ratio'].pct_change()
+    
+    # Analyze the gap from today's close to today's low
+    df['close_low_gap'] = df['close'] - df['low']
+    # Consider its average over a defined window
+    df['close_low_avg'] = df['close_low_gap'].rolling(window=window).mean()
+    
+    # Relate changes in closing price with percentage change in volume
+    df['close_volume_pct_change'] = df['close'].pct_change() * (df['volume'].pct_change())
+    
+    # Measure the correlation between daily returns and volume to identify significant patterns
+    df['daily_return'] = df['close'].pct_change()
+    df['return_vol_corr'] = df['daily_return'].rolling(window=window).corr(df['volume'].pct_change())
+    
+    # Compare the current day’s amount traded with the previous day’s to assess market interest
+    df['amount_prev_day'] = df['amount'].shift(1)
+    df['amount_interest'] = df['amount'] / df['amount_prev_day']
+    
+    # Establish a factor based on the moving average of the amount traded relative to the closing price
+    df['amount_close_ma'] = (df['amount'] / df['close']).rolling(window=window).mean()
+
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['close_open_trend'] + 
+        df['close_high_change'] + 
+        df['close_low_avg'] + 
+        df['close_volume_pct_change'] + 
+        df['return_vol_corr'] + 
+        df['amount_interest'] + 
+        df['amount_close_ma']
+    )
+    
+    return df['alpha_factor'].dropna()
+```

@@ -1,0 +1,28 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change from the previous day
+    df['price_change'] = df['close'].diff()
+    
+    # Calculate the 10-day and 30-day smoothed momentum
+    df['smoothed_momentum_10d'] = df['close'].pct_change(10).ewm(span=5, adjust=False).mean()
+    df['smoothed_momentum_30d'] = df['close'].pct_change(30).ewm(span=10, adjust=False).mean()
+    
+    # Calculate the volume weighted average price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate the difference between the close and VWAP
+    close_vwap_diff = df['close'] - vwap
+    
+    # Calculate a robust volatility measure using the 10-day ATR (Average True Range)
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], abs(x[0] - df['close'].shift(1)), abs(x[1] - df['close'].shift(1))), axis=1)
+    df['atr_10d'] = df['true_range'].rolling(window=10).mean()
+    
+    # Integrate liquidity indicators by calculating the ratio of volume to the 10-day ATR
+    df['liquidity_ratio'] = df['volume'] / (df['atr_10d'] + 1e-7)
+    
+    # Generate a factor by combining the above indicators
+    factor = df['price_change'] + close_vwap_diff + df['smoothed_momentum_10d'] + df['smoothed_momentum_30d'] + df['liquidity_ratio']
+    
+    # Return the calculated factor
+    return factor
+```

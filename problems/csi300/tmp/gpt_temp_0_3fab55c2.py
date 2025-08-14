@@ -1,0 +1,61 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df, n=14):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Volume Change
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Combine Intraday and Close-to-Open Returns
+    weighted_intraday_return = intraday_return * abs(intraday_return)
+    weighted_close_to_open_return = close_to_open_return * abs(close_to_open_return)
+    
+    # Integrate Volume Change
+    adjusted_weighted_intraday_return = weighted_intraday_return * daily_volume_change
+    adjusted_weighted_close_to_open_return = weighted_close_to_open_return * daily_volume_change
+    preliminary_factor = adjusted_weighted_intraday_return + adjusted_weighted_close_to_open_return
+    
+    # Calculate True Range (TR)
+    tr = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], 
+                                                  abs(x['high'] - df['close'].shift(1)), 
+                                                  abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Calculate Average True Range (ATR)
+    atr = tr.rolling(window=n).mean()
+    
+    # Calculate Positive Directional Movement (+DM)
+    positive_dm = df['high'].diff().where((df['high'].diff() > 0) & (df['high'].diff() > df['low'].diff()), 0)
+    
+    # Calculate Negative Directional Movement (-DM)
+    negative_dm = df['low'].diff().where((df['low'].diff() < 0) & (abs(df['low'].diff()) > abs(df['high'].diff())), 0)
+    
+    # Calculate +DM Smoothed Over n Periods
+    smooth_positive_dm = positive_dm.rolling(window=n).sum() / n
+    
+    # Calculate -DM Smoothed Over n Periods
+    smooth_negative_dm = negative_dm.rolling(window=n).sum() / n
+    
+    # Calculate +DI
+    positive_di = smooth_positive_dm / atr
+    
+    # Calculate -DI
+    negative_di = smooth_negative_dm / atr
+    
+    # Calculate ADMI
+    admi = (positive_di - negative_di) / (positive_di + negative_di)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_return.rolling(window=n).std()
+    
+    # Integrate Intraday Volatility
+    adjusted_preliminary_factor = preliminary_factor / intraday_volatility
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = adjusted_preliminary_factor * admi
+    
+    return final_alpha_factor

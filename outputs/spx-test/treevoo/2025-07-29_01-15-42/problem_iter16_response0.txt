@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_adjusted_spread = intraday_high_low_spread * df['volume']
+    volume_adjusted_change = close_to_open_change * df['volume']
+    
+    # Analyze Volume Trends
+    moving_average_volume = df['volume'].rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    combined_value = volume_adjusted_spread + volume_adjusted_change
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    price_volume_imbalance = (df['high'] - df['low']) / moving_average_volume
+    threshold = 1.5  # Example threshold value, can be adjusted
+    positive_imbalance = (price_volume_imbalance > threshold)
+    negative_imbalance = (price_volume_imbalance < -threshold)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_signal = np.where(positive_imbalance, 1, np.where(negative_imbalance, -1, 0))
+    
+    # Calculate Momentum Score
+    momentum_score = combined_value - combined_value.shift(1)
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = (df['high'] - df['low']) / df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].rolling(window=20).std()
+    
+    # Apply Volatility Filter
+    median_volatility = realized_volatility.median()
+    volatility_filter = (realized_volatility < median_volatility)
+    alpha_signal = np.where(volatility_filter, preliminary_signal, 0)
+    
+    # Generate Final Alpha Signal
+    final_alpha_signal = np.where(positive_imbalance, alpha_signal + momentum_score,
+                                  np.where(negative_imbalance, alpha_signal - momentum_score, momentum_score))
+    
+    return pd.Series(final_alpha_signal, index=df.index)
+```

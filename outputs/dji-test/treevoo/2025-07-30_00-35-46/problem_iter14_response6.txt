@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+
+    # Adjust for Volume
+    volume_adj = (df['volume'] / df['volume'].rolling(window=10).mean()) + 1
+
+    # Combine Intraday Range and Volume Adjustment
+    combined_factor = intraday_range * volume_adj
+
+    # Smoothing with Simple Moving Average (SMA) with Span of 5
+    smoothed_combined_factor = combined_factor.rolling(window=5).mean()
+
+    # Calculate MACD
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = short_ema - long_ema
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+
+    # Determine Momentum
+    momentum = (macd_line > signal_line).astype(int)
+
+    # Calculate OBV
+    obv = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+
+    # Weight OBV by |MACD Line - Signal Line|
+    weight = np.abs(macd_line - signal_line)
+    final_obv_factor = obv * weight
+
+    # Incorporate Market Sentiment
+    price_change = (df['close'] - df['open']) / df['open']
+    sentiment_score = np.where(price_change > 0.005, 1,
+                               np.where(price_change < -0.005, -1, 0))
+
+    # Adjust OBV Factor by Sentiment
+    adjusted_obv_factor = final_obv_factor * sentiment_score
+
+    # Calculate Price Velocity
+    price_velocity = (df['close'] - df['close'].shift(10)) / 10
+
+    # Combine Smoothed Intraday Momentum with Adjusted OBV Factor and Price Velocity
+    final_alpha_factor = (smoothed_combined_factor * 
+                          adjusted_obv_factor * 
+                          price_velocity)
+
+    return final_alpha_factor
+```

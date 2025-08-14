@@ -1,0 +1,29 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Calculate a novel and interpretable alpha factor from the given DataFrame.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with columns (open, high, low, close, amount, volume) and index (date).
+    
+    Returns:
+    pd.Series: Series of factor values indexed by (date).
+    """
+    # Calculate the percentage change in close price
+    df['close_pct_change'] = df['close'].pct_change()
+    
+    # Calculate the percentage of the day's range that the close price represents
+    df['day_range_close_pct'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate the average true range over a 14-day rolling window
+    df['atr_14'] = df[['high', 'low', 'close']].rolling(window=14).apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2]), x[1] - x[2])).mean(axis=1)
+    
+    # Calculate the normalized volume
+    df['norm_volume'] = df['volume'] / df['volume'].rolling(window=14).mean()
+    
+    # Combine the factors into a single alpha factor
+    df['alpha_factor'] = (df['close_pct_change'] * df['day_range_close_pct'] * df['atr_14'] * df['norm_volume']).fillna(0)
+    
+    return df['alpha_factor']

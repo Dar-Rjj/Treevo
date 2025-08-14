@@ -1,0 +1,70 @@
+import numpy as np
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Average Price
+    df['avg_price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    df['volume_adjusted_range'] = (df['price_range'] / df['avg_price']).replace([np.inf, -np.inf], 0) * df['volume']
+    
+    # Calculate Short-Term Rolling Average of Volume Adjusted Range
+    df['short_term_vol_adj_range'] = df['volume_adjusted_range'].rolling(window=10).mean()
+    
+    # Calculate Long-Term Rolling Average of Volume Adjusted Range
+    df['long_term_vol_adj_range'] = df['volume_adjusted_range'].rolling(window=20).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Combine Intraday Measures
+    df['combined_intraday_measure'] = (df['intraday_high_low_spread'] + df['close_open_diff']) * df['volume']
+    
+    # Calculate Short-Term Price Momentum
+    df['daily_price_change'] = df['close'].diff()
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['short_term_momentum'] = df['ema_5'] - df['ema_10']
+    
+    # Calculate Long-Term Price Momentum
+    df['sma_20'] = df['daily_price_change'].rolling(window=20).mean()
+    df['sma_50'] = df['daily_price_change'].rolling(window=50).mean()
+    df['long_term_momentum'] = df['sma_20'] - df['sma_50']
+    
+    # Calculate Volume Indicator
+    df['volume_change'] = df['volume'].diff()
+    df['positive_volume_days'] = df[df['volume_change'] > 0].rolling(window=20).count()['volume_change']
+    df['negative_volume_days'] = df[df['volume_change'] < 0].rolling(window=20).count()['volume_change']
+    
+    # Calculate Average True Range (ATR)
+    df['true_range'] = df[['high' - 'low', (df['high'] - df['close'].shift(1)).abs(), (df['low'] - df['close'].shift(1)).abs()]].max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Adjust Combined Measure by Momentum
+    df['volume_ema_5'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['volume_ema_10'] = df['volume'].ewm(span=10, adjust=False).mean()
+    df['volume_momentum'] = df['volume_ema_5'] - df['volume_ema_10']
+    df['adjusted_combined_measure'] = (df['short_term_momentum'] * df['volume_momentum']) / df['combined_intraday_measure'].replace(0, np.nan)
+    
+    # Combine Short-Term Price Momentum and Volume Indicator
+    df['short_term_momentum_pos_vol'] = df['short_term_momentum'] * df['positive_volume_days']
+    df['short_term_momentum_vol'] = df['short_term_momentum'] * df['volume_momentum']
+    
+    # Combine Long-Term Price Momentum and Volume Indicator
+    df['long_term_momentum_neg_vol'] = df['long_term_momentum'] * df['negative_volume_days']
+    df['long_term_momentum_vol'] = df['long_term_momentum'] * df['volume_momentum']
+    
+    # Introduce High-Low Range Factor
+    df['high_low_range_factor'] = (df['high'] - df['low']) / df['close']
+    
+    # Combine Momentum, Volume, and High-Low Range
+    df['combined_factor'] = (df['short_term_momentum'] * df['volume_momentum'] * df['high_low_range_factor']) / df['close']
+    
+    # Combine Factors
+    df['final_factor'] = df['short_term_vol_adj_range'] - df['long_term_vol_adj_range'] + df['adjusted_combined_measure'] + df['combined_factor']
+    
+    return

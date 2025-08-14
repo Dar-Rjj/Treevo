@@ -1,0 +1,65 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily log return based on close prices
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate 10-day cumulative return
+    df['cumulative_return_10d'] = df['log_return'].rolling(window=10).sum()
+    
+    # Measure the overnight return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Assess intraday price movement
+    df['intraday_movement'] = (df['high'] - df['low']) / df['close']
+    
+    # Estimate true range
+    df['true_range'] = df[['high' - 'low', 
+                           abs(df['high'] - df['close'].shift(1)), 
+                           abs(df['low'] - df['close'].shift(1))]].max(axis=1)
+    
+    # Compute 14-day average true range (ATR)
+    df['atr_14d'] = df['true_range'].rolling(window=14).mean()
+    
+    # Determine volume change from the previous day
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Analyze the ratio of today's volume to the average volume over 20 days
+    df['volume_ratio_20d'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Calculate the money flow index (MFI) using typical price and volume
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['money_flow'].where(df['typical_price'] > df['typical_price'].shift(1), 0)
+    df['negative_money_flow'] = df['money_flow'].where(df['typical_price'] < df['typical_price'].shift(1), 0)
+    df['mfi'] = df['positive_money_flow'].rolling(window=14).sum() / (df['positive_money_flow'].rolling(window=14).sum() + df['negative_money_flow'].rolling(window=14).sum())
+    
+    # Develop a volume-weighted moving average (VWMA) that weights each day's close by its volume
+    df['vwap'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Calculate the total transaction amount for the day
+    df['transaction_amount'] = df['amount']
+    
+    # Compute the ratio of today's transaction amount to the average amount over 30 days
+    df['amount_ratio_30d'] = df['transaction_amount'] / df['transaction_amount'].rolling(window=30).mean()
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['cumulative_return_10d'] +
+                          df['overnight_return'] +
+                          df['intraday_movement'] +
+                          df['atr_14d'] +
+                          df['volume_ratio_20d'] +
+                          df['mfi'] +
+                          df['vwap'] +
+                          df['amount_ratio_30d'])
+    
+    # Return the alpha factor as a pandas Series
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

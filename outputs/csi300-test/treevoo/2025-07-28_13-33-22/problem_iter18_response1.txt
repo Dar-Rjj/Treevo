@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Adjust by Volume and Price Spikes
+    volume_spike = (df['volume'] > df['volume'].shift()).astype(int)
+    price_spike = (df['close'] > df['close'].shift()).astype(int)
+    combined_spikes = volume_spike + price_spike
+    
+    # Introduce Volatility Adjustment
+    log_returns = (df['close'] / df['close'].shift()).apply(np.log)
+    std_dev = log_returns.rolling(window=5).std()
+    intraday_momentum_vol_adj = intraday_momentum * (1 / std_dev)
+    
+    # Scale Intraday Momentum
+    scaled_intraday_momentum = intraday_momentum_vol_adj * combined_spikes
+    scaled_intraday_momentum = scaled_intraday_momentum.clip(lower=-5, upper=5)
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    opening_gap = df['open'] - df['close'].shift()
+    
+    # Combine Intraday Features
+    intraday_features = df['open'] - (intraday_midpoint - opening_gap)
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift()
+    
+    # Combine Factors
+    combined_factor = intraday_range * (close_to_open_return + price_change)
+    
+    # Enhance with Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift()).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=5).mean()
+    enhanced_factor = combined_factor * avg_abs_price_change
+    
+    # Adjust Combined Factor by Volume Spike
+    adjusted_factor = enhanced_factor / (volume_spike + 1)  # Avoid division by zero
+    adjusted_factor = adjusted_factor.clip(lower=-5, upper=5)
+    
+    # Weight by Relative Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    relative_volume = df['volume'] / average_volume
+    weighted_factor = adjusted_factor * relative_volume
+    
+    # Incorporate Trading Volume Trend
+    volume_difference = df['volume'] - df['volume'].shift()
+    smoothed_volume_trend = volume_difference.rolling(window=5).mean()
+    volume_trend_adjusted_factor = weighted_factor * smoothed_volume_trend
+    
+    # Incorporate Price Trend
+    sma = df['close'].rolling(window=5).mean()
+    price_trend_adjusted_factor = volume_trend_adjusted_factor * (df['close'] - sma)
+    
+    # Final Factor
+    final_factor = price_trend_adjusted_factor
+    final_factor = final_factor.clip(lower=-5, upper=5)
+    
+    return final_factor
+```

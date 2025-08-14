@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) over 20 days
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Exponential Moving Average (EMA) over 10 days
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Daily price change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # High-Low spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Close/Open ratio
+    df['Close_Open_Ratio'] = df['close'] / df['open']
+    
+    # Close/Previous Close ratio
+    df['Close_Prev_Close_Ratio'] = df['close'] / df['close'].shift(1)
+    
+    # Volume change
+    df['Volume_Change'] = df['volume'].diff()
+    
+    # Volume-weighted close
+    df['Volume_Weighted_Close'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Price-Volume Trend (PVT)
+    pvt = [0]
+    for i in range(1, len(df)):
+        pvt.append(pvt[-1] + (df['close'][i] - df['close'][i-1]) * df['volume'][i])
+    df['PVT'] = pvt
+    
+    # On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+    
+    # Three-day price pattern
+    df['Three_Day_Pattern'] = (df['close'] - df['open']) + (df['close'].shift(1) - df['open'].shift(1)) + (df['close'].shift(2) - df['open'].shift(2))
+    
+    # Inside bar pattern
+    df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)).astype(int)
+    
+    # Price and volume confirmation
+    df['Price_Volume_Confirmation'] = ((df['close'] > df['close'].shift(1)) & (df['volume'] > df['volume'].shift(1))).astype(int)
+    
+    # Average True Range (ATR) over 14 days
+    tr = pd.DataFrame(index=df.index, columns=['tr'])
+    tr['tr'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    tr['tr'] = tr['tr'].fillna(tr['tr'].shift(1))
+    df['ATR_14'] = tr.rolling(window=14).mean()
+    
+    # Money Flow Index (MFI) over 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_money_flow_sum = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_sum = negative_money_flow.rolling(window=14).sum()
+    df['MFI_14'] = 100 - (100 / (1 + (positive_money_flow_sum / negative_money_flow_sum)))
+    
+    # Chaikin Money Flow (CMF) over 20 days
+    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = mf_multiplier * df['volume']
+    df['CMF_20'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Calculate daily open-close price spread
+    df['Open_Close_Spread'] = df['open'] - df['close']
+    
+    # Calculate momentum
+    lookback_period = 10
+    df['Momentum

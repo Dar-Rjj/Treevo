@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume Change Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Price Momentum Indicator
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['price_momentum'] = df['ema_10'] - df['close']
+    
+    # Combine and Filter Indicators
+    df['combined_indicator'] = df['volume_change'] * df['price_momentum']
+    upper_threshold = df['combined_indicator'].quantile(0.75)
+    lower_threshold = df['combined_indicator'].quantile(0.25)
+    conditions = [
+        (df['combined_indicator'] > upper_threshold),
+        (df['combined_indicator'] < lower_threshold)
+    ]
+    choices = [1, -1]
+    df['filtered_indicator'] = pd.Series(pd.np.select(conditions, choices, default=0), index=df.index)
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Short-Term High-Low Range Momentum
+    df['short_term_hl_momentum'] = (df['high_low_range'] - df['high_low_range'].shift(1)).rolling(window=5).sum()
+    
+    # Calculate Long-Term High-Low Range Momentum
+    df['long_term_hl_momentum'] = (df['high_low_range'] - df['high_low_range'].shift(1)).rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum Oscillator
+    df['hl_momentum_oscillator'] = df['short_term_hl_momentum'] - df['long_term_hl_momentum']
+    
+    # Weight by Volume Surge
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    volume_conditions = [
+        (df['volume_ratio'] > 1.5),
+        (df['volume_ratio'] > 1) & (df['volume_ratio'] <= 1.5),
+        (df['volume_ratio'] <= 1)
+    ]
+    volume_choices = [1.5, 1.2, 1]
+    df['volume_weight'] = pd.Series(pd.np.select(volume_conditions, volume_choices, default=1), index=df.index)
+    
+    # Filter by Close Price Increase
+    df['close_price_increase'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['momentum_oscillator_value'] = df['close_price_increase'] * df['hl_momentum_oscillator']
+    
+    # Final Alpha Factor
+    df['final_factor'] = (df['filtered_indicator'] * df['momentum_oscillator_value'] * df['volume_weight'])
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

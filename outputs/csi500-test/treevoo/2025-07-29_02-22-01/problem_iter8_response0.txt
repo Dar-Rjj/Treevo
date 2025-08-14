@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Momentum Component
+    df['Momentum_Signal'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate Volatility
+    df['Log_Returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['Volatility'] = df['Log_Returns'].rolling(window=20).std()
+
+    # Enhance with Volume-Weighted Price (VWAP)
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['VWAP'] = df['VWAP'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Incorporate Volume Reversal Indicator
+    df['Volume_Rate_of_Change'] = df['volume'].pct_change()
+    df['Smoothed_Volume_RoC'] = df['Volume_Rate_of_Change'].rolling(window=5).mean()
+    df['Inverse_Smoothed_Volume_RoC'] = 1 / (1 + df['Smoothed_Volume_RoC'])
+
+    # Adjust Final Alpha Factor with VWAP and Smoothed Volume Rate of Change
+    df['Enhanced_Momentum_Volatility'] = (df['Momentum_Signal'] / df['Volatility']) + df['VWAP']
+    df['Adjusted_Alpha_Factor'] = df['Enhanced_Momentum_Volatility'] * df['Inverse_Smoothed_Volume_RoC']
+
+    # Calculate Intraday Price Range
+    df['Intraday_Price_Range'] = df['high'] - df['low']
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['close'] - df['open']
+
+    # Volume Weighted Adjusted Return
+    df['Volume_Weighted_Adjusted_Return'] = df['Intraday_Return'] * df['volume']
+
+    # Calculate Proportional Movement Index
+    df['Proportional_Movement_Index'] = (df['Intraday_Price_Range'] / df['close']) * df['Intraday_Return']
+
+    # Combine All Factors
+    df['Final_Alpha_Factor'] = (
+        df['Proportional_Movement_Index'] + 
+        (df['Volume_Weighted_Adjusted_Return'] * np.log(df['volume'])) +
+        df['Adjusted_Alpha_Factor']
+    )
+
+    return df['Final_Alpha_Factor'].dropna()
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute 5-Day Price Momentum
+    df['5D_Price_Momentum'] = df['Daily_Price_Change'].rolling(window=5).mean()
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Compute 10-Day Volume Surge
+    df['10D_Volume_Surge'] = df['Daily_Volume_Change'].rolling(window=10).mean()
+    
+    # Combine High-Low Range and Volume
+    df['High_Low_Volume_Combination'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Smooth Price Momentum
+    df['Smoothed_Price_Momentum'] = df['5D_Price_Momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Smooth Volume Surge
+    df['Smoothed_Volume_Surge'] = df['10D_Volume_Surge'].ewm(span=10, adjust=False).mean()
+    
+    # Combine Smoothed Components
+    df['Combined_Smoothed'] = df['Smoothed_Price_Momentum'] * df['Smoothed_Volume_Surge'] + df['High_Low_Volume_Combination']
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] - df['open']
+    
+    # Compute 21-Day Moving Sum of Positive Returns
+    df['Positive_Daily_Return'] = df['Daily_Return'].apply(lambda x: x if x > 0 else 0)
+    df['21D_Positive_Return_Sum'] = df['Positive_Daily_Return'].rolling(window=21).sum()
+    
+    # Volume Adjusted Momentum
+    df['21D_Cumulative_Volume'] = df['volume'].rolling(window=21).sum()
+    df['Volume_Adjusted_Momentum'] = (df['21D_Positive_Return_Sum'] * df['21D_Cumulative_Volume']) / 21
+    
+    # Calculate 1-Period Price Momentum
+    df['1P_Price_Momentum'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Average Volume over n periods
+    n = 21
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    
+    # Adjust by Volume Ratio
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume']
+    
+    # Final Combined Alpha Factor
+    df['Final_Alpha_Factor'] = df['Volume_Adjusted_Momentum'] + (df['Combined_Smoothed'] * df['Volume_Ratio'])
+    
+    return df['Final_Alpha_Factor']
+```

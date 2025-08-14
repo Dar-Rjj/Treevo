@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=10):
+    # Calculate Daily Log Returns
+    df['log_returns'] = df['close'].apply(np.log).diff()
+    
+    # Compute Weighted Average Log Return
+    df['weighted_log_return'] = (df['log_returns'].rolling(window=n).sum() * df['volume'].rolling(window=n).mean()) / df['volume'].rolling(window=n).sum()
+    
+    # Incorporate Short-Term Price Reversal
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_log_return_adjusted'] = df['weighted_log_return'] - df['high_low_range']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open'] = df['close'] - df['open']
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['intraday_features'] = df['open'] - df['intraday_midpoint'] - df['opening_gap']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Combine Factors
+    df['average_intraday_range'] = df['intraday_range'].rolling(window=n).mean()
+    df['combined_factor'] = df['average_intraday_range'] * (df['close_to_open'] + df['price_change'] - df['high_low_range'] + df['weighted_log_return'])
+    
+    # Enhance with Recent Volatility
+    df['absolute_price_change'] = (df['close'] - df['close'].shift(1)).abs()
+    df['average_absolute_price_change'] = df['absolute_price_change'].rolling(window=m).mean()
+    df['volatility_enhanced_factor'] = df['combined_factor'] * df['average_absolute_price_change']
+    
+    # Adjust by Volume Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1) * 2).astype(int)
+    df['scaled_factor'] = df['volatility_enhanced_factor'] / (df['volume_spike'] + 1)
+    df['scaled_factor'] = df['scaled_factor'].clip(lower=-5, upper=5)
+    
+    # Weight by Relative Volume
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['relative_volume'] = df['volume'] / df['average_volume']
+    df['final_factor'] = df['scaled_factor'] * df['relative_volume']
+    
+    return df['final_factor']
+```

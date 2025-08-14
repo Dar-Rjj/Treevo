@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between today's closing price and yesterday's closing price
+    df['momentum_1d'] = df['close'].diff()
+    
+    # Extend the momentum indicator by calculating the difference over a 5-day window
+    df['momentum_5d'] = df['close'] - df['close'].shift(5)
+    
+    # Introduce a conditional factor based on whether the 5-day momentum is increasing or decreasing
+    df['momentum_change'] = df['momentum_5d'].diff()
+    df['momentum_score'] = df['momentum_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Incorporate the volume into the momentum calculation
+    df['volume_weighted_momentum'] = (df['close'].diff() * df['volume']).rolling(window=5).sum()
+    
+    # Calculate the average true range (ATR) over the last 14 days
+    df['high_low'] = df['high'] - df['low']
+    df['high_close_prev'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close_prev'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['high_low', 'high_close_prev', 'low_close_prev']].max(axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Combine the ATR with the momentum indicator to create a volatility-adjusted momentum factor
+    df['volatility_adjusted_momentum'] = df['momentum_5d'] / df['atr_14']
+    
+    # Calculate the number of days in the past 5 days where the close price was higher than the open price (up days)
+    df['up_day'] = (df['close'] > df['open']).astype(int)
+    df['up_days_count_5d'] = df['up_day'].rolling(window=5).sum()
+    
+    # Combine the up days count with the momentum indicator to create a sentiment-adjusted momentum factor
+    df['sentiment_adjusted_momentum'] = df['momentum_5d'] * df['up_days_count_5d']
+    
+    # Final alpha factor
+    df['alpha_factor'] = (df['momentum_score'] + df['volume_weighted_momentum'] + 
+                          df['volatility_adjusted_momentum'] + df['sentiment_adjusted_momentum'])
+    
+    return df['alpha_factor']
+```

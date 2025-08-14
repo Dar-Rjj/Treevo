@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_mean_5d = df['volume'].rolling(window=5).mean().shift(1)
+    volume_adjustment = (df['volume'] / (volume_mean_5d + 1))
+    
+    # Combine Intraday Range and Volume Adjustment
+    combined_intraday = intraday_range * volume_adjustment
+    
+    # Smoothing
+    ema_5d = combined_intraday.ewm(span=5, adjust=False).mean()
+    
+    # Calculate EMA Cross Signal
+    ema_short = df['close'].ewm(span=5, adjust=False).mean()
+    ema_long = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    momentum = np.where(ema_short > ema_long, 1, -1)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    obv = pd.Series(obv, index=df.index)
+    
+    # Weight OBV by the Difference between Short and Long EMA
+    weight = np.abs(ema_short - ema_long)
+    weighted_obv = obv * weight
+    
+    # Multiply Smoothed Intraday Momentum by OBV Factor
+    smoothed_intraday_momentum = ema_5d * weighted_obv
+    
+    # Aggregate Short-Term Momentum
+    short_term_momentum = (combined_intraday + combined_intraday.rolling(window=5).mean()) / 2
+    
+    # Combine Intraday Range and Volume Adjustment with Short-Term Momentum
+    intraday_momentum = intraday_range * volume_adjustment * short_term_momentum
+    
+    # Calculate Intraday Momentum
+    high_low_return = (df['high'] - df['low']) / df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum_combined = (0.5 * high_low_return) + (0.5 * open_close_return)
+    
+    # Apply Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    shock_filter = ((volume_ratio > 1.5) & (amount_ratio > 1.5)).astype(int)
+    
+    # Final Alpha Factor
+    final_alpha_factor = (smoothed_intraday_momentum * weighted_obv * short_term_momentum) * (intraday_momentum_combined * shock_filter)
+    
+    return final_alpha_factor
+```

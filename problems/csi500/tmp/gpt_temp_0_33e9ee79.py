@@ -1,0 +1,35 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum with dynamic weights based on recent performance
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_momentum = 0.7 * short_term_momentum + 0.3 * long_term_momentum
+
+    # Dynamic volatility using a rolling window for the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Normalized volume to account for varying liquidity conditions
+    normalized_volume = (df['volume'] - df['volume'].mean()) / df['volume'].std()
+
+    # Market sentiment using a more sophisticated ratio of high and low prices
+    market_sentiment = (df['high'] - df['low']) / df['close']
+
+    # Cumulative trend factor using the cumulative sum of the sign of daily returns
+    cumulative_trend = np.sign(df['close'].pct_change()).cumsum()
+
+    # Sector-specific insight (assuming a column 'sector' exists in the DataFrame)
+    sector_mean_return = df.groupby('sector')['close'].pct_change().mean(level=0)
+    sector_factor = df['sector'].map(sector_mean_return)
+
+    # Combining the five factors into a single alpha factor
+    # Weights are adjusted based on their perceived importance
+    factor_values = (0.3 * adaptive_momentum 
+                     - 0.1 * dynamic_volatility 
+                     + 0.2 * normalized_volume 
+                     + 0.1 * market_sentiment 
+                     + 0.1 * cumulative_trend 
+                     + 0.2 * sector_factor)
+
+    return factor_values

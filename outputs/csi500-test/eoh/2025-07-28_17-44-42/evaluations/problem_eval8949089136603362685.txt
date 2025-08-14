@@ -1,0 +1,29 @@
+def heuristics_v2(df):
+    def calculate_ema(series, span):
+        return series.ewm(span=span, adjust=False).mean()
+    
+    def calculate_rsi(series, window=14):
+        delta = series.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    # Calculate short and long-term EMAs for close prices and volumes
+    df['short_EMA_close'] = calculate_ema(df['close'], span=5)
+    df['long_EMA_close'] = calculate_ema(df['close'], span=20)
+    df['short_EMA_volume'] = calculate_ema(df['volume'], span=5)
+    df['long_EMA_volume'] = calculate_ema(df['volume'], span=20)
+    
+    # Calculate RSI for close prices
+    df['rsi_close'] = calculate_rsi(df['close'])
+    
+    # Weights for the linear combination (example values)
+    weights = {'short_EMA_close': 0.3, 'long_EMA_close': -0.2, 'short_EMA_volume': 0.1, 'long_EMA_volume': -0.1, 'rsi_close': 0.5}
+    
+    # Generate the heuristics factor
+    heuristics_series = df.apply(lambda row: sum(row[col] * weights[col] for col in weights.keys()), axis=1)
+    
+    heuristics_matrix = heuristics_series.to_frame(name='heuristics_value')
+    
+    return heuristics_matrix

@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Open-Close Spread
+    open_close_spread = df['open'] - df['close']
+    
+    # Calculate Raw Momentum (10-day lookback)
+    lookback_period = 10
+    raw_momentum = df['close'] - df['close'].rolling(window=lookback_period).mean()
+    
+    # Adjust Momentum by Spread
+    adjusted_momentum = raw_momentum * np.abs(open_close_spread)
+    
+    # Apply Volume Weighting
+    volume_weighted_momentum = adjusted_momentum * df['volume']
+    
+    # Adjust for Amount
+    amount_adjusted_momentum = volume_weighted_momentum * np.sqrt(df['amount'])
+    
+    # Incorporate Enhanced Price Trend Sensitivity
+    trend_direction = np.where(df['close'] > df['open'], 1, -1)
+    high_low_range = df['high'] - df['low']
+    modified_momentum = amount_adjusted_momentum * (1 + trend_direction * (high_low_range / df['open']))
+    
+    # Incorporate Opening Price Volatility (5-day lookback)
+    opening_price_volatility = df['open'].rolling(window=5).std()
+    final_momentum = modified_momentum * (1 + trend_direction * (opening_price_volatility / df['open']))
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['low']
+    intraday_reversal = 1 / intraday_return
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    price_change = df['close'] - df['close'].shift(1)
+    five_day_momentum = price_change.rolling(window=5).sum()
+    combined_signal = five_day_momentum * np.abs(open_close_spread) / (df['volume'] + np.sqrt(df['amount']))
+    
+    # Enhance Combined Signal with Smoothing (EMA with span of 5 days)
+    smoothed_signal = combined_signal.ewm(span=5).mean()
+    
+    # Integrate Intraday Reversal into Final Factor
+    close_to_open_diff = df['close'] - df['open']
+    integrated_intraday_reversal = intraday_reversal * close_to_open_diff
+    
+    # Introduce a New Volatility Component
+    daily_volatility = np.sqrt((df['high'] - df['low'])**2 / 4 + (df['close'] - df['open'])**2 / 4)
+    volatility_integrated_signal = integrated_intraday_reversal * daily_volatility
+    
+    # Enhance with Trend Confirmation (Long-Term Momentum)
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    final_factor = final_momentum * smoothed_signal * integrated_intraday_reversal * daily_volatility * long_term_momentum
+    
+    return final_factor
+```

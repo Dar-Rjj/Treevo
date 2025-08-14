@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # EMA Crossover
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['EMA_Crossover'] = df['EMA_12'] - df['EMA_26']
+
+    # SMA Difference
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_Diff'] = df['close'] - df['SMA_200']
+
+    # Rate of Change (ROC)
+    df['ROC_10'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['ROC_50'] = (df['close'] - df['close'].shift(50)) / df['close'].shift(50)
+    df['ROC_100'] = (df['close'] - df['close'].shift(100)) / df['close'].shift(100)
+
+    # On-Balance-Volume (OBV)
+    df['OBV'] = 0
+    c1 = (df['close'] > df['close'].shift(1))
+    c2 = (df['close'] < df['close'].shift(1))
+    c3 = (df['close'] == df['close'].shift(1))
+    
+    df.loc[c1, 'OBV'] = df['OBV'].shift(1) + df['volume']
+    df.loc[c2, 'OBV'] = df['OBV'].shift(1) - df['volume']
+    df.loc[c3, 'OBV'] = df['OBV'].shift(1)
+
+    # Volume-Weighted Average Price (VWAP)
+    df['TypicalPrice'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Cum_Volume'] = df['volume'].cumsum()
+    df['Cum_Volume_Times_Price'] = (df['volume'] * df['TypicalPrice']).cumsum()
+    df['VWAP'] = df['Cum_Volume_Times_Price'] / df['Cum_Volume']
+    df['Close_VWAP'] = df['close'] - df['VWAP']
+
+    # True Range (TR)
+    df['TR'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], 
+                                         abs(x[0] - df['close'].shift(1)), 
+                                         abs(x[1] - df['close'].shift(1))), axis=1)
+    
+    # ATR
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Stochastic Oscillator
+    high_14 = df['high'].rolling(window=14).max()
+    low_14 = df['low'].rolling(window=14).min()
+    df['K'] = ((df['close'] - low_14) / (high_14 - low_14)) * 100
+
+    # Combine all factors into a single factor
+    df['Alpha_Factor'] = (
+        df['EMA_Crossover'] +
+        df['SMA_Diff'] +
+        df['ROC_10'] +
+        df['ROC_50'] +
+        df['ROC_100'] +
+        df['OBV'] +
+        df['Close_VWAP'] +
+        df['ATR_14'] +
+        df['RSI'] +
+        df['K']
+    )
+
+    return df['Alpha_Factor']
+```

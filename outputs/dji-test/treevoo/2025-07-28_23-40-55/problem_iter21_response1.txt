@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term EMA
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate EMA Difference
+    ema_diff = short_ema - long_ema
+    
+    # Calculate Volume-Weighted EMA Difference
+    avg_vol_12d = df['volume'].rolling(window=12).mean()
+    vol_weighted_ema_diff = ema_diff * avg_vol_12d
+    
+    # Calculate Momentum Signal
+    momentum_signal = vol_weighted_ema_diff * df['volume']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    open_close_momentum = df['close'] - df['open']
+    
+    # Integrate Intraday and Open-to-Close Momentum
+    integrated_momentum = high_low_range + open_close_momentum
+    
+    # Apply Volume Filter
+    volume_rolling_mean = df['volume'].rolling(window=30).mean()
+    volume_threshold = volume_rolling_mean * 1.5  # Example threshold
+    high_volume_days = df['volume'] > volume_threshold
+    filtered_alpha_factor = integrated_momentum * high_volume_days
+    
+    # Adjust Momentum by Volatility
+    volatility = df['high'] - df['low']
+    volatility_adjusted_momentum = filtered_alpha_factor * volatility
+    
+    # Calculate Price Velocity
+    price_velocity = df['close'].diff()
+    
+    # Calculate Price Acceleration
+    price_acceleration = price_velocity.diff()
+    
+    # Adjust Price Acceleration by Volume
+    adjusted_price_acceleration = price_acceleration * df['volume']
+    
+    # Calculate Short-Term and Long-Term Momentum
+    short_term_momentum = df['close'] - df['close'].shift(7)
+    long_term_momentum = df['close'] - df['close'].shift(30)
+    
+    # Calculate Daily Volume Change
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Adjust Momentum by Volume Shock
+    momentum_by_volume_shock = (short_term_momentum - long_term_momentum) * daily_volume_change
+    
+    # Calculate Price-Velocity Interaction
+    price_velocity_interaction = price_velocity * price_acceleration
+    
+    # Adjust Price-Velocity Interaction by Volume
+    adjusted_price_velocity_interaction = price_velocity_interaction * df['volume']
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = (
+        momentum_signal +
+        adjusted_price_acceleration +
+        volatility_adjusted_momentum +
+        adjusted_price_velocity_interaction
+    )
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Momentum Score
+    lookback_days = 20
+    df['close_change'] = df['close'].diff(lookback_days)
+    df['momentum_score'] = df['close_change'].rolling(window=lookback_days).sum()
+
+    # Adjust for Volume Volatility
+    volume_period = 20
+    df['volume_ma'] = df['volume'].rolling(window=volume_period).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma']
+    df['volume_adjustment_factor'] = (df['volume_deviation'].abs() + 1e-6)  # Small constant to avoid division by zero
+    df['adjusted_momentum_score'] = df['momentum_score'] / df['volume_adjustment_factor']
+
+    # Calculate Daily Price Movement Range
+    df['daily_range'] = df['high'] - df['low']
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation'] = df['close'] - df['vwap']
+
+    # Identify Trend Reversal Potential
+    df['prev_return_deviation'] = df['return_deviation'].shift(1)
+    df['volume_14ma'] = df['volume'].rolling(window=14).mean()
+    df['trend_reversal'] = (df['return_deviation'] > df['prev_return_deviation']) & (df['volume'] > df['volume_14ma'])
+
+    # Final Score Calculation
+    df['final_score'] = df['adjusted_momentum_score']
+    df.loc[df['trend_reversal'], 'final_score'] = df['adjusted_momentum_score'] * 1.5  # Assign higher score for stronger indication
+
+    return df['final_score'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [10, 11, 12, 13, 14],
+#     'high': [11, 12, 13, 14, 15],
+#     'low': [9, 10, 11, 12, 13],
+#     'close': [10.5, 11.5, 12.5, 13.5, 14.5],
+#     'amount': [100, 110, 120, 130, 140],
+#     'volume': [1000, 1100, 1200, 1300, 1400]
+# })
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum and Gaps
+    df['1_day_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_day_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['20_day_return'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    df['price_gap'] = df['high'] - df['low']
+    df['average_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['20_day_return']) / 3
+
+    # Filter by Relative Volume
+    n_days = 20
+    df['avg_volume'] = df['volume'].rolling(window=n_days).mean()
+    df['filtered_days'] = df['volume'] > df['avg_volume']
+
+    # Calculate Adjusted High-Low Cumulative Return and Weighted Price Gaps
+    df['daily_price_range'] = df['high'] - df['low']
+    df['sum_filtered_price_ranges'] = df[df['filtered_days']]['daily_price_range'].transform('sum')
+    df['volume_growth'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['weighted_price_gaps'] = df['price_gap'] * df['volume_growth']
+    df['sum_weighted_price_gaps'] = df[df['filtered_days']]['weighted_price_gaps'].transform('sum')
+
+    # Calculate High-to-Low Range and Price Change
+    df['high_low_range'] = df['high'] - df['low']
+    df['price_change'] = df['close'] - df['open'].shift(1)
+
+    # Combine High-to-Low Range with Price Change
+    df['combined_value'] = (df['high_low_range'] * 100) + df['price_change']
+
+    # Smoothing and Initial Momentum Calculation
+    df['sma_combined'] = df['combined_value'].rolling(window=5).mean()
+    df['smoothed_momentum'] = df['sma_combined'] - df['sma_combined'].shift(5)
+
+    # Calculate Daily Log Return
+    df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x) if x > 0 else 0)
+
+    # Average the Momentum
+    df['average_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['20_day_return']) / 3
+
+    # Adjust for Volume Changes
+    df['daily_vol_percentage_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['final_volume_adjustment'] = df['average_momentum'] * (1 + df['daily_vol_percentage_change'])
+
+    # Intermediate Factor Combination
+    df['intermediate_factor'] = df['smoothed_momentum'] + df['final_volume_adjustment']
+
+    # Calculate Weighted Price Momentum
+    df['10_day_ma_close'] = df['close'].rolling(window=10).mean()
+    df['weighted_price_momentum'] = (df['close'] - df['10_day_ma_close']) * df['log_return']
+
+    # Generate Alpha Factor
+    df['alpha_factor'] = (df['sum_filtered_price_ranges'] + df['sum_weighted_price_gaps']) * df['average_momentum']
+    df['final_alpha_factor'] = df['intermediate_factor'] + df['weighted_price_momentum']
+
+    return df['final_alpha_factor']
+```

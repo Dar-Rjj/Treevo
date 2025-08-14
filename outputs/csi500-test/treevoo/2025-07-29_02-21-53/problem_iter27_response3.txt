@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5, M=14, L=20, P=10):
+    # Compute daily return (Close - Open) / Open
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Sum of returns over a lookback window of N days
+    df['N_day_return_sum'] = df['daily_return'].rolling(window=N).sum()
+    
+    # True range calculation
+    df['true_range'] = df[['high', 'close']].shift(1).max(axis=1) - df[['low', 'close']].shift(1).min(axis=1)
+    
+    # Average true range (ATR) over M days
+    df['atr_M'] = df['true_range'].rolling(window=M).mean()
+    
+    # Relative ATR (ATR over M days / ATR over 2M days)
+    df['atr_2M'] = df['true_range'].rolling(window=2*M).mean()
+    df['relative_atr'] = df['atr_M'] / df['atr_2M']
+    
+    # Directional ATR
+    df['directional_atr'] = df['atr_M'] * df['daily_return'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Volume intensity (today's volume / average volume of the last L days)
+    df['volume_intensity'] = df['volume'] / df['volume'].rolling(window=L).mean()
+    
+    # Money flow (Volume * (2*Close - High - Low)) over P days
+    df['money_flow'] = df['volume'] * (2 * df['close'] - df['high'] - df['low'])
+    df['P_day_money_flow_sum'] = df['money_flow'].rolling(window=P).sum()
+    
+    # Enhanced money flow factor
+    df['enhanced_money_flow'] = df['P_day_money_flow_sum'] * df['daily_return'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Composite factor
+    df['composite_factor'] = (
+        0.4 * df['N_day_return_sum'] + 
+        0.3 * df['relative_atr'] + 
+        0.3 * df['volume_intensity']
+    )
+    
+    return df['composite_factor']
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', parse_dates=['date'], index_col='date')
+# composite_factor = heuristics_v2(df)
+```

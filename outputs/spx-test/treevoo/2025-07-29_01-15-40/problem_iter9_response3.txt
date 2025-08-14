@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Log Return
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # EWMA of Log Return with 21-day Lookback Period
+    df['ewma_log_return'] = df['log_return'].ewm(span=21, adjust=False).mean()
+    
+    # Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Combined Momentum
+    df['combined_momentum'] = df['ewma_log_return'] * df['volume_change']
+    
+    # Upward and Downward Movements
+    df['upward_movement'] = df['high'] - df['close'].shift(1)
+    df['downward_movement'] = df['low'] - df['close'].shift(1)
+    
+    # Net Directional Movement
+    df['net_directional_movement'] = np.where(df['upward_movement'] > df['downward_movement'], 1,
+                                              np.where(df['upward_movement'] < df['downward_movement'], -1, 0))
+    
+    # Adjusted Cumulative Directional Movement
+    df['adjusted_cumulative_directional_movement'] = (df['net_directional_movement'].rolling(window=21).sum() * 
+                                                      df['volume'])
+    
+    # Trend Strength Indicator
+    df['daily_range'] = df['high'] - df['low']
+    df['average_daily_range'] = df['daily_range'].rolling(window=21).mean()
+    df['trend_strength_indicator'] = np.where(df['daily_range'] > df['average_daily_range'], 1, 0)
+    
+    # Integrated Factor
+    df['integrated_factor'] = (df['combined_momentum'] + df['adjusted_cumulative_directional_movement']) * \
+                              df['trend_strength_indicator']
+    
+    return df['integrated_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

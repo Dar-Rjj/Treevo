@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Calculate Exponential Moving Averages (EMA) for close prices with different periods
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Calculate multi-period trends using EMAs
+    df['trend_5_20'] = df['ema_5'] - df['ema_20']
+
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor_positive_negative_ratio = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Factor: VWAP compared to the 20-day EMA
+    factor_vwap_ema = df['vwap'] - df['ema_20']
+
+    # Calculate volatility
+    df['volatility'] = df['close'].rolling(window=20).std()
+
+    # Factor: Momentum adjusted by volatility
+    momentum_adjusted = df['trend_5_20'] / (df['volatility'] + 1e-7)
+
+    # Market sentiment: simple measure of high minus low
+    df['market_sentiment'] = df['high'] - df['low']
+
+    # Combine factors
+    factor = (factor_positive_negative_ratio + factor_vwap_ema + momentum_adjusted + df['market_sentiment']) / 4
+
+    return factor
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def heuristics_v2(df):
+    # Momentum factor
+    short_term_return = df['close'].pct_change(5)
+    medium_term_return = df['close'].pct_change(20)
+    momentum_factor = 0.7 * short_term_return + 0.3 * medium_term_return
+
+    # Volume-based alpha factor
+    N = 10
+    average_volume = df['volume'].rolling(window=N).mean()
+    volume_ratio = df['volume'] / average_volume
+    volume_change = df['volume'].pct_change()
+    
+    M = 5
+    X = np.arange(M).reshape(-1, 1)  # days
+    volume_trend = df['volume'].rolling(window=M).apply(lambda x: 
+        LinearRegression().fit(X, x).coef_[0], raw=False)
+
+    volume_factor = 0.5 * volume_ratio + 0.5 * volume_trend
+
+    # Volatility-based alpha factor
+    daily_range = df['high'] - df['low']
+    P = 20
+    close_std_dev = df['close'].rolling(window=P).std()
+    volatility_factor = np.sqrt(daily_range * close_std_dev)
+
+    # Transaction amount (dollar volume) alpha factor
+    transaction_amount = df['close'] * df['volume']
+    Q = 10
+    R = 5
+    amount_cv = transaction_amount.rolling(window=Q).std() / transaction_amount.rolling(window=Q).mean()
+    amount_trend = transaction_amount.rolling(window=R).apply(lambda x:
+        LinearRegression().fit(X, x).coef_[0], raw=False)
+    transaction_amount_factor = 0.5 * amount_cv + 0.5 * amount_trend
+
+    # Gap opening factor
+    S = 10
+    gap_opening = df['open'] - df['close'].shift(1)
+    positive_gaps = gap_opening[gap_opening > 0].count() / S
+    negative_gaps = gap_opening[gap_opening < 0].count() / S
+    gap_intensity = gap_opening.abs().rolling(window=S).sum() / S
+    gap_factor = 0.5 * (positive_gaps - negative_gaps) + 0.5 * gap_intensity
+
+    # Composite factor
+    composite_factor = (momentum_factor + volume_factor + 
+                        volatility_factor + transaction_amount_factor +
+                        gap_factor) / 5
+    
+    return composite_factor
+```

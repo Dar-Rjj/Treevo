@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['daily_price_range'] = df['high'] - df['low']
+    
+    # Calculate Average Price
+    df['average_price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    df['volume_adjusted_range'] = (df['daily_price_range'] / df['average_price']).replace([np.inf, -np.inf], np.nan).fillna(0) * df['volume']
+    
+    # Calculate Short-Term and Long-Term Rolling Averages
+    df['short_term_rolling_avg'] = df['volume_adjusted_range'].rolling(window=10).mean()
+    df['long_term_rolling_avg'] = df['volume_adjusted_range'].rolling(window=20).mean()
+    
+    # Calculate High-Low Range Momentum
+    n = 5
+    alpha = 2 / (n + 1)
+    df['ema_high_low'] = df['daily_price_range'].ewm(alpha=alpha, adjust=False).mean()
+    df['daily_change_ema'] = df['ema_high_low'].diff().fillna(0)
+    
+    # Calculate Volume Shock
+    df['volume_percentage_change'] = df['volume'].pct_change().fillna(0)
+    volume_shock_threshold = 0.5
+    df['volume_shock_flag'] = (df['volume_percentage_change'].abs() > volume_shock_threshold).astype(int)
+    
+    # Combine Indicators
+    df['combined_indicator'] = df['daily_change_ema'] * df['volume_shock_flag'].diff().fillna(0)
+    df['difference_rolling_avg'] = df['short_term_rolling_avg'] - df['long_term_rolling_avg']
+    df['alpha_factor'] = df['combined_indicator'] - df['difference_rolling_avg']
+    
+    # Calculate Enhanced Intraday Spread
+    df['enhanced_intraday_spread'] = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Adjust by Short-Term Momentum and Volume Trend
+    df['short_term_price_momentum'] = df['close'].ewm(span=5, adjust=False).mean() - df['close'].ewm(span=10, adjust=False).mean()
+    df['volume_momentum'] = df['volume'].ewm(span=5, adjust=False).mean() - df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Integrate Indicators
+    df['integrated_alpha_factor'] = (df['alpha_factor'] * (df['enhanced_intraday_spread'] * df['volume'])) / (df['short_term_price_momentum'] * df['volume_momentum'])
+    
+    # Final Alpha Factor
+    final_alpha_factor = df['integrated_alpha_factor'].fillna(0)
+    
+    return final_alpha_factor
+```

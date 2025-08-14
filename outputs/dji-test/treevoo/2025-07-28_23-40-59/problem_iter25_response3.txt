@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    df['IRWAP'] = (df['close'] * df['volume']) / df['volume'].sum()
+    df['IRWAP'] = df['IRWAP'].rolling(window=len(df)).sum()  # Sum of (Close price * Volume) / Total Volume
+    
+    # Evaluate IRWAP Difference
+    df['IRWAP_Diff'] = df['close'] - df['IRWAP']
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['Daily_Return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['Adjusted_Return'] = df['Daily_Return'] / df['Intraday_Spread']
+    
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Return'].rolling(window=5).mean()
+    
+    # Combine Short and Long-Term Momentum
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Short_Term_Momentum'] = df['Log_Return'].rolling(window=7).sum()
+    df['Long_Term_Momentum'] = df['Log_Return'].rolling(window=25).sum()
+    df['Momentum'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    
+    # Introduce Price Volatility Component
+    df['High_Low_Volatility'] = (df['high'] - df['low']).rolling(window=10).std()
+    df['Adjusted_Momentum'] = df['Momentum'] * (1 / df['High_Low_Volatility'])
+    
+    # Confirm with Volume Trends
+    df['Avg_Volume_20D'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Trend'] = np.where(df['volume'] > df['Avg_Volume_20D'], 1, -1)
+    
+    # Smooth Intraday Strength
+    df['Intraday_Strength'] = (df['close'] - df['open']) / df['Intraday_Spread']
+    df['Smoothed_Intraday_Strength'] = df['Intraday_Strength'].rolling(window=5).mean()
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = (
+        df['IRWAP_Diff'] +
+        df['Smoothed_Adjusted_Return'] +
+        df['Adjusted_Momentum'] +
+        df['Smoothed_Intraday_Strength'] +
+        df['Volume_Trend']
+    )
+    
+    return df['Final_Factor']
+```

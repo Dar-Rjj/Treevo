@@ -1,0 +1,52 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    lookback_sma = 20
+    df['SMA'] = df['close'].rolling(window=lookback_sma).mean()
+    
+    # Compute Volume-Adjusted Refined Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['True_Range'] = df[['high', 'low', df['close'].shift(1)]].max(axis=1) - df[['high', 'low', df['close'].shift(1)]].min(axis=1)
+    df['Volume_Weighted_TR'] = df['volume'] * df['High_Low_Diff']
+    lookback_volatility = 10
+    df['Vol_Adjusted_Volatility'] = df['Volume_Weighted_TR'].rolling(window=lookback_volatility).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=lookback_sma).mean()
+    
+    # Incorporate Robust Price Change Metrics
+    lookback_change = 5
+    df['Percentage_Change'] = df['close'].pct_change(periods=lookback_change)
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Open_Close_Diff'] = df['open'] - df['close']
+    
+    # Consider Market Trend Alignment
+    lookback_long_sma = 50
+    df['Long_Term_SMA'] = df['close'].rolling(window=lookback_long_sma).mean()
+    df['Trend'] = (df['SMA'] > df['Long_Term_SMA']).astype(int)
+    df['Trend_Strength'] = (df['SMA'] - df['Long_Term_SMA']) / (df['SMA'] - df['Long_Term_SMA']).abs().rolling(window=lookback_long_sma).apply(lambda x: max(x) - min(x), raw=True)
+    
+    # Define Weights for Each Component
+    weights = {
+        'Price_Momentum': 0.4,
+        'Vol_Adjusted_Volatility': 0.3,
+        'Percentage_Change': 0.1,
+        'High_Low_Range': 0.1,
+        'Open_Close_Diff': 0.1
+    }
+    
+    # Adjust Weights Based on Market Trend and Trend Strength
+    for component in weights:
+        df[f'Weighted_{component}'] = df[component] * weights[component] * (1 + df['Trend_Strength'])
+    
+    # Combine Components into the Final Alpha Factor
+    df['Alpha_Factor'] = df['Weighted_Price_Momentum'] + df['Weighted_Vol_Adjusted_Volatility'] + df['Weighted_Percentage_Change'] + df['Weighted_High_Low_Range'] + df['Weighted_Open_Close_Diff']
+    
+    return df['Alpha_Factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

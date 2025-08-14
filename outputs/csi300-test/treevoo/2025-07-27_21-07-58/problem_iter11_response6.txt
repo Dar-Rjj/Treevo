@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Momentum
+    df['daily_return'] = df['close'].pct_change()
+    df['5_day_sum_returns'] = df['daily_return'].rolling(window=5).sum()
+    df['5_day_sma_close'] = df['close'].rolling(window=5).mean()
+    df['short_momentum'] = df['5_day_sum_returns'] - (df['close'] - df['5_day_sma_close'])
+
+    # Calculate Long-Term Momentum
+    df['20_day_sum_returns'] = df['daily_return'].rolling(window=20).sum()
+    df['20_day_sma_close'] = df['close'].rolling(window=20).mean()
+    df['long_momentum'] = df['20_day_sum_returns'] - (df['close'] - df['20_day_sma_close'])
+
+    # Calculate Average True Range
+    df['true_range'] = df[['high', 'low', 'close']].join(df[['high', 'low', 'close']].shift(1), rsuffix='_prev').apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close_prev']), abs(x['low'] - x['close_prev'])), axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+
+    # Calculate High-Low Range and Change in High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['change_high_low_range'] = df['high_low_range'].diff()
+
+    # Calculate Price Momentum Component
+    df['price_momentum'] = df['close'].pct_change()
+
+    # Calculate Volume Surge Component
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Combine High-Low Range and Volume
+    df['high_low_volume'] = (df['change_high_low_range'] * df['volume']) / df['close']
+
+    # Adjust by Volume
+    n = 10  # number of periods to average
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+
+    # Adjust by Amount
+    m = 10  # number of periods to average
+    df['avg_amount'] = df['amount'].rolling(window=m).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount']
+
+    # Combine Momentum, Volatility, and High-Low Range Components
+    df['momentum_component'] = df['short_momentum'] + df['long_momentum']
+    df['volatility_adjusted_momentum'] = df['momentum_component'] * (1 / df['atr_14'])
+    df['combined_factor'] = df['volatility_adjusted_momentum'] + df['high_low_volume'] * df['volume_ratio'] * df['price_momentum']
+
+    # Final Alpha Factor
+    df['final_alpha'] = df['combined_factor'] * df['amount_ratio']
+
+    return df['final_alpha']
+```

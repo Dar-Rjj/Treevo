@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_Typical_Price'] = df['Typical_Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    df['VWAP'] = df['Volume_Weighted_Typical_Price'].cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = df.apply(lambda row: 1 if row['VWAP'] > row['close'] else -1, axis=1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Return'] = (df['Return'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Final_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+
+    # Incorporate Relative Volume
+    df['Average_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Relative_Volume'] = df['volume'] / df['Average_Volume']
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Relative_Volume']
+
+    # Apply Dynamic Thresholds
+    intraday_threshold = 0.05
+    overnight_threshold = 0.05
+    df['Intraday_Return'] = df['Intraday_Return'].clip(lower=-intraday_threshold, upper=intraday_threshold)
+    df['Overnight_Return'] = df['Overnight_Return'].clip(lower=-overnight_threshold, upper=overnight_threshold)
+
+    return df['Final_Alpha_Factor']
+```

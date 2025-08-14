@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 50-day and 200-day SMA of closing prices
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    # Alpha factor: (SMA_50 - SMA_200) / SMA_200
+    alpha_factor_sma = (sma_50 - sma_200) / sma_200
+    
+    # Calculate RSI based on the last 14 days of closing prices
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Alpha factor: RSI
+    alpha_factor_rsi = rsi
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Alpha factor: OBV
+    alpha_factor_obv = obv
+    
+    # Calculate Chaikin Money Flow (CMF) over a 20-day period
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    cmf = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Alpha factor: CMF
+    alpha_factor_cmf = cmf
+    
+    # Calculate Average True Range (ATR) over a 14-day period
+    tr = pd.DataFrame(index=df.index, columns=['tr'])
+    tr['tr'] = np.maximum(
+        (df['high'] - df['low']),
+        np.maximum(
+            abs(df['high'] - df['close'].shift(1)),
+            abs(df['low'] - df['close'].shift(1))
+        )
+    )
+    atr = tr['tr'].rolling(window=14).mean()
+    
+    # Alpha factor: ATR
+    alpha_factor_atr = atr
+    
+    # Calculate Bollinger Bands
+    bb_mid = df['close'].rolling(window=20).mean()
+    bb_std = df['close'].rolling(window=20).std()
+    upper_bb = bb_mid + 2 * bb_std
+    lower_bb = bb_mid - 2 * bb_std
+    
+    # Alpha factor: (Close - Lower_Bollinger_Band) / (Upper_Bollinger_Band - Lower_Bollinger_Band)
+    alpha_factor_bb = (df['close'] - lower_bb) / (upper_bb - lower_bb)
+    
+    # Identify bullish and bearish engulfing patterns
+    is_bullish_engulfing = (df['open'] > df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+    is_bearish_engulfing = (df['open'] < df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))
+    
+    # Alpha factor: Indicator of whether an engulfing pattern is present
+    alpha_factor_engulfing = np.where(is_bullish_engulfing | is_bearish_engulfing, 1, 0)
+    
+    # Identify doji patterns
+    is_doji = (df['open'] == df['close'])
+    
+    # Alpha factor: Indicator of whether a doji pattern is present
+    alpha_factor_doji = np.where(is_doji, 1, 0)
+    
+    # Combine the momentum (SMA crossover) and volume (OBV) factors
+    alpha_factor_momentum_volume = (sma_50 - sma_200) / sma_200 * obv
+    
+    # Combine the volatility (ATR) and price pattern (engulfing patterns) factors
+    alpha_factor_volatility_pattern = atr * np.where(is_bullish_engulfing | is_bearish_engulfing, 1, 0)
+    
+    # Final combined alpha factor
+    alpha_factor =

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] / df['open'] - 1
+    
+    # Calculate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Calculate Mean and Standard Deviation of Recent High-Low Differences
+    window_size = 10  # You can adjust the window size
+    df['mean_high_low_diff'] = df['high_low_diff'].rolling(window=window_size).mean()
+    df['std_high_low_diff'] = df['high_low_diff'].rolling(window=window_size).std()
+    
+    # Adjust Intraday Return by Intraday Volatility
+    df['intraday_volatility'] = (df['high_low_diff'] - df['mean_high_low_diff']) / df['std_high_low_diff']
+    df['adjusted_intraday_return'] = df['intraday_return'] / (df['intraday_volatility'] + 1e-6)  # Avoid division by zero
+    
+    # Determine Range-to-Range Ratio
+    df['prev_high_low_range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['range_to_range_ratio'] = (df['high_low_diff'] / df['prev_high_low_range']).fillna(0)
+    
+    # Integrate Volume Sensitivity
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['adjusted_range_to_range_ratio'] = df['range_to_range_ratio'] * df['volume_ratio']
+    
+    # Detect Volume Shock
+    volume_shock_threshold = 2  # You can adjust this threshold
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_shock'] = (df['volume_change'] > volume_shock_threshold * df['volume'].shift(1)).astype(int)
+    
+    # Combine Adjusted Intraday Return and Adjusted Range-to-Range Ratio
+    df['combined_momentum'] = df['adjusted_intraday_return'] * df['adjusted_range_to_range_ratio']
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['combined_momentum'] * df['volume_shock']
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# factor = heuristics_v2(df)
+```

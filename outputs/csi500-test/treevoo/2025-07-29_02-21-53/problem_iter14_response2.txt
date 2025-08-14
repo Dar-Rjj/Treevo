@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    high_low_range = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+
+    # Aggregate Price Movements
+    sum_high_low_range = high_low_range.rolling(window=20).sum()
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+
+    # Smooth High-Low Range
+    smoothed_high_low_range = high_low_range.ewm(span=20).mean()
+
+    # Calculate Long-Term High-Low Range
+    long_term_high_low_range = (df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min())
+
+    # Compute Momentum of High-Low Ranges
+    hl_momentum = long_term_high_low_range - smoothed_high_low_range
+
+    # Calculate True Range
+    prev_close = df['close'].shift(1)
+    true_range = np.maximum(np.maximum(df['high'] - df['low'], np.abs(df['high'] - prev_close)), np.abs(prev_close - df['low']))
+
+    # Calculate Rolling Average True Range (ATR)
+    atr = true_range.rolling(window=14).mean()
+
+    # Adjust Price Momentum by ATR
+    adjusted_momentum = (sum_high_low_range + sum_close_open_change) / atr
+
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = (df['volume'] > 1.5 * avg_volume).astype(int)
+
+    # Detect Volume Spike
+    vol_5d_avg = df['volume'].rolling(window=5).mean()
+    volume_spike = (df['volume'] > 2 * vol_5d_avg).astype(int)
+
+    # Adjust Momentum Based on Volume
+    adjusted_momentum = adjusted_momentum * (1 - 0.2 * volume_spike)
+
+    # Integrate Combined Factors
+    interim_alpha_factor = adjusted_momentum * high_volume_days
+
+    # Combine ATR and Price Momentum
+    interpretable_factor = interim_alpha_factor + hl_momentum
+
+    # Incorporate Recent Price Trend
+    recent_price_trend = df['close'].rolling(window=10).mean().pct_change()
+    trend_multiplier = np.where(recent_price_trend > 0, 1.2, 0.8)
+    final_alpha_factor = interpretable_factor * trend_multiplier
+
+    return final_alpha_factor
+```

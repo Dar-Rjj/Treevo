@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate price-based indicators
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Close_Open_Ratio'] = df['close'] / df['open']
+    df['Close_Prev_Close_Ratio'] = df['close'] / df['close'].shift(1)
+    
+    # Calculate volume-based indicators
+    df['Volume_Change'] = df['volume'].diff()
+    df['Volume_Weighted_Close'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Combine price and volume indicators
+    df['PVT'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    df['PVT'] = df['PVT'].cumsum()
+    
+    df['OBV'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'OBV'] = df['volume']
+    df.loc[df['close'] < df['close'].shift(1), 'OBV'] = -df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Generate pattern-based indicators
+    df['Three_Day_Price_Pattern'] = (df['close'] - df['open']) + (df['close'].shift(1) - df['open'].shift(1)) + (df['close'].shift(2) - df['open'].shift(2))
+    df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+    df['Price_Volume_Confirmation'] = ((df['close'] > df['close'].shift(1)) & (df['volume'] > df['volume'].shift(1))).astype(int)
+    
+    # Additional price and volume features
+    df['True_Range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_money_flow_sum = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_sum = negative_money_flow.rolling(window=14).sum()
+    money_flow_ratio = positive_money_flow_sum / negative_money_flow_sum
+    df['MFI_14'] = 100 - 100 / (1 + money_flow_ratio)
+    
+    cmf_numerator = (typical_price - df['low']) - (df['high'] - typical_price)
+    cmf_denominator = df['high'] - df['low']
+    cmf = (cmf_numerator / cmf_denominator) * df['volume']
+    df['CMF_20'] = cmf.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Combine all the indicators into a single alpha factor
+    alpha_factor = (
+        df['SMA_20'] + 
+        df['EMA_10'] + 
+        df['Daily_Price_Change'] + 
+        df['High_Low_Spread'] + 
+        df['Close_Open_Ratio'] + 
+        df['Close_Prev_Close_Ratio'] + 
+        df['Volume_Change'] + 
+        df['Volume_Weighted_Close'] + 
+        df['PVT'] + 
+        df['OBV'] + 
+        df['Three_Day_Price_Pattern'] + 
+        df['Inside_Bar'] + 
+        df['Price_Volume_Confirmation'] + 
+        df['ATR_14'] + 
+        df['MFI_14'] + 
+        df['CMF_20']
+    )
+    
+    return alpha_factor
+```

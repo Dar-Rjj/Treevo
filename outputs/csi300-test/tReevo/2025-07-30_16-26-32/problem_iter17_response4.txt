@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['smoothed_open_to_close_return'] = df['open_to_close_return'].ewm(span=5).mean()
+    
+    # Volume-Weighted Open-to-Close Return
+    df['volume_weighted_open_to_close_return'] = df['open_to_close_return'] * df['volume']
+    df['smoothed_volume_weighted_open_to_close_return'] = df['volume_weighted_open_to_close_return'].ewm(span=5).mean()
+    
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'].diff()
+    df['price_volume_trend'] = df['price_change'] * df['volume']
+    df['aggregate_price_volume_trend'] = df['price_volume_trend'].rolling(window=30).sum()
+    
+    # Volume-Adjusted Intraday Movement
+    df['intraday_movement'] = df['close'] - df['open']
+    df['average_20_day_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_intraday_movement'] = df['intraday_movement'] / df['average_20_day_volume']
+    
+    # Combined Momentum and Volatility Factor
+    df['combined_momentum_volatility'] = 0.4 * df['daily_range'] + 0.3 * df['smoothed_open_to_close_return'] + 0.3 * df['smoothed_volume_weighted_open_to_close_return']
+    df['smoothed_combined_momentum_volatility'] = df['combined_momentum_volatility'].ewm(alpha=0.1).mean()
+    
+    # Volume-Sensitive Momentum Factor
+    df['volume_sensitive_momentum'] = 0.4 * df['aggregate_price_volume_trend'] + 0.3 * df['smoothed_volume_weighted_open_to_close_return'] + 0.3 * df['volume_adjusted_intraday_movement']
+    df['smoothed_volume_sensitive_momentum'] = df['volume_sensitive_momentum'].ewm(alpha=0.1).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = 0.6 * df['smoothed_combined_momentum_volatility'] + 0.4 * df['smoothed_volume_sensitive_momentum']
+    df['final_smoothed_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=0.1).mean()
+    
+    return df['final_smoothed_alpha_factor']
+
+# Example usage:
+# data = pd.DataFrame({
+#     'date': pd.date_range(start='1/1/2023', periods=100),
+#     'open': np.random.rand(100) * 100,
+#     'high': np.random.rand(100) * 100,
+#     'low': np.random.rand(100) * 100,
+#     'close': np.random.rand(100) * 100,
+#     'amount': np.random.rand(100) * 100000,
+#     'volume': np.random.randint(100, 1000, size=100)
+# })
+# data.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(data)
+# print(alpha_factor)
+```

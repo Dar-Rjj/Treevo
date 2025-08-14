@@ -1,0 +1,21 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between the close and open price, then divide by the average of high and low for volatility adjusted return signal
+    volatility_adjusted_return = (df['close'] - df['open']) / ((df['high'] + df['low']) / 2 + 1e-7)
+    
+    # Calculate a volume-weighted closing price change to capture momentum with liquidity consideration
+    volume_weighted_momentum = (df['close'].pct_change().fillna(0)) * (df['volume'] / df['volume'].rolling(window=5).mean())
+    
+    # Calculate the money flow index (MFI) to incorporate volume and price changes
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Combine the three components into a single factor
+    factor_value = 0.3 * volatility_adjusted_return + 0.3 * volume_weighted_momentum + 0.4 * mfi
+    
+    return factor_value
+```

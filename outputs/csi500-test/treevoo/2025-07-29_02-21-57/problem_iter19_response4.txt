@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5D_Close_Price_Return'] = df['close'].pct_change(5)
+    avg_5D_volume = df['volume'].rolling(window=5).mean()
+    df['5D_Volume_Ratio'] = df['volume'].rolling(window=5).sum() / avg_5D_volume
+    df['Volume_Adjusted_Momentum'] = df['5D_Close_Price_Return'] * df['5D_Volume_Ratio']
+
+    # Calculate High-Low Price Oscillation
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['10D_HL_STD'] = df['High_Low_Range'].rolling(window=10).std()
+    df['10D_HL_Mean'] = df['High_Low_Range'].rolling(window=10).mean()
+    df['Price_Oscillation'] = (df['High_Low_Range'] - df['10D_HL_Mean']) / df['10D_HL_STD']
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['close'].pct_change()
+
+    # Compute Moving Averages
+    df['Short_Term_MA'] = df['Intraday_Return'].rolling(window=5).mean()
+    df['Long_Term_MA'] = df['Intraday_Return'].rolling(window=20).mean()
+
+    # Compute Intraday Return Difference
+    df['Intraday_Return_Diff'] = df['Short_Term_MA'] - df['Long_Term_MA']
+
+    # Filter by Volume Change
+    df['Volume_Change'] = df['volume'].diff()
+    df['Filtered_Intraday_Return'] = df.apply(lambda row: row['Intraday_Return_Diff'] if row['Volume_Change'] > 0 else 0, axis=1)
+
+    # Calculate Short-Term and Long-Term VWMA
+    df['VWMA_Short'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['VWMA_Long'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Generate Combined Signal
+    def generate_signal(row):
+        vwma_buy = row['VWMA_Short'] > row['VWMA_Long']
+        momentum_buy = row['Volume_Adjusted_Momentum'] > 0
+        price_osc_buy = row['Price_Oscillation'] > 0
+
+        if vwma_buy and momentum_buy and price_osc_buy:
+            return 'Strong Buy'
+        elif not vwma_buy and not momentum_buy and not price_osc_buy:
+            return 'Strong Sell'
+        elif vwma_buy and momentum_buy and not price_osc_buy:
+            return 'Moderate Buy'
+        elif vwma_buy and not momentum_buy and price_osc_buy:
+            return 'Moderate Buy'
+        elif not vwma_buy and momentum_buy and price_osc_buy:
+            return 'Moderate Buy'
+        elif not vwma_buy and not momentum_buy and price_osc_buy:
+            return 'Moderate Sell'
+        elif vwma_buy and not momentum_buy and not price_osc_buy:
+            return 'Moderate Sell'
+        elif not vwma_buy and momentum_buy and not price_osc_buy:
+            return 'Moderate Sell'
+        else:
+            return 'Hold'
+
+    df['Signal'] = df.apply(generate_signal, axis=1)
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Signal'].map({
+        'Strong Buy': 1,
+        'Strong Sell': -1,
+        'Moderate Buy': 0.5,
+        'Moderate Sell': -0.5,
+        'Hold': 0
+    })
+
+    return df['Alpha_Factor']
+```

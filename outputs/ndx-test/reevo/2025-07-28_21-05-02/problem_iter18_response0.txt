@@ -1,0 +1,53 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 120-day exponential moving average of the closing price
+    df['close_120_ema'] = df['close'].ewm(span=120, adjust=False).mean()
+    
+    # Calculate the 240-day exponential moving average of the closing price
+    df['close_240_ema'] = df['close'].ewm(span=240, adjust=False).mean()
+    
+    # Calculate the 90-day standard deviation of the closing price
+    df['close_90_std'] = df['close'].rolling(window=90).std()
+    
+    # Calculate the 180-day standard deviation of the volume
+    df['volume_180_std'] = df['volume'].rolling(window=180).std()
+    
+    # Non-linear transformation: Logarithm of the difference between the closing price and the 120-day EMA
+    factor_1 = ((df['close'] - df['close_120_ema']) / df['close_90_std']).apply(np.log1p)
+    
+    # Non-linear transformation: Square root of the difference between the 120-day EMA and the 240-day EMA
+    factor_2 = ((df['close_120_ema'] - df['close_240_ema']) / df['close_90_std']).apply(np.sqrt)
+    
+    # Non-linear transformation: Cube root of the volume divided by its 180-day standard deviation
+    factor_3 = (df['volume'] / df['volume_180_std']).apply(np.cbrt)
+    
+    # Calculate the rate of change over 15 days for the 120-day EMA
+    factor_4 = df['close_120_ema'].pct_change(periods=15)
+    
+    # Calculate the market sentiment as the difference between the 120-day EMA and the 240-day EMA
+    market_sentiment = df['close_120_ema'] - df['close_240_ema']
+    
+    # Introduce a new factor: the rate of change over 7 days for the volume
+    factor_5 = df['volume'].pct_change(periods=7)
+    
+    # Introduce a new momentum factor: the rate of change over 20 days for the closing price
+    factor_6 = df['close'].pct_change(periods=20)
+    
+    # Introduce a new factor: the absolute value of the difference between the high and low price over 60 days
+    df['hl_diff_60'] = df['high'] - df['low']
+    factor_7 = df['hl_diff_60'].rolling(window=60).mean().apply(np.abs)
+    
+    # Combine the factors into a single factor value with balanced weighted contributions, including market sentiment and the new factors
+    factor_values = (
+        0.2 * factor_1 + 
+        0.2 * factor_2 + 
+        0.15 * factor_3 + 
+        0.1 * factor_4 + 
+        0.05 * market_sentiment + 
+        0.025 * factor_5 + 
+        0.025 * factor_6 + 
+        0.25 * factor_7
+    )
+    
+    return factor_values
+```

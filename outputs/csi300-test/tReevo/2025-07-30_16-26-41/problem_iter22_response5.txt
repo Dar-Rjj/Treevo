@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Helper function to calculate the exponentially weighted standard deviation
+    def ewma_volatility(returns, span=10, min_periods=5):
+        return returns.ewm(span=span, min_periods=min_periods, adjust=False).std()
+
+    # Calculate 10-day and 5-day metrics
+    for window in [10, 5]:
+        df[f'weighted_price_diff_{window}'] = (df['high'] - df['low']) * df['volume']
+        df[f'total_volume_{window}'] = df['volume'].rolling(window=window).sum()
+        df[f'cumulative_weighted_avg_{window}'] = df[f'weighted_price_diff_{window}'].rolling(window=window).sum() / df[f'total_volume_{window}']
+        df[f'open_to_close_momentum_{window}'] = df['close'] - df['open'].shift(window)
+        df[f'average_daily_return_{window}'] = df['close'].diff().rolling(window=window).sum() / window
+        df[f'daily_returns'] = df['close'].pct_change()
+        df[f'ewma_volatility_{window}'] = ewma_volatility(df['daily_returns'], span=window)
+
+        # Calculate the alpha factor for the current window
+        df[f'alpha_factor_{window}'] = (df[f'cumulative_weighted_avg_{window}'] - df[f'average_daily_return_{window}']) / df[f'ewma_volatility_{window}']
+
+    # Calculate dynamic weights based on recent volatility
+    df['relative_volatility_ratio'] = df['ewma_volatility_5'] / df['ewma_volatility_10']
+    df['10_day_metric_weight'] = 1 / (1 + df['relative_volatility_ratio'])
+    df['5_day_metric_weight'] = df['relative_volatility_ratio'] / (1 + df['relative_volatility_ratio'])
+
+    # Combine 10-day and 5-day alpha factors with dynamic weights
+    df['combined_alpha_factor'] = (df['alpha_factor_10'] * df['10_day_metric_weight']) + (df['alpha_factor_5'] * df['5_day_metric_weight'])
+
+    # Integrate trading volume effectively
+    df['5_day_average_volume'] = df['volume'].rolling(window=5).mean()
+    df['final_alpha_factor'] = df['combined_alpha_factor'] * df['5_day_average_volume']
+
+    return df['final_alpha_factor']
+```

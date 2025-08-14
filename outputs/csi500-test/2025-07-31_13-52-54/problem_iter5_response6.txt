@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=30, M=10):
+    # Calculate Price Momentum
+    n_day_diff = df['close'] - df['close'].shift(N)
+    m_day_diff = df['close'] - df['close'].shift(M)
+    price_momentum = n_day_diff + m_day_diff
+
+    # Calculate Daily Returns
+    daily_returns = df['close'].pct_change()
+
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    long_term_returns = daily_returns.rolling(window=100).sum()
+    total_volume_100 = df['volume'].rolling(window=100).sum()
+    long_term_vol_weighted_returns = (daily_returns * df['volume']).rolling(window=100).sum() / total_volume_100
+
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    short_term_returns = daily_returns.rolling(window=5).sum()
+    total_volume_5 = df['volume'].rolling(window=5).sum()
+    short_term_vol_weighted_returns = (daily_returns * df['volume']).rolling(window=5).sum() / total_volume_5
+
+    # Combine Momentum and Reversal Components
+    combined_momentum_reversal = long_term_vol_weighted_returns - short_term_vol_weighted_returns
+
+    # Calculate Intraday Range Growth
+    daily_range = df['high'] - df['low']
+    prev_daily_range = daily_range.shift(1)
+    intraday_range_growth = (daily_range - prev_daily_range) / prev_daily_range
+
+    # Volume Weighted Moving Average
+    simple_moving_avg = df['close'].rolling(window=N).mean()
+    volume_weighted_moving_avg = (df['close'] * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+
+    # Calculate Volume Surge
+    n_day_vol_change = df['volume'] - df['volume'].shift(N)
+    m_day_vol_change = df['volume'] - df['volume'].shift(M)
+    volume_surge = n_day_vol_change + m_day_vol_change
+
+    # Synthesize Final Alpha Factor
+    alpha_factor = (price_momentum * combined_momentum_reversal * intraday_range_growth)
+    alpha_factor = alpha_factor.where(volume_surge >= 0, alpha_factor * 0.8)
+
+    return alpha_factor
+```

@@ -1,0 +1,41 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']).shift(1)
+
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).abs()
+
+    # Calculate Momentum
+    df['momentum'] = df['close'].rolling(window=5).apply(lambda x: (x[-1] - x[0]))
+
+    # Identify Price Breakaways
+    df['high_breakaway'] = ((df['high'] > df['high'].shift(1)) & 
+                            ((df['high'] - df['high'].shift(1)) / df['high'].shift(1) > 0.05))
+    df['low_breakaway'] = ((df['low'] < df['low'].shift(1)) & 
+                           ((df['low'].shift(1) - df['low']) / df['low'].shift(1) > 0.05))
+
+    # Volume-Weighted Score
+    conditions = [
+        (df['high_breakaway'] == True),
+        (df['low_breakaway'] == True)
+    ]
+    choices = [
+        (df['close'] - df['open']) * df['volume'],
+        -(df['close'] - df['open']) * df['volume']
+    ]
+    df['volume_weighted_score'] = pd.np.select(conditions, choices, default=0)
+
+    # Combine Factors
+    df['combined_factor'] = (df['close_to_open_return'] * df['volume'].shift(1)) / df['daily_volatility']
+
+    # Momentum Adjusted
+    df['momentum_adjusted_factor'] = df['combined_factor'] - df['momentum']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['volume_weighted_score'] + df['momentum_adjusted_factor']).rolling(window=5).sum()
+
+    return df['final_alpha_factor']

@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts with adaptive windows
+    pos_sum = df['positive_amount_vol'].rolling(window=15).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=15).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    sentiment_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the log returns using the close price
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Volatility factor with an adaptive window
+    volatility_window = df['log_returns'].rolling(window=40).std() * np.sqrt(252)
+    adaptive_volatility_window = df['log_returns'].ewm(span=int(40 * (1 + 0.1 * (volatility_window.mean() - volatility_window))), adjust=False).std() * np.sqrt(252)
+
+    # Calculate the VWAP with an adaptive window
+    vwap_window = 40
+    adaptive_vwap_window = int(vwap_window * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=adaptive_vwap_window).mean()
+
+    # Exponential smoothing on the VWAP with an adaptive span
+    df['vwap_smoothed'] = df['vwap'].ewm(span=adaptive_vwap_window, adjust=False).mean()
+
+    # Momentum factor with an adaptive period
+    momentum_period = 40
+    adaptive_momentum_period = int(momentum_period * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    momentum = df['close'].pct_change(periods=adaptive_momentum_period)
+
+    # Mean reversion factor with an adaptive period
+    mean_reversion_period = 20
+    adaptive_mean_reversion_period = int(mean_reversion_period * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    mean_reversion = -df['close'].pct_change(periods=adaptive_mean_reversion_period)
+
+    # Long-term trend strength factor: difference between 60-day and 30-day exponential moving averages with adaptive spans
+    ema_60_span = 60
+    adaptive_ema_60_span = int(ema_60_span * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    ema_30_span = 30
+    adaptive_ema_30_span = int(ema_30_span * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+
+    df['ema_60'] = df['close'].ewm(span=adaptive_ema_60_span, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=adaptive_ema_30_span, adjust=False).mean()
+    long_trend_strength = df['ema_30'] - df['ema_60']
+
+    # Adaptive weighting based on recent market conditions with an adaptive window
+    recent_volatility_window = 15
+    adaptive_recent_volatility_window = int(recent_volatility_window * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    recent_volatility = df['log_returns'].rolling(window=adaptive_recent_volatility_window).std() * np.sqrt(252)
+    adaptive_weight = 1 / (1 + np.exp(-recent_volatility))
+
+    # Non-linear transformation of the factors for better interpretability
+    sentiment_factor_nonlinear = np.sign(sentiment_factor) * np.log1p(np.abs(sentiment_factor))
+    vwap_ratio_nonlinear = np.sign(df['vwap'] / df['vwap_smoothed']) * np.log1p(np.abs(df['vwap'] / df['vwap_smoothed']))
+
+    # Additional factor: relative strength index (RSI) with an adaptive window
+    rsi_window = 14
+    adaptive_rsi_window = int(rsi_window * (1 + 0.1 * (volatility_window.mean() - volatility_window)))
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=adaptive_rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=adaptive_r

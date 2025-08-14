@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5, w1=0.3, w2=0.4, w3=0.1, w4=0.1, w5=0.05, w6=0.05):
+    # Calculate 1-Period Price Momentum
+    df['Price_Momentum_1D'] = df['close'].pct_change()
+    
+    # Compute Daily Price Change Percentage
+    df['Daily_Price_Change_Percentage'] = df['close'].pct_change()
+    
+    # Compute Average Price Momentum over 5 Days
+    df['Average_Price_Momentum_5D'] = df['Daily_Price_Change_Percentage'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    
+    # Compute Average Volume Change over 10 Days
+    df['Average_Volume_Change_10D'] = df['Daily_Volume_Change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['Price_Momentum_Volume_Surge'] = df['Average_Price_Momentum_5D'] * df['Average_Volume_Change_10D']
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['Change_in_High_Low_Range'] = df['High_Low_Range'].diff()
+    
+    # Combine High-Low Range and Volume
+    df['High_Low_Range_Volume_Adjusted'] = (df['Change_in_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['Average_Volume_n'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume_n']
+    
+    # Adjust by Average Amount
+    df['Average_Amount_m'] = df['amount'].rolling(window=m).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Average_Amount_m']
+    
+    # Introduce Exponential Moving Averages
+    df['EMA_Price_Momentum_5D'] = df['Daily_Price_Change_Percentage'].ewm(span=5, adjust=False).mean()
+    df['EMA_Volume_Change_10D'] = df['Daily_Volume_Change'].ewm(span=10, adjust=False).mean()
+    
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['Adjusted_Momentum'] = df['Price_Momentum_1D'] * df['Volume_Ratio'] * df['Amount_Ratio'] + df['Price_Momentum_Volume_Surge']
+    
+    # Incorporate High-Low Range Dynamics
+    df['EMA_High_Low_Range_5D'] = df['High_Low_Range'].ewm(span=5, adjust=False).mean()
+    df['EMA_Change_in_High_Low_Range_5D'] = df['Change_in_High_Low_Range'].ewm(span=5, adjust=False).mean()
+    df['Combined_High_Low_Range_Dynamics'] = df['EMA_High_Low_Range_5D'] * df['EMA_Change_in_High_Low_Range_5D']
+    
+    # Calculate 1-Period Open-Close Spread
+    df['Open_Close_Spread'] = df['open'] - df['close']
+    
+    # Combine Weighted Components
+    combined_alpha = (
+        w1 * df['High_Low_Range_Volume_Adjusted'] +
+        w2 * df['Adjusted_Momentum'] +
+        w3 * df['Price_Momentum_Volume_Surge'] +
+        w4 * df['Volume_Ratio'] +
+        w5 * df['Amount_Ratio'] +
+        w6 * df['Open_Close_Spread'] +
+        df['Combined_High_Low_Range_Dynamics']
+    )
+    
+    return combined_alpha
+```

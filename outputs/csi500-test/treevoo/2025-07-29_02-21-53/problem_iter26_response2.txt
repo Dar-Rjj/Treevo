@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Smooth High-Low Range with 20-day EMA
+    ema_20 = high_low_range.ewm(span=20).mean()
+    
+    # Compute Momentum of High-Low Ranges
+    momentum_high_low = ema_20 - high_low_range
+    
+    # Weight by Volume
+    weighted_momentum = momentum_high_low * df['volume']
+    
+    # Integrate True Range
+    prev_close = df['close'].shift(1)
+    true_range = pd.DataFrame({
+        'hl': df['high'] - df['low'],
+        'hc': abs(df['high'] - prev_close),
+        'lc': abs(df['low'] - prev_close)
+    }).max(axis=1)
+    
+    # Analyze Intraday Price Movements
+    high_low_diff = df['high'] - df['low']
+    close_open_diff = df['close'] - df['open']
+    sign_high_low_spread = (df['high'] - df['low']).apply(lambda x: 1 if x > 0 else -1)
+    intraday_movement = (high_low_diff * close_open_diff) * sign_high_low_spread
+    
+    # Aggregate Price Movements and Accumulated Buy-Sell Imbalance
+    sum_high_low = high_low_diff.rolling(window=20).sum()
+    sum_close_open = close_open_diff.rolling(window=20).sum()
+    positive_vol = df['volume'] * (df['close'] - df['open']).apply(lambda x: 1 if x > 0 else 0)
+    negative_vol = df['volume'] * (df['close'] - df['open']).apply(lambda x: 1 if x < 0 else 0)
+    total_vol = df['volume'].rolling(window=20).sum()
+    pos_vol_sum = positive_vol.rolling(window=20).sum()
+    neg_vol_sum = negative_vol.rolling(window=20).sum()
+    
+    # Calculate Integrated Momentum Score
+    vol_adjusted_momentum = (pos_vol_sum / total_vol) - (neg_vol_sum / total_vol)
+    
+    # Adjust for Volume Impact on Price
+    volume_adjusted_range = (df['high'] - df['low']) * df['volume']
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    combined_measure = (volume_adjusted_range + (df['close'] - df['open'])) / 2
+    
+    # Dynamic Momentum Indicator
+    prev_combined = combined_measure.shift(1)
+    dynamic_momentum = combined_measure - prev_combined
+    dynamic_momentum = dynamic_momentum.ewm(span=20).mean()
+    
+    # Long-Term Price Trend
+    long_term_trend = df['close'].ewm(span=100).mean()
+    short_term_trend = df['close'].ewm(span=20).mean()
+    price_trend_momentum = long_term_trend - short_term_trend
+    
+    # Generate Final Alpha Factor
+    final_factor = (
+        weighted_momentum + 
+        true_range + 
+        intraday_movement + 
+        combined_measure + 
+        dynamic_momentum + 
+        price_trend_momentum
+    )
+    
+    return final_factor
+```

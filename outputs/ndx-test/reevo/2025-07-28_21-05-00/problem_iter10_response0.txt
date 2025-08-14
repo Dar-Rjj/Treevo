@@ -1,0 +1,61 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility as the standard deviation of the price change over the last 10 days
+    volatility = price_change.rolling(window=10).std()
+
+    # Calculate the money flow index (MFI) for the last 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(price_change > 0, 0)
+    negative_money_flow = raw_money_flow.where(price_change < 0, 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Incorporate trend strength using the 50-day moving average
+    trend_50d = df['close'].rolling(window=50).mean()
+    trend_strength = (df['close'] - trend_50d) / trend_50d
+
+    # Adaptive weighting based on the recent performance of each indicator
+    recent_momentum_perf = momentum_5d.pct_change().fillna(0)
+    recent_rsi_perf = rsi.pct_change().fillna(0)
+    recent_volatility_perf = volatility.pct_change().fillna(0)
+    recent_mfi_perf = mfi.pct_change().fillna(0)
+    recent_trend_perf = trend_strength.pct_change().fillna(0)
+
+    # Normalize the performance to get weights
+    perf_sum = recent_momentum_perf.abs() + recent_rsi_perf.abs() + recent_volatility_perf.abs() + recent_mfi_perf.abs() + recent_trend_perf.abs()
+    momentum_weight = recent_momentum_perf / perf_sum
+    rsi_weight = recent_rsi_perf / perf_sum
+    volatility_weight = recent_volatility_perf / perf_sum
+    mfi_weight = recent_mfi_perf / perf_sum
+    trend_weight = recent_trend_perf / perf_sum
+
+    # Integrate multiple indicators to create a robust factor with adaptive weighting
+    factor = (price_change * volume_change +
+              diff_close_avg +
+              momentum_5d * momentum_weight +
+              rsi * rsi_weight +
+              volatility * volatility_weight +
+              mfi * mfi_weight +
+              trend_strength * trend_weight).ewm(span=5, adjust=False).mean()
+
+    return factor
+```

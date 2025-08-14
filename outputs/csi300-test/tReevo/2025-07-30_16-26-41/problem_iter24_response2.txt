@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # 10-day calculations
+    df['PriceDiffVol'] = (df['high'] - df['low']) * df['volume']
+    df['PriceDiffVol_10d'] = df['PriceDiffVol'].rolling(window=10).sum()
+    df['Volume_10d'] = df['volume'].rolling(window=10).sum()
+    df['WeightedPriceDiff_10d'] = df['PriceDiffVol_10d'] / df['Volume_10d']
+    
+    df['LongTermMomentum_10d'] = df['close'] - df['open'].shift(10)
+    df['AvgDailyReturn_10d'] = (df['close'] - df['close'].shift(1)).rolling(window=10).sum() / 10
+    df['DailyReturns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility_10d'] = df['DailyReturns'].rolling(window=10).std()
+    df['AlphaFactor_10d'] = (df['WeightedPriceDiff_10d'] - df['AvgDailyReturn_10d']) / df['Volatility_10d']
+
+    # 3-day calculations
+    df['PriceDiffVol_3d'] = df['PriceDiffVol'].rolling(window=3).sum()
+    df['Volume_3d'] = df['volume'].rolling(window=3).sum()
+    df['WeightedPriceDiff_3d'] = df['PriceDiffVol_3d'] / df['Volume_3d']
+    
+    df['ShortTermMomentum_3d'] = df['close'] - df['open'].shift(3)
+    df['AvgDailyReturn_3d'] = (df['close'] - df['close'].shift(1)).rolling(window=3).sum() / 3
+    df['Volatility_3d'] = df['DailyReturns'].rolling(window=3).std()
+    df['AlphaFactor_3d'] = (df['WeightedPriceDiff_3d'] - df['AvgDailyReturn_3d']) / df['Volatility_3d']
+
+    # Combine 10-day and 3-day metrics
+    df['CombinedAlphaFactor'] = 0.7 * df['AlphaFactor_10d'] + 0.3 * df['AlphaFactor_3d']
+
+    # Adjust for dynamic trading volume
+    df['AvgVolume_3d'] = df['volume'].rolling(window=3).mean()
+    df['AdjustedAlphaFactor'] = df['CombinedAlphaFactor'] * df['AvgVolume_3d']
+
+    # Adjust for recent market sentiment
+    df['AvgReturn_2d'] = (df['close'] - df['open']).rolling(window=2).sum() / 2
+    df['FinalAlphaFactor'] = df['AdjustedAlphaFactor'] + df['AvgReturn_2d']
+
+    return df['FinalAlphaFactor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,61 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Low and Open-Close Returns with weights
+    weight_high_low = 0.6
+    weight_open_close = 0.4
+    intraday_momentum = (weight_high_low * high_low_diff + weight_open_close * open_close_return) ** 2
+
+    # Apply Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    volume_shock_threshold = 1.5
+    amount_shock_threshold = 1.5
+    
+    # Introduce Smoothing Factor
+    ema_alpha = 0.2
+    volume_ema = df['volume'].ewm(alpha=ema_alpha).mean()
+    amount_ema = df['amount'].ewm(alpha=ema_alpha).mean()
+    
+    shock_filter = (volume_ema > volume_shock_threshold) & (amount_ema > amount_shock_threshold)
+    intraday_momentum = intraday_momentum.where(shock_filter, 0)
+
+    # Adjust for Volume
+    median_volume = df['volume'].rolling(window=5).median()
+    volume_adjustment = (df['volume'] / median_volume).fillna(1) + 1
+
+    # Combine Intraday Range and Volume Adjustment
+    combined_intraday = intraday_momentum * volume_adjustment
+
+    # Smoothing
+    smooth_intraday = combined_intraday.rolling(window=5).mean()
+
+    # Calculate Moving Average Convergence Divergence (MACD)
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = short_ema - long_ema
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    
+    # Determine Momentum
+    momentum = np.where(macd_line > signal_line, 1, -1)
+
+    # Calculate On-Balance Volume (OBV)
+    obv = pd.Series(0, index=df.index)
+    obv[1:] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    obv.iloc[0] = 0  # Initialize the first value
+
+    # Weight OBV by the Difference between MACD Line and Signal Line
+    weight = np.abs(macd_line - signal_line)
+    weighted_obv = obv * weight
+
+    # Combine Smoothed Intraday Momentum with OBV Factor
+    final_alpha_factor = smooth_intraday * weighted_obv
+
+    return final_alpha_factor

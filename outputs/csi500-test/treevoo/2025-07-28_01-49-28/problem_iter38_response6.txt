@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range + open_to_close_movement) * df['volume']
+
+    # High-Low Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    moving_sum_high_low_spreads_20 = high_low_spread.rolling(window=20).sum()
+    previous_day_moving_sum = moving_sum_high_low_spreads_20.shift(1)
+    high_low_spread_momentum = moving_sum_high_low_spreads_20 - previous_day_moving_sum
+
+    # 10-Day High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+
+    # Proximity to 10-Day Range
+    proximity_to_ten_day_high = df['close'] / ten_day_high
+    proximity_to_ten_day_low = df['close'] / ten_day_low
+    min_proximity = pd.concat([proximity_to_ten_day_high, proximity_to_ten_day_low], axis=1).min(axis=1)
+
+    # Adjust for 20-Day Volatility
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    adjusted_proximity = min_proximity / twenty_day_volatility
+
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    open_high_low_volatility = (open_high_diff + open_low_diff) * df['volume']
+
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    n = 5
+    amount_per_unit_close_t = df['amount'].rolling(window=n).sum() / df['close'].rolling(window=n).mean()
+    amount_per_unit_close_tn = df['amount'].shift(n).rolling(window=n).sum() / df['close'].shift(n).rolling(window=n).mean()
+    amount_rate_of_change = amount_per_unit_close_t - amount_per_unit_close_tn
+
+    # Volume-Weighted Moving Average Crossover
+    short_term_vwma_5 = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    long_term_vwma_20 = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    vwma_crossover = short_term_vwma_5 - long_term_vwma_20
+
+    # Final Alpha Factor
+    strong_move_indicator = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    final_alpha_factor = (
+        volume_adjusted_breakout_strength * 
+        high_low_spread_momentum * 
+        adjusted_proximity * 
+        open_high_low_volatility * 
+        amount_rate_of_change * 
+        vwma_crossover * 
+        strong_move_indicator
+    )
+
+    return final_alpha_factor
+```

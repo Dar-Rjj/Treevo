@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Integrated Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = df['close'] / df['open'] - 1
+    intraday_momentum = 0.5 * high_low_diff + 0.5 * open_close_return
+    intraday_momentum_transformed = intraday_momentum ** 2
+    
+    # Apply Integrated Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    shock_filter = (volume_ratio > 1.5) & (amount_ratio > 1.5)
+    
+    # Introduce Smoothing Factor with EMA
+    volume_ratio_ema = df['volume'].ewm(alpha=0.2, adjust=False).mean() / df['volume'].shift(1).ewm(alpha=0.2, adjust=False).mean()
+    amount_ratio_ema = df['amount'].ewm(alpha=0.2, adjust=False).mean() / df['amount'].shift(1).ewm(alpha=0.2, adjust=False).mean()
+    
+    # Measure Synchronized Volume and Price Changes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_volume = np.sign(volume_change * price_change)
+    
+    # Combine Integrated Intraday Momentum, Synchronized Volume, and OBV-Momentum Factor
+    obv_momentum_factor = df['close'].pct_change().rolling(window=10).sum() * df['volume'].rolling(window=10).sum()
+    
+    final_alpha_factor = (
+        intraday_momentum_transformed +
+        synchronized_volume * shock_filter * (volume_ratio_ema + amount_ratio_ema) / 2 +
+        obv_momentum_factor
+    )
+    
+    return final_alpha_factor
+```

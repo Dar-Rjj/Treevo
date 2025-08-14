@@ -1,0 +1,22 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the logarithmic returns of the closing price
+    log_returns = df['close'].apply(lambda x: np.log(x)) - df['close'].shift(1).apply(lambda x: np.log(x))
+    
+    # Calculate the weighted moving average of trading volume
+    weights = np.arange(1, 15)  # Example weights, increasing importance for more recent data
+    wma_volume = df['volume'].rolling(window=14).apply(lambda x: (x * weights).sum() / weights.sum(), raw=False)
+    
+    # Calculate the Positive Directional Indicator (DMI+)
+    high_low = df['high'] - df['low']
+    high_close = abs(df['high'] - df['close'].shift())
+    low_close = abs(df['low'] - df['close'].shift())
+    tr = pd.DataFrame({'high_low': high_low, 'high_close': high_close, 'low_close': low_close}).max(axis=1)
+    plus_dm = (df['high'].diff() > 0) & (df['high'].diff() > df['low'].diff())
+    plus_di = 100 * (plus_dm * tr).ewm(span=14, adjust=False).mean() / tr.ewm(span=14, adjust=False).mean()
+    
+    # Combined heuristic: Logarithmic returns, WMA of volume, and DMI+
+    heuristics_matrix = log_returns + wma_volume + plus_di
+    
+    return heuristics_matrix

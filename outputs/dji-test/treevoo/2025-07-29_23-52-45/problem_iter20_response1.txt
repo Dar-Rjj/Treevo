@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Short-Term Return
+    short_term_return = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Long-Term Return
+    long_term_return = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Returns
+    volume_weighted_short_term = short_term_return * df['volume']
+    volume_weighted_long_term = long_term_return * df['volume']
+    
+    # Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).abs()
+    
+    # Adjusted Volume-Weighted Returns by Intraday Volatility
+    adjusted_volume_weighted_short_term = volume_weighted_short_term / intraday_volatility
+    adjusted_volume_weighted_long_term = volume_weighted_long_term / intraday_volatility
+    
+    # Momentum Factor
+    momentum_factor = adjusted_volume_weighted_short_term - adjusted_volume_weighted_long_term
+    
+    # Reversal Indicator
+    reversal_indicator = -momentum_factor
+    
+    # Price Change
+    price_change = df['high'] - df['low']
+    
+    # Volume Adjusted Price Change
+    volume_adjusted_price_change = price_change * df['volume']
+    
+    # Smoothed Momentum Calculation
+    smoothed_momentum = volume_adjusted_price_change.rolling(window=10).mean()
+    smoothed_momentum_diff = smoothed_momentum - smoothed_momentum.shift(10)
+    
+    # Momentum Trend
+    momentum_trend = momentum_factor.rolling(window=20).mean()
+    momentum_trend_signal = pd.Series(0, index=df.index)
+    momentum_trend_signal[momentum_factor > momentum_trend] = 1
+    momentum_trend_signal[momentum_factor < momentum_trend] = -1
+    
+    # Additional Factors
+    cumulative_volume = df['volume'].rolling(window=5).sum()
+    cumulative_price_change = df['high'] - df['low'].shift(5)
+    cumulative_volume_adjusted_price_change = cumulative_price_change * cumulative_volume
+    rolling_avg_cumulative_vol_adj_price_change = cumulative_volume_adjusted_price_change.rolling(window=10).mean()
+    rolling_avg_cumulative_vol_adj_price_change_diff = rolling_avg_cumulative_vol_adj_price_change - rolling_avg_cumulative_vol_adj_price_change.shift(10)
+    
+    # Combined Indicator
+    combined_indicator = (momentum_factor + rolling_avg_cumulative_vol_adj_price_change_diff) / 2
+    combined_indicator_signal = pd.Series(0, index=df.index)
+    combined_indicator_signal[combined_indicator > 0] = 1
+    combined_indicator_signal[combined_indicator < 0] = -1
+    
+    # 5-Day and 60-Day Moving Average of Close Price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_60 = df['close'].rolling(window=60).mean()
+    
+    # Trend Indicator
+    trend_indicator = ma_5 - ma_60
+    
+    # Final Alpha Factor
+    final_alpha_factor = reversal_indicator + trend_indicator
+    
+    return final_alpha_factor
+```

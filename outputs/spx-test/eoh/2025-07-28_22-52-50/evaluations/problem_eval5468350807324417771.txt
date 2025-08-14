@@ -1,0 +1,35 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate ATR
+    df['H-L'] = df['high'] - df['low']
+    df['H-PC'] = abs(df['high'] - df['close'].shift(1))
+    df['L-PC'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)
+    atr_period = 20
+    df['ATR'] = df['TR'].rolling(window=atr_period).mean()
+
+    # Calculate RSI
+    rsi_period = 14
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=rsi_period).mean()
+    avg_loss = loss.rolling(window=rsi_period).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Calculate MACD
+    short_ema_period = 12
+    long_ema_period = 26
+    signal_period = 9
+    df['EMA_Short'] = df['close'].ewm(span=short_ema_period, adjust=False).mean()
+    df['EMA_Long'] = df['close'].ewm(span=long_ema_period, adjust=False).mean()
+    df['MACD'] = df['EMA_Short'] - df['EMA_Long']
+    df['Signal'] = df['MACD'].ewm(span=signal_period, adjust=False).mean()
+    macd_signal_diff = df['MACD'] - df['Signal']
+
+    # Combined heuristic: ATR adjusted by RSI and MACD signal
+    heuristics_matrix = df['ATR'] + (df['RSI'] - 50) * 0.01 * df['ATR'] + macd_signal_diff
+
+    return heuristics_matrix

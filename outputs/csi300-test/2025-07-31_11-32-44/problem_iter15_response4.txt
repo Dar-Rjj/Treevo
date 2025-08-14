@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Volatility using True Range over a period
+    df['true_range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['intraday_volatility'] = df['true_range'].rolling(window=10).mean()
+    
+    # Calculate Intraday Reversal
+    df['previous_day_close_open_diff'] = df['close'].shift(1) - df['open'].shift(1)
+    df['intraday_reversal'] = (df['close'] - df['open']) - df['previous_day_close_open_diff']
+    
+    # Calculate Volume Trend using Simple Moving Average of Volume
+    df['volume_sma'] = df['volume'].rolling(window=10).mean()
+    
+    # Compute Volume Reversal Component
+    df['volume_reversal_sentiment'] = np.where(df['volume'] > df['volume_sma'], 1, -1)
+    df['volume_reversal_component'] = df['volume_reversal_sentiment'] * df['intraday_return']
+    
+    # Introduce Intraday Gap Factor
+    df['previous_day_close'] = df['close'].shift(1)
+    df['intraday_gap_factor'] = (df['open'] - df['previous_day_close']) / df['previous_day_close']
+    
+    # Combine All Components
+    df['alpha_factor'] = (
+        df['intraday_return'] * df['intraday_range'] * df['intraday_volatility'] +
+        df['intraday_reversal'] + 
+        df['volume_reversal_component'] + 
+        df['intraday_gap_factor']
+    )
+    
+    return df['alpha_factor']
+```

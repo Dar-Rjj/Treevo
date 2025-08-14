@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Momentum_Shift'] = df['SMA_5'] - df['SMA_5'].shift(1)
+    
+    # Analyze Volume and Amount Trends
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Amount_to_Volume_Ratio'] = df['amount'] / df['volume']
+    
+    # Determine Trend Direction
+    df['Short_Long_Diff'] = df['SMA_5'] - df['SMA_20']
+    df['Trend_Direction'] = (df['Short_Long_Diff'] > 0).astype(int) * 2 - 1
+    df['Prev_Trend_Direction'] = df['Trend_Direction'].shift(1)
+    df['Trend_Confirmation'] = (df['Trend_Direction'] == df['Prev_Trend_Direction']).astype(int)
+    
+    # Enhance with Volume Confirmation
+    df['Adjusted_Trend'] = df['Trend_Direction'] * (df['Volume_Change'] > 0).astype(int)
+    
+    # Calculate Relative Strength
+    df['Volume_Weighted_Price'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['Volume_Weighted_Price_Movement'] = df['Volume_Weighted_Price'].sum() / df['volume'].sum()
+    df['Relative_Strength'] = (df['SMA_5'] - df['SMA_20']) / df['Volume_Weighted_Price_Movement']
+    
+    # Identify Volatility Patterns
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    df['Average_Volatility'] = df['Intraday_Volatility'].rolling(window=10).mean()
+    
+    # Explore Price Oscillators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['Price_Oscillator'] = df['SMA_50'] - df['SMA_200']
+    
+    # Construct Reversal Signals
+    df['Days_Since_Highest_High'] = (df['high'].cummax() != df['high']).groupby((df['high'].cummax() != df['high']).cumsum()).transform('count')
+    df['Days_Since_Lowest_Low'] = (df['low'].cummin() != df['low']).groupby((df['low'].cummin() != df['low']).cumsum()).transform('count')
+    
+    # Evaluate Price Action Relative to Moving Averages
+    df['Distance_to_SMA_20'] = df['close'] - df['SMA_20']
+    
+    # Calculate Intraday Movement
+    df['Intraday_Movement'] = df['high'] - df['low']
+    
+    # Combine Factors
+    df['Combined_Factor'] = df['Intraday_Movement'] + (df['close'] - df['open'])
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Weighted_Combined_Factor'] = df['Combined_Factor'] * df['High_Low_Range']
+    
+    # Confirm with Volume
+    df['Volume_Adjusted_Trend'] = df['Adjusted_Trend'] * (df['Volume_Change'] > 0).astype(int)
+    
+    # Calculate Intraday Reversal Indicator
+    df['Intraday_Reversal'] = (df['high'] - df['close'].shift(1)) - (df['close'].shift(1) - df['low'])
+    
+    # Integrate Intraday Reversal Indicator
+    df['Intraday_Reversal_Adjusted'] = df['Intraday_Reversal'] * df['Intraday_Volatility']
+    
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Momentum_Shift'] + 
+        df['Relative_Strength'] + 
+        df['Weighted_Combined_Factor'] + 
+        df['Intraday_Reversal_Adjusted']
+    )
+    
+    return df['Final_Alpha_Factor']
+```

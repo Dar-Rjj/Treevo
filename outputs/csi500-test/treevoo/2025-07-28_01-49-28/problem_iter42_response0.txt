@@ -1,0 +1,60 @@
+```python
+def heuristics_v2(df):
+    # Calculate the difference between high and low prices as a measure of volatility
+    df['volatility'] = df['high'] - df['low']
+    
+    # Determine the strength of the closing price relative to the opening, high, and low prices
+    df['price_movement'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Compute today's volume - yesterday's volume as a raw volume change factor
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate (volume * (close - open)) as a raw volume-price interaction factor
+    df['volume_price_interaction'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Summarize the (close - open) * volume over the last 5 days as a raw price-volume composite factor
+    df['price_volume_composite'] = (df['close'] - df['open']) * df['volume']
+    df['price_volume_composite_5d'] = df['price_volume_composite'].rolling(window=5).sum()
+    
+    # Calculate the (open - previous close) as a raw gap factor
+    df['gap'] = df['open'] - df['close'].shift(1)
+    
+    # Define positive money flow as (close - open) * volume when close > open, otherwise 0
+    df['positive_money_flow'] = (df['close'] > df['open']) * (df['close'] - df['open']) * df['volume']
+    # Define total money flow as (close - open) * volume, regardless of price direction
+    df['total_money_flow'] = (df['close'] - df['open']) * df['volume']
+    # Use the ratio of positive to total money flow as a raw money flow index
+    df['money_flow_index'] = df['positive_money_flow'] / df['total_money_flow']
+    df['money_flow_index'] = df['money_flow_index'].fillna(0)  # Handle division by zero
+    
+    # Calculate the (amount / volume) to find the average transaction size
+    df['transaction_size'] = df['amount'] / df['volume']
+    
+    # Calculate the (close - open) * (volume / average volume) as a raw momentum factor
+    df['average_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['momentum'] = (df['close'] - df['open']) * (df['volume'] / df['average_volume_20d'])
+    
+    # Calculate the (high - close) / (high - low) as a raw bearish pressure factor
+    df['bearish_pressure'] = (df['high'] - df['close']) / (df['high'] - df['low'])
+    # Calculate the (close - low) / (high - low) as a raw bullish pressure factor
+    df['bullish_pressure'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate the (amount / volume) over the last 5 days as a rolling average transaction size
+    df['rolling_transaction_size_5d'] = df['transaction_size'].rolling(window=5).mean()
+    
+    # Calculate the sum of (close - open) over the last 10 days as a raw cumulative price change factor
+    df['cumulative_price_change_10d'] = df['close'] - df['open']
+    df['cumulative_price_change_10d'] = df['cumulative_price_change_10d'].rolling(window=10).sum()
+    
+    # Calculate the sum of (today's volume - yesterday's volume) over the last 10 days as a raw cumulative volume change factor
+    df['cumulative_volume_change_10d'] = df['volume_change'].rolling(window=10).sum()
+    
+    # Calculate the (close - open) * (volume / average volume) over the last 20 days as a long-term raw momentum factor
+    df['long_term_momentum'] = (df['close'] - df['open']) * (df['volume'] / df['average_volume_20d'])
+    df['long_term_momentum_20d'] = df['long_term_momentum'].rolling(window=20).sum()
+    
+    # Select the final alpha factor
+    alpha_factor = df['momentum']
+    
+    return alpha_factor
+```

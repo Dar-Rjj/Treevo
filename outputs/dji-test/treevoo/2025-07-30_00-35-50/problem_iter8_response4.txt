@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].pct_change()
+
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close'].shift(1)
+
+    # Adjust Daily Return by Price Gap
+    half_life = 1
+    decay_factor = np.exp(-np.log(2) / half_life)
+    
+    df['Adjusted_Daily_Return'] = df['Daily_Return']
+    df.loc[df['Price_Gap'] > 0, 'Adjusted_Daily_Return'] -= df['Price_Gap'] * decay_factor
+    df.loc[df['Price_Gap'] < 0, 'Adjusted_Daily_Return'] += df['Price_Gap'] * decay_factor
+
+    # Calculate High-to-Low Price Range
+    df['Price_Range'] = df['high'] - df['low']
+
+    # Calculate Price Range Momentum
+    df['Price_Range_Momentum'] = df['Price_Range'].pct_change()
+
+    # Adjust for Volume Trend
+    df['Volume_MA_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Change'] = df['volume'] - df['Volume_MA_20']
+
+    # Adjust for Amount Trend
+    df['Amount_MA_20'] = df['amount'].rolling(window=20).mean()
+    df['Amount_Adjustment'] = df['amount'] - df['Amount_MA_20']
+
+    # Combine Momentum and Volume/Amount Trends
+    df['Combined_Momentum'] = (df['Price_Range_Momentum'] * df['Volume_Change'] * df['Amount_Adjustment'])
+
+    # Final Alpha Factor
+    df['Volume_Sum_5D'] = df['volume'].rolling(window=5).sum()
+    df['Alpha_Factor'] = (df['Adjusted_Daily_Return'] * df['volume'] / df['Volume_Sum_5D']) * df['Combined_Momentum']
+    
+    # Apply Softmax to Ensure Positive Factor
+    df['Alpha_Factor'] = np.where(df['Alpha_Factor'] < 0, np.exp(df['Alpha_Factor']) / (1 + np.exp(df['Alpha_Factor'])), df['Alpha_Factor'])
+
+    return df['Alpha_Factor'].dropna()
+```

@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = np.log(df['close'] / df['open'])
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = np.log(df['open'].shift(-1) / df['close'])
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Sum over a window (last 20 days log returns)
+    df['momentum'] = df['aggregate_returns'].rolling(window=20).sum()
+    
+    # Intraday Trend Strength
+    df['daily_range'] = df['high'] - df['low']
+    df['intraday_pct_change'] = (df['close'] - df['open']) / df['open']
+    
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['vol_weighted_high_low_vol'] = (df['high_low_range'] * df['volume']) / df['avg_volume']
+    
+    # Volume Adjusted Reversal Signal
+    df['prev_day_vol_mom'] = df['volume'] / df['volume'].shift(1)
+    df['vol_pct_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['close_to_next_open'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['inv_close_to_next_open'] = -df['close_to_next_open']
+    
+    # Smoothed Moving Average of Composite Factor
+    df['composite_factor'] = (df['momentum'] + df['intraday_pct_change'] + 
+                              df['vol_weighted_high_low_vol'] + df['inv_close_to_next_open'])
+    df['sma_composite'] = df['composite_factor'].rolling(window=5).mean()
+    df['ema_smoothed'] = df['sma_composite'].ewm(span=5, adjust=False).mean()
+    
+    # Confirm Momentum with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['positive_vol_change'] = df['volume_change'].apply(lambda x: 1 if x > 0 else 0)
+    df['ema_volume'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['volume_weighted_returns'] = (df['close'] - df['close'].shift(1)) * (df['volume'] / df['ema_volume'])
+    
+    # Add Price-Volume Correlation
+    df['price_volume_corr'] = df['close'].rolling(window=20).corr(df['volume'])
+    df['price_volume_corr'] = df['price_volume_corr'].clip(lower=-1, upper=1)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['momentum'] + df['intraday_pct_change'] + 
+                                 df['daily_range'] / df['high_low_range'] + 
+                                 df['open'] / df['close'] * df['volume_weighted_returns'] + 
+                                 df['price_volume_corr'])
+    
+    return df['final_alpha_factor']
+```

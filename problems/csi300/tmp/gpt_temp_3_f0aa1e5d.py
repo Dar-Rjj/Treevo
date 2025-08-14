@@ -1,0 +1,45 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 20-day and 60-day historical volatility
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility_20'] = df['log_returns'].rolling(window=20).std() * np.sqrt(252)
+    df['volatility_60'] = df['log_returns'].rolling(window=60).std() * np.sqrt(252)
+
+    # Define a sentiment score based on (high - low) / (open - close)
+    df['sentiment_score'] = (df['high'] - df['low']) / (df['open'] - df['close'])
+    df['sentiment_sma'] = df['sentiment_score'].rolling(window=10).mean()
+
+    # Determine the adaptive window size based on recent price trends
+    def adaptive_window(close, short, long):
+        if close > close.shift(1):
+            return short
+        else:
+            return long
+
+    df['short_term_window'] = df['close'].apply(lambda x: adaptive_window(x, 5, 20))
+    df['long_term_window'] = df['close'].apply(lambda x: adaptive_window(x, 30, 60))
+
+    # Calculate short-term and long-term momentum using adaptive windows
+    df['short_term_momentum'] = df['close'].pct_change().rolling(window=df['short_term_window']).mean()
+    df['long_term_momentum'] = df['close'].pct_change().rolling(window=df['long_term_window']).mean()
+
+    # Adjust for volatility
+    df['short_term_momentum_adj'] = df['short_term_momentum'] / df['volatility_20']
+    df['long_term_momentum_adj'] = df['long_term_momentum'] / df['volatility_60']
+
+    # Prioritize recent, liquidity-adjusted data
+    df['volume_weight'] = df['volume'].rolling(window=10).mean()
+    df['vwema_price'] = (df['close'] * df['volume_weight']).ewm(span=10).mean() / df['volume_weight'].ewm(span=10).mean()
+
+    # Smooth the momentum calculations with VWEMA
+    df['short_term_momentum_smooth'] = (df['short_term_momentum_adj'] * df['vwema_price']).ewm(span=10).mean() / df['vwema_price'].ewm(span=10).mean()
+    df['long_term_momentum_smooth'] = (df['long_term_momentum_adj'] * df['vwema_price']).ewm(span=10).mean() / df['vwema_price'].ewm(span=10).mean()
+
+    # Combine adjusted momentum and sentiment
+    df['factor'] = (df['short_term_momentum_smooth'] + df['long_term_momentum_smooth']) * df['sentiment_sma']
+
+    return df['factor']

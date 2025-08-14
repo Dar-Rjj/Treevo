@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df[['high', 'low', 'close', 'open']].std(axis=1) / df['open'])
+    
+    # Adjust Intraday Return
+    df['intraday_volatility_adjusted'] = df['intraday_return'] / df['intraday_volatility']
+    
+    # Calculate 30-day Price Momentum
+    df['30_day_momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Identify Volume Shock
+    df['30_day_avg_volume'] = df['volume'].rolling(window=30).mean().shift(1)
+    df['volume_shock'] = (df['volume'] > 2 * df['30_day_avg_volume']).astype(int)
+    
+    # Multiply 30-day Momentum by Volume Shock indicator
+    df['30_day_momentum_with_volume_shock'] = df['30_day_momentum'] * df['volume_shock']
+    
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['adjusted_high_low_range'] = df['high_low_range'] * df['volume']
+    
+    # Detect Volume Spike
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_spike_flag'] = (df['volume'] > 1.7 * df['5_day_avg_volume']).astype(int)
+    
+    # Calculate 10-day Momentum
+    df['10_day_momentum'] = (df['close'] - df['close'].shift(10))
+    
+    # Combine Adjusted Range, 10-day Momentum, and Volume Spike
+    df['combined_factor'] = (df['adjusted_high_low_range'] + df['10_day_momentum']) * (df['volume_spike_flag'] * 2.5 + 1)
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['30_day_momentum_with_volume_shock'] + df['combined_factor']
+    
+    # Final Weighting
+    df['final_factor'] = (
+        df['intraday_volatility_adjusted'] +
+        df['30_day_momentum_with_volume_shock'] +
+        df['adjusted_high_low_range'] +
+        df['10_day_momentum'] +
+        df['combined_factor'] * df['volume_spike_flag']
+    )
+    
+    return df['final_factor']
+```

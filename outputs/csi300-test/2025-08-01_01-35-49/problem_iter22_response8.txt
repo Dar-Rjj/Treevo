@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def adaptive_ema(data, period, alpha):
+    ema = data.ewm(span=period, adjust=False).mean()
+    return ema
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    df['combined_factor'] = df['intraday_return'] * df['high_low_range']
+    
+    # Smooth using Adaptive Exponential Moving Average (AEMA)
+    aema_period = 14
+    recent_volatility = df['intraday_return'].rolling(window=aema_period).std()
+    dynamic_alpha = 1 / (1 + recent_volatility)
+    df['smoothed_factor'] = adaptive_ema(df['combined_factor'], aema_period, dynamic_alpha)
+    
+    # Apply Volume Weighting
+    df['volume_weighted_smoothed_factor'] = df['smoothed_factor'] * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    df['prev_day_close'] = df['close'].shift(1)
+    df['closing_gap'] = df['open'] - df['prev_day_close']
+    df['volume_weighted_smoothed_factor_with_gap'] = df['volume_weighted_smoothed_factor'] + df['closing_gap']
+    
+    # Integrate Long-Term Momentum
+    long_term_period = 50
+    df['long_term_return'] = df['close'] - df['close'].shift(long_term_period)
+    df['normalized_long_term_return'] = df['long_term_return'] / df['high_low_range']
+    
+    # Include Enhanced Dynamic Volatility Component
+    rolling_std = df['intraday_return'].rolling(window=20).std()
+    df['atr'] = df['high_low_range'].rolling(window=14).mean()
+    df['combined_volatility'] = (rolling_std + df['atr']) / 2
+    
+    # Adjust Volatility Component with Volume
+    df['volume_adjusted_volatility'] = df['combined_volatility'] * df['volume']
+    
+    # Incorporate Sector-Specific Volatility
+    # Assuming 'sector' is a column in the DataFrame
+    sector_volatility = df.groupby('sector')['close'].transform(lambda x: x.rolling(window=30).std())
+    df['sector_adjusted_volatility'] = df['volume_adjusted_volatility'] * sector_volatility
+    
+    # Integrate Market Sentiment
+    # Assuming 'sentiment_score' is a column in the DataFrame
+    df['market_sentiment_adjusted_factor'] = df['volume_weighted_smoothed_factor_with_gap'] * df['sentiment_score']
+    
+    # Final Factor Calculation
+    df['final_factor'] = (
+        df['volume_weighted_smoothed_factor_with_gap'] +
+        df['normalized_long_term_return'] +
+        df['sector_adjusted_volatility'] +
+        df['market_sentiment_adjusted_factor']
+    )
+    
+    # Apply Non-Linear Transformation
+    df['final_factor'] = np.log(1 + df['final_factor']**2)
+    
+    return df['final_factor']
+```

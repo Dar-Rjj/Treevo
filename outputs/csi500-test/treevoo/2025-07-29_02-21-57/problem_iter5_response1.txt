@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5DayCloseReturn'] = (df['close'] / df['close'].shift(5)) - 1
+    df['5DayVolumeRatio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['VolumeAdjustedMomentum'] = df['5DayCloseReturn'] * df['5DayVolumeRatio']
+
+    # Calculate Short-Term (10 days) and Long-Term (30 days) Volume Weighted Moving Average (VWMA)
+    short_term_window, long_term_window = 10, 30
+    df['ShortTermVWMA'] = (df['close'] * df['volume']).rolling(window=short_term_window).sum() / df['volume'].rolling(window=short_term_window).sum()
+    df['LongTermVWMA'] = (df['close'] * df['volume']).rolling(window=long_term_window).sum() / df['volume'].rolling(window=long_term_window).sum()
+
+    # Generate Buy/Sell Signal based on VWMA crossover
+    df['CrossoverSignal'] = 0
+    df.loc[df['ShortTermVWMA'] > df['LongTermVWMA'], 'CrossoverSignal'] = 1
+    df.loc[df['ShortTermVWMA'] < df['LongTermVWMA'], 'CrossoverSignal'] = -1
+
+    # Calculate Price Momentum over a lookback period (e.g., 14 days)
+    lookback_period = 14
+    df['PriceMomentum'] = df['close'].diff().rolling(window=lookback_period).sum()
+
+    # Adjust Signal with Price Momentum
+    df['AdjustedSignal'] = 0
+    df.loc[(df['CrossoverSignal'] == 1) & (df['PriceMomentum'] > 0), 'AdjustedSignal'] = 1.5  # Strengthen Buy Signal
+    df.loc[(df['CrossoverSignal'] == -1) & (df['PriceMomentum'] < 0), 'AdjustedSignal'] = -1.5  # Strengthen Sell Signal
+    df.loc[(df['CrossoverSignal'] == 0) & (df['PriceMomentum'] > 0), 'AdjustedSignal'] = 0.5  # Mild Buy Signal
+    df.loc[(df['CrossoverSignal'] == 0) & (df['PriceMomentum'] < 0), 'AdjustedSignal'] = -0.5  # Mild Sell Signal
+
+    # Calculate High-Low Price Oscillation
+    df['HighLowRange'] = df['high'] - df['low']
+    df['MeanHighLow'] = df['HighLowRange'].rolling(window=5).mean()
+    df['StdHighLow'] = df['HighLowRange'].rolling(window=5).std()
+    df['PriceOscillation'] = (df['HighLowRange'] - df['MeanHighLow']) / df['StdHighLow']
+
+    # Combine all factors into a single factor
+    df['AlphaFactor'] = (df['VolumeAdjustedMomentum'] + 
+                         df['AdjustedSignal'] * df['PriceMomentum'] +
+                         df['PriceOscillation'])
+
+    return df['AlphaFactor']
+```

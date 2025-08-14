@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['open_to_close_ema_5'] = df['open_to_close_return'].ewm(span=5).mean()
+    
+    # Volume-Weighted Open-to-Close Return
+    df['volume_weighted_open_to_close_return'] = df['open_to_close_return'] * df['volume']
+    df['volume_weighted_ema_5'] = df['volume_weighted_open_to_close_return'].ewm(span=5).mean()
+    
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_volume_trend'] = df['price_change'] * df['volume']
+    df['price_volume_trend_30'] = df['price_volume_trend'].rolling(window=30).sum()
+    
+    # Volume-Adjusted Intraday Movement
+    df['intraday_movement'] = df['close'] - df['open']
+    df['avg_vol_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_intraday_movement'] = df['intraday_movement'] / df['avg_vol_20']
+    
+    # Combined Momentum and Volatility Factor
+    combined_momentum_volatility = 0.3 * df['daily_range'] + 0.4 * df['open_to_close_ema_5'] + 0.3 * df['volume_weighted_ema_5']
+    df['combined_momentum_volatility_ema'] = combined_momentum_volatility.ewm(alpha=0.1, adjust=False).mean()
+    
+    # Volume-Sensitive Momentum Factor
+    volume_sensitive_momentum = 0.4 * df['price_volume_trend_30'] + 0.3 * df['volume_weighted_ema_5'] + 0.3 * df['volume_adjusted_intraday_movement']
+    df['volume_sensitive_momentum_ema'] = volume_sensitive_momentum.ewm(alpha=0.1, adjust=False).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = 0.5 * df['combined_momentum_volatility_ema'] + 0.5 * df['volume_sensitive_momentum_ema']
+    df['final_alpha_factor_ema'] = final_alpha_factor.ewm(alpha=0.1, adjust=False).mean()
+    
+    return df['final_alpha_factor_ema']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

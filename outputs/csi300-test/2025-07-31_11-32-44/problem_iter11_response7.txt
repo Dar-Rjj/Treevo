@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility using Average True Range
+    df['True_Range'] = df[['high', 'low']].apply(lambda x: max(x) - min(x), axis=1)
+    df['Intraday_Volatility'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Intraday Momentum
+    df['Intraday_Momentum'] = df['Intraday_High_Low_Spread'].diff()
+    
+    # Calculate Intraday Reversal
+    df['Prev_Day_Close_Open_Diff'] = df['close'].shift(1) - df['open'].shift(1)
+    df['Intraday_Reversal'] = (df['close'] - df['open']) - df['Prev_Day_Close_Open_Diff']
+    df['Intraday_Reversal'] = df['Intraday_Reversal'] * df['Intraday_Momentum']
+    
+    # Calculate Volume Trend using Exponential Moving Average of Volume
+    df['Volume_EMA'] = df['volume'].ewm(span=14, adjust=False).mean()
+    
+    # Compute Volume Reversal Component
+    df['Volume_Reversal'] = np.where(df['volume'] > df['Volume_EMA'], 1, -1) * df['Intraday_Return']
+    
+    # Introduce Intraday Gap Factor
+    df['Prev_Day_Close'] = df['close'].shift(1)
+    df['Intraday_Gap_Factor'] = (df['open'] - df['Prev_Day_Close']) / df['Prev_Day_Close']
+    
+    # Incorporate Transaction Amount
+    df['Amount_SMA'] = df['amount'].rolling(window=14).mean()
+    df['Transaction_Amount_Component'] = np.where(df['amount'] > df['Amount_SMA'], 1, -1) * df['Intraday_Return']
+    
+    # Calculate Intraday Price Efficiency
+    df['Price_Efficiency_1'] = (df['high'] - df['close']) / (df['high'] - df['low'])
+    df['Price_Efficiency_2'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Incorporate Intraday Price Efficiency
+    df['Prev_Price_Efficiency_1'] = df['Price_Efficiency_1'].shift(1)
+    df['Prev_Price_Efficiency_2'] = df['Price_Efficiency_2'].shift(1)
+    df['Price_Efficiency_Component'] = ((df['Price_Efficiency_1'] - df['Prev_Price_Efficiency_1']) + 
+                                        (df['Price_Efficiency_2'] - df['Prev_Price_Efficiency_2'])) * df['Intraday_Return']
+    
+    # Combine All Components
+    df['Alpha_Factor'] = (df['Intraday_Return'] * df['Intraday_Range'] * df['Intraday_Volatility'] +
+                          df['Intraday_Reversal'] + df['Volume_Reversal'] + df['Intraday_Gap_Factor'] +
+                          df['Transaction_Amount_Component'] + df['Price_Efficiency_Component'])
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': ...,
+#     'open': ...,
+#     'high': ...,
+#     'low': ...,
+#     'close': ...,
+#     'amount': ...,
+#     'volume': ...
+# })
+# alpha_factor = heuristics_v2(df)
+```

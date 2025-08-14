@@ -1,0 +1,23 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df, alpha=0.1, lookback_period=20):
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Initialize EMA with the first day's return
+    df['ema'] = 0.0
+    df.loc[df.index[0], 'ema'] = df.loc[df.index[0], 'daily_return']
+    
+    # Compute Exponential Moving Average of Daily Returns
+    for i in range(1, len(df)):
+        df.loc[df.index[i], 'ema'] = df.loc[df.index[i-1], 'ema'] * (1 - alpha) + df.loc[df.index[i], 'daily_return'] * alpha
+    
+    # Calculate volume weight
+    df['avg_volume'] = df['volume'].rolling(window=lookback_period).mean()
+    df['volume_weight'] = df['volume'] / df['avg_volume']
+    
+    # Combine EMA and Volume Weight
+    df['alpha_factor'] = df['ema'] * df['volume_weight']
+    
+    return df['alpha_factor']

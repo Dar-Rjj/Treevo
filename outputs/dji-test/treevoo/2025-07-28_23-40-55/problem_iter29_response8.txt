@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate intraday volatility measures
+    df['daily_price_range'] = df['high'] - df['low']
+    df['intraday_true_range'] = (df[['high', 'close', 'open']]
+                                 .apply(lambda x: max(x['high'] - x['close'], 
+                                                      x['high'] - x['open'],
+                                                      x['close'] - x['open']), axis=1))
+    df['daily_return'] = df['close'].pct_change()
+    df['std_20day'] = df['daily_return'].rolling(window=20).std()
+
+    # Analyze trading activity through volume
+    df['volume_20day_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume'] / df['volume'].shift(1) - 1)
+    df['volume_5day_avg'] = df['volume'].rolling(window=5).mean()
+    df['volume_20day_avg'] = df['volume_20day_ma']
+
+    # Construct indicators based on price movements
+    df['C_O'] = df['close'] - df['open']
+    df['C_L_div_H_L'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    df['momentum_10day_close'] = df['close'] - df['close'].shift(10)
+    df['1day_return'] = df['daily_return']
+    df['5day_return'] = (df['close'] / df['close'].shift(5) - 1)
+    df['20day_return'] = (df['close'] / df['close'].shift(20) - 1)
+    df['60day_return'] = (df['close'] / df['close'].shift(60) - 1)
+
+    # Incorporate amount traded
+    df['amount_per_share'] = df['amount'] / df['volume']
+    df['amount_to_close_ratio'] = df['amount'] / df['close']
+
+    # Explore momentum in price and volume
+    df['momentum_10day_volume'] = df['volume'] - df['volume'].shift(10)
+
+    # Utilize technical patterns
+    df['doji_pattern'] = (abs(df['open'] - df['close']) / (df['high'] - df['low']) < 0.05) & (df['high'] - df['low'] > 0)
+    df['hammer_pattern'] = ((df['close'] - df['low']) / (df['high'] - df['low']) > 0.67) & (df['open'] - df['low'] / (df['high'] - df['low']) < 0.33)
+
+    # Leverage historical returns
+    df['5day_simple_return'] = df['close'].pct_change(5)
+    df['20day_simple_return'] = df['close'].pct_change(20)
+
+    # Integrate trend indicators
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_200'] = df['close'].rolling(window=200).mean()
+    df['sma_crossover'] = (df['sma_50'] > df['sma_200']).astype(int)
+
+    # Investigate accumulation/distribution
+    df['ad_line'] = (((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']).cumsum()
+    df['ad_oscillator'] = df['ad_line'] - df['ad_line'].shift(14)
+
+    # Assess the support and resistance levels using high and low prices
+    df['close_above_20sma'] = (df['close'] > df['sma_20']).astype(int)
+    df['close_below_20sma'] = (df['close'] < df['sma_20']).astype(int)
+
+    # Consider the relationship between open and close prices to evaluate intraday sentiment
+    df['proportion_up_days'] = (df['close'] > df['open']).rolling(window=20).mean()
+    df['proportion_down_days'] = (df['close'] < df['open']).rolling(window=20).mean()
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (df['daily_price_range'] + df['intraday_true_range'] + df['std_20day'] + 
+                    df['volume_spike'] + df['C_L

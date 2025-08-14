@@ -1,0 +1,50 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = intraday_return * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Return
+    ema_volume_weighted_intraday_return = volume_weighted_intraday_return.ewm(span=30, adjust=False).mean()
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (intraday_return ** 2).rolling(window=60).sum().apply(np.sqrt)
+    
+    # Calculate Simple Moving Average of Intraday Volatility
+    sma_intraday_volatility = intraday_volatility.rolling(window=60).mean()
+    
+    # Adjust for Recent Volatility
+    recent_volatility_sma = intraday_volatility.rolling(window=10).mean()
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    volume_weighted_intraday_momentum = intraday_return * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Momentum
+    ema_volume_weighted_intraday_momentum = volume_weighted_intraday_momentum.ewm(span=30, adjust=False).mean()
+    
+    # Combine Factors
+    combined_factor = (ema_volume_weighted_intraday_return 
+                       + sma_intraday_volatility 
+                       + recent_volatility_sma 
+                       + ema_volume_weighted_intraday_momentum)
+    
+    # Incorporate Relative Strength and Liquidity
+    daily_trading_volume = df['volume']
+    relative_strength = df['close'].pct_change(50)
+    
+    # Assuming 'sp500' column is the S&P 500 Index
+    market_trend_factor = df['sp500'].rolling(window=50).mean()
+    
+    # Final Factor Adjustment
+    final_factor = (combined_factor 
+                    + relative_strength 
+                    + daily_trading_volume 
+                    + market_trend_factor)
+    
+    return final_factor

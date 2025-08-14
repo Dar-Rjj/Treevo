@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['low']
+    intraday_reversal = -intraday_return
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    combined_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    price_change = df['close'].diff()
+    five_day_momentum = price_change.rolling(window=5).sum()
+    open_close_spread = (df['open'] - df['close']).abs()
+    adjusted_momentum = five_day_momentum * open_close_spread
+    combined_signal = adjusted_momentum / combined_range
+    
+    # Enhance Combined Signal with Smoothing
+    smoothed_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Weighted Price Change
+    weighted_price_change = price_change * df['volume'] * np.sqrt(df['amount'])
+    
+    # Integrate Weighted Price Change with Enhanced Combined Signal
+    integrated_signal = smoothed_signal + weighted_price_change
+    
+    # Integrate Intraday Reversal into Final Factor
+    close_to_open_diff = df['close'] - df['open']
+    intraday_reversal_adjusted = intraday_reversal * df['volume'] * close_to_open_diff
+    final_factor = integrated_signal + intraday_reversal_adjusted
+    
+    # Introduce a New Volatility Component
+    daily_volatility = np.sqrt(((df['high'] - df['low']) ** 2) / 4 + ((df['close'] - df['open']) ** 2) / 4)
+    final_factor *= daily_volatility
+    
+    # Apply a Second Smoothing Layer
+    final_factor = final_factor.rolling(window=10).mean()
+    
+    # Enhance with Trend Confirmation
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    final_factor *= long_term_momentum
+    
+    # Final Smoothing for Robustness
+    final_factor = final_factor.rolling(window=15, min_periods=1).apply(lambda x: np.convolve(x, np.arange(1, len(x)+1), 'valid')[0] / sum(np.arange(1, len(x)+1)), raw=True)
+    
+    return final_factor
+```

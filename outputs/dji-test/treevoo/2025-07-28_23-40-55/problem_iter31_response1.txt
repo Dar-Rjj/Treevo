@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Integrated Intraday and Open-to-Close Momentum
+    intraday_range = df['high'] - df['low']
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    integrated_momentum = intraday_range + open_to_close_return
+    
+    # Apply Volume Filter
+    volume_rolling_mean = df['volume'].rolling(window=7).mean()
+    high_volume_days = df['volume'] > volume_rolling_mean
+    filtered_alpha = integrated_momentum[high_volume_days]
+    
+    # Adjust Momentum by Volatility
+    high_low_volatility = df['high'] - df['low']
+    preliminary_alpha = filtered_alpha * high_low_volatility[high_volume_days]
+    
+    # Calculate Short-Term vs. Long-Term EMA
+    short_term_ema = df['close'].ewm(span=7, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=25, adjust=False).mean()
+    ema_difference = short_term_ema - long_term_ema
+    
+    # Calculate Momentum Based on EMAs
+    short_term_momentum = df['close'].shift(1) - df['close'].shift(7)
+    long_term_momentum = df['close'].shift(1) - df['close'].shift(30)
+    adjusted_momentum = short_term_momentum - long_term_momentum
+    
+    # Adjust by Volume Shock
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    momentum_by_volume_shock = adjusted_momentum * daily_volume_change
+    
+    # Synthesize Final Alpha
+    synthesized_alpha = preliminary_alpha.add(momentum_by_volume_shock, fill_value=0)
+    final_alpha_factor = synthesized_alpha * df['close'][high_volume_days]
+    
+    return final_alpha_factor
+```

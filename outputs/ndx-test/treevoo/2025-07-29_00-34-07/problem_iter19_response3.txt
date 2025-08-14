@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    price_diff = df['close'].diff(15)
+
+    # Calculate 25-day Rolling High-Low Differential
+    rolling_high = df['high'].rolling(window=25).max()
+    rolling_low = df['low'].rolling(window=25).min()
+    high_low_diff = rolling_high - rolling_low
+
+    # Volume Volatility
+    volume_volatility = df['volume'].rolling(window=15).std()
+    weighted_high_low_diff = high_low_diff * volume_volatility
+
+    # Adjust for Volume Changes
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    final_volume_adjustment = weighted_high_low_diff * (1 + 2 * daily_volume_change)
+
+    # Aggregate the Signals
+    aggregated_signal = final_volume_adjustment - price_diff
+
+    # Calculate Price Momentum
+    price_return_2d = (df['close'] / df['close'].shift(2) - 1)
+    price_return_7d = (df['close'] / df['close'].shift(7) - 1)
+    price_return_30d = (df['close'] / df['close'].shift(30) - 1)
+
+    # Average the Momentum
+    averaged_momentum = (price_return_2d + price_return_7d + price_return_30d) / 3
+
+    # Smoothing and Initial Momentum Calculation
+    sma_aggregated = aggregated_signal.rolling(window=7).mean()
+    smoothed_momentum = sma_aggregated - sma_aggregated.shift(7)
+
+    # Adjusted High-Low Cumulative Return and Weighted Price Gaps
+    daily_price_range = df['high'] - df['low']
+    sum_daily_price_range = daily_price_range.rolling(window=7).sum()
+    weighted_price_gaps = (df['close'] - df['close'].shift(1)) * daily_volume_change
+    sum_weighted_price_gaps = weighted_price_gaps.rolling(window=7).sum()
+
+    # Intermediate Factor Combination
+    intermediate_factor = smoothed_momentum + averaged_momentum
+
+    # Calculate Weighted Price Momentum
+    log_return = np.log(df['close'] / df['close'].rolling(window=15).mean())
+    weighted_price_momentum = (df['close'] - df['close'].rolling(window=15).mean()) * log_return
+
+    # Final Alpha Factor Construction
+    alpha_factor = (sum_daily_price_range + sum_weighted_price_gaps) * averaged_momentum + intermediate_factor + weighted_price_momentum
+
+    return alpha_factor
+```

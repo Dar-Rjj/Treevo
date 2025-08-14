@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    df['Daily_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 20-Day Raw Momentum
+    df['Raw_Momentum_20'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['MA_Price_Momentum_5'] = df['Price_Momentum'].rolling(window=5).mean()
+    
+    # Calculate 5-day Exponential Moving Average of 1-Period Returns
+    M = 5
+    df['EMA_Price_Momentum_5'] = df['Price_Momentum'].ewm(span=M, adjust=False).mean()
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Generate Initial Alpha Factor
+    df['Initial_Alpha_Factor'] = df['High_Low_Range'] * df['MA_Price_Momentum_5']
+    
+    # Confirm with Volume
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Confirmed_Alpha'] = df['Initial_Alpha_Factor'] * np.log(df['Volume_Change'] + 1)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate VWAP to Close Difference
+    df['VWAP_Close_Diff'] = df['VWAP'] - df['close']
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    df['Momentum_VWAP_Diff'] = df['Daily_Momentum'] * df['VWAP_Close_Diff']
+    
+    # Integrate with Intraday and Trend Adjustments
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    df['Volume_Adjusted_Intraday_Return'] = df['Intraday_Return'] / df['volume']
+    df['Enhanced_Price_Momentum'] = df['Raw_Momentum_20'] * df['Volume_Adjusted_Intraday_Return']
+    
+    # Calculate Volume Delta
+    df['Volume_Delta'] = df['volume'] - df['volume'].shift(20)
+    
+    # Adjust with Volume Delta
+    df['Adjusted_Result'] = df['Momentum_VWAP_Diff'] * np.abs(df['Volume_Delta'])
+    
+    # Integrate Price Delta
+    df['Price_Delta'] = df['close'] - df['close'].shift(1)
+    df['Integrated_Result'] = df['Adjusted_Result'] + df['Price_Delta']
+    
+    # Apply 7-day Simple Moving Average
+    df['SMA_7'] = df['Integrated_Result'].rolling(window=7).mean()
+    
+    # Calculate Intraday Reversal
+    df['Prev_Day_Close_Open_Diff'] = (df['close'].shift(1) - df['open'].shift(1))
+    df['Intraday_Reversal'] = -df['Prev_Day_Close_Open_Diff']
+    
+    # Synthesize Enhanced Intraday and Cumulative Momentum Factor
+    df['Synthesized_Factor'] = df['SMA_7'] + df['Intraday_Reversal']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Synthesized_Factor'] * np.sign(df['Volume_Change']) * np.sign(df['close'] - df['close'].shift(1))
+    
+    # Introduce a threshold to filter out low signal-to-noise ratio
+    threshold = 0.5
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'].apply(lambda x: x if abs(x) > threshold else 0)
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    df['adj_close'] = df['close'] - df['open']
+
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    weights = {'high': 0.6, 'low': 0.4}
+    enhanced_intraday_momentum = (weights['high'] * high_price_indicator + 
+                                  weights['low'] * low_price_indicator)
+
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    lookback_period_vol_ema = 10
+    df['vol_ema'] = df['volume'].ewm(span=lookback_period_vol_ema).mean()
+    normalized_volume = df['volume'] / df['vol_ema']
+    intraday_momentum_vol_adjusted = enhanced_intraday_momentum * normalized_volume
+
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    n = 20
+    long_term_momentum = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    volume_ratio = df['volume'] / df['volume'].shift(n)
+    long_term_momentum_vol_adj = long_term_momentum * volume_ratio
+
+    # Add Volume Spike Filter
+    spike_threshold = 3
+    volume_spike = df['volume'] / df['volume'].shift(1)
+    no_spike = (volume_spike < spike_threshold).astype(int)
+    filtered_long_term_momentum_vol_adj = long_term_momentum_vol_adj * no_spike
+
+    # Calculate Weighted Intraday Momentum
+    weighted_intraday_momentum = (df['close'] - df['open']) * df['volume']
+    weighted_intraday_momentum_ema = weighted_intraday_momentum.ewm(span=12).mean()
+    recent_volume_avg = df['volume'].rolling(window=7).mean()
+    weighted_intraday_momentum_final = weighted_intraday_momentum_ema * recent_volume_avg
+
+    # Calculate Adjusted High-Low Breakout Potential
+    high_low_range = df['high'] - df['low']
+    breakout_potential = high_low_range * df['volume']
+    breakout_potential_ema = breakout_potential.ewm(span=25).mean()
+    recent_breakout_vol_avg = df['volume'].rolling(window=15).mean()
+    adjusted_breakout_potential = breakout_potential_ema * recent_breakout_vol_avg
+
+    # Momentum Reversal Indicator
+    momentum_reversal = (df['close'] - df['open']) - weighted_intraday_momentum
+    momentum_reversal_indicator = momentum_reversal / adjusted_breakout_potential
+
+    # Price-Volume Synchronization
+    price_change = df['close'] - df['close'].shift(1)
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_volume_sync = price_change.rolling(window=20).corr(volume_change)
+
+    # Consolidate All Factors
+    total_factor = (df['adj_close'] + intraday_momentum_vol_adjusted +
+                    weighted_intraday_momentum_final + adjusted_breakout_potential +
+                    filtered_long_term_momentum_vol_adj + price_volume_sync)
+    factor_values = total_factor / df['open']
+
+    return factor_values
+```

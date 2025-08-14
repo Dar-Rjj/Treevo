@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) / df['open'].shift(1) - 1
+    
+    # Volume-Weight the Return
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Short-Term (5 days) Lookback Period for Momentum
+    df['5d_sma_vw_return'] = df['volume_weighted_return'].rolling(window=5).mean()
+    df['5d_ema_vw_return'] = df['volume_weighted_return'].ewm(span=5, adjust=False).mean()
+    
+    # Mid-Term (10 days) Lookback Period for Momentum
+    df['10d_ema_vw_return'] = df['volume_weighted_return'].ewm(span=10, adjust=False).mean()
+    
+    # Long-Term (20 days) Lookback Period for Momentum
+    df['20d_sma_vw_return'] = df['volume_weighted_return'].rolling(window=20).mean()
+    df['20d_ema_vw_return'] = df['volume_weighted_return'].ewm(span=20, adjust=False).mean()
+    
+    # Adaptive Volatility Stabilization
+    short_term_volatility = df['volume_weighted_return'].rolling(window=5).std()
+    long_term_volatility = df['volume_weighted_return'].rolling(window=20).std()
+    df['adaptive_volatility'] = 0.6 * short_term_volatility + 0.4 * long_term_volatility
+    
+    # Integrated Momentum and Adaptive Volatility
+    integrated_momentum = (df['5d_sma_vw_return'] + df['10d_ema_vw_return'] + df['20d_ema_vw_return']) / 3
+    df['integrated_volatility_factor'] = integrated_momentum / df['adaptive_volatility']
+    
+    # Incorporate High-Low Price Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Integrate High-Low Momentum
+    df['high_low_momentum'] = df['high_low_ratio'].rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['integrated_volatility_factor'] 
+                          + df['high_low_momentum'] 
+                          + df['volume_weighted_return'])
+    
+    return df['alpha_factor'].dropna()
+```

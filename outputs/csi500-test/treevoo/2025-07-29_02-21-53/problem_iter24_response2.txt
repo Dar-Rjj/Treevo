@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute True Range using High, Low, and Previous Close
+    df['TrueRange'] = df[['High', 'Low']].sub(df['Close'].shift(1), axis=0).abs().max(axis=1)
+    
+    # Compute Intraday Price Movement using High, Low, Open, and Close
+    df['IntradayPriceMove'] = (df['High'] - df['Low']) + (df['Close'] - df['Open'])
+    
+    # Adjust for Volume Impact on Price
+    df['VolumeTrueRange'] = df['TrueRange'] * df['Volume']
+    df['VolumeIntradayMove'] = df['IntradayPriceMove'] * df['Volume']
+    
+    # Compute High-Low Difference and Close-Open Difference
+    df['HighLowDiff'] = df['High'] - df['Low']
+    df['CloseOpenDiff'] = df['Close'] - df['Open']
+    
+    # Smooth High-Low Range and Aggregate Price Movements
+    df['SmoothedHighLowRange'] = df['HighLowDiff'].ewm(span=20).mean()
+    df['SumHighLowDiff'] = df['HighLowDiff'].rolling(window=20).sum()
+    df['SumCloseOpenDiff'] = df['CloseOpenDiff'].rolling(window=20).sum()
+    
+    # Calculate Long-Term High-Low Range
+    df['LongTermHighLowRange'] = df['High'].rolling(window=50).max() - df['Low'].rolling(window=50).min()
+    
+    # Compute Combined Price and High-Low Range Momentum
+    df['CombinedMomentum'] = df['SumHighLowDiff'] + df['SumCloseOpenDiff'] - (df['LongTermHighLowRange'] - df['SmoothedHighLowRange'])
+    
+    # Weight by Recent Price Volatility
+    df['Volatility'] = df['Close'].rolling(window=20).std()
+    df['WeightedCombinedMomentum'] = df['CombinedMomentum'] * df['Volatility']
+    
+    # Evaluate Volume Activity
+    df['AvgVolume'] = df['Volume'].ewm(span=20).mean()
+    df['IsHighVolume'] = (df['Volume'] > df['AvgVolume']).astype(int)
+    
+    # Integrate Price, High-Low Range, and Volume Factors
+    df['VolumeRatio'] = df['Volume'] / df['AvgVolume']
+    df['VolumeAdjustedMomentum'] = df['WeightedCombinedMomentum'] * df['VolumeRatio'] * df['IsHighVolume']
+    
+    # Assess Trend Continuity and Reversal Potential
+    df['MarketReturn'] = df['Close'].pct_change()
+    df['FinalAlphaFactor'] = df['VolumeAdjustedMomentum'] + df['MarketReturn']
+    
+    # Consider Volume Weighted Price Change
+    df['VWAP'] = (df['Close'] * df['Volume']).cumsum() / df['Volume'].cumsum()
+    df['FinalAlphaFactor'] += (df['Close'] - df['VWAP']) / df['VWAP']
+    
+    # Adjust Alpha Factor for Volume Spike
+    df['VolumeSpike'] = df['Volume'] / df['AvgVolume']
+    df['FinalAlphaFactor'] *= (1 + df['VolumeSpike'].clip(lower=1.0))
+    
+    return df['FinalAlphaFactor']
+```

@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range and Daily Range
+    df['Previous Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['Previous Close']).abs()
+    df['TR3'] = (df['low'] - df['Previous Close']).abs()
+    df['True Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['Daily Range'] = df['high'] - df['low']
+
+    # Calculate 14-Period Average True Range (ATR) and 20-Day Moving Average of Daily Range
+    df['ATR'] = df['True Range'].rolling(window=14).mean()
+    df['Avg Daily Range'] = df['Daily Range'].rolling(window=20).mean()
+
+    # Identify Breakouts
+    df['Upward Breakout'] = df['close'] > df['high'].shift(1)
+    df['Downward Breakout'] = df['close'] < df['low'].shift(1)
+
+    # Calculate Breakout Strength
+    df['Breakout Strength'] = 0
+    df.loc[df['Upward Breakout'], 'Breakout Strength'] = (df['close'] - df['high'].shift(1)) / df['Avg Daily Range']
+    df.loc[df['Downward Breakout'], 'Breakout Strength'] = (df['low'].shift(1) - df['close']) / df['Avg Daily Range']
+
+    # Cumulate Breakout Strength over the past 10 days
+    df['Positive Breakout Sum'] = df['Breakout Strength'].apply(lambda x: max(x, 0)).rolling(window=10).sum()
+    df['Negative Breakout Sum'] = df['Breakout Strength'].apply(lambda x: min(x, 0)).rolling(window=10).sum()
+    df['Cumulated Breakout Strength'] = df['Positive Breakout Sum'] + df['Negative Breakout Sum']
+
+    # Calculate Price Momentum
+    df['Price Momentum'] = (df['close'] - df['close'].shift(14)) * df['volume']
+
+    # Adjust Momentum by ATR
+    df['ATR Adjusted Momentum'] = df['Price Momentum'] / df['ATR']
+
+    # Generate Alpha Factor
+    df['Close-to-Open Return'] = df['close'] - df['open']
+    df['Intraday High-Low Spread'] = df['high'] - df['low']
+    df['Alpha Factor'] = (df['Intraday High-Low Spread'] + 
+                          df['Close-to-Open Return'] + 
+                          df['Cumulated Breakout Strength'] + 
+                          df['ATR Adjusted Momentum'])
+
+    # Incorporate Volume Trend
+    df['Volume MA10'] = df['volume'].rolling(window=10).mean()
+    df['Volume Surge'] = df['volume'] > df['Volume MA10']
+    df['Volume Decline'] = df['volume'] < df['Volume MA10']
+    df['Alpha Factor'] = df['Alpha Factor'] * (1.5 * df['Volume Surge'] + 0.5 * df['Volume Decline'])
+
+    return df['Alpha Factor']
+```

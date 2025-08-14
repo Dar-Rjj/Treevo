@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Exponential Moving Average of Intraday Returns (EMA)
+    def ema(series, alpha=0.2):
+        return series.ewm(alpha=alpha, adjust=False).mean()
+    
+    df['ema_intraday_return'] = ema(df['intraday_return'], alpha=0.2)
+
+    # Calculate Intraday Volatility
+    df['squared_intraday_returns'] = df['intraday_return'] ** 2
+    df['intraday_volatility'] = (df['squared_intraday_returns'].rolling(window=10).sum()) ** 0.5
+    
+    # Calculate EMA of Intraday Volatility
+    df['ema_intraday_volatility'] = ema(df['intraday_volatility'], alpha=0.2)
+
+    # Weight by Volume
+    df['volume_weighted_ema_intraday_volatility'] = df['volume'] * df['ema_intraday_volatility']
+
+    # Calculate Volume-Weighted Intraday Momentum
+    df['volume_weighted_intraday_momentum'] = df['volume'] * df['ema_intraday_return']
+
+    # Calculate EMA of Volume-Weighted Intraday Momentum
+    df['ema_volume_weighted_intraday_momentum'] = ema(df['volume_weighted_intraday_momentum'], alpha=0.2)
+
+    # Incorporate Trade Amount
+    df['adjusted_volume_weighted_intraday_momentum'] = df['ema_volume_weighted_intraday_momentum'] / df['amount']
+
+    # Adjust for Recent Volatility
+    df['recent_volatility'] = ema(df['intraday_volatility'], alpha=0.3)
+
+    # Combine Factors
+    df['combined_factor'] = df['ema_intraday_volatility'] + df['adjusted_volume_weighted_intraday_momentum']
+
+    # Final Adjustment
+    df['combined_factor_diff'] = df['combined_factor'].diff()
+    df['final_factor'] = df['combined_factor'] + df['combined_factor_diff']
+
+    # Return the final factor values
+    return df['final_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', index_col='date', parse_dates=True)
+# factors = heuristics_v2(df)
+```

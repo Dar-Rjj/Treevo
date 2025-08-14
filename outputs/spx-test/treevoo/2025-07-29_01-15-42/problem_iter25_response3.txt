@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate EMA Smoothed Close-to-Open Return
+    df['Close_to_Open_Return'] = df['Close'].shift(-1) - df['Open']
+    df['Volume_Amount_Sum'] = df['Volume'].rolling(window=10).sum() + df['Amount'].rolling(window=10).sum()
+    df['EMA_Close_to_Open_Return'] = df['Close_to_Open_Return'].ewm(span=10, adjust=False).mean()
+    df['Adjusted_Momentum'] = df['EMA_Close_to_Open_Return'] / df['Volume_Amount_Sum']
+
+    # Calculate Price Range Ratio
+    df['Price_Range_Ratio'] = (df['High'] - df['Low']) / df['Close']
+
+    # Compute RTSI
+    df['Gain'] = df['Close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['Loss'] = -df['Close'].diff().apply(lambda x: x if x < 0 else 0)
+    df['Smoothed_Gain'] = df['Gain'].ewm(span=14, adjust=False).mean()
+    df['Smoothed_Loss'] = df['Loss'].ewm(span=14, adjust=False).mean()
+    df['RTSI'] = (df['Smoothed_Gain'] / (df['Smoothed_Gain'] + df['Smoothed_Loss'])) * 100
+
+    # Calculate EMA Smoothed Daily Volume Change
+    df['Daily_Volume_Change'] = df['Volume'].diff()
+    df['EMA_Daily_Volume_Change'] = df['Daily_Volume_Change'].ewm(span=5, adjust=False).mean()
+
+    # Combine Factors
+    df['Combined_Factor'] = (df['Price_Range_Ratio'] * df['RTSI']) + df['Adjusted_Momentum'] + df['EMA_Daily_Volume_Change']
+
+    # Calculate Daily Close-to-Close Return and Adjust for Volume and Amount
+    df['Close_to_Close_Return'] = df['Close'].diff()
+    df['EMA_Close_to_Close_Return'] = df['Close_to_Close_Return'].ewm(span=10, adjust=False).mean()
+    df['Volume_Amount_Sum_Close_to_Close'] = df['Volume'].rolling(window=10).sum() + df['Amount'].rolling(window=10).sum()
+    df['Adjusted_Momentum_Close_to_Close'] = df['EMA_Close_to_Close_Return'] / df['Volume_Amount_Sum_Close_to_Close']
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Price_Range_Ratio'] * df['RTSI']) + df['Adjusted_Momentum_Close_to_Close'] + df['EMA_Daily_Volume_Change']
+
+    return df['Alpha_Factor']
+```

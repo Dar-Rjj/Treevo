@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Change
+    price_change = df['close'].diff()
+    
+    # Compute Momentum over the last 10 days
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'].diff()
+    
+    # Adjust for Volume
+    volume_adjusted_range = high_low_range * volume_delta
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volatility
+    volatility_adjusted_momentum = (momentum + volume_adjusted_range) / daily_volatility
+    
+    # Combine Momentum, Volume-Adjusted Range, and Volatility Adjustment
+    combined_factor = volatility_adjusted_momentum.rolling(window=20).sum() / volume_adjusted_range
+    
+    # Calculate High-Low Range Momentum
+    high_low_range_momentum = high_low_range.diff().rolling(window=10).sum()
+    
+    # Adjust for Volume
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    adjusted_high_low_momentum = high_low_range_momentum * avg_volume_5d
+    
+    # Apply Exponential Moving Average Smoothing
+    smoothed_momentum = adjusted_high_low_momentum.ewm(span=20, adjust=False).mean()
+    
+    # Interim Alpha Factor 1: Smoothed Adjusted Momentum
+    interim_alpha_factor_1 = smoothed_momentum
+    
+    # Calculate Logarithmic Daily Returns
+    log_returns = (df['close'] / df['close'].shift(1)).apply(np.log)
+    
+    # Momentum Component
+    ema_21 = log_returns.ewm(span=21, adjust=False).mean()
+    ema_63 = log_returns.ewm(span=63, adjust=False).mean()
+    momentum_component = ema_21 - ema_63
+    
+    # Volatility Component
+    abs_returns = log_returns.abs()
+    ema_vol_21 = abs_returns.ewm(span=21, adjust=False).mean()
+    ema_vol_63 = abs_returns.ewm(span=63, adjust=False).mean()
+    volatility_component = ema_vol_21 - ema_vol_63
+    
+    # Volume Component
+    log_volume_changes = (df['volume'] / df['volume'].shift(1)).apply(np.log)
+    ema_vol_21 = log_volume_changes.ewm(span=21, adjust=False).mean()
+    ema_vol_63 = log_volume_changes.ewm(span=63, adjust=False).mean()
+    volume_component = ema_vol_21 - ema_vol_63
+    
+    # Open-Close Spread
+    open_close_diff = df['open'] - df['close']
+    open_close_spread = open_close_diff.ewm(span=21, adjust=False).mean()
+    
+    # Final Alpha Factor 2
+    final_alpha_factor_2 = momentum_component + volatility_component + volume_component + open_close_spread
+    
+    # Final Alpha Factor
+    final_alpha_factor = interim_alpha_factor_1 + final_alpha_factor_2
+    
+    return final_alpha_factor
+```

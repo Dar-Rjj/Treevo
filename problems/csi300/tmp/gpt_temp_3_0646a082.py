@@ -1,0 +1,32 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = (df['close'] - df['open']) / df['open'].shift(1)
+    
+    # Calculate Volume-Weighted Intraday Range
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['VolumeWeightedIntradayRange'] = (df['high'] - df['low']) * (df['volume'] / avg_volume)
+    
+    # Calculate Amount-Weighted Close-to-Open Return
+    avg_amount = df['amount'].rolling(window=20).mean()
+    df['AmountWeightedCloseToOpenReturn'] = (df['close'] - df['open']) / df['open'] * (df['amount'] / avg_amount)
+    
+    # Combine Weighted Intraday Range and Close-to-Open Return with Dynamic Weights
+    recent_weights = 0.7 * df['VolumeWeightedIntradayRange'] + 0.3 * df['AmountWeightedCloseToOpenReturn']
+    older_weights = 0.5 * df['VolumeWeightedIntradayRange'] + 0.5 * df['AmountWeightedCloseToOpenReturn']
+    
+    # Apply dynamic weights based on recency
+    df['RecentnessFactor'] = df.index.to_series().diff().dt.days
+    df['RecentnessFactor'] = df['RecentnessFactor'].fillna(0)  # Handle the first row
+    df['RecentnessFactor'] = df['RecentnessFactor'].apply(lambda x: 0.7 if x < 5 else 0.5)
+    
+    df['AlphaFactor'] = df['RecentnessFactor'] * recent_weights + (1 - df['RecentnessFactor']) * older_weights
+    
+    return df['AlphaFactor']

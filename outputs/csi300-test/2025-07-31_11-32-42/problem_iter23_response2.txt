@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Evaluate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    integrated_metric = intraday_volatility - open_to_close_movement
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range = (df['high'] - df['low']) / (df['open'] + df['close'])
+    stability_adjusted_metric = integrated_metric / price_range
+    
+    # Incorporate Advanced Volume Impact
+    volume_impact = np.cbrt(df['volume'])
+    volume_adjusted_metric = stability_adjusted_metric * volume_impact
+    
+    # Calculate Volume-Weighted Prices
+    volume_weighted_close = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    volume_weighted_open = (df['open'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Synthesize VWAPCHL into the Model
+    vwapchl = (volume_weighted_close - volume_weighted_open) / (df['high'] - df['low'])
+    
+    # Introduce Dynamic Price Momentum
+    close_5d_ma = df['close'].rolling(window=5).mean()
+    momentum_5d = (df['close'] - close_5d_ma) / (df['close'].rolling(window=5).max() - df['close'].rolling(window=5).min())
+    
+    # Enhance with Additional Momentum Indicators
+    close_10d_ma = df['close'].rolling(window=10).mean()
+    momentum_10d = (df['close'] - close_10d_ma) / (df['close'].rolling(window=10).max() - df['close'].rolling(window=10).min())
+    
+    # Integrate Momentum Indicators
+    balanced_momentum_signal = (momentum_5d + momentum_10d) / 2
+    
+    # Evaluate Volume-Weighted Momentum
+    vwap = ((df['close'] * df['volume']) + (df['open'] * df['volume'])) / (2 * df['volume'])
+    vwap_change = vwap - vwap.shift(1)
+    
+    # Introduce Dynamic Weighting
+    volume_5d_std = df['volume'].rolling(window=5).std()
+    volume_5d_ma = df['volume'].rolling(window=5).mean()
+    z_score_volume = (df['volume'] - volume_5d_ma) / volume_5d_std
+    dynamic_weighted_metric = volume_adjusted_metric * z_score_volume
+    
+    # Final Integration
+    factor = (volume_adjusted_metric 
+              * vwapchl 
+              * vwap_change 
+              * dynamic_weighted_metric 
+              * balanced_momentum_signal)
+    
+    return factor
+```

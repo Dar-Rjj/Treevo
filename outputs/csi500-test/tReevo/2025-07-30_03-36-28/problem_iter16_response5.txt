@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Define the lookback periods
+    short_lookback = 20
+    long_lookback = 60
+    
+    # Calculate Simple Moving Averages (SMA)
+    df['SMA_short'] = df['close'].rolling(window=short_lookback).mean()
+    df['SMA_long'] = df['close'].rolling(window=long_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['volume_weighted_high_low'] = df['high_low_diff'] * df['volume']
+    df['volatility'] = df['volume_weighted_high_low'].rolling(window=short_lookback).mean()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['SMA_short']) / df['close'].rolling(window=short_lookback).mean()
+    
+    # Determine Market Trend
+    df['trend'] = np.where(df['SMA_short'] > df['SMA_long'], 'Bullish', 'Bearish')
+    
+    # Dynamically adjust component weights based on market trend
+    bullish_weights = {'price_momentum': 0.7, 'volatility': 0.3}
+    bearish_weights = {'price_momentum': 0.3, 'volatility': 0.7}
+    
+    df['weight_price_momentum'] = np.where(df['trend'] == 'Bullish', bullish_weights['price_momentum'], bearish_weights['price_momentum'])
+    df['weight_volatility'] = np.where(df['trend'] == 'Bullish', bullish_weights['volatility'], bearish_weights['volatility'])
+    
+    # Combine Price Momentum and Volume-Adjusted Volatility
+    df['alpha_factor'] = (df['price_momentum'] * df['weight_price_momentum']) + (df['volatility'] * df['weight_volatility'])
+    
+    # Drop rows with NaN values
+    df.dropna(inplace=True)
+    
+    return df['alpha_factor']
+```

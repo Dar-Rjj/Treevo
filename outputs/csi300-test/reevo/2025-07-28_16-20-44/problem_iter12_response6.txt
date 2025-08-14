@@ -1,0 +1,52 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log returns over the last 10 days
+    log_returns = np.log(df['close']).diff(periods=10)
+    
+    # Calculate the volatility of the log returns over the last 30 days
+    volatility = log_returns.rolling(window=30).std()
+    
+    # Calculate the liquidity factor using the average volume over the last 20 days
+    liquidity = df['volume'].rolling(window=20).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over the last 5 days
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=5).mean()
+    
+    # Calculate the RSI (Relative Strength Index) over the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the MACD (Moving Average Convergence Divergence)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd = macd_line - signal_line
+    
+    # Calculate the ATR (Average True Range) over the last 14 days
+    tr = pd.DataFrame({
+        'h-l': df['high'] - df['low'],
+        'h-yc': abs(df['high'] - df['close'].shift(1)),
+        'l-yc': abs(df['low'] - df['close'].shift(1))
+    }).max(axis=1)
+    atr = tr.rolling(window=14).mean()
+    
+    # Calculate the ADX (Average Directional Index) over the last 14 days
+    dm_plus = (df['high'].diff().where(lambda x: x > 0, 0)).fillna(0)
+    dm_minus = (df['low'].diff().where(lambda x: x < 0, 0) * -1).fillna(0)
+    di_plus = 100 * (dm_plus.rolling(window=14).mean() / atr)
+    di_minus = 100 * (dm_minus.rolling(window=14).mean() / atr)
+    dx = 100 * (abs(di_plus - di_minus) / (di_plus + di_minus))
+    adx = dx.rolling(window=14).mean()
+    
+    # Create a combined factor by balancing the log returns, volatility, liquidity, and market sentiment
+    # The idea is that stocks with positive log returns, low volatility, high liquidity, strong market sentiment, 
+    # favorable RSI, and positive MACD may outperform
+    factor = (log_returns + abs(log_returns.min())) * (1 / (volatility + 1)) * (liquidity / liquidity.mean()) * (market_sentiment / market_sentiment.mean()) * (rsi / 100) * (macd + abs(macd.min())) * (1 / (atr + 1)) * (adx / 100)
+    
+    return factor
+```

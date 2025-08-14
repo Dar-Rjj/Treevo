@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate momentum indicators
+    short_sma = df['close'].rolling(window=10).mean()
+    long_sma = df['close'].rolling(window=30).mean()
+    sma_ratio = short_sma / long_sma
+    
+    short_ema = df['close'].ewm(span=10, adjust=False).mean()
+    long_ema = df['close'].ewm(span=30, adjust=False).mean()
+    ema_ratio = short_ema / long_ema
+    
+    roc = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    
+    # Calculate trend indicators
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+    
+    tr = df[['high', 'low', 'close']].diff().abs().max(axis=1)
+    atr = tr.ewm(span=14, adjust=False).mean()
+    
+    pos_dm = (df['high'].diff().fillna(0)).apply(lambda x: max(x, 0))
+    neg_dm = (-df['low'].diff().fillna(0)).apply(lambda x: max(x, 0))
+    pos_di = 100 * (pos_dm.rolling(window=14).sum() / atr)
+    neg_di = 100 * (neg_dm.rolling(window=14).sum() / atr)
+    dx = 100 * (abs(pos_di - neg_di) / (pos_di + neg_di))
+    adx = dx.ewm(span=14, adjust=False).mean()
+    
+    # Calculate volume-based indicators
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    cmf = ((df['close'] - df['low']) - (df['high'] - df['close']) / (df['high'] - df['low']) * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Integrate multiple indicators
+    cmi = (sma_ratio + ema_ratio + roc) / 3
+    cti = (macd_histogram + adx) / 2
+    cvi = atr
+    cvoi = (obv + cmf) / 2
+    
+    # Generate final alpha factor
+    faf = (cmi + cti + cvi + cvoi) / 4
+    
+    return faf
+```

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices for the last 20 days
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Factor
+    momentum = sma_20 - df['close']
+    
+    # Calculate Combined Volume & Price Volatility
+    avg_volume_220 = df['volume'].rolling(window=220).mean()
+    avg_high_low_range_20 = (df['high'] - df['low']).rolling(window=20).mean()
+    combined_volatility = avg_volume_220 * avg_high_low_range_20
+    weighted_momentum = momentum * combined_volatility
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    high_low_diff = df['high'] - df['low']
+    intraday_vol_mean = high_low_diff.rolling(window=20).mean()
+    intraday_vol_std = high_low_diff.rolling(window=20).std()
+    intraday_vol = (intraday_vol_mean + intraday_vol_std) / 2
+    adjusted_intraday_return = intraday_return / intraday_vol
+    
+    # Determine Range-to-Range Ratio
+    prev_high_low_range = (df['high'].shift(1) - df['low'].shift(1)).fillna(0)
+    range_to_range_ratio = (df['high'] - df['low']) / prev_high_low_range
+    
+    # Integrate Volume Sensitivity
+    volume_ratio = df['volume'] / df['volume'].shift(1).fillna(1)
+    adjusted_range_to_range_ratio = range_to_range_ratio * volume_ratio
+    
+    # Detect Volume Shock
+    volume_change = df['volume'] - df['volume'].shift(1).fillna(0)
+    volume_shock = (volume_change > 0.5 * df['volume'].shift(1)).astype(int)
+    
+    # Combine Intraday Indicators
+    combined_intraday_indicators = (intraday_spread * intraday_return) + intraday_return
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = df['close'] / (df['high'] - df['low'])
+    
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    volume_weighted_close_to_range_momentum = combined_intraday_indicators * close_to_range_ratio
+    
+    # Final Combination
+    final_combination = (combined_intraday_indicators * volume_weighted_close_to_range_momentum) * weighted_momentum
+    
+    # Adjust for Volume Impact and Enhanced Price Volatility
+    volume_trend = df['volume'] - df['volume'].shift(1).fillna(0)
+    avg_true_range = (df['high'] - df['low']).rolling(window=20).mean() + \
+                    (abs(df['high'] - df['close'].shift(1))).rolling(window=20).mean() + \
+                    (abs(df['low'] - df['close'].shift(1))).rolling(window=20).mean()
+    avg_true_range /= 3
+    enhanced_price_volatility = combined_volatility * avg_true_range
+    final_alpha_factor = final_combination * volume_trend * enhanced_price_volatility
+    
+    return final_alpha_factor
+```

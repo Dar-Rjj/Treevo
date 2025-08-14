@@ -1,0 +1,52 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 30-day Exponential Moving Averages (EMA) of the close price
+    df['ema_10d'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30d'] = df['close'].ewm(span=30, adjust=False).mean()
+
+    # Momentum - Difference between the two EMAs
+    df['momentum'] = df['ema_10d'] - df['ema_30d']
+
+    # Volatility - Standard deviation of the daily close price over the last 30 days
+    df['volatility'] = df['close'].pct_change().rolling(window=30).std()
+
+    # Liquidity - Average volume over the last 20 days
+    df['avg_vol_20d'] = df['volume'].rolling(window=20).mean()
+
+    # Price-Volume Relationship - 10-day change in volume
+    df['volume_change_10d'] = df['volume'].pct_change(periods=10)
+
+    # Relative Strength - Daily close difference to the average volume
+    df['close_diff'] = df['close'].diff()
+    df['relative_strength'] = df['close_diff'] / (df['avg_vol_20d'] + 1e-7)
+
+    # Market Sentiment - 10-day moving average of the high and low prices
+    df['ema_high_10d'] = df['high'].ewm(span=10, adjust=False).mean()
+    df['ema_low_10d'] = df['low'].ewm(span=10, adjust=False).mean()
+    df['market_sentiment'] = df['ema_high_10d'] - df['ema_low_10d']
+
+    # Trend Direction - EMA cross-over
+    df['trend_direction'] = (df['ema_10d'] > df['ema_30d']).astype(int)
+
+    # Dynamic Price-Volume Interaction - Adjust relative strength based on the trend direction
+    df['dynamic_relative_strength'] = df['relative_strength'] * (1 + 0.5 * (df['trend_direction'] - 0.5))
+
+    # Volatility Regime - Different weights based on the volatility regime
+    df['vol_regime'] = (df['volatility'] > df['volatility'].quantile(0.5)).astype(int)
+    
+    # Non-linear transformations
+    df['log_volume'] = np.log(df['volume'] + 1e-7)
+    df['square_momentum'] = df['momentum'] ** 2
+
+    # Composite Factor
+    df['composite_factor'] = (
+        df['square_momentum'] * (0.4 + 0.1 * (df['vol_regime'] - 0.5)) -
+        df['volatility'] * (0.2 - 0.05 * (df['vol_regime'] - 0.5)) +
+        df['dynamic_relative_strength'] * (0.2 + 0.1 * (df['vol_regime'] - 0.5)) +
+        df['volume_change_10d'] * (0.1 - 0.05 * (df['vol_regime'] - 0.5)) +
+        df['market_sentiment'] * (0.1 + 0.05 * (df['vol_regime'] - 0.5))
+    )
+
+    # Return the composite factor
+    return df['composite_factor']
+```

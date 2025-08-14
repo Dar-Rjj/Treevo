@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    intraday_price_movement = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    close_difference = df['close'] - df['close'].shift(1)
+    weighted_intraday_price_movement = intraday_price_movement * (df['volume'] * close_difference)
+    
+    # Integrate Intraday Volatility
+    daily_range = df['high'] - df['low']
+    intraday_volatility = daily_range.rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    reversal_signal = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    volume_weighted_return = df['volume'] * reversal_signal
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    weighted_intraday_return_reversal = (df['volume'] * weighted_intraday_price_movement) + (df['amount'] * reversal_signal)
+    
+    # Combine Enhanced Factors
+    combined_factors = (weighted_intraday_price_movement + intraday_volatility) * volume_weighted_return
+    
+    # Adjust by Average Volume
+    average_volume = df['volume'].rolling(window=40).mean()
+    adjusted_combined_factors = combined_factors / average_volume
+    
+    # Incorporate Close Price Momentum
+    close_momentum = df['close'].rolling(window=30).mean()
+    adjusted_momentum = close_momentum * intraday_volatility
+    
+    # Adjusted Price Momentum
+    close_ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    adjusted_momentum_factor = (close_ema_10 - close_momentum) * 0.6
+    
+    # Filter for Recent Price Trend
+    recent_trend = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Introduce Volume Trend
+    volume_sum_5 = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / volume_sum_5
+    volume_trend_adjusted_factor = adjusted_momentum_factor * volume_ratio * 0.4
+    
+    # Technical Indicators
+    sma_close = df['close'].rolling(window=20).mean()
+    ema_close = df['close'].ewm(span=20, adjust=False).mean()
+    roc_close = df['close'].pct_change(periods=12)
+    rsi_close = 100 - (100 / (1 + df['close'].diff().rolling(window=14).mean() / df['close'].diff().abs().rolling(window=14).mean()))
+    obv = ((df['close'] - df['close'].shift(1)) / df['close']).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0).cumsum() * df['volume']
+    mfi = (df['high'] - df['low']).rolling(window=14).mean() / (df['close'] - df['close'].shift(1)).rolling(window=14).mean()
+    tr = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    atr = tr.rolling(window=14).mean()
+    high_low_range = df['high'] - df['low']
+    nhnl = (df['high'] == df['high'].rolling(window=14).max()).astype(int) - (df['low'] == df['low'].rolling(window=14).min()).astype(int)
+    dmi = 100 * (atr / df['close'])
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    
+    # Custom Indicators
+    cumulative_returns = (df['close'] / df['close'].shift(1) - 1).cumsum()
+    volume_weighted_close = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Final Factor Calculation
+    combined_adjusted_range_volatility_momentum = (0.55 * adjusted_combined_factors) + (0.225 * intraday_volatility) + (0.225 * adjusted_momentum)
+    final_alpha_factor = (combined_adjusted_range_volatility_momentum * 0.75) + (weighted_intraday_return_reversal * 0

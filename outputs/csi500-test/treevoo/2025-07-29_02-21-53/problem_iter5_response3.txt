@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday and Long-Term Price Movements
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Smooth High-Low Range
+    df['ema_high_low'] = df['high_low_diff'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Long-Term High-Low Range
+    df['long_term_high_low_range'] = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Aggregate Price Movements
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=20).sum()
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=20).sum()
+    
+    # Compute Momentum of High-Low Ranges
+    df['hl_momentum'] = df['long_term_high_low_range'] - df['ema_high_low']
+    
+    # Calculate Price Momentum Score
+    df['price_momentum_score'] = (df['sum_high_low_diff'] + df['sum_close_open_diff']) / df['close'].rolling(window=20).std()
+    
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['high_volume'] = df['volume'] > df['avg_volume'] * 1.5
+    
+    # Integrate Price and Volume Factors
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+    df['price_volatility_weighted'] = df['price_momentum_score'] * df['volume_ratio']
+    df['final_alpha_factor'] = df['price_volatility_weighted'] + df['hl_momentum']
+    
+    # Adjust for Market Trends
+    df['market_index_return'] = df['close'].pct_change()
+    df['final_alpha_factor'] = df['final_alpha_factor'] * df['market_index_return']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 101, 99, 102, 103],
+#     'high': [105, 106, 104, 107, 108],
+#     'low': [98, 99, 97, 100, 101],
+#     'close': [104, 105, 103, 106, 107],
+#     'amount': [1000, 1050, 950, 1000, 1050],
+#     'volume': [10000, 11000, 9000, 10000, 11000]
+# })
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

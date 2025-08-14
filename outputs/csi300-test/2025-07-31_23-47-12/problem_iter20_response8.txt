@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices) - np.log(close_prices.shift(1))
+
+    # Compute Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    clipped_cum_log_returns = np.clip(cum_log_returns, lower_threshold, upper_threshold)
+
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = clipped_cum_log_returns * (volumes / mean_volume)
+
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+
+    # Calculate Advanced Volatility Measures
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=N).quantile(0.75) - abs_price_changes.rolling(window=N).quantile(0.25)
+
+    # Final Factor Calculation
+    weighted_momentum = 0.2 * clipped_cum_log_returns
+    weighted_vol_adj_momentum = 0.3 * volume_adjusted_momentum
+    weighted_ema = 0.2 * ema_abs_price_changes
+    weighted_iqr = 0.3 * iqr_abs_price_changes
+    
+    final_factor = weighted_momentum + weighted_vol_adj_momentum + weighted_ema + weighted_iqr
+
+    return final_factor.dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

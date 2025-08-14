@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum Component
+    df['daily_diff'] = df['close'] - df['close'].shift(1)
+    ewa_decay_rate = 0.95
+    df['momentum_ewa'] = df['daily_diff'].ewm(alpha=1-ewa_decay_rate, adjust=False).mean()
+
+    # Calculate Overbought or Oversold Pressure
+    sma_window = 20
+    df['sma_20'] = df['close'].rolling(window=sma_window).mean()
+    
+    df['days_above_sma'] = (df['close'] > df['sma_20']).astype(int).rolling(window=sma_window).sum()
+    df['days_below_sma'] = (df['close'] < df['sma_20']).astype(int).rolling(window=sma_window).sum()
+
+    df['overbought_ratio'] = df['days_above_sma'] / sma_window
+    df['oversold_ratio'] = df['days_below_sma'] / sma_window
+
+    # Bound the ratios to avoid extreme values
+    overbought_bound = 0.7
+    oversold_bound = 0.3
+    df['overbought_signal'] = df['overbought_ratio'].clip(upper=overbought_bound)
+    df['oversold_signal'] = df['oversold_ratio'].clip(upper=oversold_bound)
+
+    # Combine Momentum and Overbought/Oversold Signals
+    momentum_weight = 0.8
+    obos_weight = 0.2
+    df['factor_value'] = (momentum_weight * df['momentum_ewa'] 
+                          - obos_weight * df['overbought_signal']
+                          + obos_weight * df['oversold_signal'])
+
+    return df['factor_value']
+```

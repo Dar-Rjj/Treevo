@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA)
+    df['EMA'] = df['close'].ewm(span=10, adjust=False).mean()
+
+    # Calculate Price Momentum
+    df['PriceMomentum'] = df['close'] - df['EMA']
+
+    # Intraday Reversal Calculation
+    df['IntradayReversal'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+
+    # Volume Change Calculation
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+
+    # Composite Reversal Factor
+    df['CompositeReversalFactor'] = df['IntradayReversal'] * df['VolumeChange']
+
+    # Calculate Volume Adjusted Spread
+    average_volume = df['volume'].rolling(window=10).mean()
+    df['VolumeAdjustedSpread'] = (df['high'] - df['low']) * (df['volume'] / average_volume)
+
+    # Calculate Intraday Momentum
+    df['IntradayMomentum'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Volume Thrust
+    upward_thrust = df[df['close'] > df['open']]['volume']
+    downward_thrust = df[df['close'] <= df['open']]['volume']
+    df['UpwardThrust'] = upward_thrust.reindex(df.index, fill_value=0)
+    df['DownwardThrust'] = downward_thrust.reindex(df.index, fill_value=0)
+    df['VolumeThrust'] = df['UpwardThrust'] - df['DownwardThrust']
+
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (
+        df['PriceMomentum'] + 
+        df['IntradayMomentum'] - 
+        df['VolumeAdjustedSpread'] + 
+        df['VolumeThrust'] + 
+        df['CompositeReversalFactor']
+    )
+
+    return df['FinalAlphaFactor']
+```

@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the rolling average and standard deviation of 'close' for volatility
+    avg_close_10 = df['close'].rolling(window=10).mean()
+    std_close_10 = df['close'].rolling(window=10).std()
+    volatility = std_close_10 / avg_close_10
+
+    # Adaptive window for volume-based signals using a 20-day average
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    std_volume_20 = df['volume'].rolling(window=20).std()
+    volume_volatility = std_volume_20 / avg_volume_20
+
+    # Momentum signal based on the EMA of close price and volume
+    ema_close_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ema_volume_20 = df['volume'].ewm(span=20, adjust=False).mean()
+    momentum_signal = (df['close'] - ema_close_10) * (df['volume'] - ema_volume_20)
+
+    # Relative Strength Index (RSI) for the 'close' price with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.ewm(com=13, adjust=False).mean()
+    avg_loss = loss.ewm(com=13, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Money Flow Ratio as a measure of buying to selling pressure
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum()
+
+    # Trend following indicator: 50-day exponential moving average
+    trend_following = df['close'].ewm(span=50, adjust=False).mean()
+
+    # Market sentiment: 10-day sum of the amount traded
+    market_sentiment = df['amount'].rolling(window=10).sum()
+
+    # Adaptive weighting based on recent performance
+    def adaptive_weighting(signal, window):
+        return (signal - signal.rolling(window=window).mean()) / signal.rolling(window=window).std()
+
+    momentum_weight = adaptive_weighting(momentum_signal, 10)
+    rsi_weight = adaptive_weighting(rsi, 10)
+    money_ratio_weight = adaptive_weighting(money_ratio, 10)
+    volatility_weight = adaptive_weighting(volatility, 10)
+    volume_volatility_weight = adaptive_weighting(volume_volatility, 10)
+    trend_weight = adaptive_weighting(df['close'] - trend_following, 10)
+    market_sentiment_weight = adaptive_weighting(market_sentiment, 10)
+
+    # Combine all the signals into a final alpha factor with adaptive weights
+    alpha_factor = (
+        momentum_signal * momentum_weight +
+        rsi * rsi_weight +
+        money_ratio * money_ratio_weight +
+        volatility * volatility_weight +
+        volume_volatility * volume_volatility_weight +
+        (df['close'] - trend_following) * trend_weight +
+        market_sentiment * market_sentiment_weight
+    ).fillna(0)
+
+    return alpha_factor
+```

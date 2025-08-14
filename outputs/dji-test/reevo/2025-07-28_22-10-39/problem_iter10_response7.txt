@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the exponential moving average (EMA) of the close price with a span of 10 days
+    ema_close_10 = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the adaptive window momentum based on the EMA's slope
+    momentum_adaptive = (df['close'] - ema_close_10) / (ema_close_10 + 1e-6)
+    
+    # Calculate the volatility using the standard deviation of the close price over a 10-day window
+    volatility_10day = df['close'].rolling(window=10).std()
+    
+    # Calculate the relative position of the close price within the range of high and low
+    rel_pos_close = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate a weighted volume where the weight is based on the ratio of close to high
+    weighted_volume = df['volume'] * (df['close'] / df['high'])
+    
+    # Compute a new factor as the product of the relative position and the weighted volume
+    factor = rel_pos_close * weighted_volume
+    
+    # Integrate the factor with adaptive momentum and normalize by volatility
+    combined_factor = (factor + momentum_adaptive) / (volatility_10day + 1e-6)
+    
+    # Apply exponential smoothing to the combined factor for more robustness
+    smoothed_factor = combined_factor.ewm(span=5, adjust=False).mean()
+    
+    # Additional feature: Incorporate market depth
+    # Calculate the difference between high and low prices as a measure of market depth
+    market_depth = df['high'] - df['low']
+    
+    # Adjust the final factor by the market depth
+    adjusted_factor = smoothed_factor / (market_depth + 1e-6)
+    
+    # Calculate trend strength using the difference between the 10-day EMA and 30-day EMA
+    ema_close_30 = df['close'].ewm(span=30, adjust=False).mean()
+    trend_strength = ema_close_10 - ema_close_30
+    
+    # Calculate liquidity measure as the ratio of volume to the average of high and low
+    liquidity_measure = df['volume'] / ((df['high'] + df['low']) / 2)
+    
+    # Combine the adjusted factor with trend strength and liquidity measure
+    final_factor = adjusted_factor * trend_strength * liquidity_measure
+    
+    # Additional dynamic momentum
+    # Calculate the 20-day EMA
+    ema_close_20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the 20-day momentum
+    momentum_20day = (df['close'] - ema_close_20) / (ema_close_20 + 1e-6)
+    
+    # Integrate the 20-day momentum into the final factor
+    final_factor = final_factor * (1 + momentum_20day)
+    
+    return final_factor
+```

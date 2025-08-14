@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close']).diff()
+    
+    # Compute 20-Day Momentum
+    df['20d_momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Calculate 20-Day Volume Volatility
+    df['volume_pct_change'] = df['volume'].pct_change()
+    df['volume_volatility'] = df['volume_pct_change'].rolling(window=20).std()
+    
+    # Adjust 20-Day Momentum by Volume Volatility
+    df['adjusted_20d_momentum'] = df['20d_momentum'] / df['volume_volatility']
+    
+    # Calculate Relative Strength
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # Weight by Volume and Volatility
+    df['volume_average'] = df['volume'].rolling(window=5).mean()
+    df['volatility'] = (df['close'] - df['open']) / df['open']
+    df['weighted_relative_strength'] = df['relative_strength'] * (df['volume_average'] * df['volatility'].rolling(window=20).std())
+    
+    # Incorporate Trading Range
+    df['high_low_range'] = (df['high'] - df['low']) / df['low']
+    df['avg_trading_range'] = df['high_low_range'].rolling(window=5).mean()
+    df['range_adjusted_rs'] = df['weighted_relative_strength'] * (1 + df['avg_trading_range'])
+    
+    # Integrate Amount
+    df['amount_average'] = df['amount'].rolling(window=5).mean()
+    df['final_factor'] = df['range_adjusted_rs'] * (df['amount_average'] / df['volume_average'])
+    
+    # Enhance with Intraday Indicators
+    df['enhanced_pv_signal'] = (df['high'] - df['low']) * (df['close'] - df['open']) / (df['volume'] + 1)
+    df['intraday_reversal'] = (df['high'] - df['low']) / (df['open'] - df['close'])
+    df['final_factor'] *= (1 + df['intraday_reversal'])
+    
+    # Incorporate Price and Volume Correlation
+    df['pv_corr'] = df['close'].rolling(window=20).corr(df['volume'])
+    df['final_factor'] *= (1 + df['pv_corr'])
+    
+    # Add Intraday Trading Intensity
+    df['intraday_intensity'] = (df['high'] - df['low']) / (df['close'] - df['open'])
+    df['final_factor'] *= (1 + df['intraday_intensity'])
+    
+    # Incorporate Advanced Volatility Adjustment
+    df['daily_high_low_range'] = df['high'] - df['low']
+    df['ema_daily_range'] = df['daily_high_low_range'].ewm(span=10, adjust=False).mean()
+    df['volatility_multiplier'] = 1 / (df['ema_daily_range'] + 1)
+    df['final_factor'] = df['adjusted_20d_momentum'] * df['volume_average'] * df['volatility_multiplier']
+    
+    return df['final_factor']
+```

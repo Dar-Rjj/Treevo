@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_hl_change'] = (df['high'] - df['low']) / df['low']
+
+    # Incorporate Volume Spike
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['combined_indicator'] = df['intraday_hl_change'] * df['volume_ratio']
+
+    # Apply Threshold to Identify Significant Movements
+    daily_returns = df['close'].pct_change()
+    ema_std_20 = daily_returns.ewm(span=20, adjust=False).std()
+    df['adjusted_combined_indicator'] = df['combined_indicator'] / ema_std_20
+
+    # Confirm with Price Momentum
+    df['ema_close_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_score'] = df['close'] - df['ema_close_20']
+    df['volume_adjusted_momentum'] = df['momentum_score'] * df['volume_ratio']
+
+    # Apply Moving Averages to Volume-Adjusted Intraday Momentum
+    fast_ema = df['volume_adjusted_momentum'].ewm(span=5, adjust=False).mean()
+    slow_ema = df['volume_adjusted_momentum'].ewm(span=20, adjust=False).mean()
+
+    # Calculate 20-day Moving Average of Daily Log Returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    ma_log_returns_20 = log_returns.rolling(window=20).mean()
+
+    # Calculate 5-day Moving Average of Daily Close Price
+    sma_close_5 = df['close'].rolling(window=5).mean()
+
+    # Calculate 20-day Exponential Moving Average of Amount
+    ema_amount_20 = df['amount'].ewm(span=20, adjust=False, alpha=0.1).mean()
+
+    # Combine Momentum, Volume, and Long-Term Trend
+    combined_factor = (fast_ema * ma_log_returns_20) / ema_amount_20 - slow_ema + sma_close_5
+
+    # Smooth the Adjusted Intraday Momentum
+    final_alpha_factor = combined_factor.rolling(window=5).mean()
+
+    return final_alpha_factor
+```

@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    n = 20
+    alpha = 0.1
+    df['ema_daily_return'] = df['daily_return'].ewm(span=n, adjust=False).mean()
+    
+    # Calculate Volume Weight
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_weight'] = (df['volume'] - df['avg_volume']) * df['daily_return']
+    
+    # Combine Exponentially Smoothed Moving Average and Volume Weight
+    df['momentum_indicator'] = df['ema_daily_return'] * df['volume_weight']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['high_low_range']
+    
+    # Calculate Volume Breakout Indicator
+    df['volume_breakout_indicator'] = (df['close'] - df['open']) * df['volume']
+    
+    # Aggregate Breakout Indicators
+    df['aggregated_breakout'] = df['price_breakout_ratio'] * df['volume'] + df['volume_breakout_indicator']
+    
+    # Smooth Aggregated Breakout Indicators
+    window_size = 14
+    df['smoothed_aggregated_breakout'] = df['aggregated_breakout'].rolling(window=window_size).mean()
+    
+    # Combine Momentum and Breakout Indicators
+    df['combined_indicator'] = df['momentum_indicator'] + df['smoothed_aggregated_breakout']
+    
+    # Calculate Volume-Weighted Combined Indicator
+    df['volume_weighted_combined_indicator'] = df['combined_indicator'] * df['volume_weight']
+    
+    # Calculate Daily Price Movement Range
+    df['daily_price_movement_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['previous_deviation'] = df['deviation_from_vwap'].shift(1)
+    df['trend_reversal_potential'] = (df['deviation_from_vwap'] > df['previous_deviation']) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_intraday_return'] = (df['volume'] - df['volume_ma_20']) * df['intraday_return']
+    
+    # Incorporate Price Volatility
+    df['std_close'] = df['close'].rolling(window=10).std()
+    df['volatility_adjusted_intraday_return'] = df['intraday_return'] * df['adjusted_intraday_return'].apply(lambda x: 1.5 if x > df['std_close'] else 0.7)
+    
+    # Integrate Reversal and Intraday Indicators
+    df['integrated_reversal_intraday_indicator'] = df['trend_reversal_potential'] * df['volatility_adjusted_intraday_return']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['volume_weighted_combined_indicator'] * df['integrated_reversal_intraday_indicator']
+    
+    return df['final_alpha_factor']
+```

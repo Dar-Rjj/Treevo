@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+
+    # Compute Volume-Weighted Daily Return
+    n_days = 20
+    df['volume_weighted_return'] = (df['daily_price_change'] * df['volume']).rolling(window=n_days).sum() / df['volume'].rolling(window=n_days).sum()
+    
+    # Incorporate Dynamic Volume Spike Indicator
+    rolling_volatility = df['volume'].rolling(window=20).std()
+    mean_volume = df['volume'].rolling(window=20).mean()
+    df['is_volume_spike'] = (df['volume'] > mean_volume + 2 * rolling_volatility)
+    dynamic_factor = 1 + (df['volume'] - mean_volume) / rolling_volatility
+    df.loc[df['is_volume_spike'], 'volume_weighted_return'] *= dynamic_factor
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['adjusted_return'] = df['daily_return'] / df['intraday_range']
+    
+    # Smooth the Adjusted Return
+    df['smoothed_adjusted_return'] = df['adjusted_return'].ewm(span=5, adjust=False).mean()
+    
+    # Combine Volume-Weighted Price Momentum with Intraday Volatility-Adjusted Returns
+    df['alpha_factor'] = df['volume_weighted_return'] + df['smoothed_adjusted_return']
+    
+    return df['alpha_factor']
+```

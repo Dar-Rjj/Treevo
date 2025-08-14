@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum Indicators
+    df['Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Measure Daily Price Range
+    df['Price_Range'] = df['high'] - df['low']
+    
+    # Evaluate Intraday Return Adjusted by High-Low Range
+    df['Intraday_Return_Adjusted'] = (df['close'] - df['open']) / df['Price_Range']
+    
+    # Compare Current Volume to Previous Day's Volume
+    df['Volume_Change'] = df['volume'] / df['volume'].shift(1)
+    
+    # Analyze Dollar Volume
+    df['Dollar_Volume'] = df['amount'] * df['close']
+    
+    # Determine Volume-Weighted Momentum
+    df['VWAP'] = df['Dollar_Volume'] / df['volume']
+    df['VWAP_Momentum'] = (df['VWAP'] - df['open']) / df['VWAP']
+    
+    # Apply Moving Averages and Crossovers
+    short_window = 5
+    long_window = 20
+    df['SMA_Short'] = df['close'].rolling(window=short_window).mean()
+    df['SMA_Long'] = df['close'].rolling(window=long_window).mean()
+    df['MA_Crossover'] = df['SMA_Short'] - df['SMA_Long']
+    
+    # Determine Relative Strength Index (RSI)
+    window = 14
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    RS = gain / loss
+    df['RSI'] = 100 - (100 / (1 + RS))
+    
+    # Integrate MACD into Final Factor
+    short_term = 12
+    long_term = 26
+    signal_period = 9
+    df['MACD'] = df['close'].ewm(span=short_term, adjust=False).mean() - df['close'].ewm(span=long_term, adjust=False).mean()
+    df['Signal'] = df['MACD'].ewm(span=signal_period, adjust=False).mean()
+    
+    # Assess On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Intraday Reversal
+    df['Intraday_Reversal'] = (df['high'] - df['open']) / df['Price_Range']
+    
+    # Generate Final Alpha Factor
+    combined_factors = (
+        df['Momentum'] +
+        df['Intraday_Return_Adjusted'] +
+        df['Volume_Change'] +
+        df['VWAP_Momentum'] +
+        df['MA_Crossover'] +
+        df['RSI'] +
+        df['MACD'] -
+        df['Signal'] +
+        df['OBV'] +
+        df['Daily_Volume_Change']
+    )
+    
+    df['Final_Alpha_Factor'] = combined_factors * df['Momentum'] * df['Daily_Volume_Change'] * (1 - (df['Intraday_Reversal'] > 0.5) * 0.2)
+    
+    return df['Final_Alpha_Factor']
+```

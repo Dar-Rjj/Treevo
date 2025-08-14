@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the rolling average and standard deviation of 'close' for volatility
+    avg_close_10 = df['close'].rolling(window=10).mean()
+    std_close_10 = df['close'].rolling(window=10).std()
+    volatility = std_close_10 / avg_close_10
+    
+    # Calculate the rolling average and standard deviation of 'volume' for volume-based signals
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    std_volume_10 = df['volume'].rolling(window=10).std()
+    volume_volatility = std_volume_10 / avg_volume_10
+    
+    # Momentum signal based on the average close price and volume
+    momentum_signal = (df['close'] - avg_close_10) * (df['volume'] - avg_volume_10)
+    
+    # Relative Strength Index (RSI) for the 'close' price
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Money Flow Ratio as a measure of buying to selling pressure
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum()
+    
+    # Trend-following signal using the 50-day and 200-day moving averages
+    short_mavg = df['close'].rolling(window=50).mean()
+    long_mavg = df['close'].rolling(window=200).mean()
+    trend_signal = (short_mavg - long_mavg) / long_mavg
+    
+    # Mean-reversion signal using Bollinger Bands
+    bollinger_mid = df['close'].rolling(window=20).mean()
+    bollinger_std = df['close'].rolling(window=20).std()
+    bollinger_upper = bollinger_mid + 2 * bollinger_std
+    bollinger_lower = bollinger_mid - 2 * bollinger_std
+    mean_reversion_signal = (df['close'] - bollinger_mid) / (bollinger_upper - bollinger_lower)
+    
+    # Dynamic weights based on the performance of each signal
+    momentum_weight = (momentum_signal > 0).astype(int).rolling(window=10).mean()
+    rsi_weight = (rsi < 70).astype(int).rolling(window=10).mean()
+    money_ratio_weight = (money_ratio > 1).astype(int).rolling(window=10).mean()
+    trend_weight = (trend_signal > 0).astype(int).rolling(window=10).mean()
+    mean_reversion_weight = (mean_reversion_signal < 0).astype(int).rolling(window=10).mean()
+    
+    total_weight = momentum_weight + rsi_weight + money_ratio_weight + trend_weight + mean_reversion_weight
+    momentum_weight /= total_weight
+    rsi_weight /= total_weight
+    money_ratio_weight /= total_weight
+    trend_weight /= total_weight
+    mean_reversion_weight /= total_weight
+    
+    # Combine all the signals into a final alpha factor with dynamic weights
+    alpha_factor = (
+        momentum_signal * momentum_weight +
+        rsi * rsi_weight +
+        money_ratio * money_ratio_weight +
+        trend_signal * trend_weight +
+        mean_reversion_signal * mean_reversion_weight
+    ).fillna(0)
+    
+    return alpha_factor
+```

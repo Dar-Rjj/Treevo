@@ -1,0 +1,62 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day moving average of the close price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+
+    # Calculate adaptive weights based on the inverse of the rolling standard deviation
+    adaptive_weights_open = 1 / (df['open'].rolling(window=5).std() + 1e-7)
+    adaptive_weights_high = 1 / (df['high'].rolling(window=5).std() + 1e-7)
+    adaptive_weights_low = 1 / (df['low'].rolling(window=5).std() + 1e-7)
+    adaptive_weights_close = 1 / (df['close'].rolling(window=5).std() + 1e-7)
+    total_weight = adaptive_weights_open + adaptive_weights_high + adaptive_weights_low + adaptive_weights_close
+
+    # Weighted sum of open, high, low, and close prices
+    weighted_prices = (adaptive_weights_open * df['open'] + 
+                       adaptive_weights_high * df['high'] + 
+                       adaptive_weights_low * df['low'] + 
+                       adaptive_weights_close * df['close']) / total_weight
+
+    # Volatility ratio: (high - low) divided by the 5-day moving average of the close price
+    volatility_ratio = (df['high'] - df['low']) / (ma_5 + 1e-7)
+
+    # 5-day exponential moving average of the close price for smoother trend following
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+
+    # 5-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=5).std()
+
+    # Momentum factor: difference between the 5-day EMA and 20-day MA
+    momentum_factor = ema_5 - ma_20
+
+    # Liquidity factor: volume divided by amount
+    liquidity_factor = df['volume'] / (df['amount'] + 1e-7)
+
+    # Adaptive mean reversion factor: difference between the 5-day EMA and the current close price
+    mean_reversion_factor = (ema_5 - df['close']) / (realized_volatility + 1e-7)
+
+    # Incorporate longer-term trend strength
+    trend_strength_30d = (df['close'] - df['close'].rolling(window=30).mean()) / (df['close'].rolling(window=30).mean() + 1e-7)
+
+    # Additional long-term trend: 60-day and 120-day moving averages
+    ma_60 = df['close'].rolling(window=60).mean()
+    ma_120 = df['close'].rolling(window=120).mean()
+    trend_strength_60d = (df['close'] - ma_60) / (ma_60 + 1e-7)
+    trend_strength_120d = (df['close'] - ma_120) / (ma_120 + 1e-7)
+
+    # Additional volatility measure: 20-day realized volatility
+    realized_volatility_20d = log_returns.rolling(window=20).std()
+
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (
+        (weighted_prices - ma_5) / (volatility_ratio + 1e-7) +
+        mean_reversion_factor +
+        momentum_factor +
+        liquidity_factor +
+        0.1 * trend_strength_30d +
+        0.1 * trend_strength_60d +
+        0.1 * trend_strength_120d
+    )
+    return alpha_factor
+```

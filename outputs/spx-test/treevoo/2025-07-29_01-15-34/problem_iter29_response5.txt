@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Open to Close Movement
+    df['Open_Close_Movement'] = df['close'] - df['open']
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VWAP'] = (df['volume'] * df['Typical_Price']).cumsum() / df['volume'].cumsum()
+
+    # Weighted Ratio of High-Low to Open-Close
+    df['HL_OC_Ratio'] = df['High_Low_Range'] / df['Open_Close_Movement'].abs()
+
+    # VWAP Deviation from Close
+    df['VWAP_Deviation'] = df['close'] - df['VWAP']
+
+    # Identify Trend Strength and Reversal Signals
+    df['Positive_Momentum'] = (df['High_Low_Range'] > 1.5 * df['Open_Close_Movement']).astype(int)
+    df['Potential_Reversal'] = ((df['Open_Close_Movement'] > 0.8 * df['High_Low_Range']) & 
+                                (df['VWAP_Deviation'] < 0) & 
+                                (df['Open_Close_Movement'] < 0)).astype(int)
+
+    # Calculate Closing Position in Intraday Range
+    df['Closing_Position'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+
+    # Integrate Volume Activity Ratio
+    df['Volume_20_MA'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Activity_Ratio'] = df['volume'] / df['Volume_20_MA']
+
+    # Calculate Intraday Volume Intensity
+    df['Median_10_Volume'] = df['volume'].rolling(window=10).median()
+    df['Intraday_Volume_Intensity'] = df['volume'] / df['Median_10_Volume']
+
+    # Adjust for Recent Price Trend
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_Adjustment'] = df['close'] - df['EMA_20']
+
+    # Calculate Short-Term Price Momentum
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Short_Term_Momentum'] = df['EMA_5'] - df['EMA_10']
+
+    # Examine Daily Returns and Volume Relationship
+    df['Daily_Returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Investigate Closing Price Significance
+    df['Relative_Closing_Position'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+
+    # Evaluate Amount Traded Changes
+    df['Amount_Change'] = df['amount'] - df['amount'].shift(1)
+
+    # Composite Alpha Factor
+    df['Weighted_Sum'] = (0.3 * df['HL_OC_Ratio'] +
+                          0.3 * df['VWAP_Deviation'] +
+                          0.2 * df['Intraday_Volume_Intensity'] +
+                          0.2 * df['Closing_Position'])
+
+    # Incorporate EMA Adjustment and Recent Volatility
+    df['STD_20'] = df['close'].rolling(window=20).std()
+    df['Trend_Adjustment'] = df['EMA_Adjustment'] / df['STD_20']
+    df['Composite_Alpha'] = (df['Weighted_Sum'] + 
+                             df['Trend_Adjustment'] + 
+                             df['Short_Term_Momentum'] + 
+                             0.1 * df['Daily_Returns'] + 
+                             0.1 * df['Volume_Activity_Ratio'] + 
+                             0.1 * df['Relative_Closing_Position'])
+
+    return df['Composite_Alpha']
+```

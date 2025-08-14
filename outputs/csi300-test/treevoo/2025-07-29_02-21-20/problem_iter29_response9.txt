@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    df['high_low_spread'] = df['high'] - df['low']
+    df['weighted_high_low'] = 0.6 * df['high'] + 0.4 * df['low']
+    df['avg_high_low_spread'] = (df['high'] - df['low']).ewm(alpha=0.1).mean()
+    
+    # Volume Impact on Intraday Momentum
+    smoothing_factor = 0.3
+    df['smoothed_volume'] = df['volume'].ewm(alpha=smoothing_factor).mean()
+    df['volume_impact_intraday_momentum'] = df['avg_high_low_spread'] * df['smoothed_volume']
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    lookback_period = 10
+    df['ema_volume'] = df['volume'].ewm(span=lookback_period, adjust=False).mean()
+    df['normalized_volume'] = df['volume'] / df['ema_volume']
+    df['dynamic_volume_impact_momentum'] = df['normalized_volume'] * df['avg_high_low_spread']
+    
+    # Long-Term Momentum Adjusted for Volume
+    n_days = 20
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(n_days)) / df['close'].shift(n_days)
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(n_days)
+    df['volume_adjusted_long_term_momentum'] = df['long_term_momentum'] + df['long_term_momentum'] * np.cbrt(df['volume_ratio'])
+    
+    # Calculate Daily Price Return
+    df['daily_return'] = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01
+    df['significant_price_increase'] = (df['daily_return'] > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    df['volume_spike_indicator'] = (df['volume'] > df['volume'].rolling(window=7).median()).astype(int)
+    
+    # Compute Weighted Price Momentum
+    df['weighted_price_momentum'] = df['daily_return'] * df['significant_price_increase']
+    
+    # Apply Volume Spike Filter
+    df['filtered_weighted_momentum'] = df['weighted_price_momentum'] * df['volume_spike_indicator']
+    
+    # Consolidate All Factors
+    df['consolidated_factors'] = (df['adjusted_close'] 
+                                  + df['volume_impact_intraday_momentum'] 
+                                  + df['dynamic_volume_impact_momentum'] 
+                                  + df['volume_adjusted_long_term_momentum'])
+    df['final_factors_divided_by_open'] = df['consolidated_factors'] / df['open']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df[['high', 'low']].std(axis=1)
+    
+    # Incorporate Intraday Volatility into Alpha Factor
+    df['intraday_volatility_impact'] = df['daily_return'] * df['intraday_volatility']
+    df['final_alpha_factor'] = (df['final_factors_divided_by_open'] 
+                                + df['filtered_weighted_momentum'] 
+                                + df['intraday_volatility_impact']) * df['volume_spike_indicator']
+    
+    return df['final_alpha_factor']
+```

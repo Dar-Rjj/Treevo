@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 20-day Price Momentum
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Calculate Volume Confirmation
+    df['avg_volume_20_days'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_20_days'].shift(1)
+    df['volume_confirmation'] = df['volume_ratio'].apply(lambda x: 1 if x > 1 else (-1 if x < 1 else 0))
+    
+    # Incorporate Price Oscillation
+    df['max_high_20_days'] = df['high'].rolling(window=20).max()
+    df['min_low_20_days'] = df['low'].rolling(window=20).min()
+    df['20_day_max_range'] = df['max_high_20_days'] - df['min_low_20_days']
+    df['20_day_actual_range'] = df['high'] - df['low'].shift(19)
+    df['oscillation_score'] = df.apply(
+        lambda row: 1 if row['20_day_actual_range'] > 0.5 * row['20_day_max_range'] else (-1 if row['20_day_actual_range'] < 0.2 * row['20_day_max_range'] else 0),
+        axis=1
+    )
+    
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['combined_indicator'] = df['intraday_pct_change'] * df['volume_change_ratio']
+    
+    # Apply Moving Averages to Intraday High-to-Low Momentum
+    df['fast_ema'] = df['intraday_pct_change'].ewm(span=12, adjust=False).mean()
+    df['slow_ema'] = df['intraday_pct_change'].ewm(span=26, adjust=False).mean()
+    df['macd_line'] = df['fast_ema'] - df['slow_ema']
+    
+    # Normalize the Threshold with 20-Day Moving Standard Deviation
+    df['std_dev_20_days'] = df['close'].pct_change().rolling(window=20).std()
+    threshold = df['std_dev_20_days'] * 3  # Example threshold, 3 standard deviations
+    
+    # Adjust for Market Volatility and Generate Final Alpha Factor
+    df['alpha_factor'] = df['combined_indicator'].apply(lambda x: 1 if x > threshold else (-1 if x < -threshold else 0))
+    df['final_alpha_factor'] = df['alpha_factor'] * (df['20_day_return'] + df['oscillation_score'] + df['volume_confirmation'] + df['macd_line'])
+    
+    return df['final_alpha_factor']
+```

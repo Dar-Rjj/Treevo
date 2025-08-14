@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+    
+    # Adaptive Lookback Periods
+    short_term_lookback = 5
+    mid_term_lookback = 10
+    long_term_lookback = 20
+    
+    # Short-Term Lookback
+    df['5D_SMA_VW_Return'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).mean()
+    df['5D_STD_VW_Return'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).std()
+    
+    # Mid-Term Lookback
+    df['10D_SMA_VW_Return'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).mean()
+    df['10D_STD_VW_Return'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).std()
+    
+    # Long-Term Lookback
+    df['20D_SMA_VW_Return'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).mean()
+    df['20D_STD_VW_Return'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).std()
+    
+    # Combine Multi-Period Volatilities
+    df['Combined_Volatility'] = (0.4 * df['5D_STD_VW_Return'] + 
+                                 0.3 * df['10D_STD_VW_Return'] + 
+                                 0.3 * df['20D_STD_VW_Return'])
+    
+    # Incorporate Adaptive Market Trend Adjustments
+    df['5D_SMA_Close'] = df['close'].rolling(window=short_term_lookback).mean()
+    df['20D_SMA_Close'] = df['close'].rolling(window=long_term_lookback).mean()
+    
+    df['Price_Trend_Indicator'] = np.where(df['5D_SMA_Close'] > df['20D_SMA_Close'], 1,
+                                          np.where(df['5D_SMA_Close'] < df['20D_SMA_Close'], -1, 0))
+    
+    # Adjust Combined Factor by Price Trend Indicator
+    df['Bullish_Factor'] = 1.2 * (0.5 * df['5D_SMA_VW_Return'] + 
+                                  0.3 * df['10D_SMA_VW_Return'] + 
+                                  0.2 * df['20D_SMA_VW_Return'])
+    df['Neutral_Factor'] = 1.0 * (0.5 * df['5D_SMA_VW_Return'] + 
+                                  0.3 * df['10D_SMA_VW_Return'] + 
+                                  0.2 * df['20D_SMA_VW_Return'])
+    df['Bearish_Factor'] = 0.8 * (0.5 * df['5D_SMA_VW_Return'] + 
+                                  0.3 * df['10D_SMA_VW_Return'] + 
+                                  0.2 * df['20D_SMA_VW_Return'])
+    
+    df['Combined_Momentum_Signal'] = np.where(df['Price_Trend_Indicator'] == 1, df['Bullish_Factor'],
+                                              np.where(df['Price_Trend_Indicator'] == 0, df['Neutral_Factor'],
+                                                       df['Bearish_Factor']))
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Combined_Momentum_Signal'] / df['Combined_Volatility']
+    
+    return df['Final_Alpha_Factor']
+```

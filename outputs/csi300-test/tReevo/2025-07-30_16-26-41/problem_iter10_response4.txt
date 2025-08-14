@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Weighted Dynamic Long-Term Price Difference
+    hl_diff = (df['high'] - df['low']) * df['volume']
+    hl_diff_ewm = hl_diff.ewm(span=10).mean()
+    volume_ewm = df['volume'].ewm(span=10).mean()
+    
+    # Determine Exponential Weighted Dynamic Long-Term Open to Close Momentum
+    open_to_close_momentum = (df['close'] - df['open'].shift(10)).ewm(span=10).mean()
+    
+    # Calculate the Exponential Weighted Dynamic Long-Term Cumulative Average
+    ewma_price_diff = hl_diff_ewm / volume_ewm
+    
+    # Subtract Exponential Weighted Dynamic Long-Term Average Daily Return
+    daily_returns = df['close'].pct_change()
+    ewma_daily_return = daily_returns.ewm(span=10).mean()
+    
+    # Adjust for Volatility
+    vol_10_day = daily_returns.rolling(window=10).std()
+    
+    # Final Alpha Factor
+    alpha_factor_10_day = (ewma_price_diff - ewma_daily_return) / vol_10_day
+    
+    # Incorporate Short-Term Momentum
+    hl_diff_5_ewm = hl_diff.ewm(span=5).mean()
+    volume_5_ewm = df['volume'].ewm(span=5).mean()
+    ewma_price_diff_5 = hl_diff_5_ewm / volume_5_ewm
+    ewma_daily_return_5 = daily_returns.ewm(span=5).mean()
+    vol_5_day = daily_returns.rolling(window=5).std()
+    alpha_factor_5_day = (ewma_price_diff_5 - ewma_daily_return_5) / vol_5_day
+    
+    # Combine 10-day and 5-day metrics
+    combined_alpha_factor = 0.6 * alpha_factor_10_day + 0.4 * alpha_factor_5_day
+    
+    # Integrate Trading Volume Effectively
+    volume_weighted_price_diff = (hl_diff * df['volume']).ewm(span=5).mean() / df['volume'].ewm(span=5).mean()
+    volume_5_ewm = df['volume'].ewm(span=5).mean()
+    combined_alpha_factor *= volume_5_ewm
+    
+    # Consider Volume Spikes
+    volume_spike = df['volume'] / volume_5_ewm
+    combined_alpha_factor *= np.where(volume_spike > 1.5, 0.8, 1.0)
+    
+    return combined_alpha_factor
+```

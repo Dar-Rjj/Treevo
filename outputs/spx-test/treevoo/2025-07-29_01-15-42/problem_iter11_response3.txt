@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Movement
+    close_to_open_movement = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_impact = df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].rolling(window=20).std()
+    
+    # Adjust Range by Volume
+    adjusted_range = intraday_high_low_spread / df['volume']
+    
+    # Incorporate Momentum Factor
+    price_momentum = df['close'].pct_change().rolling(window=20).mean()
+    combined_momentum = adjusted_range * price_momentum
+    
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate Price Range Ratio
+    price_range_ratio = daily_price_range / df['open']
+    
+    # Compute Relative True Strength Index (RTSI)
+    gains = np.where(df['close'] > df['close'].shift(1), df['close'] - df['close'].shift(1), 0)
+    losses = np.where(df['close'] < df['close'].shift(1), df['close'].shift(1) - df['close'], 0)
+    smoothed_gains = pd.Series(gains).rolling(window=14).mean()
+    smoothed_losses = pd.Series(losses).rolling(window=14).mean()
+    rtsi = (smoothed_gains / (smoothed_gains + smoothed_losses)) * 100
+    
+    # Calculate Volume Volatility
+    vol_volatility = df['volume'].rolling(window=20).std() / df['volume'].rolling(window=20).mean()
+    
+    # Combine Price and Volume Intensity
+    price_volume_intensity = price_range_ratio * rtsi * vol_volatility
+    
+    # Analyze Volume Trends
+    moving_average_volume = df['volume'].rolling(window=20).mean()
+    
+    # Adjust Daily Price Range by Moving Average Volume
+    volume_adjusted_price_range = daily_price_range / moving_average_volume
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    threshold = 1.5
+    positive_imbalance = (volume_adjusted_price_range > threshold).astype(int)
+    negative_imbalance = (volume_adjusted_price_range < -threshold).astype(int)
+    
+    # Generate Initial Alpha Signal
+    alpha_signal = positive_imbalance - negative_imbalance
+    
+    # Calculate Close to Range Midpoint Deviation
+    range_midpoint = (df['high'] + df['low']) / 2
+    close_to_midpoint_deviation = df['close'] - range_midpoint
+    
+    # Incorporate Volume and Amount Trends
+    volume_change = df['volume'].pct_change()
+    amount_change = df['amount'].pct_change()
+    
+    # Combine Volume-Adjusted Price Range and Intraday Reversal
+    combined_signal = (volume_adjusted_price_range * volume_change * amount_change)
+    
+    # Adjust Alpha Signal
+    final_alpha_factor = alpha_signal + (close_to_midpoint_deviation * volume_change)
+    
+    # Combine Intensity and Adjusted Alpha Factor
+    final_alpha_factor = final_alpha_factor * price_volume_intensity
+    
+    return final_alpha_factor
+```

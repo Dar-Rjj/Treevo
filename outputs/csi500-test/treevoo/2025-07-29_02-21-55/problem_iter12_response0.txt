@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Base Alpha Factors
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_Day_Momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    average_volume = df['volume'].rolling(window=5).mean()
+    df['Volume_Ratio'] = df['volume'] / average_volume
+    
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['20_Day_Avg_Price_Range'] = df['Daily_Price_Range'].rolling(window=20).mean()
+    
+    df['Intraday_Direction'] = (df['close'] - df['open']) / df['open']
+    df['Significant_Intraday'] = df['Intraday_Direction'].apply(lambda x: 1 if abs(x) > 0.05 else 0)
+    
+    df['Bullish_Engulfing'] = ((df['close'].shift(1) < df['open'].shift(1)) & 
+                               (df['close'] > df['open']) & 
+                               (df['close'] > df['open'].shift(1)) & 
+                               (df['open'] < df['close'].shift(1))).astype(int)
+    
+    # Advanced Alpha Factors
+    df['MA_50'] = df['close'].rolling(window=50).mean()
+    df['MA_200'] = df['close'].rolling(window=200).mean()
+    df['Crossover_Signal'] = df['MA_50'] - df['MA_200']
+    df['Smoothed_Crossover_Signal'] = df['Crossover_Signal'].rolling(window=5).mean()
+    
+    df['5_Day_Volatility'] = (df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()) / 20
+    df['Vol_Adjusted_Momentum'] = df['Daily_Return'] / df['5_Day_Volatility']
+    
+    df['Volume_Spike'] = (df['volume'] > 1.5 * average_volume)
+    df['Price_Increase'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) > 0.02
+    df['Volume_Price_Spike'] = df['Volume_Spike'] & df['Price_Increase']
+    
+    # Hybrid Alpha Factors
+    df['Weighted_Momentum'] = (df['Daily_Return'] * df['Volume_Ratio']) + ((df['close'] - df['close'].rolling(window=20).mean()) / df['close'].rolling(window=20).mean())
+    
+    df['Bullish_Volume_Spike'] = (df['Bullish_Engulfing'] | df['Bullish_Engulfing'].shift(1) | df['Bullish_Engulfing'].shift(2)) & df['Volume_Spike']
+    
+    # Market Sentiment Factors
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Money_Flow'] = (df['Typical_Price'] - df['Typical_Price'].shift(1)) * df['volume']
+    df['Cumulative_Money_Flow'] = df['Money_Flow'].rolling(window=20).sum()
+    
+    # Seasonal and Cyclical Factors
+    df['Month_Return'] = df['close'].pct_change().resample('M').mean()
+    df['Monthly_Seasonality'] = df['Month_Return'].rolling(window=60).mean()
+    
+    df['Day_of_Week_Effect'] = df['close'].resample('W-MON').ffill().pct_change()
+    
+    # Final Alpha Factor
+    alpha_factor = (df['5_Day_Momentum'] + 
+                    df['Volume_Ratio'] + 
+                    df['20_Day_Avg_Price_Range'] + 
+                    df['Significant_Intraday'] + 
+                    df['Bullish_Engulfing'] + 
+                    df['Smoothed_Crossover_Signal'] + 
+                    df['Vol_Adjusted_Momentum'] + 
+                    df['Volume_Price_Spike'] + 
+                    df['Weighted_Momentum'] + 
+                    df['Bullish_Volume_Spike'] + 
+                    df['Cumulative_Money_Flow'] + 
+                    df['Monthly_Seasonality'] + 
+                    df['Day_of_Week_Effect'])
+    
+    return

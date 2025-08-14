@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    n = 20
+    alpha = 0.1
+    df['ema_daily_returns'] = df['daily_returns'].ewm(span=n, adjust=False).mean()
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['high_low_range']
+    
+    # Calculate Volume Breakout Indicator
+    df['volume_breakout_indicator'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Aggregate Breakout Indicators
+    df['aggregated_breakout_ratio'] = df['price_breakout_ratio'] * df['volume_breakout_indicator']
+    df['aggregated_breakout_ratio'] = df['aggregated_breakout_ratio'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Momentum
+    df['volume_weighted_momentum'] = df['ema_daily_returns'] * df['volume']
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_weighted_momentum'] /= df['avg_volume']
+    
+    # Combine Volume-Weighted Momentum and Aggregated Breakout Ratios
+    df['combined_momentum_breakout'] = df['volume_weighted_momentum'] + df['aggregated_breakout_ratio']
+    
+    # Calculate Daily Price Movement Range
+    df['price_movement_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal_potential'] = (df['return_deviation_from_vwap'] > df['return_deviation_from_vwap'].shift(1)).astype(int)
+    df['volume_increase'] = (df['volume'] > df['volume'].rolling(window=14).mean()).astype(int)
+    
+    # Compute Price Momentum Factor
+    df['price_momentum_factor'] = df['daily_returns'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    df['volume_momentum_factor'] = df['volume'].pct_change().rolling(window=n).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 1.0
+    k2 = 1.0
+    df['combined_momentum'] = k1 * df['price_momentum_factor'] + k2 * df['volume_momentum_factor']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma']
+    df['volume_adjustment_factor'] = df['volume_deviation'] / (df['volume_deviation'].std() + 1e-8)
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Introduce Price Volatility Adjustment
+    df['price_volatility'] = df['price_movement_range'].rolling(window=n).std()
+    df['final_composite_factor'] = df['adjusted_combined_momentum'] / df['price_volatility']
+    
+    # Final Composite Factor Calculation
+    df['final_alpha_factor'] = df['final_composite_factor'] * (df['trend_reversal_potential'] * df['volume_increase'] + 1)
+    df['final_alpha_factor'] = df['final_alpha_factor'].ewm(span=n, adjust=False).mean()
+    
+    return df['final_alpha_factor']
+```

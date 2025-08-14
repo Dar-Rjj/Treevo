@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute Volume-Weighted Daily Return
+    df['Volume_Weighted_Return'] = df['Daily_Price_Change'] * df['volume']
+    N = 20
+    df['Cumulative_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].rolling(window=N).sum()
+    df['Total_Volume_N_days'] = df['volume'].rolling(window=N).sum()
+    df['Volume_Weighted_Daily_Return'] = df['Cumulative_Volume_Weighted_Return'] / df['Total_Volume_N_days']
+    
+    # Introduce Enhanced Price Directional Component
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Sign_Close_Open'] = np.sign(df['Close_Open_Diff'])
+    
+    # Incorporate Dynamic Volume Spike Indicator
+    df['Vol_STD'] = df['volume'].rolling(window=20).std()
+    df['Vol_Mean'] = df['volume'].rolling(window=20).mean()
+    df['Vol_Spike'] = (df['volume'] > df['Vol_Mean'] + 2 * df['Vol_STD']).astype(int)
+    df['Dynamic_Factor'] = 1 + (df['volume'] - df['Vol_Mean']) / df['Vol_STD']
+    df['Adjusted_Volume_Weighted_Daily_Return'] = df['Volume_Weighted_Daily_Return'] * np.where(df['Vol_Spike'] == 1, df['Dynamic_Factor'], 1)
+    
+    # Calculate High-Low Spread and Adjusted Volume
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Adjusted_Volume'] = df['volume'] / df['High_Low_Spread']
+    
+    # Calculate Log Return
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate High-Close Difference and its Sign
+    df['High_Close_Diff'] = df['high'] - df['close']
+    df['Sign_High_Close'] = np.sign(df['High_Close_Diff'])
+    
+    # Combine Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Combined_Adjusted_Volume_Log_Return'] = df['Log_Return'] * df['Adjusted_Volume'] * df['Sign_Close_Open'] * df['Sign_High_Close']
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['Adjusted_Daily_Return'] = df['Daily_Return'] / df['Intraday_Range']
+    
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Daily_Return'].ewm(span=5).mean()
+    
+    # Combine Components into Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_Volume_Weighted_Daily_Return'] + df['Smoothed_Adjusted_Return'] + df['Combined_Adjusted_Volume_Log_Return']
+    
+    return df['Final_Alpha_Factor']
+```

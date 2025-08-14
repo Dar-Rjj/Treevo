@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low', 'prev_close']].max(axis=1) - df[['high', 'low', 'prev_close']].min(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    n_days_atr = 14
+    df['atr'] = df['true_range'].rolling(window=n_days_atr).mean()
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_intraday_range'] = df['intraday_range'] * df['volume']
+    
+    # Calculate Open-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    # Assign Weights Based on Historical Volatility
+    historical_volatility = df['close'].pct_change().rolling(window=20).std()
+    weight_adjusted_high_low = 0.6
+    weight_open_close = 0.4
+    df['combined_momentum'] = (weight_adjusted_high_low * df['volume_adjusted_intraday_range'] + 
+                               weight_open_close * df['open_close_momentum']) / (weight_adjusted_high_low + weight_open_close)
+    
+    # Introduce Volume Trend Analysis
+    df['volume_trend'] = df['volume'].pct_change()
+    df['adjusted_combined_momentum'] = df['combined_momentum'] * (1 + df['volume_trend'])
+    
+    # Dynamic Momentum Indicator
+    df['yesterday_indicator'] = df['adjusted_combined_momentum'].shift(1)
+    df['today_indicator'] = df['adjusted_combined_momentum']
+    df['momentum_change'] = df['today_indicator'] - df['yesterday_indicator']
+    df['volatility'] = df['close'].pct_change().rolling(window=5).std()
+    df['smoothed_momentum_change'] = df['momentum_change'] / df['volatility']
+    
+    # Aggregate Price Movements
+    n_days_aggregate = 5
+    df['sum_high_low_diff'] = df['high'] - df['low']
+    df['sum_high_low_diff'] = df['sum_high_low_diff'].rolling(window=n_days_aggregate).sum()
+    df['sum_close_open_diff'] = df['close'] - df['open']
+    df['sum_close_open_diff'] = df['sum_close_open_diff'].rolling(window=n_days_aggregate).sum()
+    
+    # Calculate Price Momentum
+    n_days_price_momentum = 10
+    df['price_momentum'] = df['close'] - df['close'].shift(n_days_price_momentum)
+    
+    # Normalize Price Momentum by ATR
+    df['normalized_price_momentum'] = df['price_momentum'] / df['atr']
+    
+    # Evaluate Volume Activity
+    df['average_volume'] = df['volume'].rolling(window=n_days_price_momentum).mean()
+    df['high_volume'] = (df['volume'] > df['average_volume']).astype(int)
+    
+    # Integrate Combined Factors
+    df['final_alpha_factor'] = df['normalized_price_momentum'] * df['high_volume'] * df['smoothed_momentum_change']
+    
+    return df['final_alpha_factor']
+```

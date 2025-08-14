@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20):
+    # Calculate Daily Price Movement
+    df['Daily_Price_Movement'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['Daily_Price_Movement'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['VWAP'] = vwap
+    
+    # Incorporate Market Depth
+    df['Market_Depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * (df['VWAP'] + df['Market_Depth']) / df['Intraday_Volatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_vol = df['volume'].rolling(window=n).mean()
+    total_avg_vol = df['volume'].mean()
+    df['Final_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (avg_vol / total_avg_vol)
+    
+    # Integrate Multi-Day Momentum
+    df['5D_Return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10D_Return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Avg_MultiDay_Return'] = (df['5D_Return'] + df['10D_Return']) / 2
+    df['Final_Adjusted_Momentum'] += df['Avg_MultiDay_Return']
+    
+    # Incorporate Liquidity
+    avg_volume_n_days = df['volume'].rolling(window=n).mean()
+    total_avg_volume = df['volume'].mean()
+    df['Final_Adjusted_Momentum'] *= (avg_volume_n_days / total_avg_volume)
+    
+    # Enhance with Dynamic Price and Volume Ratios
+    df['Price_to_Volume_Ratio'] = df['close'] / df['volume']
+    ma_pvr = df['Price_to_Volume_Ratio'].rolling(window=n).mean()
+    avg_pvr = df['Price_to_Volume_Ratio'].mean()
+    df['Final_Adjusted_Momentum'] *= (ma_pvr / avg_pvr)
+    
+    # Consider Volatility Clustering
+    ema_intraday_volatility = df['Intraday_Volatility'].ewm(span=n, adjust=False).mean()
+    avg_intraday_volatility = df['Intraday_Volatility'].mean()
+    df['Final_Adjusted_Momentum'] *= (ema_intraday_volatility / avg_intraday_volatility)
+    
+    # Incorporate Short-Term Reversal
+    df['2D_Return'] = (df['close'] - df['close'].shift(2)) / df['close'].shift(2)
+    df['Final_Adjusted_Momentum'] *= (1 + df['2D_Return'])
+    
+    # Final Alpha Factor
+    return df['Final_Adjusted_Momentum']
+
+# Example usage
+# df = pd.read_csv('stock_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

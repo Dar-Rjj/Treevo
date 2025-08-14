@@ -1,0 +1,30 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    df['price_change'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Calculate the weighted moving average of price and volume changes
+    df['wma_price_change'] = df['price_change'].ewm(span=10, adjust=False).mean()
+    df['wma_volume_change'] = df['volume_change'].ewm(span=10, adjust=False).mean()
+
+    # Calculate volatility
+    df['volatility'] = df['close'].rolling(window=20).std()
+
+    # Integrate sector performance (assuming 'sector' is a column in the DataFrame)
+    # For simplicity, let's use the mean close price of the sector as a proxy for sector performance
+    if 'sector' in df.columns:
+        df['sector_performance'] = df.groupby('sector')['close'].transform('mean').pct_change()
+    else:
+        df['sector_performance'] = 0
+
+    # Adjust weights based on market regime (high/low volatility)
+    df['regime_weight'] = df['volatility'].apply(lambda x: 0.8 if x > df['volatility'].quantile(0.75) else 1.2)
+
+    # Alpha factor: the product of the weighted moving averages of price and volume changes,
+    # adjusted by sector performance and market regime
+    df['alpha_factor'] = (df['wma_price_change'] * df['wma_volume_change'] * 
+                          df['sector_performance'] * df['regime_weight'])
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Rolling Average of Daily Price Changes
+    df['price_change_10_day_ma'] = df['daily_price_change'].rolling(window=10).mean()
+    
+    # Calculate Volume and Amount Weighted Daily Return
+    df['daily_return'] = df['close'] / df['open']
+    df['volume_weighted_daily_return'] = df['daily_return'] * df['volume'] * df['amount']
+    
+    # Summarize Volume and Amount Weighted Daily Returns
+    df['volume_weighted_daily_return_20_day_ma'] = df['volume_weighted_daily_return'].rolling(window=20).mean()
+    
+    # Combine Signals
+    df['signal_difference'] = df['price_change_10_day_ma'] - df['volume_weighted_daily_return_20_day_ma']
+    df['preliminary_alpha_factor'] = df['signal_difference'].rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Volume Change
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Weight by Logarithmic Volume Difference
+    df['log_volume_t'] = np.log(df['volume'])
+    df['log_volume_t-1'] = np.log(df['volume'].shift(1))
+    df['log_volume_difference'] = df['log_volume_t'] - df['log_volume_t-1']
+    df['smoothed_log_volume_difference'] = df['log_volume_difference'].ewm(span=5, adjust=False).mean()
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['weighted_intraday_return'] = df['intraday_return'] * abs(df['intraday_return'])
+    df['weighted_close_to_open_return'] = df['close_to_open_return'] * abs(df['close_to_open_return'])
+    
+    # Adjust Weights by Volume
+    df['adjusted_intraday_weight'] = df['weighted_intraday_return'] * df['smoothed_log_volume_difference']
+    df['adjusted_close_to_open_weight'] = df['weighted_close_to_open_return'] * df['smoothed_log_volume_difference']
+    
+    # Integrate Volume Change
+    df['intraday_preliminary_factor'] = (df['adjusted_intraday_weight'] + df['adjusted_close_to_open_weight']) * df['daily_volume_change']
+    
+    # Calculate True Range (TR)
+    df['high_low'] = df['high'] - df['low']
+    df['high_prev_close'] = abs(df['high'] - df['close'].shift(1))
+    df['low_prev_close'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate Positive Directional Movement (+DM) and Negative Directional Movement (-DM)
+    df['+dm'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)), 
+                         df['high'] - df['high'].shift(1), 0)
+    df['-dm'] = np.where((df['low'] < df['low'].shift(1)) & (df['high'] > df['high'].shift(1)), 
+                         df['low'].shift(1) - df['low'], 0)
+    
+    # Smooth +DM and -DM
+    df['+dm_smoothed'] = df['+dm'].rolling(window=14).mean()
+    df['-dm_smoothed'] = df['-dm'].rolling(window=14).mean()
+    
+    # Calculate +DI and -DI
+    df['+di'] = (df['+dm_smoothed'] / df['atr']) * 100
+    df['-di'] = (df['-dm_smoothed'] / df['atr']) * 100
+    
+    # Calculate ADMI
+    df['admi'] = (df['+di'] - df['-di']) / (df['+di'] + df['-di'])
+    
+    # Synthesize Final Alpha

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Obtain close prices
+    close_prices = df['close']
+    
+    # Compute log returns over N days
+    log_returns = np.log(close_prices).diff(N)
+    
+    # Calculate momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Apply dynamic thresholds
+    lower_threshold = cum_log_returns.quantile(0.1)
+    upper_threshold = cum_log_returns.quantile(0.9)
+    momentum = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * (volumes / mean_volume)
+    
+    # Determine absolute price changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate advanced volatility measures
+    std_volatility = abs_price_changes.rolling(window=M).std()
+    ema_volatility = abs_price_changes.ewm(span=M, min_periods=M).mean()
+    iqr_volatility = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine weighted components
+    weights = [0.4, 0.3, 0.3]
+    combined_factor = (weights[0] * volume_adjusted_momentum +
+                       weights[1] * std_volatility +
+                       weights[2] * ema_volatility)
+    
+    # Ensure weights sum to 1
+    if not np.isclose(np.sum(weights), 1):
+        raise ValueError("Weights must sum to 1")
+    
+    # Integrate market breadth indicators
+    advance_decline_line = (df['close'].diff() > 0).astype(int).cumsum()
+    new_highs = close_prices.rolling(window=M).max() == close_prices
+    new_lows = close_prices.rolling(window=M).min() == close_prices
+    market_breadth = (advance_decline_line + new_highs - new_lows) / 3
+    
+    # Final factor calculation
+    final_factor = (combined_factor + market_breadth) / 2
+    
+    return final_factor
+```

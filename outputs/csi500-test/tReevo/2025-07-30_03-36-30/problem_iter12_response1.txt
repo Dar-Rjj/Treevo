@@ -1,0 +1,33 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Multi-Day Price Momentum
+    df['3D_Return'] = (df['close'].shift(-2) / df['close']) - 1
+    df['5D_Return'] = (df['close'].shift(-4) / df['close']) - 1
+    df['3D_Smoothed_Return'] = df['3D_Return'].ewm(span=2, adjust=False).mean()
+    df['5D_Smoothed_Return'] = df['5D_Return'].ewm(span=4, adjust=False).mean()
+    df['Smoothed_Return'] = (df['3D_Smoothed_Return'] * 0.6) + (df['5D_Smoothed_Return'] * 0.4)
+    df['Volume_Weighted_Momentum'] = df['Smoothed_Return'] * df['volume']
+
+    # Calculate Dynamic Intraday Volatility Index
+    df['5D_High_Low_Range'] = df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()
+    df['5D_Open_Close_Range'] = (df['open'] - df['close']).abs().rolling(window=5).sum()
+    df['5D_Mean_Price'] = (df['open'] + df['close']).rolling(window=5).sum() / 10
+    df['Dynamic_Volatility_Index'] = (df['5D_High_Low_Range'] + df['5D_Open_Close_Range']) / df['5D_Mean_Price']
+
+    # Integrate Enhanced Market Sentiment
+    df['Daily_Change_Amount'] = (df['amount'] - df['amount'].shift(1)) / df['amount']
+    df['10D_Volume_EMA'] = df['volume'].ewm(span=10, adjust=False).mean()
+    df['Normalized_Volume'] = df['volume'] / df['10D_Volume_EMA']
+    df['Enhanced_Market_Sentiment'] = (df['Daily_Change_Amount'] * 0.7) + (df['Normalized_Volume'] * 0.3)
+
+    # Final Factor Calculation
+    df['Final_Factor'] = (df['Volume_Weighted_Momentum'] - df['Dynamic_Volatility_Index']) + df['Enhanced_Market_Sentiment']
+
+    return df['Final_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

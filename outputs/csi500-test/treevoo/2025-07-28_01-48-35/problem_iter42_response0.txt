@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Identify Crossovers and Divergences
+    df['SMA_Crossover'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
+    df['EMA_Crossover'] = (df['EMA_12'] > df['EMA_26']) & (df['EMA_12'].shift(1) <= df['EMA_26'].shift(1))
+    
+    # Calculate True Range (TR)
+    df['TR'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))),
+        axis=1
+    )
+    
+    # Compute Average True Range (ATR) over 14 days
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Calculate Rate of Change (ROC) over 12 days
+    df['ROC_12'] = ((df['close'] - df['close'].shift(12)) / df['close'].shift(12)) * 100
+    
+    # Calculate Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate Commodity Channel Index (CCI) over 20 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    sma_tp = typical_price.rolling(window=20).mean()
+    mean_deviation = abs(typical_price - sma_tp).rolling(window=20).mean()
+    df['CCI_20'] = (typical_price - sma_tp) / (0.015 * mean_deviation)
+    
+    # Calculate On-Balance Volume (OBV)
+    df['OBV'] = (df['volume'] * (df['close'] > df['close'].shift(1)).astype(int) - 
+                 df['volume'] * (df['close'] < df['close'].shift(1)).astype(int)).cumsum()
+    
+    # Calculate Money Flow Index (MFI) over 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where((typical_price > typical_price.shift(1)), 0)
+    negative_flow = money_flow.where((typical_price < typical_price.shift(1)), 0)
+    positive_flow_sum = positive_flow.rolling(window=14).sum()
+    negative_flow_sum = negative_flow.rolling(window=14).sum()
+    money_ratio = positive_flow_sum / negative_flow_sum
+    df['MFI_14'] = 100 - (100 / (1 + money_ratio))
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    cum_typical_price = (df['high'] + df['low'] + df['close']) / 3
+    cum_volume = df['volume'].cumsum()
+    cum_vwap = (cum_typical_price * df['volume']).cumsum() / cum_volume
+    df['VWAP'] = cum_vwap
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['SMA_Crossover'] + df['EMA_Crossover'] + 
+                          df['ATR_14'] + df['ROC_12'] + df['RSI_14'] + 
+                          df['CCI_20'] + df['OBV

@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 50-day moving averages of closing prices
+    df['ma_10'] = df['close'].rolling(window=10).mean()
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate the 10-day rolling standard deviation to represent volatility
+    df['volatility_10d'] = df['close'].rolling(window=10).std()
+    
+    # Calculate the difference between the current close and the 10-day moving average
+    df['close_ma_10_diff'] = df['close'] - df['ma_10']
+    
+    # Normalize the difference by the 10-day price range plus a small constant for numerical stability
+    df['normalized_close_ma_10_diff'] = df['close_ma_10_diff'] / (df['high'] - df['low'] + 1e-7)
+    
+    # Calculate the trend strength as the ratio of the 10-day moving average to the 50-day moving average
+    df['trend_strength'] = df['ma_10'] / df['ma_50']
+    
+    # Calculate the liquidity as the 10-day average volume
+    df['liquidity_10d'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the moving average crossover signal
+    df['ma_crossover'] = df['ma_10'] - df['ma_50']
+    
+    # Combine the normalized difference, volatility, trend strength, liquidity, RSI, and moving average crossover
+    alpha_factor = (df['normalized_close_ma_10_diff'] * df['volatility_10d']) * df['trend_strength'] * df['liquidity_10d'] * df['rsi_14'] * df['ma_crossover']
+    
+    return alpha_factor.dropna()
+```

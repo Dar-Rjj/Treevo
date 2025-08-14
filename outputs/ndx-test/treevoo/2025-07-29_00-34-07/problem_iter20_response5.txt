@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Gap Between Open and Close
+    df['price_gap'] = df['open'] - df['close']
+    
+    # Calculate Current Day Volume Growth
+    df['volume_growth'] = df['volume'] / df['volume'].shift(1)
+    
+    # Weight the Price Gaps
+    df['weighted_price_gap'] = df['price_gap'] * df['volume_growth']
+    weighted_avg_price_gap = df['weighted_price_gap'].sum()
+    
+    # Calculate Rolling High-Low Differential
+    df['rolling_high_10'] = df['high'].rolling(window=10).max()
+    df['rolling_low_20'] = df['low'].rolling(window=20).min()
+    df['high_low_diff'] = df['rolling_high_10'] - df['rolling_low_20']
+    
+    # Weight by Volume Volatility
+    df['volume_volatility'] = df['volume'].rolling(window=20).std()
+    df['weighted_high_low_diff'] = df['high_low_diff'] * df['volume_volatility']
+    
+    # Aggregate the Signals
+    df['close_t_minus_20'] = df['close'].shift(20)
+    df['aggregate_signal'] = df['weighted_high_low_diff'] - (df['close'] - df['close_t_minus_20'])
+    
+    # Calculate Price Momentum
+    df['1_day_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['30_day_return'] = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Average the Momentum
+    df['average_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['30_day_return']) / 3
+    
+    # Adjust for Volume
+    df['volume_change_pct'] = (df['volume'] / df['volume'].shift(1) - 1) * 100
+    df['adjusted_aggregate_signal'] = df['aggregate_signal'] * df['volume_change_pct']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = weighted_avg_price_gap + df['adjusted_aggregate_signal'] - df['average_momentum']
+    
+    return df['alpha_factor']
+```

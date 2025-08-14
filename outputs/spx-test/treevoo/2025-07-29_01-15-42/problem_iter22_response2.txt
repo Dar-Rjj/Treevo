@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Price Change
+    daily_price_change = df['close'] - df['open']
+    
+    # Calculate Moving Average Volume
+    moving_avg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = daily_price_change / moving_avg_volume
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(28)
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+    
+    # Combine Long-Term and Short-Term Momentum
+    combined_momentum = long_term_momentum + short_term_momentum
+    
+    # Calculate High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].rolling(window=20).std()
+    
+    # Adjust by Average Volume
+    adjusted_high_low_range = high_low_range / moving_avg_volume
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Movement
+    close_open_movement = df['close'] - df['open']
+    
+    # Weighted Average of Combined Components
+    weighted_average = (combined_momentum * 0.4 +
+                        intraday_high_low_spread * 0.3 +
+                        close_open_movement * 0.2 +
+                        adjusted_high_low_range * 0.1)
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    threshold = 0.01  # Example threshold, can be adjusted
+    positive_imbalance = (adjusted_price_volume_signal > threshold)
+    negative_imbalance = (adjusted_price_volume_signal < -threshold)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_alpha_signal = pd.Series(0, index=df.index)
+    preliminary_alpha_signal[positive_imbalance] = 1
+    preliminary_alpha_signal[negative_imbalance] = -1
+    
+    # Calculate Momentum Score
+    momentum_score = combined_momentum - combined_momentum.shift(1)
+    
+    # Final Alpha Signal Based on Combined Indicators
+    final_factor = pd.Series(0, index=df.index)
+    condition_1 = (adjusted_price_volume_signal > threshold) & (realized_volatility < realized_volatility.median()) & (combined_momentum > 0)
+    condition_2 = (adjusted_price_volume_signal < -threshold) & (realized_volatility < realized_volatility.median()) & (combined_momentum < 0)
+    
+    final_factor[condition_1] = 1
+    final_factor[condition_2] = -1
+    
+    # Generate Final Alpha Signal
+    final_alpha_signal = final_factor.copy()
+    final_alpha_signal[positive_imbalance] += momentum_score
+    final_alpha_signal[negative_imbalance] -= momentum_score
+    
+    return final_alpha_signal
+```

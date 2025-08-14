@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=20, volume_spike_threshold=1.5):
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'].diff()
+    
+    # Identify Volume Spike
+    df['volume_ma'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > df['volume_ma'] * volume_spike_threshold).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df['raw_momentum'] * (1 - 0.5 * df['volume_spike'])
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['intraday_factor'] = df['high_low_spread'] + (df['close'] - df['open'])
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['avg_volume']
+    
+    # Calculate Intraday Momentum Difference
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    df['intraday_return_ema'] = df['intraday_return'].ewm(span=5, adjust=False).mean().shift(1)
+    df['intraday_momentum_diff'] = df['intraday_return'] - df['intraday_return_ema']
+    
+    # Incorporate Volume Intensity
+    df['volume_intensity_inverse'] = 1 / df['avg_volume']
+    df['intraday_momentum_impact'] = df['intraday_momentum_diff'] * df['volume_intensity_inverse']
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'].pct_change()
+    df['avg_volume_change'] = df['volume_change'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume_change'] > 1.5 * df['avg_volume_change']).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    df['combined_intraday_factor'] = df['intraday_momentum_impact'] * df['volume_spike']
+    df['combined_intraday_factor_sma'] = df['combined_intraday_factor'].rolling(window=3).mean().shift(1)
+    
+    # Final Alpha Factor
+    df['final_alpha'] = df['adjusted_momentum'] * df['combined_intraday_factor_sma'] * df['weighted_price_movement_normalized'] * df['intraday_momentum_impact']
+    
+    # Adjust for Volatility
+    df['close_std'] = df['close'].rolling(window=10).std()
+    df['final_alpha_adjusted'] = df['final_alpha'] / (1 + df['close_std'])
+    
+    # Incorporate Price Range Indicator
+    df['price_range'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    df['price_range_ema'] = df['price_range'].ewm(span=5, adjust=False).mean().shift(1)
+    df['final_alpha'] = df['final_alpha_adjusted'] * df['price_range_ema']
+    
+    return df['final_alpha'].dropna()
+```

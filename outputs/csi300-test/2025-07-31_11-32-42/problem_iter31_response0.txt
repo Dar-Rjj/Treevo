@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Parameters
+    N = 10  # SMA window
+    M = 10  # ROC window
+    P = 14  # RS window
+    Q = 10  # MOM window
+    R = 30  # VWAP window
+    S = 10  # VROC window
+    T = 14  # ATR window
+    U = 10  # Standard deviation window
+
+    # Sub-Thought 1: Calculate momentum indicators
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['ROC'] = df['close'].pct_change(periods=M) * 100
+    df['gain'] = df['close'].diff().clip(lower=0)
+    df['loss'] = -df['close'].diff().clip(upper=0)
+    df['avg_gain'] = df['gain'].rolling(window=P).mean()
+    df['avg_loss'] = df['loss'].rolling(window=P).mean()
+    df['RS'] = df['avg_gain'] / df['avg_loss']
+    df['MOM'] = df['close'] - df['close'].shift(Q)
+
+    # Sub-Thought 2: Incorporate volume-related features
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['tpv'] = df['typical_price'] * df['volume']
+    df['VWAP'] = df['tpv'].rolling(window=R).sum() / df['volume'].rolling(window=R).sum()
+    df['VROC'] = df['volume'].pct_change(periods=S) * 100
+    df['OBV'] = (df['close'].diff() > 0).astype(int) * df['volume'] - (df['close'].diff() < 0).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+
+    # Sub-Thought 3: Generate volatility-based factors
+    df['prev_close'] = df['close'].shift(1)
+    df['TR'] = df[['high', 'low']].sub(df['prev_close'], axis=0).abs().max(axis=1)
+    df['ATR'] = df['TR'].rolling(window=T).mean()
+    df['std_dev'] = df['close'].rolling(window=U).std()
+
+    # Sub-Thought 4: Create factors that capture the relationship between opening and closing prices
+    df['OCR'] = df['close'] / df['open']
+    df['GS'] = df['open'] - df['close'].shift(1)
+
+    # Final alpha factor
+    df['alpha_factor'] = df['SMA'] + df['ROC'] + df['RS'] + df['MOM'] + df['VWAP'] + df['VROC'] + df['OBV'] + df['ATR'] + df['std_dev'] + df['OCR'] + df['GS']
+    
+    return df['alpha_factor']
+```

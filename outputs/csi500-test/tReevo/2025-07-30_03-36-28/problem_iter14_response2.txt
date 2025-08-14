@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short_period = 20
+    sma_long_period = 100
+    atr_period = 14
+    volatility_lookback = 20
+    turnover_lookback = 20
+    percentage_change_lookback = 5
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['High_Low_Diff'] * df['volume']
+    df['Rolling_Volatility'] = df['Volume_Adjusted_Volatility'].rolling(window=volatility_lookback).mean()
+    
+    # Enhance Volatility Measures with ATR
+    df['True_Range'] = df[['high', 'low']].diff(axis=1).iloc[:, 1].abs() + df['close'].diff().abs()
+    df['ATR'] = df['True_Range'].rolling(window=atr_period).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=atr_period).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(periods=percentage_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Market_Trend'] = df['SMA_Short'] > df['SMA_Long']
+    df['Trend_Indicator'] = df['Market_Trend'].map({True: 1, False: -1})
+    
+    # Incorporate Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Optimize Dynamic Weight Adjustments Based on Market Conditions
+    df['Liquidity_Weight'] = df['Rolling_Turnover'].rank(pct=True)
+    df['Trend_Weight'] = df['Trend_Indicator'].clip(lower=0.5, upper=1.5)
+    
+    # Combine all components into the final alpha factor
+    weights = {
+        'Price_Momentum': 0.4,
+        'Rolling_Volatility': 0.2,
+        'Percentage_Change': 0.1,
+        'High_Low_Range': 0.1,
+        'Trend_Indicator': 0.1,
+        'Liquidity_Weight': 0.1
+    }
+    
+    df['Alpha_Factor'] = (
+        weights['Price_Momentum'] * df['Price_Momentum'] +
+        weights['Rolling_Volatility'] * df['Rolling_Volatility'] +
+        weights['Percentage_Change'] * df['Percentage_Change'] +
+        weights['High_Low_Range'] * df['High_Low_Range'] +
+        weights['Trend_Indicator'] * df['Trend_Weight'] +
+        weights['Liquidity_Weight'] * df['Liquidity_Weight']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

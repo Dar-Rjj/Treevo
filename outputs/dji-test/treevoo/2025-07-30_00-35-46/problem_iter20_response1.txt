@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Base Intraday Return
+    df['base_intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute High-Low Momentum Component
+    df['high_low_momentum'] = (df['high'] - df['low']) / df['open']
+    
+    # Combine Intraday and High-Low Momentum
+    df['combined_momentum'] = (df['base_intraday_return'] + df['high_low_momentum']) / 2
+    
+    # Apply Volume-Weighted Adjustments for Trading Activity
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['high_low_spread_change'] = (df['high'] - df['low']) - (df['high'].shift(1) - df['low'].shift(1))
+    df['combined_momentum_adjusted'] = df['combined_momentum'] * df['volume_ratio'] * df['amount_ratio'] * df['high_low_spread_change']
+    
+    # Synthesize and Filter
+    df['synthesized_combined_momentum'] = df['combined_momentum_adjusted']
+    
+    # Apply Volume Shock Filter
+    df['volume_shock_ratio'] = df['volume'] / df['volume'].shift(1)
+    volume_shock_threshold = 1.5
+    df['synthesized_combined_momentum_filtered'] = df['synthesized_combined_momentum'].where(df['volume_shock_ratio'] > volume_shock_threshold, 0)
+    
+    # Smoothing
+    df['smoothed_synthesized_combined_momentum'] = df['synthesized_combined_momentum_filtered'].ewm(span=5).mean()
+    
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['volume_mean'] = df['volume'].rolling(window=5).mean()
+    df['volume_adjustment'] = (df['volume'] / df['volume_mean']) + 1
+    df['intraday_range_volume_adjusted'] = df['intraday_range'] * df['volume_adjustment']
+    
+    # Smoothing
+    df['smoothed_intraday_range_volume_adjusted'] = df['intraday_range_volume_adjusted'].ewm(span=5).mean()
+    
+    # Calculate EMA Cross Signal
+    df['short_ema'] = df['close'].ewm(span=5).mean()
+    df['long_ema'] = df['close'].ewm(span=20).mean()
+    df['momentum'] = np.where(df['short_ema'] > df['long_ema'], 'Bullish', 'Bearish')
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    df['final_obv_factor'] = df['obv'] * abs(df['short_ema'] - df['long_ema'])
+    
+    # Apply Volume and Amount Shock Filter
+    df['volume_shock_ratio_day'] = df['volume'] / df['volume'].shift(1)
+    df['amount_shock_ratio_day'] = df['amount'] / df['amount'].shift(1)
+    combined_shock_threshold = 1.5
+    df['final_obv_factor_filtered'] = df['final_obv_factor'].where((df['volume_shock_ratio_day'] > combined_shock_threshold) & (df['amount_shock_ratio_day'] > combined_shock_threshold), 0)
+    
+    # Measure Volume Synchronization
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['synchronized_product'] = df['volume_change'] * df['price_change']
+    
+    # Synthesize Combined Factor
+    df['final_alpha_factor'] = (df['smoothed_synthesized_combined_momentum'] + df['synchronized_product'] + df['smoothed_intraday_range_volume_adjusted']) * df['final_obv_factor_filtered']
+    df['final_alpha_factor'] = df['

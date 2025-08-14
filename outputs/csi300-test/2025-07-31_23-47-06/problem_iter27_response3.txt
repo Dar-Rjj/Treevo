@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def heuristics_v2(data):
+    # Calculate Intraday Price Movement
+    data['High_Low_Range'] = data['high'] - data['low']
+    data['Close_Open_Diff'] = data['close'] - data['open']
+
+    # Incorporate Volume Influence
+    data['Volume_Adjusted_Momentum'] = (data['Close_Open_Diff'] + data['High_Low_Range']) * data['volume']
+    data['Volume_Adjusted_Momentum_EMA10'] = data['Volume_Adjusted_Momentum'].ewm(span=10, adjust=False).mean()
+
+    # Adjust for Dynamic Market Volatility
+    data['Daily_Return'] = data['close'].pct_change()
+    data['Abs_Daily_Return'] = data['Daily_Return'].abs()
+    data['Dynamic_Volatility'] = data['Daily_Return'].rolling(window=10).std()
+    data['Volatility_Adjusted_Momentum'] = data['Volume_Adjusted_Momentum_EMA10'] / data['Dynamic_Volatility']
+
+    # Integrate Non-Linear Transformation
+    data['Sqrt_Transformed_Momentum'] = np.sqrt(data['Volatility_Adjusted_Momentum'])
+    data['Log_Transformed_Momentum'] = np.log(data['Volatility_Adjusted_Momentum'])
+
+    # Incorporate Trend Reversal Signal
+    data['Short_Term_Momentum'] = data['close'].ewm(span=5, adjust=False).mean()
+    data['Long_Term_Momentum'] = data['close'].ewm(span=20, adjust=False).mean()
+    data['Momentum_Reversal'] = data['Short_Term_Momentum'] - data['Long_Term_Momentum']
+
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    data['Reversal_Signal_EMA5'] = data['Momentum_Reversal'].ewm(span=5, adjust=False).mean()
+    data['Reversal_Signal_EMA10'] = data['Momentum_Reversal'].ewm(span=10, adjust=False).mean()
+    data['Smoothed_Reversal_Signal'] = (data['Reversal_Signal_EMA5'] + data['Reversal_Signal_EMA10']) / 2
+    data['Combined_Factor'] = data['Log_Transformed_Momentum'] + data['Smoothed_Reversal_Signal']
+
+    # Final Advanced Adaptive Smoothing
+    data['Final_Alpha_Factor_EMA5'] = data['Combined_Factor'].ewm(span=5, adjust=False).mean()
+    data['Final_Alpha_Factor_EMA10'] = data['Combined_Factor'].ewm(span=10, adjust=False).mean()
+    data['Final_Alpha_Factor'] = (data['Final_Alpha_Factor_EMA5'] + data['Final_Alpha_Factor_EMA10']) / 2
+
+    return data['Final_Alpha_Factor']
+```

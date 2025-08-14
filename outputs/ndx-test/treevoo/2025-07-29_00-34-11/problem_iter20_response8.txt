@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Logarithmic Return
+    short_term_return = df['close'].pct_change(5).apply(lambda x: 0 if pd.isna(x) else x)
+    short_term_log_return = (df['close'] / df['close'].shift(5)).apply(np.log)
+
+    # Calculate Long-Term Logarithmic Return
+    long_term_return = df['close'].pct_change(20).apply(lambda x: 0 if pd.isna(x) else x)
+    long_term_log_return = (df['close'] / df['close'].shift(20)).apply(np.log)
+
+    # Calculate Volume-Weighted Short-Term Logarithmic Return
+    volume_weighted_short_term_return = short_term_log_return * df['volume']
+
+    # Calculate Volume-Weighted Long-Term Logarithmic Return
+    volume_weighted_long_term_return = long_term_log_return * df['volume']
+
+    # Calculate Short-Term Volatility (Average True Range over 5 days)
+    true_range = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    short_term_volatility = true_range.rolling(window=5).mean()
+
+    # Adjust for Volatility
+    adjusted_short_term_return = (volume_weighted_short_term_return / short_term_volatility) - volume_weighted_long_term_return
+
+    # Determine Gain and Loss
+    gain = (df['close'] - df['close'].shift(1)).apply(lambda x: x if x > 0 else 0)
+    loss = (df['close'].shift(1) - df['close']).apply(lambda x: x if x > 0 else 0)
+
+    # Aggregate Gains and Losses over 14 days
+    sum_gains = gain.rolling(window=14).sum()
+    sum_losses = loss.rolling(window=14).sum()
+
+    # Calculate Relative Strength
+    rs = sum_gains / sum_losses.replace(0, 1)
+
+    # Convert to ARSI
+    arsi = 100 - (100 / (1 + rs))
+    arsi = arsi * df['volume'].rolling(window=14).mean() * ((df['close'] / df['open']) - 1)
+
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+
+    # Calculate Close-to-Close Return
+    close_to_close_return = (df['close'] / df['close'].shift(1)) - 1
+
+    # Combine Intraday Volatility and Close-to-Close Return
+    combined_volatility_return = intraday_volatility * close_to_close_return
+
+    # Calculate Daily Volume Change
+    daily_volume_change = (df['volume'] / df['volume'].shift(1)) - 1
+
+    # Aggregate Volume Changes over last 5 days
+    aggregated_volume_changes = daily_volume_change.rolling(window=5).sum()
+
+    # Calculate Price Oscillator
+    price_oscillator = short_term_log_return - long_term_log_return
+
+    # Combine ARSI, Adjusted Returns, and Price Oscillator
+    combined_factor = arsi * adjusted_short_term_return + price_oscillator - volume_weighted_long_term_return
+
+    # Final Adjustment
+    final_factor = combined_factor + adjusted_short_term_return + combined_volatility_return * aggregated_volume_changes
+
+    return final_factor
+```

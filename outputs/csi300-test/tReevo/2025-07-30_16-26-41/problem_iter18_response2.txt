@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    """
+    Generate a novel alpha factor based on Dynamic EMA Crossover with Volume-Weighted Momentum.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with columns 'open', 'high', 'low', 'close', 'amount', 'volume' and index 'date'.
+    
+    Returns:
+    pd.Series: Alpha factor values indexed by date.
+    """
+    # Calculate market volatility
+    def calculate_volatility(close, window=20):
+        return close.rolling(window=window).std()
+
+    # Calculate Exponential Moving Average (EMA)
+    def calculate_ema(close, span):
+        return close.ewm(span=span, adjust=False).mean()
+    
+    # Calculate Volume-Weighted Momentum
+    def calculate_volume_weighted_momentum(close, volume, n=20):
+        price_diff = close - close.shift(n)
+        avg_volume = volume.rolling(window=n).mean()
+        return price_diff * avg_volume
+
+    # Determine short and long-term EMA windows based on volatility
+    short_window = 10 if calculate_volatility(df['close'])[-1] > 0.05 else 20
+    long_window = 50 if calculate_volatility(df['close'])[-1] > 0.05 else 100
+    
+    # Calculate short and long-term EMAs
+    ema_short = calculate_ema(df['close'], short_window)
+    ema_long = calculate_ema(df['close'], long_window)
+    
+    # Calculate Volume-Weighted Momentum
+    vwm = calculate_volume_weighted_momentum(df['close'], df['volume'])
+    
+    # Combine the EMAs and Volume-Weighted Momentum
+    ema_diff = ema_short - ema_long
+    combined_factor = ema_diff * vwm
+    
+    # Adjust for Liquidity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    final_factor = combined_factor * avg_volume
+    
+    return final_factor
+```

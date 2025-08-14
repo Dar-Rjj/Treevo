@@ -1,0 +1,59 @@
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price (VWP)
+    df['VWP'] = (df['high'] * df['volume'] + df['low'] * df['volume']) / (2 * df['volume'])
+    
+    # Assess Intraday Volatility
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Integrate High-to-Low Range Momentum
+    df['Rolling_20_High_Low_Sum'] = df['high'] - df['low']
+    df['Rolling_20_High_Low_Sum'] = df['Rolling_20_High_Low_Sum'].rolling(window=20).sum()
+    df['VWP_Diff'] = df['VWP'].diff()
+    df['Adjusted_Momentum'] = df['VWP_Diff'] / (df['Intraday_Range'] + df['Rolling_20_High_Low_Sum'])
+    
+    # Calculate Volume-Adjusted Momentum
+    df['EMA_25_VWP'] = df['VWP'].ewm(span=25, adjust=False).mean()
+    df['Volume_Adjusted_Momentum'] = df['VWP'] - df['EMA_25_VWP']
+    
+    # Incorporate Recent Volatility
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['15D_Volatility'] = df['Daily_Returns'].rolling(window=15).std()
+    df['Momentum_by_Volatility'] = df['Volume_Adjusted_Momentum'] * (1 / df['15D_Volatility'])
+    
+    # Combine Volume-Adjusted Momentum and High-Low Range Volatility
+    df['30D_High_Low_MA'] = (df['high'] - df['low']).rolling(window=30).mean()
+    df['Combined_Momentum'] = df['Volume_Adjusted_Momentum'] - df['30D_High_Low_MA']
+    
+    # Explore Momentum and Mean Reversion through Price Trends
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Compute the 5-day and 20-day average true range (ATR)
+    df['TR'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['ATR_5'] = df['TR'].rolling(window=5).mean()
+    df['ATR_20'] = df['TR'].rolling(window=20).mean()
+    
+    # Compute the 5-day and 20-day rate of change (ROC) in volume
+    df['ROC_5_Volume'] = df['volume'].pct_change(5)
+    df['ROC_20_Volume'] = df['volume'].pct_change(20)
+    
+    # Determine if the current day's volume is higher than the 5-day and 20-day average volume
+    df['Volume_Above_5D_Avg'] = df['volume'] > df['volume'].rolling(window=5).mean()
+    df['Volume_Above_20D_Avg'] = df['volume'] > df['volume'].rolling(window=20).mean()
+    
+    # Evaluate Price Momentum
+    df['10D_Momentum'] = df['close'].pct_change(10)
+    df['30D_Momentum'] = df['close'].pct_change(30)
+    df['ROC_10_Close'] = df['close'].pct_change(10)
+    df['ROC_30_Close'] = df['close'].pct_change(30)
+    
+    # Assess Relative Strength
+    def RSI(series, period):
+        delta = series.diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi

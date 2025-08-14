@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum - 20 day and 60 day price change to capture short and medium-term trends
+    momentum_20 = df['close'].pct_change(periods=20).fillna(0)
+    momentum_60 = df['close'].pct_change(periods=60).fillna(0)
+
+    # Volatility - 60 day standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    volatility = log_returns.rolling(window=60).std().fillna(0)
+
+    # Liquidity - ratio of current volume to 20 day average volume
+    liquidity = df['volume'] / df['volume'].rolling(window=20).mean()
+    liquidity.fillna(0, inplace=True)
+
+    # Price action - range over the last 5 days
+    price_action = (df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()) / df['close']
+    price_action.fillna(0, inplace=True)
+
+    # Trend - difference between 50-day and 200-day moving averages
+    ma_close_50 = df['close'].rolling(window=50).mean()
+    ma_close_200 = df['close'].rolling(window=200).mean()
+    trend = (ma_close_50 - ma_close_200) / df['close']
+    trend.fillna(0, inplace=True)
+
+    # Relative Strength Index (RSI) - 14-day RSI to incorporate mean reversion
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi.fillna(0, inplace=True)
+
+    # Dynamic weighting based on historical performance
+    weights = {
+        'momentum_20': 0.3,
+        'momentum_60': 0.2,
+        'volatility': -0.2,
+        'liquidity': 0.15,
+        'price_action': -0.1,
+        'trend': 0.1,
+        'rsi': -0.05
+    }
+
+    # Combine the features into a single alpha factor with dynamic weights
+    alpha_factor = (momentum_20 * weights['momentum_20']) + \
+                   (momentum_60 * weights['momentum_60']) + \
+                   (volatility * weights['volatility']) + \
+                   (liquidity * weights['liquidity']) + \
+                   (price_action * weights['price_action']) + \
+                   (trend * weights['trend']) + \
+                   ((100 - rsi) / 100 * weights['rsi'])
+
+    return alpha_factor
+```

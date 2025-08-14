@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) of Close Prices over 20 days
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Momentum Factor
+    df['momentum'] = df['EMA_20'] - df['close']
+    
+    # Calculate Average Volume Over 20 Days
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average True Range (ATR) Over 20 Days
+    df['tr'] = df[['high', 'low', 'close']].shift(1).join(df[['high', 'low', 'close']]).apply(lambda x: max(x[3], x[4]) - min(x[3], x[4]), axis=1)
+    df['atr_20'] = df['tr'].rolling(window=20).mean()
+    
+    # Combine Volume and ATR
+    df['volatility_weight'] = df['avg_volume_20'] * df['atr_20']
+    
+    # Weight the momentum by combined volume & price volatility
+    df['weighted_momentum'] = df['momentum'] * df['volatility_weight']
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_spread'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    df['intraday_indicators'] = (df['intraday_spread'] * df['open_close_momentum']) + df['open_close_momentum']
+    
+    # Calculate Daily Price Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate 20-Day Moving Average of Price Range
+    df['ma_price_range_20'] = df['daily_range'].rolling(window=20).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    df['up_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['down_change'] = -df['close'].diff().apply(lambda x: x if x < 0 else 0)
+    
+    df['avg_gain'] = df['up_change'].rolling(window=14).mean()
+    df['avg_loss'] = df['down_change'].rolling(window=14).mean()
+    
+    df['smoothed_avg_gain'] = df['avg_gain'].ewm(alpha=1/14, adjust=False).mean()
+    df['smoothed_avg_loss'] = df['avg_loss'].ewm(alpha=1/14, adjust=False).mean()
+    
+    df['rs'] = df['smoothed_avg_gain'] / df['smoothed_avg_loss'].abs()
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['ma_price_range_20'] * df['volume']) + (df['rsi'] * df['volume'])
+    
+    # Calculate Close-to-Range Ratio
+    df['close_to_range_ratio'] = df['close'] / df['intraday_spread']
+    
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    df['volume_weighted_close_to_range_momentum'] = df['volume'] * df['close_to_range_ratio']
+    
+    # Final Combination
+    df['final_combination'] = (df['intraday_indicators'] * df['volume_weighted_close_to_range_momentum']) + df['volume_adjusted_momentum']
+    
+    # Adjust for Volume Impact
+    df['volume_trend'] = df['volume'].diff()
+    df['alpha_factor'] = df['final_combination'] * df['volume_trend']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

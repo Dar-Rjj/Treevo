@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close to High and Low Ratios
+    close_high_ratio = df['close'] / df['high']
+    close_low_ratio = df['close'] / df['low']
+    
+    # Combine Close to High and Low Ratios
+    combined_ratio = 0.7 * close_high_ratio + 0.3 * close_low_ratio
+    
+    # Calculate Intraday Price Movements
+    high_low_diff = df['high'] - df['low']
+    high_low_pct = (df['high'] - df['low']) / df['open']
+    
+    # Smooth Intraday Percentage Movement
+    smoothed_pct_move = high_low_pct.ewm(span=5).mean()
+    
+    # Calculate Volume-Adjusted Momentum
+    price_change = df['close'].diff()
+    volume_adj_momentum = price_change * np.sqrt(df['volume'])
+    
+    # Calculate Volume Change
+    vol_change = df['volume'].diff()
+    vol_change_pct = vol_change / df['volume'].shift(1)
+    
+    # Weighted Final Alpha Factor
+    alpha_factor = smoothed_pct_move * vol_change_pct
+    
+    # Apply Volume Shock Filter
+    abs_vol_change = vol_change.abs()
+    volume_shock_threshold = abs_vol_change.quantile(0.85)
+    alpha_factor = alpha_factor[abs_vol_change < volume_shock_threshold]
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute EMA of Intraday Return
+    ema_intraday_return = intraday_return.ewm(span=5).mean()
+    
+    # Incorporate Volatility Component
+    intraday_range = df['high'] - df['low']
+    volatility_adjusted_momentum = volume_adj_momentum / intraday_range.rolling(window=5).std()
+    
+    # Calculate Price Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    price_momentum = log_returns.rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    final_alpha_factor = alpha_factor * ema_intraday_return * volatility_adjusted_momentum * price_momentum
+    
+    return final_alpha_factor
+```

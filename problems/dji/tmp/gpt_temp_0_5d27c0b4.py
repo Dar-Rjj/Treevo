@@ -1,0 +1,67 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the ratio of Close to Open price
+    df['close_to_open_ratio'] = df['close'] / df['open']
+    
+    # Identify days with strong upward or downward movement using a threshold
+    strong_movement_threshold = 1.05
+    df['strong_upward_movement'] = (df['close_to_open_ratio'] > strong_movement_threshold).astype(int)
+    df['strong_downward_movement'] = (df['close_to_open_ratio'] < 1/strong_movement_threshold).astype(int)
+    
+    # Analyze the difference between High and Low prices
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Create a metric for the average true range (ATR) over a short period
+    atr_period = 14
+    df['tr'] = df[['high', 'low']].apply(lambda x: max(x['high'], x.shift(1)['close']) - min(x['low'], x.shift(1)['close']), axis=1)
+    df['atr'] = df['tr'].rolling(window=atr_period).mean()
+    
+    # Examine the relationship between volume and price change
+    df['price_change'] = df['close'] - df['open']
+    df['volume_weighted_price_change'] = df['price_change'] * df['volume']
+    
+    # Smooth the factor using a rolling window
+    smooth_window = 5
+    df['smooth_volume_weighted_price_change'] = df['volume_weighted_price_change'].rolling(window=smooth_window).mean()
+    
+    # Construct a factor based on the sum of recent returns
+    lookback_period = 5
+    df['recent_returns_sum'] = df['close'].pct_change().rolling(window=lookback_period).sum()
+    
+    # Develop a factor that captures the relationship between total transaction value and price
+    df['amount'] = df['volume'] * df['close']  # Assume 'amount' is the total transaction value
+    correlation_window = 10
+    df['price_amount_corr'] = df['close'].rolling(window=correlation_window).corr(df['amount'])
+    
+    # Implement a moving average crossover system
+    short_ma_period = 10
+    long_ma_period = 30
+    df['short_ma'] = df['close'].rolling(window=short_ma_period).mean()
+    df['long_ma'] = df['close'].rolling(window=long_ma_period).mean()
+    df['ma_crossover'] = (df['short_ma'] > df['long_ma']).astype(int) - (df['short_ma'] < df['long_ma']).astype(int)
+    
+    # Develop a factor that measures the overnight price change
+    df['overnight_change'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Create a factor that combines price momentum and volume
+    price_momentum_window = 10
+    volume_moving_average_window = 10
+    df['price_momentum'] = df['close'].pct_change(periods=price_momentum_window)
+    df['volume_moving_average'] = df['volume'].rolling(window=volume_moving_average_window).mean()
+    df['price_momentum_volume_factor'] = df['price_momentum'] * df['volume_moving_average']
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['strong_upward_movement'] - df['strong_downward_movement'] +
+        df['atr'] + 
+        df['smooth_volume_weighted_price_change'] +
+        df['recent_returns_sum'] +
+        df['price_amount_corr'] +
+        df['ma_crossover'] +
+        df['overnight_change'] +
+        df['price_momentum_volume_factor']
+    )
+    
+    return alpha_factor

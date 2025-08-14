@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_Signal'] = (df['SMA_50'] > df['SMA_200']).astype(int) * 2 - 1
+    
+    df['ROC'] = df['close'].pct_change(12)
+    df['ROC_Signal'] = (df['ROC'] > 0).astype(int) * 2 - 1
+    
+    # Volume Indicators
+    df['OBV'] = 0
+    obv = 0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            obv += df.loc[df.index[i], 'volume']
+        elif df.loc[df.index[i], 'close'] < df.loc[df.index[i-1], 'close']:
+            obv -= df.loc[df.index[i], 'volume']
+        else:
+            obv = obv
+        df.loc[df.index[i], 'OBV'] = obv
+    df['OBV_Signal'] = (df['OBV'] > df['OBV'].shift(1)).astype(int) * 2 - 1
+    
+    # Price Action Indicators
+    df['Bullish_Engulfing'] = ((df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & 
+                               (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1)))
+    df['Bearish_Engulfing'] = ((df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & 
+                               (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1)))
+    df['Candlestick_Signal'] = (df['Bullish_Engulfing'] * 1 + df['Bearish_Engulfing'] * -1).fillna(0)
+    
+    df['Upward_Gap'] = (df['low'] > df['high'].shift(1))
+    df['Downward_Gap'] = (df['high'] < df['low'].shift(1))
+    df['Gap_Signal'] = (df['Upward_Gap'] * 1 + df['Downward_Gap'] * -1).fillna(0)
+    
+    # Combining Factors
+    df['Combined_Signal'] = (df['SMA_Signal'] * 0.4 + df['ROC_Signal'] * 0.3 + 
+                             df['OBV_Signal'] * 0.2 + df['Candlestick_Signal'] * 0.1)
+    
+    # New Combined Factor
+    df['SMA_50_OBV'] = df['OBV'].rolling(window=50).mean()
+    df['SMA_200_OBV'] = df['OBV'].rolling(window=200).mean()
+    df['Combined_Momentum_Volume_Signal'] = (df['SMA_50_OBV'] > df['SMA_200_OBV']).astype(int) * 2 - 1
+    
+    df['Bullish_Engulfing_Upward_Gap'] = df['Bullish_Engulfing'] & df['Upward_Gap']
+    df['Bearish_Engulfing_Downward_Gap'] = df['Bearish_Engulfing'] & df['Downward_Gap']
+    df['Combined_Price_Action_Gap_Signal'] = (df['Bullish_Engulfing_Upward_Gap'] * 1 + 
+                                              df['Bearish_Engulfing_Downward_Gap'] * -1).fillna(0)
+    
+    # Final Combination
+    df['Final_Signal'] = (df['Combined_Momentum_Volume_Signal'] * 0.5 + 
+                          df['Combined_Price_Action_Gap_Signal'] * 0.5)
+    
+    return df['Final_Signal']
+
+# Example usage:
+# factor = heuristics_v2(df)
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Momentum factor: sum of daily returns over a 30-day window
+    df['momentum_30'] = df['daily_return'].rolling(window=30).sum()
+    
+    # Mean reversion factor: (close_t - average(close over a 30-day window)) / standard_deviation(close over a 30-day window)
+    close_avg_30 = df['close'].rolling(window=30).mean()
+    close_std_30 = df['close'].rolling(window=30).std()
+    df['mean_reversion_30'] = (df['close'] - close_avg_30) / close_std_30
+    
+    # Price range: (high_t - low_t) / close_{t-1}
+    df['price_range'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Price range volatility: standard deviation of price range over a 30-day window
+    df['price_range_volatility'] = df['price_range'].rolling(window=30).std()
+    
+    # Risk-adjusted price range: (sum(price range over a 30-day window)) / (standard deviation of price range over a 30-day window)
+    df['risk_adjusted_price_range'] = df['price_range'].rolling(window=30).sum() / df['price_range_volatility']
+    
+    # Volatility: standard deviation of daily returns over a 30-day window
+    df['volatility_30'] = df['daily_return'].rolling(window=30).std()
+    
+    # Risk-adjusted return: (sum(daily return over a 30-day window)) / (standard deviation of daily returns over a 30-day window)
+    df['risk_adjusted_return'] = df['daily_return'].rolling(window=30).sum() / df['volatility_30']
+    
+    # Daily volume change: (volume_t - volume_{t-1})
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Significant volume spikes: if (volume_t > 2 * average(volume over a 30-day window))
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    df['significant_volume_spike'] = df['volume'] > 2 * avg_volume_30
+    df['impact_on_price'] = df['daily_return'] * df['significant_volume_spike']
+    
+    # Volume trend: (average(volume over last 5 days) - average(volume over a 30-day window)) / average(volume over a 30-day window)
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    df['volume_trend'] = (avg_volume_5 - avg_volume_30) / avg_volume_30
+    
+    # Combine factors to create a composite alpha factor
+    df['alpha_factor'] = (df['momentum_30'] + df['mean_reversion_30'] + 
+                          df['risk_adjusted_price_range'] + df['risk_adjusted_return'] + 
+                          df['volume_trend'] + df['impact_on_price'])
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,57 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility as the standard deviation of the price change over the last 10 days
+    volatility = price_change.rolling(window=10).std()
+
+    # Calculate the money flow index (MFI) for the last 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(price_change > 0, 0)
+    negative_money_flow = raw_money_flow.where(price_change < 0, 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Integrate multiple indicators to create a robust factor
+    # Apply exponential smoothing to the combined factors
+    factor = (price_change * volume_change + diff_close_avg + momentum_5d + rsi + volatility + mfi).ewm(span=5, adjust=False).mean()
+
+    # Add a sector-specific factor (assuming 'sector' is a column in the DataFrame)
+    if 'sector' in df.columns:
+        sector_factor = df.groupby('sector')['close'].transform(lambda x: x.ewm(span=5, adjust=False).mean())
+        factor = factor + sector_factor
+
+    # Incorporate additional technical indicators
+    # Calculate the 20-day Exponential Moving Average (EMA) of the closing prices
+    ema_20d = df['close'].ewm(span=20, adjust=False).mean()
+    ema_diff = df['close'] - ema_20d
+
+    # Calculate the 10-day Bollinger Bands
+    bollinger_mid = df['close'].rolling(window=10).mean()
+    bollinger_std = df['close'].rolling(window=10).std()
+    bollinger_upper = bollinger_mid + 2 * bollinger_std
+    bollinger_lower = bollinger_mid - 2 * bollinger_std
+    bollinger_percent = (df['close'] - bollinger_lower) / (bollinger_upper - bollinger_lower)
+
+    # Incorporate the new indicators into the factor
+    factor = (factor + ema_diff + bollinger_percent).ewm(span=5, adjust=False).mean()
+
+    return factor
+```

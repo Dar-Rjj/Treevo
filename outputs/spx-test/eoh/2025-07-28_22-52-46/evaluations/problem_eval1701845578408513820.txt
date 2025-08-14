@@ -1,0 +1,39 @@
+import pandas as pd
+import talib
+
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute simple moving averages for close price
+    df['sma_30'] = df['close'].rolling(window=30).mean()
+    df['sma_90'] = df['close'].rolling(window=90).mean()
+    
+    # Calculate momentum
+    df['momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate price relative to SMA
+    df['price_to_sma_30'] = df['close'] / df['sma_30']
+    df['price_to_sma_90'] = df['close'] / df['sma_90']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'].rolling(window=30).mean() / df['volume'].rolling(window=90).mean()
+    
+    # RSI
+    df['rsi'] = talib.RSI(df['close'], timeperiod=10)
+    
+    # Historical return correlations
+    corr_with_returns = {'momentum': df['momentum'].corr(df['daily_return'].shift(-1)), 
+                         'price_to_sma_30': df['price_to_sma_30'].corr(df['daily_return'].shift(-1)),
+                         'price_to_sma_90': df['price_to_sma_90'].corr(df['daily_return'].shift(-1)),
+                         'volume_trend': df['volume_trend'].corr(df['daily_return'].shift(-1)),
+                         'rsi': df['rsi'].corr(df['daily_return'].shift(-1))}
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['momentum'] * corr_with_returns['momentum'] +
+                         df['price_to_sma_30'] * corr_with_returns['price_to_sma_30'] +
+                         df['price_to_sma_90'] * corr_with_returns['price_to_sma_90'] +
+                         df['volume_trend'] * corr_with_returns['volume_trend'] +
+                         df['rsi'] * corr_with_returns['rsi'])
+    
+    return heuristics_matrix

@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    import numpy as np
+
+    # Calculate the RSI with a 14-day window
+    def rsi(series, window=14):
+        delta = series.diff(1)
+        gain = (delta.where(delta > 0, 0)).ewm(com=window-1, adjust=False).mean()
+        loss = (-delta.where(delta < 0, 0)).ewm(com=window-1, adjust=False).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    rsi_values = rsi(df['close'])
+
+    # Calculate the MACD
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal = macd.ewm(span=9, adjust=False).mean()
+
+    # Adaptive momentum with volume-weighted, exponentially smoothed indicators
+    momentum = (df['close'] / df['close'].shift(10)) - 1
+    volume_weighted_momentum = (momentum * df['volume']).ewm(span=10, adjust=False).mean() / df['volume'].rolling(window=10).mean()
+
+    # Calculate the Parkinson's Volatility
+    parkinson_volatility = ((df['high'] / df['low']).apply(np.log).rolling(window=10).std()) * (np.sqrt(4.67))
+
+    # Trend strength using moving averages
+    ma_50 = df['close'].rolling(window=50).mean()
+    ma_200 = df['close'].rolling(window=200).mean()
+    trend_strength = ma_50 - ma_200
+
+    # High-low range mean
+    hl_range_mean = (df['high'] - df['low']).rolling(window=10).mean()
+
+    # Combine the volume-weighted momentum, RSI, MACD, Parkinson's volatility, trend strength, and high-low range into an alpha factor
+    alpha_factor = (
+        volume_weighted_momentum * rsi_values * macd / (parkinson_volatility + 1e-7) *
+        (trend_strength / (hl_range_mean + 1e-7))
+    )
+
+    # Smooth the alpha factor using a 3-day exponentially weighted moving average
+    smoothed_alpha_factor = alpha_factor.ewm(span=3, adjust=False).mean()
+
+    return smoothed_alpha_factor
+```

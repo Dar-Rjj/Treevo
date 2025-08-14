@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_hl_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    df['combined_indicator'] = df['intraday_hl_pct_change'] * df['volume_change_ratio']
+    
+    # Apply Threshold to Identify Significant Movements
+    # Set a Dynamic Threshold Based on Historical Volatility
+    rolling_volatility = df['close'].rolling(window=20).std()
+    threshold = 2 * rolling_volatility
+    df['significant_movement'] = df['combined_indicator'] > threshold
+    
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    df['ma_log_return_20'] = df['log_return'].rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    alpha = 0.1
+    df['ema_volume_20'] = df['volume'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    df['adjusted_ma_return'] = df['ma_log_return_20'] * df['ema_volume_20'] / df['volume'].rolling(window=20).mean()
+    
+    # Fast and Slow Exponential Moving Averages of Adjusted Moving Average Return
+    fast_period = 10
+    slow_period = 30
+    df['fast_ema'] = df['adjusted_ma_return'].ewm(span=fast_period, adjust=False).mean()
+    df['slow_ema'] = df['adjusted_ma_return'].ewm(span=slow_period, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['fast_ema'] - df['slow_ema']
+    
+    return df['alpha_factor']
+```

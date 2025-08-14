@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_10day_ma = df['volume'].rolling(window=10).mean()
+    volume_trend = df['volume'] - volume_10day_ma
+    volume_trend_sign = np.where(volume_trend > 0, 1, 0.5)
+    
+    # Calculate Short-Term Price Trend
+    close_10day_ema = df['close'].ewm(span=10).mean()
+    short_term_trend = df['close'] - close_10day_ema
+    short_term_trend_sign = np.where(short_term_trend > 0, 1.2, 0.8)
+    
+    # Calculate Medium-Term Price Trend
+    close_30day_ema = df['close'].ewm(span=30).mean()
+    medium_term_trend = df['close'] - close_30day_ema
+    medium_term_trend_sign = np.where(medium_term_trend > 0, 1.1, 0.9)
+    
+    # Calculate Long-Term Price Trend
+    close_50day_ema = df['close'].ewm(span=50).mean()
+    long_term_trend = df['close'] - close_50day_ema
+    long_term_trend_sign = np.where(long_term_trend > 0, 1.3, 0.7)
+    
+    # Calculate Dynamic Volatility
+    volatility = df['close'].rolling(window=20).std()
+    volatility_high = np.percentile(volatility.dropna(), 70)
+    volatility_low = np.percentile(volatility.dropna(), 30)
+    volatility_sign = np.where(volatility > volatility_high, 1.4, 
+                               np.where(volatility < volatility_low, 0.6, 1))
+    
+    # Integrate Momentum and Relative Strength
+    short_term_ema = df['close'].ewm(span=5).mean()
+    long_term_ema = df['close'].ewm(span=20).mean()
+    relative_strength = short_term_ema / long_term_ema
+    relative_strength_sign = np.where(relative_strength > 1, 1.5, 0.5)
+    
+    # Calculate MACD and Signal Line
+    macd = df['close'].ewm(span=12).mean() - df['close'].ewm(span=26).mean()
+    signal_line = macd.ewm(span=9).mean()
+    macd_signal_sign = np.where(macd > signal_line, 1.6, 0.4)
+    
+    # Combine all factors
+    alpha_factor = (
+        high_low_spread * volume_trend_sign * 
+        short_term_trend_sign * medium_term_trend_sign * 
+        long_term_trend_sign * volatility_sign * 
+        relative_strength_sign * macd_signal_sign
+    )
+    
+    return alpha_factor

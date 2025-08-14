@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=10, long_term_lookback=60, positive_threshold=0.01):
+    # Calculate Adjusted Close Price by Open Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    df['enhanced_intraday_momentum'] = (high_price_indicator + low_price_indicator) / 2
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    moving_average_volume = df['volume'].rolling(window=lookback_period).mean()
+    normalized_volume = df['volume'] / moving_average_volume
+    df['adjusted_intraday_momentum'] = df['enhanced_intraday_momentum'] * normalized_volume
+    
+    # Longer-Term Momentum Adjusted for Volume
+    long_term_momentum = (df['close'] - df['close'].shift(long_term_lookback)) / df['close'].shift(long_term_lookback)
+    volume_ratio = df['volume'] / df['volume'].shift(long_term_lookback)
+    df['final_long_term_factor'] = long_term_momentum * (1 + volume_ratio)
+    
+    # Consolidate All Factors
+    df['consolidated_factors'] = (df['adjusted_close'] + df['adjusted_intraday_momentum'] + df['final_long_term_factor']) / df['open']
+    
+    # Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Significant Price Increase
+    significant_price_increase = (daily_price_return > positive_threshold).astype(int)
+    
+    # Volume Spike Indicator
+    average_past_week_volumes = df['volume'].rolling(window=5).mean()
+    volume_spike_indicator = (df['volume'] > average_past_week_volumes).astype(int)
+    
+    # Weighted Price Momentum
+    weighted_price_momentum = daily_price_return * significant_price_increase
+    
+    # Apply Volume Spike Filter
+    volume_spike_filtered_momentum = weighted_price_momentum * volume_spike_indicator
+    
+    # Final Alpha Factor Synthesis
+    df['alpha_factor'] = (df['consolidated_factors'] + volume_spike_filtered_momentum) * volume_spike_indicator
+    
+    return df['alpha_factor']
+```

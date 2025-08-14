@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute 10-Day Price Momentum
+    df['10_day_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    df['volume_change_indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Calculate Price Trend Indicator
+    df['short_sma'] = df['close'].rolling(window=5).mean()
+    df['long_sma'] = df['close'].rolling(window=20).mean()
+    df['price_trend_indicator'] = (df['short_sma'] > df['long_sma']).astype(int) * 2 - 1
+    
+    # Combine Intraday and 10-Day Momentum
+    df['combined_momentum'] = df['intraday_return'] + df['10_day_momentum']
+    
+    # Apply Volume Confirmation
+    df['combined_momentum_vol_adj'] = df['combined_momentum'] * df['volume_change_indicator']
+    
+    # Calculate Averaged High-to-Low Volatility
+    lookback_period = 10
+    df['high_low_pct_change'] = (df['high'] - df['low']) / df['low']
+    df['avg_high_low_volatility'] = df['high_low_pct_change'].rolling(window=lookback_period).mean()
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low'])
+    
+    # Adjust Factors
+    df['adjusted_combined_momentum'] = df['combined_momentum_vol_adj'] / df['daily_volatility']
+    
+    # Integrate Both Metrics
+    df['final_factor'] = (df['intraday_return'] + df['adjusted_combined_momentum']) / 2
+    
+    # Smooth the Result
+    smoothing_factor = 7
+    df['smoothed_final_factor'] = df['final_factor'].ewm(span=smoothing_factor, adjust=False).mean()
+    
+    return df['smoothed_final_factor']
+```

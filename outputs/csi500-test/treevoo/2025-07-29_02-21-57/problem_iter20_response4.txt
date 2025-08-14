@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range and High-Low Spread
+    df['Previous Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['Previous Close'])
+    df['TR3'] = abs(df['low'] - df['Previous Close'])
+    df['True Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['High-Low Spread'] = df['high'] - df['low']
+    df['Avg High-Low Spread'] = df['High-Low Spread'].rolling(window=14).mean()
+
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR_14'] = df['True Range'].rolling(window=14).mean()
+
+    # Calculate Volume Weighted Moving Averages (VWMA)
+    df['Volume * Price'] = df['volume'] * df['close']
+    df['Short-Term VWMA'] = df['Volume * Price'].rolling(window=7).sum() / df['volume'].rolling(window=7).sum()
+    df['Long-Term VWMA'] = df['Volume * Price'].rolling(window=28).sum() / df['volume'].rolling(window=28).sum()
+
+    # Combined Crossover and Momentum Signal
+    df['Crossover Signal'] = 0
+    df.loc[df['Short-Term VWMA'] > df['Long-Term VWMA'], 'Crossover Signal'] = 1
+    df.loc[df['Short-Term VWMA'] < df['Long-Term VWMA'], 'Crossover Signal'] = -1
+
+    df['5-Day Close Return'] = df['close'] / df['close'].shift(5) - 1
+    df['5-Day Volume Ratio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=20).mean()
+    df['Volume Adjusted Momentum'] = df['5-Day Close Return'] * df['5-Day Volume Ratio']
+
+    df['Momentum Signal'] = 0
+    df.loc[df['Volume Adjusted Momentum'] > 0, 'Momentum Signal'] = 1
+    df.loc[df['Volume Adjusted Momentum'] < 0, 'Momentum Signal'] = -1
+
+    df['Combined Signal'] = 0
+    df.loc[(df['Crossover Signal'] == 1) & (df['Momentum Signal'] == 1), 'Combined Signal'] = 2
+    df.loc[(df['Crossover Signal'] == -1) & (df['Momentum Signal'] == -1), 'Combined Signal'] = -2
+    df.loc[(df['Crossover Signal'] == 1) & (df['Momentum Signal'] != -1), 'Combined Signal'] = 1
+    df.loc[(df['Crossover Signal'] == -1) & (df['Momentum Signal'] != 1), 'Combined Signal'] = -1
+
+    # Calculate Intraday High-Low Spread
+    df['Intraday High-Low Spread'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['Close-to-Open Return'] = df['close'] - df['open']
+
+    # Calculate Price Momentum
+    df['Price Momentum'] = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    df['Weighted Momentum'] = df['Price Momentum'] * df['volume']
+
+    # Adjust Momentum by ATR
+    df['ATR Adjusted Momentum'] = df['Weighted Momentum'] / df['ATR_14']
+
+    # Generate Alpha Factor
+    df['Alpha Factor'] = df['ATR Adjusted Momentum'] + df['Short-Term VWMA']
+    df['Alpha Factor'] += df['Intraday High-Low Spread'] - df['Avg High-Low Spread']
+    df.loc[df['Combined Signal'] == 2, 'Alpha Factor'] += 1
+    df.loc[df['Combined Signal'] == -2, 'Alpha Factor'] -= 1
+    df.loc[df['Combined Signal'] == 1, 'Alpha Factor'] += 0.5
+    df.loc[df['Combined Signal'] == -1, 'Alpha Factor'] -= 0.5
+
+    return df['Alpha Factor']
+```

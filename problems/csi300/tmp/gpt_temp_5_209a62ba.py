@@ -1,0 +1,42 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=30).std().mean(axis=1)
+    
+    # Adaptive Window Calculation
+    def adjust_window_size(volatility):
+        if volatility > volatility.mean():
+            return 5  # Decrease window size
+        else:
+            return 60  # Increase window size
+    
+    df['window_size'] = df['volatility'].apply(adjust_window_size)
+    
+    # Rolling Statistics
+    df['rolling_mean'] = df.groupby('window_size')['volume_weighted_return'].transform(lambda x: x.rolling(window=x.name).mean())
+    df['rolling_std'] = df.groupby('window_size')['volume_weighted_return'].transform(lambda x: x.rolling(window=x.name).std())
+    
+    # Momentum Factor
+    df['price_momentum'] = df['close'].pct_change(periods=-30)  # 30-day price momentum
+    df['momentum_factor'] = df['rolling_mean'] + df['price_momentum']
+    
+    # Drop NaN values
+    df.dropna(inplace=True)
+    
+    # Return the alpha factor
+    return df['momentum_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

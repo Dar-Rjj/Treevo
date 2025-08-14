@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Volume Trend
+    df['volume_20_day_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_trend'] = df['volume'] - df['volume_20_day_avg']
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    df['adjusted_close_to_open_return'] = df['close_to_open_return'] * (df['intraday_range'] / df['intraday_range'].max())
+    
+    # Calculate Volume-Weighted Volatility
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['avg_amount'] = df['amount'].rolling(window=20).mean()
+    df['volume_weighted_volatility'] = (df['intraday_range'] / df['avg_volume']) * df['avg_amount']
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    df['combined_factor'] = df['adjusted_close_to_open_return'] * df['volume_weighted_volatility'] * df['volume_change']
+    
+    # Incorporate Volume Trend
+    df['combined_factor'] *= df['volume_trend']
+    
+    # Calculate Daily Price Return
+    df['daily_price_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Identify Volume Spike
+    df['volume_moving_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_std'] = df['volume'].rolling(window=20).std()
+    df['is_volume_spike'] = df['volume'] > (df['volume_moving_avg'] + 2 * df['volume_std'])
+    
+    # Adjust Daily Price Return for Volume Spike
+    K = 2  # Amplification factor for volume spike
+    df['adjusted_daily_price_return'] = df['daily_price_return']
+    df.loc[df['is_volume_spike'], 'adjusted_daily_price_return'] *= K
+    
+    # Compute Cumulative Sum of Adjusted Price Return
+    df['cumulative_adjusted_price_return'] = df['adjusted_daily_price_return'].cumsum()
+    
+    # Compute Cumulative Sum of Volume Change
+    df['cumulative_volume_change'] = df['volume_change'].cumsum()
+    
+    # Combine Cumulative Sums
+    df['final_factor'] = df['cumulative_adjusted_price_return'] * df['cumulative_volume_change']
+    
+    return df['final_factor']
+```

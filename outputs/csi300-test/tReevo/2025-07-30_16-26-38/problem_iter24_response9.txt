@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Determine Volatility
+    def calculate_volatility(row, window=20):
+        high_low = row['high'] - row['low']
+        high_close = np.abs(row['high'] - row['close'].shift(1))
+        low_close = np.abs(row['low'] - row['close'].shift(1))
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        return tr.rolling(window=window).std()
+    
+    df['Volatility'] = df.apply(calculate_volatility, axis=1)
+    
+    # Adjust Window Size Based on Volatility
+    def adjust_window_size(volatility, base_window=20):
+        if volatility > volatility.median():
+            return max(5, int(base_window * 0.8))  # Decrease window size
+        else:
+            return min(40, int(base_window * 1.2))  # Increase window size
+    
+    df['Adaptive_Window'] = df['Volatility'].apply(adjust_window_size)
+    
+    # Rolling Statistics with Adaptive Window
+    df['Rolling_Mean'] = df.groupby('Adaptive_Window')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).mean())
+    df['Rolling_Std'] = df.groupby('Adaptive_Window')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).std())
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Rolling_Mean'] / df['Rolling_Std']).fillna(0)
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

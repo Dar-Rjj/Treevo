@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    lookback_sma = 20
+    df['SMA'] = df['close'].rolling(window=lookback_sma).mean()
+
+    # Compute Refined Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['volume_weighted_diff'] = df['high_low_diff'] * df['volume']
+    lookback_volatility = 10
+    df['refined_volatility'] = df['volume_weighted_diff'].rolling(window=lookback_volatility).mean()
+
+    # Compute Price Momentum
+    n_avg_close = 5
+    df['avg_close'] = df['close'].rolling(window=n_avg_close).mean()
+    df['price_momentum'] = (df['close'] - df['SMA']) / df['avg_close']
+
+    # Incorporate Additional Price Change Metrics
+    lookback_pct_change = 1
+    df['pct_change_close'] = df['close'].pct_change(periods=lookback_pct_change)
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    long_lookback_sma = 100
+    df['long_SMA'] = df['close'].rolling(window=long_lookback_sma).mean()
+    df['trend_indicator'] = (df['SMA'] > df['long_SMA']).astype(int)
+
+    # Incorporate Dynamic Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    lookback_turnover = 30
+    df['rolling_turnover'] = df['daily_turnover'].rolling(window=lookback_turnover).mean()
+
+    # Final Alpha Factor
+    weights_bullish = [0.5, 0.25, 0.15, 0.05, 0.05]
+    weights_bearish = [0.3, 0.4, 0.15, 0.05, 0.05]
+
+    df['alpha_factor'] = (df['price_momentum'] * df['trend_indicator'].apply(lambda x: weights_bullish[0] if x == 1 else weights_bearish[0]) +
+                          df['refined_volatility'] * df['trend_indicator'].apply(lambda x: weights_bullish[1] if x == 1 else weights_bearish[1]) +
+                          df['pct_change_close'] * df['trend_indicator'].apply(lambda x: weights_bullish[2] if x == 1 else weights_bearish[2]) +
+                          df['trend_indicator'] * df['trend_indicator'].apply(lambda x: weights_bullish[3] if x == 1 else weights_bearish[3]) +
+                          df['rolling_turnover'] * df['trend_indicator'].apply(lambda x: weights_bullish[4] if x == 1 else weights_bearish[4]))
+
+    return df['alpha_factor']
+```

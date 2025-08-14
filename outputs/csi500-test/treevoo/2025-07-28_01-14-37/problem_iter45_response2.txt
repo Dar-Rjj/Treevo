@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+
+    # Enhance with Volume Confirmation
+    volume_change = df['volume'] - df['volume'].shift(1)
+    momentum_by_volume = trend_direction * volume_change
+
+    # Calculate Relative Strength
+    relative_strength = (short_term_ma - long_term_ma) / (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    volume_weighted_price = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    total_volume = df['volume'].sum()
+    volume_weighted_price_movement = volume_weighted_price.sum() / total_volume
+    relative_strength = (short_term_ma - long_term_ma) / volume_weighted_price_movement
+
+    # Calculate Daily Return and Cumulative Return
+    daily_return = df['close'] - df['close'].shift(1)
+    cumulative_return = daily_return.rolling(window=5).sum()
+    average_volume_5_days = df['volume'].rolling(window=5).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume_5_days
+
+    # Calculate Intraday Return and Range
+    intraday_return = (df['close'] - df['open'])
+    intraday_range = (df['high'] - df['low'])
+    intraday_momentum = (intraday_return * df['volume']) + (intraday_range * df['volume'])
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    integrated_factor = (short_term_ma - long_term_ma - df['close'].rolling(window=50).mean()) + adjusted_cumulative_return + relative_strength
+
+    # Calculate Close-to-Open Return and Open-to-Low Return
+    close_to_open_return = df['close'] - df['open']
+    open_to_low_return = df['open'] - df['low']
+
+    # Combine Factors
+    combined_factors = (df['high'] - df['low']) + close_to_open_return + open_to_low_return
+    price_range_ratio = (df['high'] - df['low']) / (df['high'].rolling(window=5).mean() - df['low'].rolling(window=5).mean())
+    combined_factors_weighted = combined_factors * price_range_ratio
+
+    # Confirm with Volume
+    momentum_by_volume_confirmed = trend_direction * volume_change
+
+    # Calculate Intraday Reversal Indicator
+    intraday_reversal_indicator = (df['high'] - df['close'].shift(1)) - (df['close'].shift(1) - df['low'])
+
+    # Integrate Intraday Reversal Indicator
+    intraday_volatility = (df['high'] - df['low']).rolling(window=5).mean()
+    integrated_intraday_reversal = intraday_reversal_indicator * intraday_volatility
+
+    # Calculate Intraday Momentum Shift
+    intraday_momentum_shift = intraday_return - intraday_return.shift(1)
+
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = (integrated_factor + integrated_intraday_reversal + intraday_momentum_shift) * relative_strength
+    return final_alpha_factor
+```

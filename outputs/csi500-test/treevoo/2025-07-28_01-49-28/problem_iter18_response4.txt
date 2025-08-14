@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Adjust for Volume
+    volume_adjusted_range = daily_range * np.sqrt(df['volume'])
+    
+    # Calculate 5-day Momentum
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    momentum_score = np.where(df['close'] > ema_5, 1, -1)
+    
+    # Combine Indicators
+    combined_indicator = volume_adjusted_range + open_to_close_movement
+    combined_indicator_with_momentum = combined_indicator * momentum_score
+    
+    # Filter for Strong Moves
+    strong_move_threshold = 0.5 * np.max(combined_indicator_with_momentum)
+    strong_move_signal = np.where(combined_indicator_with_momentum > strong_move_threshold, 1, 0)
+    
+    # Calculate Simple Moving Averages (SMA)
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Trend-Following Signal
+    trend_following_signal = sma_5 - sma_20
+    
+    # Analyze Past Returns
+    daily_returns = df['close'].pct_change()
+    weekly_returns = daily_returns.rolling(window=5).sum()
+    monthly_returns = daily_returns.rolling(window=21).sum()
+    
+    weighted_returns = (daily_returns * 0.4) + (weekly_returns * 0.3) + (monthly_returns * 0.3)
+    
+    # Measure Overnight Sentiment
+    overnight_sentiment = df['open'] - df['close'].shift(1)
+    
+    # Evaluate Volume-Based Factors
+    obv = (df['close'] - df['close'].shift(1)).apply(np.sign) * df['volume']
+    obv_cumulative = obv.cumsum()
+    
+    # Introduce a factor that combines OBV with closing price movement
+    obv_factor = obv_cumulative * (df['close'] - df['close'].shift(1))
+    
+    # Volatility Index
+    volatility_index = daily_returns.rolling(window=30).std()
+    
+    # Synthesize Final Alpha Factor
+    alpha_factor = (
+        strong_move_signal +
+        trend_following_signal +
+        weighted_returns +
+        overnight_sentiment +
+        obv_factor +
+        1 / volatility_index
+    )
+    
+    return alpha_factor
+```

@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Moving Averages
+    df['50_day_EMA'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['100_day_EMA'] = df['close'].ewm(span=100, adjust=False).mean()
+    df['200_day_EMA'] = df['close'].ewm(span=200, adjust=False).mean()
+
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+    df['100_day_SMA'] = df['close'].rolling(window=100).mean()
+    df['200_day_SMA'] = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer MA from Shorter MA
+    df['EMA_100_200'] = df['100_day_EMA'] - df['200_day_EMA']
+    df['EMA_50_100'] = df['50_day_EMA'] - df['100_day_EMA']
+    df['SMA_100_200'] = df['100_day_SMA'] - df['200_day_SMA']
+    df['SMA_50_100'] = df['50_day_SMA'] - df['100_day_SMA']
+
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal Signals
+    df['combined_EMA_100_200'] = df['EMA_100_200'] * df['reversal_signal']
+    df['combined_EMA_50_100'] = df['EMA_50_100'] * df['reversal_signal']
+    df['combined_SMA_100_200'] = df['SMA_100_200'] * df['reversal_signal']
+    df['combined_SMA_50_100'] = df['SMA_50_100'] * df['reversal_signal']
+
+    # Compute True Range (TR)
+    df['prev_close'] = df['close'].shift(1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_prev_close'] = abs(df['high'] - df['prev_close'])
+    df['low_prev_close'] = abs(df['low'] - df['prev_close'])
+    df['true_range'] = df[['high_low_range', 'high_prev_close', 'low_prev_close']].max(axis=1)
+
+    # Integrate TR with Combined Signal
+    df['TR_combined_EMA_100_200'] = df['true_range'] * df['combined_EMA_100_200']
+    df['TR_combined_EMA_50_100'] = df['true_range'] * df['combined_EMA_50_100']
+    df['TR_combined_SMA_100_200'] = df['true_range'] * df['combined_SMA_100_200']
+    df['TR_combined_SMA_50_100'] = df['true_range'] * df['combined_SMA_50_100']
+    df['smoothed_TR_combined_EMA_100_200'] = df['TR_combined_EMA_100_200'].ewm(span=5, adjust=False).mean()
+    df['smoothed_TR_combined_EMA_50_100'] = df['TR_combined_EMA_50_100'].ewm(span=5, adjust=False).mean()
+    df['smoothed_TR_combined_SMA_100_200'] = df['TR_combined_SMA_100_200'].ewm(span=5, adjust=False).mean()
+    df['smoothed_TR_combined_SMA_50_100'] = df['TR_combined_SMA_50_100'].ewm(span=5, adjust=False).mean()
+
+    # High-Low Range Momentum with Volume Adjustment
+    df['high_low_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    df['avg_volume'] = df['volume'].rolling(window

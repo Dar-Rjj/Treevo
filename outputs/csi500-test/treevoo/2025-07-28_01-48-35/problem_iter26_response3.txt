@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Spread
+    spread = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Spread
+    volume_adjusted_spread = spread * df['volume']
+    
+    # Calculate Momentum Component
+    momentum_component = intraday_return.rolling(window=5).sum() * close_to_range_ratio
+    
+    # Adjust for Volume Activity
+    vol_change = df['volume'] - df['volume'].shift(5)
+    avg_vol_10d = df['volume'].rolling(window=10).mean()
+    vol_change_rate = vol_change / avg_vol_10d
+    vol_trend_score = vol_change_rate.apply(lambda x: 2.0 if x > 1 else (-1.5 if x < -1 else 0))
+    
+    # Integrate Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    price_trend = df['close'] - ema_20
+    
+    # Combine Initial Signals
+    combined_signal = (intraday_return + volume_adjusted_spread) / df['volume'].rolling(window=20).mean()
+    
+    # Introduce Opening Impact Factor
+    open_impact_factor = df['open'] - df['close']
+    
+    # Enhance Combined Momentum, Volume, and Price Factor
+    enhanced_factor = (momentum_component * close_to_range_ratio * vol_trend_score * open_impact_factor 
+                       / df['volume'].rolling(window=20).mean() * price_trend)
+    
+    # Adjust and Output
+    overnight_gap = df['open'] - df['close'].shift(1)
+    final_alpha_factor = enhanced_factor - overnight_gap
+    
+    return final_alpha_factor
+```

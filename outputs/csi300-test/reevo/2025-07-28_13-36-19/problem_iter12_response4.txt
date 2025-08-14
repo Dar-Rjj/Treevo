@@ -1,0 +1,84 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average (EMA) of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Calculate the standard deviation of the price movement
+    price_movement_std = price_movement.rolling(window=14).std()
+
+    # Calculate the momentum over a 10-day period
+    momentum_10d = df['close'].pct_change(periods=10)
+
+    # Calculate the 14-period rolling standard deviation of returns for advanced volatility
+    returns_volatility = df['close'].pct_change().rolling(window=14).std()
+
+    # Calculate the adaptive weight for each factor based on market conditions
+    weight_ema = 1 / (ema_price_movement.abs() + 1e-6)
+    weight_rsi = 1 / (rsi + 1e-6)
+    weight_volume_trend = 1 / (volume_trend.abs() + 1e-6)
+    weight_seasonal_adj = 1 / (seasonal_adj_price_movement.abs() + 1e-6)
+    weight_momentum = 1 / (momentum_10d.abs() + 1e-6)
+    weight_volatility = 1 / (returns_volatility + 1e-6)
+
+    # Normalize the weights
+    total_weight = (weight_ema + weight_rsi + weight_volume_trend + weight_seasonal_adj + weight_momentum + weight_volatility)
+    weight_ema /= total_weight
+    weight_rsi /= total_weight
+    weight_volume_trend /= total_weight
+    weight_seasonal_adj /= total_weight
+    weight_momentum /= total_weight
+    weight_volatility /= total_weight
+
+    # Additional sophisticated volatility measures
+    # Calculate the 30-day and 60-day rolling standard deviation of returns
+    returns_volatility_30d = df['close'].pct_change().rolling(window=30).std()
+    returns_volatility_60d = df['close'].pct_change().rolling(window=60).std()
+
+    # Calculate the adaptive weight for the 30-day and 60-day volatility
+    weight_volatility_30d = 1 / (returns_volatility_30d + 1e-6)
+    weight_volatility_60d = 1 / (returns_volatility_60d + 1e-6)
+
+    # Re-normalize the weights including the new volatility measures
+    total_weight = (weight_ema + weight_rsi + weight_volume_trend + weight_seasonal_adj + weight_momentum + weight_volatility + weight_volatility_30d + weight_volatility_60d)
+    weight_ema /= total_weight
+    weight_rsi /= total_weight
+    weight_volume_trend /= total_weight
+    weight_seasonal_adj /= total_weight
+    weight_momentum /= total_weight
+    weight_volatility /= total_weight
+    weight_volatility_30d /= total_weight
+    weight_volatility_60d /= total_weight
+
+    # Combine the factors with adaptive weighting
+    factor = (
+        weight_ema * ema_price_movement +
+        weight_rsi * rsi +
+        weight_volume_trend * volume_trend +
+        weight_seasonal_adj * seasonal_adj_price_movement +
+        weight_momentum * momentum_10d +
+        weight_volatility * returns_volatility +
+        weight_volatility_30d * returns_volatility_30d +
+        weight_volatility_60d * returns_volatility_60d
+    )
+
+    return factor
+```

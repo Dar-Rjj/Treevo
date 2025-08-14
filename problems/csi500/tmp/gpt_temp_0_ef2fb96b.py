@@ -1,0 +1,55 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum with exponential smoothing for both short and long-term trends
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_momentum = 0.7 * short_term_momentum + 0.3 * long_term_momentum
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over the last 14 days with exponential smoothing
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Volume trend using the rate of change in volume with exponential smoothing
+    volume_trend = df['volume'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+
+    # Market sentiment using the ratio of high to low prices as a proxy
+    market_sentiment = (df['high'] - df['low']) / df['close']
+
+    # Price range factor using the difference between high and low prices
+    price_range = (df['high'] - df['low']) / df['close']
+
+    # Liquidity indicator using the ratio of volume to amount
+    liquidity_indicator = df['volume'] / df['amount']
+
+    # Cross-asset correlation factor
+    cross_asset_correlation = df['close'].pct_change().rolling(window=30).corr(df['volume'].pct_change()).fillna(0)
+
+    # Momentum reversal factor
+    momentum_reversal = df['close'].pct_change(periods=21).rank(pct=True)
+
+    # Trend strength factor using the ADX (Average Directional Index)
+    adx = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+    trend_strength = adx / 100
+
+    # Mean reversion factor using the distance from the 20-day moving average
+    mean_reversion = (df['close'] - df['close'].rolling(window=20).mean()) / df['close'].rolling(window=20).std()
+
+    # Factor combination using Principal Component Analysis (PCA)
+    factors = pd.DataFrame({
+        'adaptive_momentum': adaptive_momentum,
+        'dynamic_volatility': dynamic_volatility,
+        'volume_trend': volume_trend,
+        'market_sentiment': market_sentiment,
+        'price_range': price_range,
+        'liquidity_indicator': liquidity_indicator,
+        'cross_asset_correlation': cross_asset_correlation,
+        'momentum_reversal': momentum_reversal,
+        'trend_strength': trend_strength,
+        'mean_reversion': mean_reversion
+    })
+
+    pca = PCA(n_components=1)
+    factor_values = pd.Series(pca.fit_transform(factors.fillna(0)).flatten(), index=df.index)
+
+    return factor_values

@@ -1,0 +1,36 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days)
+    momentum = np.log(df['close']).diff(periods=20)
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days)
+    liquidity = df['volume'].rolling(window=30).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=10).mean()
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility = np.log(df['close']).diff().rolling(window=40).std()
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5 days
+    intraday_dynamics = (df['high'] / df['low']).rolling(window=5).mean()
+    
+    # Incorporate a sector-specific indicator by adding a sector_mean_close column, which is the mean close price of the sector
+    sector_mean_close = df.groupby('sector')['close'].transform('mean')
+    sector_rel_strength = df['close'] / sector_mean_close
+    
+    # Normalize each factor by dividing by its mean to give equal weightage
+    momentum_normalized = (momentum + 1) / (momentum + 1).mean()
+    liquidity_normalized = liquidity / liquidity.mean()
+    market_sentiment_normalized = market_sentiment / market_sentiment.mean()
+    volatility_normalized = (volatility + 1e-6) / (volatility + 1e-6).mean()
+    intraday_dynamics_normalized = intraday_dynamics / intraday_dynamics.mean()
+    sector_rel_strength_normalized = sector_rel_strength / sector_rel_strength.mean()
+    
+    # Create a combined factor by multiplying the normalized factors
+    # The idea is that stocks with positive momentum, high liquidity, strong market sentiment, lower volatility, positive intraday dynamics, and relative strength within their sector may outperform
+    factor = (momentum_normalized * liquidity_normalized * market_sentiment_normalized * intraday_dynamics_normalized * sector_rel_strength_normalized) / volatility_normalized
+    
+    return factor

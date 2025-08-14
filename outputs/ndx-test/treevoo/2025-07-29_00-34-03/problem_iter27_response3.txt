@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-based factors
+    N = 10
+    M = 5
+    O = 20
+    
+    # Simple Moving Average (SMA)
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['SMA_diff'] = df['close'] - df['SMA']
+    
+    # Rate of Change (ROC)
+    df['ROC'] = df['close'].pct_change(M)
+    
+    # Exponential Moving Average (EMA)
+    df['EMA'] = df['close'].ewm(span=O, adjust=False).mean()
+    df['EMA_diff'] = df['close'] - df['EMA']
+    
+    # Volatility-based factors
+    K = 14
+    L = 14
+    S = 20
+    
+    # True Range (TR)
+    df['high_low'] = df['high'] - df['low']
+    df['high_close_prev'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close_prev'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['high_low', 'high_close_prev', 'low_close_prev']].max(axis=1)
+    
+    # Average True Range (ATR)
+    df['ATR'] = df['TR'].rolling(window=L).mean()
+    
+    # Standard Deviation
+    df['std_dev'] = df['close'].rolling(window=S).std()
+    
+    # Volume-based factors
+    P = 10
+    Q = 10
+    T = 10
+    
+    # Moving Average of Volume
+    df['vol_MA'] = df['volume'].rolling(window=P).mean()
+    df['vol_ratio'] = df['volume'] / df['vol_MA']
+    
+    # Cumulative Sum of Volume on Up and Down Days
+    df['up_days_vol'] = df.apply(lambda x: x['volume'] if x['close'] > x['open'] else 0, axis=1)
+    df['down_days_vol'] = df.apply(lambda x: x['volume'] if x['close'] < x['open'] else 0, axis=1)
+    df['cum_up_vol'] = df['up_days_vol'].rolling(window=Q).sum()
+    df['cum_down_vol'] = df['down_days_vol'].rolling(window=Q).sum()
+    
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).rolling(window=T).sum() / df['volume'].rolling(window=T).sum()
+    df['VWAP_diff'] = df['close'] - df['VWAP']
+    
+    # Pattern recognition for alpha generation
+    R = 5
+    
+    # Doji Pattern
+    df['doji'] = (abs(df['close'] - df['open']) < (df['high'] - df['low']) * 0.1) * 1
+    
+    # Hammer Pattern
+    df['hammer'] = ((df['high'] - df['low']) > 3 * (df['open'] - df['close'])) & \
+                   ((df['close'] - df['low']) / (0.001 + df['high'] - df['low']) > 0.6) & \
+                   ((df['open'] - df['low']) / (0.001 + df['high'] - df['low']) > 0.6) * 1
+    
+    # Engulfing Pattern
+    df['engulfing_bull'] = ((df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & \
+                           (df['close'] >= df['open'].shift(1)) & (df['open'] <= df['close'].shift(1))) * 1
+    df['engulfing_bear'] = ((df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & \
+                           (df['close'] <= df['open'].shift(1)) & (df['open'] >= df['close'].shift(1))) * 1
+    
+    # Gaps
+    df['gap_up'] = ((df['open'] - df['close'].shift(1)) > 0.01 * df['close'].shift(1)) * 1
+    df['gap_down'] = ((df['open'] - df['close'].shift(1)) < -0.01 * df['close'].shift(1)) * 1
+    
+    #

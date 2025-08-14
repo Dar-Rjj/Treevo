@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_adjustment = df['volume'] / df['volume'].shift(1)
+    
+    # Calculate Weighted High-Low Spread
+    weighted_high_low_spread = intraday_momentum * volume_adjustment
+    
+    # Integrate Volume with Intraday Dynamics
+    integrated_volume_dynamics = (df['high'] - df['low']) * volume_adjustment
+    
+    # Compute Enhanced Price Momentum
+    n_day_avg_close = df['close'].rolling(window=5).mean()
+    momentum_signal = df['close'] - n_day_avg_close
+    sma_high = df['high'].rolling(window=14).mean()
+    sma_low = df['low'].rolling(window=14).mean()
+    high_low_oscillator = (sma_high - sma_low) / (sma_high + sma_low).abs()
+    enhanced_price_momentum = momentum_signal + high_low_oscillator
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    def classify_volume_trend(volume_ratio):
+        if volume_ratio > 2:
+            return 2
+        elif volume_ratio >= 0.7 and volume_ratio <= 2:
+            return 0
+        else:
+            return -2
+    volume_trend_classification = volume_ratio.apply(classify_volume_trend)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    combined_returns = (intraday_return + weighted_high_low_spread + enhanced_price_momentum) * volume_trend_classification
+    
+    # Calculate Enhanced Volume Volatility
+    m_day_avg_volume = df['volume'].rolling(window=5).mean()
+    volatility_signal = df['volume'] - m_day_avg_volume
+    rolling_std_volume = df['volume'].rolling(window=5).std()
+    enhanced_volume_volatility = volatility_signal * rolling_std_volume
+    
+    # Compute 5-Day Price Momentum
+    five_day_momentum = df['close'].rolling(window=5).sum() / 5
+    
+    # Incorporate Volume Influence
+    five_day_avg_volume = df['volume'].rolling(window=5).sum() / 5
+    relative_volume = df['volume'] / five_day_avg_volume
+    adjusted_five_day_momentum = five_day_momentum * relative_volume
+    
+    # Compute Hybrid Factor
+    hybrid_factor = (intraday_return + weighted_high_low_spread + adjusted_five_day_momentum + 
+                     enhanced_price_momentum + enhanced_volume_volatility).cumsum()
+    
+    return hybrid_factor
+```

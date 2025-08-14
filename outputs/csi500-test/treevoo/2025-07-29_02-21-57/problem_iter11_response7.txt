@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Volume Weighted Moving Average (VWMA)
+    df['PriceVolume'] = df['close'] * df['volume']
+    df['ShortTermVWMA'] = df['PriceVolume'].rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+
+    # Calculate Long-Term Volume Weighted Moving Average (VWMA)
+    df['LongTermVWMA'] = df['PriceVolume'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5DayCloseReturn'] = df['close'] / df['close'].shift(5) - 1
+    df['5DayVolumeRatio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=20).mean()
+    df['VolumeAdjustedMomentum'] = df['5DayCloseReturn'] * df['5DayVolumeRatio']
+
+    # Calculate High-Low Price Oscillation
+    df['HighLowRange'] = df['high'] - df['low']
+    df['HLMean'] = df['HighLowRange'].rolling(window=5).mean()
+    df['HLStd'] = df['HighLowRange'].rolling(window=5).std()
+    df['HLOscillation'] = df['HighLowRange'] - df['HLMean'] - df['HLStd']
+
+    # Calculate True Range
+    df['PrevClose'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['PrevClose']).abs()
+    df['TR3'] = (df['low'] - df['PrevClose']).abs()
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+
+    # Calculate Price Momentum
+    df['PriceMomentum'] = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    df['WeightedMomentum'] = df['volume'] * df['PriceMomentum']
+
+    # Normalize by ATR
+    df['NormalizedMomentum'] = df['WeightedMomentum'] / df['ATR']
+
+    # Generate Alpha Factor
+    df['AlphaFactor'] = df['NormalizedMomentum'] + df['VolumeAdjustedMomentum'] + df['HLOscillation']
+
+    # Calculate Intraday Return Series
+    df['IntradayReturn'] = (df['close'] / df['open']) - 1
+
+    # Compute Moving Averages of Intraday Returns
+    df['ShortTermIntradayMA'] = df['IntradayReturn'].rolling(window=5).mean()
+    df['LongTermIntradayMA'] = df['IntradayReturn'].rolling(window=20).mean()
+
+    # Compute Intraday Return Difference
+    df['IntradayReturnDiff'] = df['ShortTermIntradayMA'] - df['LongTermIntradayMA']
+
+    # Filter by Volume Change
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['FilteredIntradayReturnDiff'] = df['IntradayReturnDiff'].where(df['VolumeChange'] > 0, 0)
+
+    # Combined Crossover and Momentum Signal
+    df['VWMASignal'] = (df['ShortTermVWMA'] > df['LongTermVWMA']).astype(int) - (df['ShortTermVWMA'] < df['LongTermVWMA']).astype(int)
+    df['MomentumSignal'] = (df['VolumeAdjustedMomentum'] > 0).astype(int) - (df['VolumeAdjustedMomentum'] < 0).astype(int)
+    df['IntradaySentimentSignal'] = (df['FilteredIntradayReturnDiff'] > 0).astype(int) - (df['FilteredIntradayReturnDiff'] < 0).astype(int)
+
+    df['CombinedSignal'] = df['VWMASignal'] + df['MomentumSignal'] + df['IntradaySentimentSignal']
+    df['AlphaFactor'] = df['AlphaFactor'] + df['CombinedSignal']
+
+    return df['AlphaFactor']
+```

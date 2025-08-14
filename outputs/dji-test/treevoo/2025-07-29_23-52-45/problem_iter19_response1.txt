@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between close and open prices
+    df['price_diff'] = df['close'] - df['open']
+    
+    # Count the number of days in the past 10 days where the close was higher than the open
+    df['uptrend_count'] = (df['price_diff'] > 0).rolling(window=10).sum()
+    
+    # Calculate the average true range (ATR) over the last 10 days
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_10'] = df['tr'].rolling(window=10).mean()
+    
+    # Calculate the ATR's moving average over the last 20 days
+    df['atr_20_ma'] = df['atr_10'].rolling(window=20).mean()
+    
+    # Check if the current ATR is below the 20-day moving average
+    df['atr_signal'] = (df['atr_10'] < df['atr_20_ma']).astype(int)
+    
+    # Examine the trading volume relative to the price movement
+    df['volume_30_ma'] = df['volume'].rolling(window=30).mean()
+    df['positive_price_change'] = (df['price_diff'] > 0)
+    df['above_avg_volume'] = (df['volume'] > df['volume_30_ma'])
+    
+    # Assign a positive score for each day meeting both conditions in the past 30 days
+    df['buying_pressure_score'] = (df['positive_price_change'] & df['above_avg_volume']).rolling(window=30).sum()
+    
+    # Compute the ratio of (high - open) / (open - low)
+    df['intraday_ratio'] = (df['high'] - df['open']) / (df['open'] - df['low'])
+    
+    # Check if the ratio is consistently above 1 over the past 5 days
+    df['bullish_sentiment'] = (df['intraday_ratio'] > 1).rolling(window=5).sum() / 5
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['uptrend_count'] + 
+                          df['atr_signal'] + 
+                          df['buying_pressure_score'] + 
+                          df['bullish_sentiment'])
+    
+    return df['alpha_factor']
+```

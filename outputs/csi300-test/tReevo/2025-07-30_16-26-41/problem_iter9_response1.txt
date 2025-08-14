@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic Long-Term Weighted Price Difference
+    df['price_diff_vol_10'] = (df['high'] - df['low']) * df['volume']
+    sum_price_diff_vol_10 = df['price_diff_vol_10'].rolling(window=10).sum()
+    total_volume_10 = df['volume'].rolling(window=10).sum()
+    dynamic_long_term_weighted_price_diff = sum_price_diff_vol_10 / total_volume_10
+    
+    # Determine Dynamic Long-Term Open to Close Momentum
+    dynamic_long_term_momentum = df['close'] - df['open'].shift(10)
+    
+    # Calculate the Dynamic Long-Term Cumulative Weighted Average
+    dynamic_long_term_cumulative_weighted_avg = dynamic_long_term_weighted_price_diff
+    
+    # Subtract Dynamic Long-Term Average Daily Return
+    daily_returns_10 = df['close'] - df['close'].shift(1)
+    dynamic_long_term_avg_daily_return = daily_returns_10.rolling(window=10).mean()
+    dynamic_long_term_adjusted = dynamic_long_term_cumulative_weighted_avg - dynamic_long_term_avg_daily_return
+    
+    # Adjust for Volatility
+    daily_returns_10_pct = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    std_dev_10 = daily_returns_10_pct.rolling(window=10).std()
+    long_term_alpha = dynamic_long_term_adjusted / std_dev_10
+    
+    # Recalculate the above metrics using a 5-day window
+    df['price_diff_vol_5'] = (df['high'] - df['low']) * df['volume']
+    sum_price_diff_vol_5 = df['price_diff_vol_5'].rolling(window=5).sum()
+    total_volume_5 = df['volume'].rolling(window=5).sum()
+    dynamic_short_term_weighted_price_diff = sum_price_diff_vol_5 / total_volume_5
+    
+    dynamic_short_term_momentum = df['close'] - df['open'].shift(5)
+    dynamic_short_term_cumulative_weighted_avg = dynamic_short_term_weighted_price_diff
+    
+    daily_returns_5 = df['close'] - df['close'].shift(1)
+    dynamic_short_term_avg_daily_return = daily_returns_5.rolling(window=5).mean()
+    dynamic_short_term_adjusted = dynamic_short_term_cumulative_weighted_avg - dynamic_short_term_avg_daily_return
+    
+    daily_returns_5_pct = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    std_dev_5 = daily_returns_5_pct.rolling(window=5).std()
+    short_term_alpha = dynamic_short_term_adjusted / std_dev_5
+    
+    # Combine 10-day and 5-day metrics
+    combined_alpha = 0.6 * long_term_alpha + 0.4 * short_term_alpha
+    
+    # Integrate Trading Volume Effectively
+    volume_weighted_price_diff_5 = sum_price_diff_vol_5 / total_volume_5
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    final_alpha = combined_alpha * avg_volume_5
+    
+    return final_alpha.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

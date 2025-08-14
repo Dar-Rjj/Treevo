@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short_period = 20
+    sma_long_period = 100
+    vol_lookback = 20
+    momentum_lookback = 20
+    pct_change_lookback = 5
+    turnover_lookback = 20
+    dollar_volume_lookback = 20
+    liquidity_ratio_lookback = 20
+    liquidity_spread_lookback = 20
+
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_lookback).mean()
+
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=momentum_lookback).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['Trend_Indicator'] = np.where(df['SMA_Short'] > df['SMA_Long'], 1, -1)
+
+    # Incorporate Refined Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    df['Avg_Dollar_Volume'] = (df['volume'] * df['close']).rolling(window=dollar_volume_lookback).mean()
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    df['Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_ratio_lookback).mean()
+    df['Liquidity_Spread'] = df['high'] - df['low']
+    df['Avg_Liquidity_Spread'] = df['Liquidity_Spread'].rolling(window=liquidity_spread_lookback).mean()
+
+    # Final Alpha Factor
+    weights = {
+        'Price_Momentum': 0.3,
+        'Volume_Adjusted_Volatility': -0.2,
+        'Pct_Change': 0.2,
+        'High_Low_Range': 0.1,
+        'Avg_Daily_Turnover': 0.1,
+        'Avg_Dollar_Volume': 0.05,
+        'Avg_Liquidity_Ratio': 0.05,
+        'Avg_Liquidity_Spread': -0.05
+    }
+
+    # Adjust Weights Dynamically
+    df['Dynamic_Weight'] = np.where(df['Trend_Indicator'] == 1, 1.1, 0.9)
+    df['Dynamic_Weight'] *= np.where(df['Avg_Daily_Turnover'] > df['Avg_Daily_Turnover'].median(), 1.1, 0.9)
+    df['Dynamic_Weight'] *= np.where(df['Avg_Dollar_Volume'] > df['Avg_Dollar_Volume'].median(), 1.1, 0.9)
+    df['Dynamic_Weight'] *= np.where(df['Avg_Liquidity_Ratio'] > df['Avg_Liquidity_Ratio'].median(), 1.1, 0.9)
+    df['Dynamic_Weight'] *= np.where(df['Avg_Liquidity_Spread'] < df['Avg_Liquidity_Spread'].median(), 1.1, 0.9)
+
+    # Combine all components
+    df['Alpha_Factor'] = (
+        df['Price_Momentum'] * weights['Price_Momentum'] +
+        df['Volume_Adjusted_Volatility'] * weights['Volume_Adjusted_Volatility'] +
+        df['Pct_Change'] * weights['Pct_Change'] +
+        df['High_Low_Range'] * weights['High_Low_Range'] +
+        df['Avg_Daily_Turnover'] * weights['Avg_Daily_Turnover'] +
+        df['Avg_Dollar_Volume'] * weights['Avg_Dollar_Volume'] +
+        df['Avg_Liquidity_Ratio'] * weights['Avg_Liquidity_Ratio'] +
+        df['

@@ -1,0 +1,30 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return Components
+    intraday_range = (df['high'] - df['low']) / df['low']
+    true_intraday_movement = (df['close'] - df['open']) / df['open']
+
+    # Measure Overnight Return
+    df['ONR'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Construct Composite Factor
+    # Combine Intraday with Momentum
+    df['intraday_score'] = true_intraday_movement.apply(lambda x: 1.5 * x if x > 0.01 else x)
+    
+    # Combine ONR with Reversal Expectation
+    df['onr_score'] = df['ONR'].apply(lambda x: x - 1 if x > 0.03 else x + 0.5)
+    
+    # Final Composite Score
+    df['composite_score'] = df['intraday_score'] + df['onr_score']
+    
+    # Consider Volume as a Multiplier
+    average_volume_20 = df['volume'].rolling(window=20).mean()
+    df['final_factor'] = df.apply(
+        lambda row: row['composite_score'] * 1.2 if row['volume'] > average_volume_20.loc[row.name] else row['composite_score'],
+        axis=1
+    )
+    
+    return df['final_factor']
+```

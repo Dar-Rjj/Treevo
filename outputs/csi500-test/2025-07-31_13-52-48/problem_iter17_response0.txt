@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    intraday_momentum = high_low_diff.rolling(window=5).mean()
+    
+    # Adjust by Volume Volatility
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_volatility = daily_volume_change.rolling(window=5).std()
+    adjusted_intraday_momentum = intraday_momentum / volume_volatility
+    
+    # Incorporate Price Trend
+    price_change = df['close'] - df['close'].shift(1)
+    adjusted_intraday_momentum *= price_change
+    
+    # Compute Dynamic Momentum Oscillator
+    dynamic_momentum_oscillator = adjusted_intraday_momentum - adjusted_intraday_momentum.rolling(window=60).mean()
+    
+    # Introduce Enhanced Volume Impact
+    volume_weighted_intraday_return = (df['close'] * df['volume']) / (df['volume'].shift(1) + 1e-9)
+    ema_alpha = 0.2  # New Exponential Smoothing Factor
+    volume_weighted_ema = volume_weighted_intraday_return.ewm(alpha=ema_alpha, min_periods=5).mean()
+    
+    volume_rate_of_change = df['volume'] / df['volume'].shift(5) - 1
+    final_factor = volume_weighted_ema + volume_rate_of_change
+    final_factor *= (1 + np.abs(volume_rate_of_change) / (np.abs(volume_rate_of_change).rolling(window=5).mean() + 1e-9))
+    
+    # Calculate Daily Price Momentum
+    daily_price_momentum = (df['close'] / df['close'].shift(1)).apply(np.log).rolling(window=5).sum()
+    
+    # Apply Volume-Adjusted Momentum Filter
+    daily_volume_adjusted_momentum = (df['volume'] - df['volume'].shift(1)) * daily_price_momentum
+    rolling_sum_volume_adjusted_momentum = daily_volume_adjusted_momentum.rolling(window=20).sum()
+    threshold = rolling_sum_volume_adjusted_momentum.abs().quantile(0.75)
+    filtered_factor = final_factor[rolling_sum_volume_adjusted_momentum.abs() < threshold]
+    
+    # Calculate Intraday Price Movement
+    percentage_price_movement_1 = (df['high'] - df['low']) / df['open']
+    percentage_price_movement_2 = (df['close'] - df['open']) / df['open']
+    average_percentage_movement = (percentage_price_movement_1 + percentage_price_movement_2) / 2
+    smoothed_average = average_percentage_movement.ewm(span=3).mean()
+    
+    # Combine Ratios
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+    combined_ratios = 0.5 * close_to_high_ratio + 0.5 * close_to_low_ratio
+    
+    # Combine Adjusted Momentum, Intraday Movement, and Ratios
+    combined_factor = smoothed_average + filtered_factor + combined_ratios
+    
+    # Compute Dynamic Price Momentum Oscillator
+    dynamic_price_momentum_oscillator = rolling_sum_volume_adjusted_momentum - rolling_sum_volume_adjusted_momentum.rolling(window=60).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = combined_factor + dynamic_price_momentum_oscillator
+    return alpha_factor
+```

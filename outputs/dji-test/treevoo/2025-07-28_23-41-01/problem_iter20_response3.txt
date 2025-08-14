@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    close_position_in_range = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] / df['close'].shift(1) - 1)
+    
+    # Weighted by Volume
+    weighted_daily_return = daily_return * df['volume']
+    
+    # Combine Initial Factors
+    initial_factors = close_position_in_range + weighted_daily_return
+    
+    # Calculate Breakout Strength
+    recent_avg_high_low_range = (df['high'] - df['low']).rolling(window=21).sum()
+    breakout_strength = (df['high'] - df['low']) / recent_avg_high_low_range
+    
+    # Calculate Intraday Reversal Score
+    intraday_close_to_open_delta = df['close'] - df['open']
+    intraday_reversal_score = (intraday_close_to_open_delta / intraday_range) * df['volume']
+    
+    # Combine Breakout and Intraday Factors
+    combined_breakout_intraday = initial_factors + breakout_strength + intraday_reversal_score
+    
+    # Calculate Price Momentum
+    seven_day_return = (df['close'] / df['close'].shift(7) - 1)
+    twenty_one_day_return = (df['close'] / df['close'].shift(21) - 1)
+    price_momentum = seven_day_return + twenty_one_day_return
+    
+    # Determine Volume Impact
+    mean_volume = df['volume'].mean()
+    volume_ratio = df['volume'] / mean_volume
+    adjusted_factor = combined_breakout_intraday * volume_ratio
+    
+    # Incorporate Momentum
+    momentum_factor = adjusted_factor + price_momentum
+    
+    # Integrate Volume Momentum
+    ten_day_rolling_sum_volume = df['volume'].rolling(window=10).sum()
+    ten_day_rolling_sum_price_change = (df['close'] - df['close'].shift(1)).rolling(window=10).sum()
+    
+    # Calculate Volume Activity
+    seven_day_avg_volume = df['volume'].rolling(window=7).mean()
+    twenty_one_day_avg_volume = df['volume'].rolling(window=21).mean()
+    volume_activity = seven_day_avg_volume / twenty_one_day_avg_volume
+    
+    # Introduce Trend Indicator
+    fifty_day_ma = df['close'].rolling(window=50).mean()
+    two_hundred_day_ma = df['close'].rolling(window=200).mean()
+    trend_indicator = fifty_day_ma > two_hundred_day_ma
+    
+    # Final Alpha Factor
+    final_alpha_factor = momentum_factor * volume_activity
+    final_alpha_factor = final_alpha_factor.where(trend_indicator, -final_alpha_factor)
+    
+    return final_alpha_factor
+```

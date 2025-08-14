@@ -1,0 +1,29 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the volume-weighted average price (VWAP) with a dynamic window
+    vwap = (df['amount'] / df['volume']).rolling(window=7, min_periods=1).mean()
+
+    # Calculate the adaptive exponential moving average (EMA) of the close price with a dynamic window
+    ema_close = df['close'].ewm(span=7, adjust=False).mean()
+
+    # Calculate the relative strength index (RSI) with a dynamic window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(com=13, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(com=13, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+
+    # Calculate the buying pressure
+    buying_pressure = (df['close'] - df['open']) * df['volume']
+
+    # Smooth the buying pressure over 3 days to reduce noise
+    smooth_buying_pressure = buying_pressure.rolling(window=3, min_periods=1).mean()
+
+    # Final alpha factor, which incorporates momentum, volatility, and volume
+    alpha_factor = (vwap - ema_close) * rsi * log_returns * (smooth_buying_pressure / df['close'])
+
+    return alpha_factor
+```

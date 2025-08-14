@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High and Low
+    high_volume = df['high'] * df['volume']
+    low_volume = df['low'] * df['volume']
+    
+    lookback_period = 14
+    sum_high_volume = high_volume.rolling(window=lookback_period).sum()
+    sum_low_volume = low_volume.rolling(window=lookback_period).sum()
+    total_volume = df['volume'].rolling(window=lookback_period).sum()
+    
+    volume_weighted_high = sum_high_volume / total_volume
+    volume_weighted_low = sum_low_volume / total_volume
+    
+    volume_weighted_high_low_diff = (volume_weighted_high - volume_weighted_low) / total_volume
+    
+    # Compute Dynamic Momentum
+    high_low_diff = df['high'] - df['low']
+    sma_high_low_diff = high_low_diff.rolling(window=lookback_period).mean()
+    raw_momentum = high_low_diff - sma_high_low_diff
+    dynamic_momentum = raw_momentum.ewm(alpha=0.2, adjust=False).mean()
+    
+    # Combine Volume-Weighted High-Low Range and Dynamic Momentum
+    combined_value = (volume_weighted_high_low_diff * dynamic_momentum) * 0.5
+    
+    # Transform to Bounded Range Without Normalization
+    min_value = 0
+    max_value = combined_value.max() - combined_value.min()
+    offset = -combined_value.min() + min_value
+    bounded_combined_value = (combined_value + offset) * (100 / max_value)
+    
+    # Compute EMA Components
+    ema_7 = bounded_combined_value.ewm(span=7, adjust=False).mean()
+    ema_21 = bounded_combined_value.ewm(span=21, adjust=False).mean()
+    
+    # Compute Ratio of EMAs
+    ema_ratio = ema_7 / ema_21
+    
+    # Compute Price Oscillator
+    ema_5_close = df['close'].ewm(span=5, adjust=False).mean()
+    ema_14_close = df['close'].ewm(span=14, adjust=False).mean()
+    price_oscillator = ema_5_close - ema_14_close
+    
+    # Compute Amount-Adjusted Return
+    daily_return = df['close'].pct_change()
+    amount_adjusted_return = daily_return * df['amount']
+    sma_amount_adjusted_return = amount_adjusted_return.rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = ema_ratio * sma_amount_adjusted_return + price_oscillator
+    return alpha_factor
+```

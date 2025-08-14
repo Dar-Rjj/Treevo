@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Multi-Period Price Momentum
+    def rolling_return(start, end):
+        return (df['close'].shift(-start) - df['close'].shift(-end)) / df['close'].shift(-end)
+
+    five_day_return = rolling_return(4, 0)
+    ten_day_return = rolling_return(9, 0)
+    twenty_day_return = rolling_return(19, 0)
+    
+    weighted_return = (five_day_return * 0.3 + 
+                       ten_day_return * 0.4 + 
+                       twenty_day_return * 0.3)
+    
+    volume_weighted_momentum = weighted_return * df['volume']
+
+    # Calculate Smoothed Open-High-Low Volatility Index
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = abs(df['open'] - df['close'])
+    mean_price = (df['open'] + df['close']) / 2
+    daily_volatility = (high_low_spread + open_close_spread) / mean_price
+    
+    smoothed_volatility = daily_volatility.ewm(alpha=0.2, adjust=False).mean()
+    smoothed_volatility.iloc[0:7] = daily_volatility.rolling(window=7).mean().iloc[6]
+
+    # Integrate Market Sentiment
+    daily_amount_change = df['amount'] - df['amount'].shift(1)
+    smoothed_market_sentiment = daily_amount_change.ewm(alpha=0.2, adjust=False).mean()
+    smoothed_market_sentiment.iloc[0:7] = daily_amount_change.rolling(window=7).mean().iloc[6]
+    
+    sentiment_adjusted_momentum = volume_weighted_momentum + smoothed_market_sentiment
+
+    # Adjust for Cumulative Market Impact
+    ten_day_volume_ma = df['volume'].rolling(window=10).mean()
+    deviation_from_ma = (df['volume'] - ten_day_volume_ma) / ten_day_volume_ma
+    adjusted_momentum = sentiment_adjusted_momentum * deviation_from_ma
+    
+    # Final Factor Calculation
+    final_factor = adjusted_momentum - smoothed_volatility
+
+    return final_factor
+```

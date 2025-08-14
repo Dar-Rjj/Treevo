@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    sma_window = 20
+    df['SMA'] = df['close'].rolling(window=sma_window).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    high_low_diff = df['high'] - df['low']
+    volume_weighted_volatility = high_low_diff * df['volume']
+    volat_window = 20
+    df['Volatility_Adjusted'] = volume_weighted_volatility.rolling(window=volat_window).mean()
+    
+    # Compute Price Momentum
+    momentum_window = 10
+    df['Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=momentum_window).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    pct_change_window = 5
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_window)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    long_sma_window = 60
+    df['Long_SMA'] = df['close'].rolling(window=long_sma_window).mean()
+    df['Trend_Indicator'] = (df['SMA'] > df['Long_SMA']).astype(int)
+    
+    # Incorporate Enhanced Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    turnover_window = 20
+    df['Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_window).mean()
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    liquidity_ratio_window = 20
+    df['Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_ratio_window).mean()
+    
+    # Final Alpha Factor
+    weights = {
+        'Momentum': 0.3,
+        'Volatility_Adjusted': -0.2,
+        'Pct_Change': 0.2,
+        'High_Low_Range': -0.1,
+        'Avg_Daily_Turnover': 0.1,
+        'Avg_Liquidity_Ratio': 0.1
+    }
+    
+    # Dynamically Adjust Weights Based on Trends and Liquidity
+    df['Weight_Adjustment'] = (df['Trend_Indicator'] * 0.1) + (df['Avg_Daily_Turnover'] / df['Avg_Daily_Turnover'].mean() * 0.05) + (df['Avg_Liquidity_Ratio'] / df['Avg_Liquidity_Ratio'].mean() * 0.05)
+    
+    for key in weights.keys():
+        df[key] *= (1 + df['Weight_Adjustment'])
+    
+    df['Alpha_Factor'] = sum(weights[key] * df[key] for key in weights.keys())
+    
+    return df['Alpha_Factor']
+```

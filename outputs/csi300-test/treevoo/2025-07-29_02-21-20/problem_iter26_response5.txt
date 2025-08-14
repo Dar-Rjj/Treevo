@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, short_window=5, long_window=20):
+    # Calculate Momentum
+    momentum = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Adjust for Volume Changes
+    volume_ratio = df['volume'] / df['volume'].shift(n)
+    volume_impact = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_adjusted_momentum = (momentum * volume_ratio) * (1 + volume_impact) + momentum
+    
+    # Integrate SMA Crossover
+    sma_short = df['close'].rolling(window=short_window).mean()
+    sma_long = df['close'].rolling(window=long_window).mean()
+    crossover_signal = (sma_short > sma_long).astype(int) - (sma_short < sma_long).astype(int)
+    
+    # Combine with Volume-Adjusted Momentum
+    integrated_alpha = volume_adjusted_momentum + crossover_signal * volume_adjusted_momentum.abs()
+    
+    # On-Balance Volume (OBV)
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    obv_signal = (obv > obv.shift(1)).astype(int) - (obv < obv.shift(1)).astype(int)
+    
+    # Volume Spike Indicator
+    avg_volume = df['volume'].rolling(window=30).mean()
+    volume_spike_threshold = 2 * avg_volume
+    volume_spike = (df['volume'] > volume_spike_threshold).astype(int)
+    price_movement = (df['close'] > df['close'].shift(1)).astype(int)
+    volume_spike_signal = (volume_spike * price_movement).fillna(0)
+    
+    # Volume-Weighted Average Price (VWAP)
+    vwap = (df['amount'] / df['volume']).cumsum() / (df['volume']).cumsum()
+    vwap_signal = (df['close'] > vwap).astype(int) - (df['close'] < vwap).astype(int)
+    
+    # Final Integrated Alpha Factor
+    final_alpha_factor = integrated_alpha + obv_signal + volume_spike_signal + vwap_signal
+    return final_alpha_factor
+```

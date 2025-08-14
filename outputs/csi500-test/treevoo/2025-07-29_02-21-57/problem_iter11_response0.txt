@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Volume Weighted Moving Average (VWMA)
+    short_term_window = 5
+    df['Volume_Price'] = df['close'] * df['volume']
+    df['Short_Term_VWMA'] = df['Volume_Price'].rolling(window=short_term_window).sum() / df['volume'].rolling(window=short_term_window).sum()
+
+    # Calculate Long-Term Volume Weighted Moving Average (VWMA)
+    long_term_window = 20
+    df['Long_Term_VWMA'] = df['Volume_Price'].rolling(window=long_term_window).sum() / df['volume'].rolling(window=long_term_window).sum()
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    momentum_window = 5
+    df['Close_t_minus_5'] = df['close'].shift(momentum_window)
+    df['5D_Close_Return'] = (df['close'] - df['Close_t_minus_5']) / df['Close_t_minus_5']
+    df['5D_Volume_Ratio'] = df['volume'].rolling(window=momentum_window).sum() / df['volume'].rolling(window=momentum_window*10).mean()
+    df['Volume_Adjusted_Momentum'] = df['5D_Close_Return'] * df['5D_Volume_Ratio']
+
+    # Calculate 10-Day Price Oscillation
+    price_oscillation_window = 10
+    df['10D_High'] = df['high'].rolling(window=price_oscillation_window).max()
+    df['10D_Low'] = df['low'].rolling(window=price_oscillation_window).min()
+    df['10D_Price_Range'] = df['10D_High'] - df['10D_Low']
+    df['Historical_Average_Price_Range'] = df['10D_Price_Range'].expanding().mean()
+
+    # Generate Signals
+    df['VWMA_Crossover_Signal'] = 0
+    df.loc[df['Short_Term_VWMA'] > df['Long_Term_VWMA'], 'VWMA_Crossover_Signal'] = 1
+    df.loc[df['Short_Term_VWMA'] < df['Long_Term_VWMA'], 'VWMA_Crossover_Signal'] = -1
+
+    df['Momentum_Signal'] = 0
+    df.loc[df['Volume_Adjusted_Momentum'] > 0, 'Momentum_Signal'] = 1
+    df.loc[df['Volume_Adjusted_Momentum'] < 0, 'Momentum_Signal'] = -1
+
+    df['Price_Oscillation_Signal'] = 0
+    df.loc[df['10D_Price_Range'] > df['Historical_Average_Price_Range'], 'Price_Oscillation_Signal'] = 1
+    df.loc[df['10D_Price_Range'] < df['Historical_Average_Price_Range'], 'Price_Oscillation_Signal'] = -1
+
+    # Combine Signals
+    df['Combined_Signal'] = df['VWMA_Crossover_Signal'] + df['Momentum_Signal'] + df['Price_Oscillation_Signal']
+    df['Factor'] = 0
+    df.loc[df['Combined_Signal'] == 3, 'Factor'] = 1  # Strong Buy
+    df.loc[df['Combined_Signal'] == 2, 'Factor'] = 0.5  # Moderate Buy
+    df.loc[df['Combined_Signal'] == -3, 'Factor'] = -1  # Strong Sell
+    df.loc[df['Combined_Signal'] == -2, 'Factor'] = -0.5  # Moderate Sell
+    df.loc[df['Combined_Signal'] == 0, 'Factor'] = 0  # Hold
+
+    return df['Factor']
+```

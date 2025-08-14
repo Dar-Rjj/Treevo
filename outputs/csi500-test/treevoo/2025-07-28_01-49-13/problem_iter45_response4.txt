@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Evaluate Intraday Dynamics
+    intraday_range = df['high'] - df['low']
+    intraday_midpoint_to_open_ratio = ((df['high'] + df['low']) / 2) / df['open']
+    close_to_open_return_adj_by_intraday_range = (df['close'] - df['open']) / intraday_range
+    
+    # Analyze Momentum
+    close_roc_10 = df['close'].pct_change(10)
+    close_roc_30 = df['close'].pct_change(30)
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_30 = df['close'].rolling(window=30).mean()
+    sma_60 = df['close'].rolling(window=60).mean()
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+    vwap_t = df['amount'] / df['volume']
+    close_to_next_day_open_return = (df['open'].shift(-1) - vwap_t) / vwap_t
+    weighted_close_to_next_day_open_return = close_to_next_day_open_return * df['volume']
+    
+    # Assess Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    smooth_volatility = daily_volatility.ewm(span=20).mean()
+    std_30 = df['close'].rolling(window=30).std()
+    
+    # Combine Metrics
+    daily_price_change = df['close'] - df['close'].shift(1)
+    cumulative_price_change = daily_price_change.cumsum()
+    vwap = (df['amount'] / df['volume']).cumsum() / (df['volume']).cumsum()
+    max_adj_close = df['close'].rolling(window=30).max()
+    min_open = df['open'].rolling(window=30).min()
+    adjusted_close_to_open_envelope = (max_adj_close - df['open']) / (max_adj_close - min_open)
+    midpoint_to_open_vwap = intraday_midpoint_to_open_ratio * vwap
+    
+    # Final Factor Adjustment
+    volume_weighted_momentum = (sma_10 - sma_30) * df['volume']
+    combined_intraday_range_momentum = intraday_range * volume_weighted_momentum
+    adjusted_close_to_open_plus_weighted_intraday = close_to_open_return_adj_by_intraday_range + combined_intraday_range_momentum
+    final_factor = adjusted_close_to_open_plus_weighted_intraday * (cumulative_price_change + smoothed_volatility)
+    
+    return final_factor
+```

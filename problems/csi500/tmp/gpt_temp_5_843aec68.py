@@ -1,0 +1,38 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Dynamic Price Momentum
+    volatility_window = 10
+    avg_range = (df['high'] - df['low']).rolling(window=volatility_window).mean()
+    dynamic_window = (avg_range * volatility_window).astype(int)
+    
+    momentum = (df['close'].rolling(window=dynamic_window, min_periods=1).mean() - df['close'])
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = df['close'] / df['open'] - 1
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Momentum by Volume-Weighted Average Return
+    adjusted_momentum = momentum * volume_weighted_returns
+    
+    # Assess Adaptive Trend Following Potential
+    long_term_trend = df['close'].rolling(window=50).mean()
+    short_term_trend = df['close'].rolling(window=10).mean()
+    
+    trend_weight = 1.0 * (long_term_trend > df['close']) + 0.5 * (long_term_trend <= df['close'])
+    trend_weight += 0.2 * (short_term_trend > df['close'])
+    
+    integrated_momentum = adjusted_momentum * trend_weight
+    
+    # Calculate Dynamic Volatility
+    dynamic_volatility = (df['high'] - df['low']).rolling(window=dynamic_window, min_periods=1).mean()
+    
+    # Adjust Final Factor by Dynamic Volatility
+    final_factor = integrated_momentum / dynamic_volatility
+    
+    # Integrate Market Sentiment
+    up_days_ratio = (df['close'] > df['open']).rolling(window=volatility_window).mean()
+    final_factor *= up_days_ratio
+    
+    return final_factor

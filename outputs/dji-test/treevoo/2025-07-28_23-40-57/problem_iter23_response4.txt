@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Volume Impact Score
+    sum_volume_10d = df['volume'].rolling(window=10).sum()
+    avg_high_10d = df['high'].rolling(window=10).mean()
+    avg_low_10d = df['low'].rolling(window=10).mean()
+    price_diff = avg_high_10d - avg_low_10d
+    volume_impact_score = price_diff / sum_volume_10d
+    
+    # Generate Factor 1
+    factor_1 = intraday_return * volume_impact_score
+    
+    # Intraday and Breakout Price Movements
+    intraday_movement = df['high'] - df['low']
+    breakout_momentum = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Volume and Amount
+    volume_weighted_intraday = intraday_movement * df['volume']
+    cumulative_volume_10d = df['volume'].rolling(window=10).sum()
+    volume_adjusted_breakout = breakout_momentum / cumulative_volume_10d
+    
+    amount_weighted_intraday = intraday_movement * df['amount']
+    cumulative_amount_10d = df['amount'].rolling(window=10).sum()
+    amount_adjusted_breakout = breakout_momentum / cumulative_amount_10d
+    
+    # Incorporate Opening Trend and Amount Impact
+    opening_trend = df['open'] - df['close'].shift(1)
+    amount_weighted_opening = opening_trend * df['amount']
+    
+    # Combine Weighted Movements
+    combined_movements = (
+        volume_weighted_intraday + 
+        volume_adjusted_breakout + 
+        amount_weighted_intraday + 
+        amount_adjusted_breakout + 
+        amount_weighted_opening
+    )
+    
+    # Incorporate Trend Strength
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd = short_ema - long_ema
+    trend_adjusted_combined = combined_movements * macd
+    
+    # Calculate Moving Averages
+    ma_volume_weighted_intraday = volume_weighted_intraday.rolling(window=5).mean()
+    ma_amount_weighted_intraday = amount_weighted_intraday.rolling(window=5).mean()
+    ma_amount_weighted_opening = amount_weighted_opening.rolling(window=5).mean()
+    
+    # Aggregate and Adjust Momentum
+    aggregated_momentum = trend_adjusted_combined.rolling(window=5).sum()
+    adjusted_momentum = (
+        aggregated_momentum - 
+        ma_volume_weighted_intraday - 
+        ma_amount_weighted_intraday - 
+        ma_amount_weighted_opening
+    )
+    
+    # Confirm with Volume and Intraday Return
+    avg_volume_15d = df['volume'].rolling(window=15).mean()
+    volume_ratio = df['volume'] / avg_volume_15d
+    confirmed_momentum = adjusted_momentum.where(volume_ratio > 1.5, 0.5 * (adjusted_momentum + macd))
+    
+    # Final Factor
+    final_factor = factor_1 * confirmed_momentum
+    return final_factor
+```

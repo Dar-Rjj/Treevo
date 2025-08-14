@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Volume-Weighted Close-to-Open Return
+    df['volume_weighted_c_to_o_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Intraday High-Low Movement
+    df['intraday_high_low_movement'] = df['high'] - df['low']
+    
+    # Intraday High-Low Ratio
+    df['intraday_high_low_ratio'] = df['intraday_high_low_movement'] / df['close']
+    
+    # Intraday Return
+    df['intraday_return'] = df['close'] / df['open'] - 1
+    
+    # Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Adjust Intraday Return by Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['adjusted_intraday_return'] = df['intraday_return'] * df['volume_change']
+    
+    # Sum of Recent Returns
+    df['recent_returns_sum'] = df['close'].pct_change().rolling(window=5).sum()
+    
+    # Daily VWAP
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['vwap'] /= df['volume']
+    
+    # 20-Day Moving Average VWAP
+    df['ma_vwap_20'] = df['vwap'].rolling(window=22).mean()
+    
+    # Combined Weighted Momentum
+    df['weighted_momentum'] = df['intraday_return'] + df['adjusted_intraday_return'] + df['recent_returns_sum']
+    df['weighted_momentum'] *= df['volume_change']
+    
+    # PMI Score
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    df['pmi_score'] = df['daily_price_change'].rolling(window=22).sum() * df['vwap']
+    
+    # Adjust for Volume Volatility
+    df['volume_ma_22'] = df['volume'].rolling(window=22).mean()
+    df['volume_std_22'] = (df['volume'] - df['volume_ma_22']).pow(2).rolling(window=22).sum().pow(0.5)
+    
+    # Enhanced Combined Weighted Momentum
+    df['enhanced_weighted_momentum'] = (df['intraday_return'] + df['adjusted_intraday_return'] + df['recent_returns_sum'])
+    df['enhanced_weighted_momentum'] *= df['volume_change'] * df['intraday_high_low_ratio']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['enhanced_weighted_momentum'] * df['ma_vwap_20'] 
+                                + df['pmi_score'] 
+                                + df['volume_weighted_c_to_o_return'])
+    
+    return df['final_alpha_factor']
+```

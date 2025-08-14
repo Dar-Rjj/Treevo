@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range and Daily Range
+    df['Previous_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['Previous_Close'])
+    df['TR3'] = abs(df['low'] - df['Previous_Close'])
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Calculate 14-Period Average True Range (ATR) and 20-Day Moving Average of Daily Range
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['Avg_Daily_Range_20'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    # Identify Breakouts
+    df['Upward_Breakout'] = df['close'] > df['high'].shift(1)
+    df['Downward_Breakout'] = df['close'] < df['low'].shift(1)
+    
+    # Calculate Breakout Strength
+    df['Breakout_Strength'] = np.where(df['Upward_Breakout'], (df['close'] - df['high'].shift(1)) / df['Avg_Daily_Range_20'],
+                                       np.where(df['Downward_Breakout'], (df['low'].shift(1) - df['close']) / df['Avg_Daily_Range_20'], 0))
+    
+    # Cumulate Breakout Strength over the past 10 days
+    df['Cumulative_Positive_BS'] = df['Breakout_Strength'].where(df['Breakout_Strength'] > 0, 0).rolling(window=10).sum()
+    df['Cumulative_Negative_BS'] = df['Breakout_Strength'].where(df['Breakout_Strength'] < 0, 0).rolling(window=10).sum()
+    df['Net_Cumulative_BS'] = df['Cumulative_Positive_BS'] + df['Cumulative_Negative_BS']
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Impact
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Adjusted_Breakout_Strength'] = np.where(df['Volume_Ratio'] > 1.5, df['Breakout_Strength'] * 1.5, df['Breakout_Strength'])
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(14)
+    
+    # Weight by Volume
+    df['Weighted_Momentum'] = df['Price_Momentum'] * df['volume']
+    
+    # Adjust Momentum by ATR
+    df['ATR_Adjusted_Momentum'] = df['Weighted_Momentum'] / df['ATR_14']
+    
+    # Generate Alpha Factor
+    df['Alpha_Factor'] = (df['ATR_Adjusted_Momentum'] 
+                          + df['Close_to_Open_Return'] 
+                          + df['Intraday_High_Low_Spread'] 
+                          + df['Net_Cumulative_BS'])
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

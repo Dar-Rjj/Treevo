@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the short-term exponential moving average (EMA) of the close price with a span of 10 days
+    ema_close_short = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the long-term EMA of the close price with a span of 30 days
+    ema_close_long = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the adaptive window momentum based on the short-term EMA's slope
+    momentum_adaptive = (df['close'] - ema_close_short) / (ema_close_short + 1e-6)
+    
+    # Calculate the volatility using the standard deviation of the close price over a 10-day window
+    volatility_10day = df['close'].rolling(window=10).std()
+    
+    # Calculate the relative position of the close price within the range of high and low
+    rel_pos_close = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate a weighted volume where the weight is based on the ratio of close to high
+    weighted_volume = df['volume'] * (df['close'] / df['high'])
+    
+    # Compute a new factor as the product of the relative position and the weighted volume
+    factor = rel_pos_close * weighted_volume
+    
+    # Integrate the factor with adaptive momentum and normalize by volatility
+    combined_factor = (factor + momentum_adaptive) / (volatility_10day + 1e-6)
+    
+    # Apply exponential smoothing to the combined factor for more robustness
+    smoothed_factor = combined_factor.ewm(span=5, adjust=False).mean()
+    
+    # Incorporate market depth by considering the average of open and close prices
+    market_depth = (df['open'] + df['close']) / 2
+    
+    # Adjust the factor with market depth
+    final_factor = smoothed_factor * (market_depth / df['close'])
+    
+    # Use an adaptive window for the final factor to capture recent trends
+    adaptive_window = df['close'].rolling(window=5).apply(lambda x: (x[-1] - x[0]) / x[0], raw=True)
+    final_factor = final_factor * (1 + adaptive_window)
+    
+    # Integrate a long-term trend component
+    long_term_trend = (df['close'] - ema_close_long) / (ema_close_long + 1e-6)
+    
+    # Integrate the long-term trend into the final factor
+    final_factor_with_trend = final_factor * long_term_trend
+    
+    return final_factor_with_trend
+```

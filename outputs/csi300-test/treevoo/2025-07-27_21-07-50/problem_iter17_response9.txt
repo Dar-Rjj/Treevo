@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday Log-Return: log(Close / Open)
+    intraday_log_return = np.log(df['close'] / df['open'])
+    
+    # Scale by High-Low Range: log(Close / Open) / (High - Low)
+    intraday_volatility_adjusted_return = intraday_log_return / (df['high'] - df['low'])
+
+    # Integrate Volume into Intraday Return
+    daily_price_change = df['close'] - df['open']
+    volume_adjusted_return = (daily_price_change * df['volume']).rolling(window=20).sum()
+
+    # Enhance Volatility Correction
+    # Calculate Price Volatility
+    price_volatility = df['close'].pct_change().rolling(window=20).std()
+    # Calculate Volume Volatility
+    volume_volatility = df['volume'].pct_change().rolling(window=20).std()
+    # Subtract price volatility and volume volatility from the volume-adjusted intraday return
+    corrected_intraday_momentum = volume_adjusted_return - price_volatility - volume_volatility
+
+    # Incorporate Trend Adjustment
+    # Calculate Long-Term Trend
+    long_term_trend = df['close'].rolling(window=100).mean()
+    # Calculate Short-Term Trend
+    short_term_trend = df['close'].ewm(span=20, adjust=False).mean()
+    # Determine Trend Difference
+    trend_difference = long_term_trend - short_term_trend
+    
+    # Adjust the corrected intraday momentum factor based on trend difference
+    adjusted_factor = np.where(trend_difference > 0, 1.5 * corrected_intraday_momentum, 0.5 * corrected_intraday_momentum)
+
+    return adjusted_factor
+```

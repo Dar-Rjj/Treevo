@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price momentum as the ratio of today's close to the 7-day moving average of close prices
+    df['price_momentum'] = df['close'] / df['close'].rolling(window=7).mean()
+
+    # Calculate the buying pressure as (high - close) / (high - low + 1e-7), indicating strength of buying relative to range
+    df['buying_pressure'] = (df['high'] - df['close']) / (df['high'] - df['low'] + 1e-7)
+
+    # Calculate the volume trend as the 7-day moving average of volume
+    df['volume_trend'] = df['volume'].rolling(window=7).mean()
+
+    # Calculate the relative strength as the ratio of today's close to the 7-day minimum of close prices
+    df['relative_strength'] = df['close'] / df['close'].rolling(window=7).min()
+
+    # Calculate the volatility of the close price over a 20-day period
+    df['volatility'] = df['close'].rolling(window=20).std()
+
+    # Calculate the money flow ratio as the sum of typical price * volume for up days / sum of typical price * volume for down days
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['money_flow_up'] = df['money_flow'].where(df['typical_price'] > df['typical_price'].shift(1), 0)
+    df['money_flow_down'] = df['money_flow'].where(df['typical_price'] < df['typical_price'].shift(1), 0)
+    df['money_ratio'] = df['money_flow_up'].rolling(window=7).sum() / (df['money_flow_down'].rolling(window=7).sum() + 1e-7)
+
+    # Calculate the volume-weighted average price (VWAP)
+    df['vwap'] = (df['volume'] * (df['high'] + df['low']) / 2).cumsum() / df['volume'].cumsum()
+
+    # Calculate the divergence between the close price and VWAP
+    df['vwap_divergence'] = (df['close'] - df['vwap']) / df['vwap']
+
+    # The alpha factor is the product of price momentum, buying pressure, relative strength, and money ratio, 
+    # weighted by volume trend and adjusted for vwap divergence and volatility
+    alpha_factor = (df['price_momentum'] * df['buying_pressure'] * df['relative_strength'] * df['money_ratio']) * df['volume_trend'] * (df['vwap_divergence'] / df['volatility'])
+
+    return alpha_factor
+```

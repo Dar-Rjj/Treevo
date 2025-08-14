@@ -1,0 +1,60 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Combine Metrics
+    df['sum_of_returns_and_breakout'] = df['intraday_return'] + df['close_to_prev_close_return'] + df['breakout_intensity']
+    
+    # Weight by Volume
+    df['weighted_combined_metrics'] = df['volume'] * df['sum_of_returns_and_breakout']
+    
+    # Volume Weighted Intraday Return
+    avg_volume_5_days = df['volume'].rolling(window=5).mean().shift(1)
+    df['volume_weighted_intraday_return'] = (df['close'] - df['open']) / df['open'] * (df['volume'] / avg_volume_5_days)
+    
+    # Volume Spike Detection
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    spike_threshold = df['daily_volume_change'].rolling(window=21).quantile(0.9) * 2.0
+    df['volume_spike'] = (df['daily_volume_change'] > spike_threshold).astype(int)
+    
+    # Volume Increase Ratio
+    df['volume_increase_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=5).std() / df['close'].shift(1)
+    
+    # Intermediate Factor
+    df['intermediate_factor'] = (df['volume_increase_ratio'] * (df['close'] - df['close'].rolling(window=5).mean().shift(1)) * df['price_volatility'])
+    
+    # Adjust for Volatility
+    rolling_volatility = df[['high', 'low']].diff(axis=1).dropna(axis=1, how='all')['high'].rolling(window=5).std()
+    df['adjusted_combined_metrics'] = df['weighted_combined_metrics'] / rolling_volatility
+    df['adjusted_intermediate_factor'] = df['intermediate_factor'] / rolling_volatility
+    
+    # Incorporate Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    df['final_factor'] = (df['adjusted_combined_metrics'] + df['adjusted_intermediate_factor'] + df['short_term_momentum'] + df['long_term_momentum']).fillna(0)
+    
+    # Enhance Weighting with Trade Activity
+    avg_volume_10_days = df['volume'].rolling(window=10).mean()
+    df['trade_activity_weight'] = df['volume'] / avg_volume_10_days
+    df['final_factor'] = df['final_factor'] * df['trade_activity_weight']
+    
+    return df['final_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col=0, parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

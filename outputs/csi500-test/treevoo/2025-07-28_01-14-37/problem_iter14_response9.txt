@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=10, rsi_period=14, window=5, m_days=30):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=n_days).mean()
+    
+    # Calculate Price Changes
+    price_changes = df['close'].diff()
+    
+    # Separate Positive and Negative Gains
+    positive_gains = price_changes.apply(lambda x: x if x > 0 else 0)
+    negative_gains = price_changes.apply(lambda x: abs(x) if x < 0 else 0)
+    
+    # Adjust for Volume and Amount
+    volume_weighted_positive_gain = (positive_gains * df['volume']).sum() / df['volume'].sum()
+    volume_weighted_negative_gain = (negative_gains * df['volume']).sum() / df['volume'].sum()
+    
+    # Calculate RSI
+    RS = volume_weighted_positive_gain / volume_weighted_negative_gain
+    RSI = 100 - (100 / (1 + RS))
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open']
+    
+    # Calculate Logarithmic Return
+    log_return = np.log(intraday_return + 1e-6)
+    log_return = np.clip(log_return, -3, 3)  # Winsorize
+    
+    # Combine Adjusted Momentum and RSI
+    smoothed_log_return = log_return.ewm(span=m_days, adjust=False).mean()
+    smoothed_RSI = RSI.ewm(span=rsi_period, adjust=False).mean()
+    combined_momentum_rsi = smoothed_log_return + smoothed_RSI
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Cumulative Return
+    cumulative_return = daily_return.rolling(window=window).sum()
+    
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=window).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+    
+    # Adjust by Price Volatility
+    std_dev_close = df['close'].rolling(window=window).std()
+    final_adjusted_cumulative_return = (adjusted_cumulative_return / std_dev_close) + 1
+    
+    # Calculate Momentum
+    log_return_momentum = np.log(df['close'] / df['close'].shift(m_days))
+    momentum_sum = log_return_momentum.rolling(window=m_days).sum()
+    
+    # Adjust by Intraday Volatility and Volume
+    weighted_momentum = (momentum_sum * df['volume']) / intraday_volatility
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    relative_strength = df['close'].rolling(window=50).mean()
+    integrated_relative_strength = weighted_momentum - relative_strength
+    integrated_adjusted_cumulative_return = integrated_relative_strength + final_adjusted_cumulative_return
+    
+    # Calculate Intraday Movement
+    intraday_movement = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] / df['open']
+    
+    # Combine Factors
+    combined_factors = intraday_movement + close_to_open_return
+    price_range_ratio = (df['high'] - df['low']) / df['close']
+    weighted_combined_factors = combined_factors * price_range_ratio
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = combined_momentum_rsi + integrated_adjusted_cumulative_return + weighted_combined_factors
+    return final_alpha_factor
+```

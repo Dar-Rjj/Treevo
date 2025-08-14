@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / intraday_range
+    
+    # Calculate Intraday Volume Intensity
+    volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Calculate Intraday Price Change
+    intraday_price_change = (df['close'] - df['open']) / intraday_range
+    
+    # Combine Intraday Components
+    intraday_component = volume_intensity * closing_position + intraday_price_change
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = ema_20 - df['close']
+    
+    # VWAP Deviation from Close
+    vwap_deviation = df['close'] - vwap
+    
+    # Weighted Ratio of High-Low to Open-Close
+    open_close_movement = df['open'] - df['close']
+    weighted_ratio = intraday_range / abs(open_close_movement)
+    
+    # Potential Reversal if Open-Close > 0.8 * High-Low
+    potential_reversal = (abs(open_close_movement) > 0.8 * intraday_range).astype(int)
+    
+    # Strong Reversal if VWAP Deviation is Negative and Open-Close < 0
+    strong_reversal = ((vwap_deviation < 0) & (open_close_movement < 0)).astype(int)
+    
+    # Final Alpha Factor
+    alpha_factor = (intraday_component 
+                    + vwap_deviation 
+                    + weighted_ratio 
+                    + potential_reversal 
+                    + strong_reversal)
+    
+    return alpha_factor
+```

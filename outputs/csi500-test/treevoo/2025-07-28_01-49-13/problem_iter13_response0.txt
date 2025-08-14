@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, ema_window=10, momentum_days=20, volume_spike_window=20, k=1.5):
+    # Calculate Volume-Weighted High-Low Spread
+    df['High_Low_Spread'] = (df['high'] - df['low']) * df['volume']
+    df['EMA_High_Low_Spread'] = df['High_Low_Spread'].ewm(span=ema_window, min_periods=ema_window).mean()
+    
+    # Identify Volume Spike
+    df['Volume_MA'] = df['volume'].rolling(window=volume_spike_window, min_periods=volume_spike_window).mean()
+    df['Volume_STD'] = df['volume'].rolling(window=volume_spike_volume_spike_window, min_periods=volume_spike_window).std()
+    df['Volume_Spike'] = df['volume'] > (df['Volume_MA'] + 2 * df['Volume_STD'])
+    
+    # Calculate N-day Price Momentum
+    df['N_Day_Return'] = df['close'].pct_change(periods=momentum_days)
+    
+    # Combine Intraday High-Low Range and Close-Open Return
+    df['High_Low_Range_Ratio'] = (df['high'] - df['low']) / df['close']
+    df['Close_Open_Return_Ratio'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Price Momentum, Volume Spike, and Intraday Volatility
+    df['Combined_Return'] = df['N_Day_Return']
+    df.loc[df['Volume_Spike'], 'Combined_Return'] *= k
+    df['Combined_Return'] *= df['High_Low_Range_Ratio']
+    df['Combined_Return'] *= df['Close_Open_Return_Ratio']
+    
+    # Calculate Volume-Weighted Adjusted Return
+    df['Volume_Weighted_Adjusted_Return'] = df['Combined_Return'] * df['volume']
+    
+    # Calculate Final Alpha Factor
+    df['Volume_Weighted_EMA'] = df['EMA_High_Low_Spread']
+    df['MA_Volume_Weighted_Adjusted_Return'] = df['Volume_Weighted_Adjusted_Return'].rolling(window=momentum_days, min_periods=momentum_days).mean()
+    df['Alpha_Factor'] = df['Volume_Weighted_Adjusted_Return'] / df['MA_Volume_Weighted_Adjusted_Return']
+    
+    return df['Alpha_Factor']
+```

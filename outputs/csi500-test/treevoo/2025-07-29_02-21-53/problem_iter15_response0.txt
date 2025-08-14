@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range and Rolling Average True Range (ATR)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    n = 14  # Select N Days for Rolling Window
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+
+    # Calculate Intraday Price Movement and Signed Transaction Volume
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    df['intraday_movement'] = df['high_low_diff'] * df['close_open_diff'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Aggregate Price Movements and Accumulated Buy-Sell Imbalance
+    df['agg_high_low_diff'] = df['high_low_diff'].rolling(window=n).sum()
+    df['agg_close_open_diff'] = df['close_open_diff'].rolling(window=n).sum()
+    df['positive_volume'] = df['volume'].where(df['close_open_diff'] > 0, 0).rolling(window=n).sum()
+    df['negative_volume'] = df['volume'].where(df['close_open_diff'] < 0, 0).rolling(window=n).sum()
+
+    # Calculate Integrated Momentum Score
+    df['price_volatility'] = df['close'].rolling(window=n).std()
+    df['integrated_momentum_score'] = (df['agg_high_low_diff'] + df['agg_close_open_diff']) / df['price_volatility']
+    total_volume = df['positive_volume'] + df['negative_volume']
+    df['volume_ratio'] = (df['positive_volume'] / total_volume) - (df['negative_volume'] / total_volume)
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low'] = df['high_low_diff'] * df['volume']
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['weighted_avg'] = (df['volume_adjusted_high_low'] + df['close_open_diff']) / 2
+
+    # Dynamic Momentum Indicator
+    df['dynamic_momentum'] = df['intraday_movement'].shift(1) * df['intraday_movement']
+    df['dynamic_momentum'] = df['dynamic_momentum'] / df['close'].rolling(window=n).std()
+
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['high_volume'] = (df['volume'] > df['avg_volume']).astype(int)
+
+    # Integrate Combined Factors
+    df['final_factor'] = df['integrated_momentum_score'] * (df['volume'] / df['avg_volume'])
+    df['final_factor'] += df['weighted_avg'] / df['atr']
+    df['final_factor'] *= df['dynamic_momentum']
+    df['final_factor'] *= df['high_volume']
+
+    return df['final_factor']
+```

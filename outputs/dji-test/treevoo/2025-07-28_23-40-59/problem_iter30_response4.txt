@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Evaluate IRWAP Difference
+    irwap_difference = df['close'] - irwap
+    
+    # Integrate Volume-Adjusted Log Return
+    log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    volume_adjusted_log_return = df['volume'] * log_return
+    
+    # Combine Indicators for Intraday Analysis
+    intraday_analysis = intraday_high_low_spread + irwap_difference
+    
+    # Calculate Price Momentum
+    n_day_return = df['close'].pct_change(5)
+    
+    # Compare Latest Volume to Moving Average
+    m_day_moving_avg_volume = df['volume'].rolling(window=20).mean()
+    latest_volume = df['volume']
+    volume_support = np.where(latest_volume > m_day_moving_avg_volume, 1, -1)
+    
+    # Calculate Long-Term (LMA) and Short-Term (SMA) Moving Averages
+    lma = df['close'].rolling(window=200).mean()
+    sma = df['close'].rolling(window=50).mean()
+    
+    # Calculate Volume-Weighted Difference Between LMA and SMA
+    volume_weighted_diff = (lma - sma) * df['volume']
+    smoothed_vol_weighted_diff = volume_weighted_diff.ewm(span=10).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = log_return.rolling(window=7).sum()
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = log_return.rolling(window=25).sum()
+    
+    # Combine Short and Long-Term Momentum
+    combined_momentum = short_term_momentum - long_term_momentum
+    
+    # Filter by Volume
+    min_volume_threshold = 1.5 * df['volume'].rolling(window=20).mean()
+    combined_momentum_filtered = np.where(df['volume'] > min_volume_threshold, combined_momentum, 0)
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_combined_momentum = combined_momentum_filtered / price_volatility
+    
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Weighted Moving Average of Daily Ranges
+    weighted_daily_ranges = daily_range.ewm(span=10).mean()
+    
+    # Combine Factors
+    final_alpha_factor = (
+        smoothed_vol_weighted_diff * 
+        adjusted_combined_momentum * 
+        weighted_daily_ranges * 
+        intraday_high_low_spread
+    )
+    
+    return final_alpha_factor
+```

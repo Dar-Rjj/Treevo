@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate 5-Day Price Momentum
+    price_momentum_5 = df['close'].rolling(window=5).mean()
+    
+    # Incorporate Volume Influence
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    relative_volume = df['volume'] / avg_volume_5
+    adjusted_momentum = price_momentum_5 * relative_volume
+    
+    # Calculate Short-Term High-Low Range Momentum
+    range_diff_short = high_low_range.diff().fillna(0)
+    short_term_momentum = range_diff_short.rolling(window=7).sum()
+    
+    # Calculate Long-Term High-Low Range Momentum
+    long_term_momentum = range_diff_short.rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum Oscillator
+    range_momentum_oscillator = short_term_momentum - long_term_momentum
+    
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    open_close_returns = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_close_returns
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1).fillna(1)
+    
+    # Classify Volume Trend
+    volume_trend_classification = volume_ratio.apply(lambda x: 2 if x > 1.5 else (-2 if x < 0.5 else 0))
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend_classification
+    
+    # Filter by Close Price Increase
+    close_price_increase = (df['close'] > df['close'].shift(1)).astype(int)
+    filtered_momentum_oscillator = range_momentum_oscillator * close_price_increase
+    
+    # Integrate Volume with Intraday Dynamics
+    high_low_spread = df['high'] - df['low']
+    volume_adjustment = high_low_spread * relative_volume
+    
+    # Weight by Volume Surge
+    avg_volume_10 = df['volume'].rolling(window=10).mean().shift(1)
+    volume_surge_weight = (df['volume'] / avg_volume_10).apply(lambda x: 1.5 if x > 1.5 else (1.2 if x > 1 else 1))
+    
+    # Incorporate Close Price Trend
+    close_price_trend = df['close'].rolling(window=7).mean()
+    trend_factor = (df['close'] > close_price_trend).astype(int) * 0.4 + 0.8
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        filtered_momentum_oscillator * volume_surge_weight * 
+        adjusted_combined_returns * trend_factor + 
+        volume_adjustment * volume_surge_weight
+    )
+    
+    return final_alpha_factor
+```

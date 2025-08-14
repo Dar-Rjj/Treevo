@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices).diff().rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    
+    # Clip Log Returns to Thresholds
+    momentum = log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * (volumes / mean_volume)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Weighted Momentum, Volume, and Volatility Components
+    weights = {'momentum': 0.4, 'vol_std': 0.2, 'vol_ema': 0.2, 'vol_iqr': 0.1, 'vol_high_low': 0.1}
+    assert sum(weights.values()) == 1.0, "Weights must sum to 1"
+    
+    factor_values = (
+        weights['momentum'] * volume_adjusted_momentum +
+        weights['vol_std'] * std_dev +
+        weights['vol_ema'] * ema_abs_price_changes +
+        weights['vol_iqr'] * iqr +
+        weights['vol_high_low'] * high_low_range
+    )
+    
+    return factor_values
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

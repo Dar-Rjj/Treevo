@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Average High-Low Spread
+    df['High_Low_Spread'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate 5-Day Momentum
+    df['Momentum_5D'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Multiply High-Low Spread and Momentum
+    df['HL_Momentum'] = df['High_Low_Spread'] * df['Momentum_5D']
+    
+    # Calculate Enhanced Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['open'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    df['Close_Diff'] = df['close'] - df['close'].shift(1)
+    df['Weighted_Intraday_PM'] = df['Intraday_Price_Movement'] * df['volume'] * df['Close_Diff']
+    
+    # Generate IntradayMomentumScore
+    df['IntradayMomentumScore'] = df['Weighted_Intraday_PM'].abs()
+    
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * df['Reversal_Signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Intraday_Return_Weight'] = df['amount'] * df['Intraday_Price_Movement']
+    df['Reversal_Signal_Weight'] = df['volume'] * df['Reversal_Signal']
+    df['Weighted_Intraday_and_Reversal'] = df['Intraday_Return_Weight'] + df['Reversal_Signal_Weight']
+    
+    # Combine Enhanced Factors
+    df['Combined_Factor'] = 0.3 * df['IntradayMomentumScore'] + 0.3 * df['Intraday_Volatility'] + 0.4 * df['Momentum_5D']
+    
+    # Final Factor Calculation
+    df['Final_Alpha_Factor'] = 0.5 * df['Combined_Factor'] + 0.5 * df['Weighted_Intraday_and_Reversal']
+    
+    # Apply Price Level Adjustment
+    df['Price_Level_Ratio'] = df['close'] / df['open']
+    df['Adjusted_Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Price_Level_Ratio']
+    
+    # Enhance with Volume Trend
+    df['MA_Volume_5D'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Trend'] = df['volume'] - df['MA_Volume_5D']
+    df['Enhanced_Final_Alpha_Factor'] = df['Adjusted_Final_Alpha_Factor'] * df['Volume_Trend']
+    
+    # Adjust by Average Volume
+    df['MA_Volume_20D'] = df['volume'].rolling(window=20).mean()
+    df['Adjusted_Alpha_Factor'] = df['Enhanced_Final_Alpha_Factor'] / df['MA_Volume_20D']
+    
+    # Subtract N-day Exponential Moving Average of Final Alpha Factor
+    df['EMA_Final_Alpha_Factor'] = df['Adjusted_Alpha_Factor'].ewm(span=20).mean()
+    df['Final_Output'] = df['Adjusted_Alpha_Factor'] - df['EMA_Final_Alpha_Factor']
+    
+    return df['Final_Output']
+```

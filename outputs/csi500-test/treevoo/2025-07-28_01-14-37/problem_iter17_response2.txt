@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    close_price_change = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    weighted_momentum = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    weighted_momentum = close_price_change / weighted_momentum
+    
+    # Adjust for Volatility
+    adjusted_momentum = weighted_momentum / high_to_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Cumulative Return over a specified window (e.g., 5 days)
+    cumulative_return = daily_return.rolling(window=5).sum()
+    
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+    
+    # Adjust by Price Volatility
+    price_volatility = df['close'].rolling(window=5).std()
+    final_adjusted_cumulative_return = (adjusted_cumulative_return / price_volatility) + 1
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate Weighted Momentum
+    lookback_period = 5
+    log_returns = np.log(df['close'] / df['close'].shift(lookback_period))
+    exp_weights = np.linspace(0.1, 1, lookback_period)
+    weighted_log_returns = (log_returns.rolling(window=lookback_period).apply(lambda x: np.sum(x * exp_weights), raw=True) / intraday_volatility)
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    relative_strength = weighted_log_returns - df['close'].ewm(span=5, adjust=False).mean()
+    volume_weighted_price_movement = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    combined_factor = (relative_strength / volume_weighted_price_movement) + final_adjusted_cumulative_return
+    ema_difference = short_term_ma - long_term_ma
+    combined_factor = combined_factor / ema_difference
+    
+    # Enhance with Intraday Price Behavior
+    intraday_price_mean = (df['high'] + df['low'] + df['close']) / 3
+    intraday_price_variability = high_to_low_range / intraday_price_mean
+    adjusted_volatility_momentum = adjusted_momentum * intraday_price_variability
+    
+    # Final Factor
+    final_factor = (adjusted_volatility_momentum * volume_change * trend_direction) + (final_adjusted_cumulative_return * trend_direction)
+    
+    return final_factor
+```

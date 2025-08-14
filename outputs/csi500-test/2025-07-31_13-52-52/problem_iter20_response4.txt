@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Compute 10-Day Price Momentum
+    df['10_day_momentum'] = df['close'].shift(1) - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    df['volume_change_indicator'] = df['volume'].diff().apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Price Trend Indicator
+    df['short_sma'] = df['close'].rolling(window=5).mean()
+    df['long_sma'] = df['close'].rolling(window=20).mean()
+    df['price_trend_indicator'] = (df['short_sma'] > df['long_sma']).astype(int) * 2 - 1
+    
+    # Combine Intraday and 10-Day Momentum
+    df['combined_momentum'] = df['intraday_return'] + df['10_day_momentum']
+    
+    # Apply Volume Confirmation
+    df['confirmed_momentum'] = df['combined_momentum'] * df['volume_change_indicator']
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = df['high'] - df['low']
+    
+    # Adjust Factors
+    df['adjusted_momentum'] = df['confirmed_momentum'] / df['daily_volatility']
+    
+    # Integrate Both Metrics
+    df['integrated_metric'] = (df['intraday_return'] + df['adjusted_momentum']) / 2
+    
+    # Smooth the Result
+    df['smoothed_result'] = df['integrated_metric'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Adjust for Momentum
+    df['momentum_adjustment'] = (df['close'].diff(periods=5)).sum() / df['volume'].rolling(window=5).mean()
+    
+    # Combine Close-to-Open Factors
+    df['close_to_open_factor'] = (df['close_to_open_return'] * df['volume']) / df['daily_range']
+    
+    # Final Integration
+    df['final_alpha_factor'] = (df['smoothed_result'] + df['close_to_open_factor']) / 2
+    
+    # Synthesize Final Alpha Factor
+    df['synthesized_alpha_factor'] = df['final_alpha_factor'].ewm(span=10, adjust=False).mean()
+    
+    return df['synthesized_alpha_factor']
+```

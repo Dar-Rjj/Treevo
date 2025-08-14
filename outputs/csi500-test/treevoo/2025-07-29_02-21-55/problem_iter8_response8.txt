@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_hl_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['combined_indicator'] = df['intraday_hl_pct_change'] * df['volume_ratio']
+    
+    # Adjust for Market Volatility using 20-day Moving Standard Deviation
+    df['daily_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['daily_return'].rolling(window=20).std()
+    threshold = 2 * df['volatility']
+    df['significant_movement'] = df['combined_indicator'] > threshold
+    
+    # Calculate Intraday Price Movement
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_direction'] = df['close'] - df['open']
+    
+    # Calculate Weighted Volume Activity
+    n = 20
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['relative_volume'] = df['volume'] / df['average_volume']
+    
+    # Combine Intraday Price and Volume Metrics
+    df['weighted_intraday_range'] = df['intraday_range'] * df['relative_volume']
+    df['weighted_intraday_direction'] = df['intraday_direction'] * df['relative_volume']
+    df['combined_intraday_metric'] = df['weighted_intraday_range'] + df['weighted_intraday_direction']
+    
+    # Apply Moving Averages to Intraday High-to-Low Momentum
+    short_period = 12
+    long_period = 26
+    df['fast_ema'] = df['intraday_hl_pct_change'].ewm(span=short_period, adjust=False).mean()
+    df['slow_ema'] = df['intraday_hl_pct_change'].ewm(span=long_period, adjust=False).mean()
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    df['ma_return'] = df['daily_return'].rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    smoothing_factor = 0.1
+    df['ema_volume'] = df['volume'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    df['adjusted_return'] = (df['ma_return'] * df['ema_volume']) / df['average_volume']
+    
+    # Smooth the Adjusted Return
+    df['smoothed_adjusted_return'] = df['adjusted_return'].rolling(window=5).mean()
+    
+    # Enhance with MACD Signal
+    df['macd_line'] = df['fast_ema'] - df['slow_ema']
+    signal_period = 9
+    df['signal_line'] = df['macd_line'].ewm(span=signal_period, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['macd_line'] - df['signal_line']) * df['smoothed_adjusted_return']
+    
+    return df['alpha_factor']
+```

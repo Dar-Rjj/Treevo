@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Returns with Smoothing
+    df['EMA_2'] = df['close'].ewm(span=2, adjust=False).mean()
+    df['Daily_Return_Smoothed'] = (df['EMA_2'] - df['EMA_2'].shift(1)) / df['EMA_2'].shift(1)
+    
+    # Weighted Moving Average (WMA)
+    n = 7  # Example window size
+    weights = np.arange(1, n+1)  # Simple linear weighting
+    df['WMA'] = df['close'].rolling(window=n).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    
+    # Double Exponential Moving Average (DEMA)
+    df['DEMA'] = 2 * df['close'].ewm(span=n, adjust=False).mean() - df['close'].ewm(span=n, adjust=False).mean().ewm(span=n, adjust=False).mean()
+    
+    # SMA and WMA Crossover
+    df['SMA_short'] = df['close'].rolling(window=5).mean()
+    df['Crossover_Signal'] = (df['SMA_short'] > df['WMA']).astype(int)
+    
+    # DEMA Crossover
+    df['DEMA_long'] = df['DEMA'].rolling(window=14).mean()
+    df['DEMA_Crossover_Signal'] = (df['DEMA'] > df['DEMA_long']).astype(int)
+    
+    # Volume-Price Momentum
+    momentum_period = 10
+    df['Volume_Momentum'] = df['volume'].pct_change(momentum_period)
+    df['Price_Momentum'] = df['close'].pct_change(momentum_period)
+    df['Volume_Price_Momentum'] = df['Volume_Momentum'] / df['Price_Momentum']
+    
+    # Amount-Price Momentum
+    df['Amount_Momentum'] = df['amount'].pct_change(momentum_period)
+    df['Amount_Price_Momentum'] = df['Amount_Momentum'] / df['Price_Momentum']
+    
+    # Volume-Price Correlation with Lag
+    k = 3  # Example lag
+    df['Corr_Volume_Price_Lag'] = df['volume'].rolling(window=momentum_period).corr(df['close'].shift(k))
+    
+    # Amount-Price Correlation with Lag
+    df['Corr_Amount_Price_Lag'] = df['amount'].rolling(window=momentum_period).corr(df['close'].shift(k))
+    
+    # True Range with Volatility Adjustment
+    df['True_Range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))),
+        axis=1
+    )
+    volatility_adjustment = 1.5  # Example adjustment factor
+    df['True_Range_Adjusted'] = df['True_Range'] * volatility_adjustment
+    
+    # Average True Range (ATR) with Adaptive Smoothing
+    adaptive_n = 10  # Example adaptive window
+    df['ATR_Adaptive'] = df['True_Range_Adjusted'].ewm(span=adaptive_n, adjust=False).mean()
+    
+    # Gap Up with Intraday Confirmation
+    df['Gap_Up'] = ((df['open'] > df['close'].shift(1)) & (df['close'] > df['open'])).astype(int)
+    
+    # Gap Down with Intraday Confirmation
+    df['Gap_Down'] = ((df['open'] < df['close'].shift(1)) & (df['close'] < df['open'])).astype(int)
+    
+    # Intraday Price Reversal
+    df['Intraday_Reversal'] = ((df['open'] < df['close'].shift(1)) & (df['close'] > df['open'])).astype(int)
+    
+    # Combine all factors into a single alpha factor (simple sum for demonstration)
+    df['Alpha_Factor'] = (
+        df['Daily_Return_Smoothed'] + 
+        df['Crossover_Signal'] + 
+        df['DEMA_Crossover_Signal'] + 
+        df['Volume_Price_Momentum'] + 
+        df['Amount_Price_Momentum'] + 
+        df['Corr_Volume_Price_Lag'] + 
+        df['Corr_Amount_Price_Lag'] + 
+        df['True_Range_Adjusted'] + 
+        df['ATR_Adaptive'] + 
+        df['Gap_Up'] - 
+        df['Gap_Down'] + 
+        df['Intraday_Reversal

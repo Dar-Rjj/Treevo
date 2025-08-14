@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High-Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Daily Volume Trend
+    df['Volume_MA10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = df['volume'] - df['Volume_MA10']
+
+    # Calculate Volatility
+    df['Close_MA20'] = df['close'].rolling(window=20).mean()
+    df['Close_Std20'] = df['close'].rolling(window=20).std()
+    df['Normalized_Volatility'] = df['Close_Std20'] / df['Close_MA20']
+
+    # Integrate Momentum
+    # Long-Term Price Momentum
+    df['Close_MA20'] = df['close'].rolling(window=20).mean()
+    df['Close_MA50'] = df['close'].rolling(window=50).mean()
+    df['Long_Term_Momentum'] = df['Close_MA20'] - df['Close_MA50']
+
+    # Short-Term Price Reversal
+    df['Daily_Price_Change'] = df['close'] - df['open']
+    df['5Day_Sum_Price_Change'] = df['Daily_Price_Change'].rolling(window=5).sum()
+    df['5Day_High'] = df['high'].rolling(window=5).max()
+    df['5Day_Low'] = df['low'].rolling(window=5).min()
+    df['5Day_High_Low_Range'] = df['5Day_High'] - df['5Day_Low']
+    df['Short_Term_Reversal'] = (df['5Day_Sum_Price_Change'] / df['5Day_High_Low_Range']) * df['volume']
+
+    # Combine High-Low Spread, Volume Trend, and Momentum
+    df['Adjusted_Spread'] = df['High-Low_Spread'] * df['Volume_Trend']
+    df['Adjusted_Spread'] = np.where(df['Volume_Trend'] > 0, df['Adjusted_Spread'] * 1.5,
+                                     np.where(df['Volume_Trend'] < 0, df['Adjusted_Spread'] * 0.5, df['Adjusted_Spread']))
+    df['Combined_Alpha'] = df['Adjusted_Spread'] * df['Long_Term_Momentum'] + df['Short_Term_Reversal']
+
+    return df['Combined_Alpha'].dropna()
+```

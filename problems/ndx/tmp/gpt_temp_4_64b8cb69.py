@@ -1,0 +1,16 @@
+def heuristics_v2(df, N=14):
+    # Calculate Price Momentum
+    df['Price_Momentum'] = (df['close'].diff(1)).rolling(window=N).sum()
+
+    # Calculate Volume Adjusted Momentum
+    df['Volume_Adjusted_Momentum'] = ((df['close'].diff(1)) * df['volume']).rolling(window=N).sum()
+
+    # Calculate True Range
+    df['True_Range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), 
+                      abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Calculate Momentum to Volatility Ratio
+    df['Momentum_Volatility_Ratio'] = df['Volume_Adjusted_Momentum'] / df['True_Range']
+
+    return df['Momentum_Volatility_Ratio']

@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum based on close prices
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    momentum_signal = short_sma - long_sma
+    
+    # Momentum crossover signal
+    buy_signal = (short_sma > long_sma) & (short_sma.shift(1) <= long_sma.shift(1))
+    sell_signal = (short_sma < long_sma) & (short_sma.shift(1) >= long_sma.shift(1))
+    
+    # Daily volume weighted average price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_change = vwap.pct_change()
+    
+    # Volume spike indicator
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_spike = df['volume'] / avg_volume
+    
+    # True range and average true range (ATR)
+    high_low = df['high'] - df['low']
+    high_close = abs(df['high'] - df['close'].shift())
+    low_close = abs(df['low'] - df['close'].shift())
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Volatility breakout
+    ema_close = df['close'].ewm(span=20, adjust=False).mean()
+    upper_band = ema_close + atr * 2
+    lower_band = ema_close - atr * 2
+    volatility_breakout_buy = df['close'] > upper_band
+    volatility_breakout_sell = df['close'] < lower_band
+    
+    # Market sentiment using open and close prices
+    daily_return = (df['close'] - df['open']) / df['open']
+    cumulative_return = (1 + daily_return).rolling(window=5).apply(np.prod, raw=True) - 1
+    positive_returns = (daily_return > 0).rolling(window=5).sum()
+    negative_returns = (daily_return < 0).rolling(window=5).sum()
+    sentiment_trend = positive_returns - negative_returns
+    
+    # Trend detection with moving averages
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    trend_direction_5 = ema_5 - ema_5.shift(1)
+    trend_direction_20 = ema_20 - ema_20.shift(1)
+    ema_crossover_buy = (ema_5 > ema_20) & (ema_5.shift(1) <= ema_20.shift(1))
+    ema_crossover_sell = (ema_5 < ema_20) & (ema_5.shift(1) >= ema_20.shift(1))
+    trend_strength = ema_5 - ema_20
+    
+    # Combine all signals into a single alpha factor
+    alpha_factor = (
+        momentum_signal +
+        vwap_change +
+        volume_spike +
+        true_range +
+        atr +
+        (volatility_breakout_buy.astype(int) - volatility_breakout_sell.astype(int)) +
+        cumulative_return +
+        sentiment_trend +
+        trend_direction_5 +
+        trend_direction_20 +
+        (ema_crossover_buy.astype(int) - ema_crossover_sell.astype(int)) +
+        trend_strength
+    )
+    
+    return alpha_factor
+```

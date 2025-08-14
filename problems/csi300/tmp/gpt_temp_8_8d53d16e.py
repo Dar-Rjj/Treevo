@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10):
+    # Obtain Close Prices
+    close = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close).diff()
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    momentum_clipped = momentum.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volume = df['volume']
+    mean_volume = volume.rolling(window=N).mean()
+    volume_adjusted = (volume / mean_volume) * momentum_clipped
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_dev = abs_price_changes.rolling(window=M).std()
+    ema = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine Weighted Components
+    weights = [0.4, 0.3, 0.3]  # Weights for momentum, volume, and volatility
+    combined_factor = (weights[0] * volume_adjusted +
+                       weights[1] * std_dev + 
+                       weights[2] * ema)
+    
+    # Integrate Market Breadth Indicators
+    advancing_issues = (df['close'] > df['close'].shift(1)).astype(int)
+    declining_issues = (df['close'] < df['close'].shift(1)).astype(int)
+    advance_decline_line = (advancing_issues - declining_issues).cumsum()
+    
+    new_highs = (df['close'] == df['close'].rolling(window=252).max()).astype(int)
+    new_lows = (df['close'] == df['close'].rolling(window=252).min()).astype(int)
+    new_highs_lows_diff = new_highs - new_lows
+    
+    # Integrate Key Economic Indicators (Assuming we have interest rate and GDP data in the DataFrame)
+    interest_rate_trend = df['interest_rate'].diff()
+    gdp_growth_rate = df['gdp'].pct_change(quarterly=True)
+    
+    # Final Factor Calculation
+    final_factor = (combined_factor + 
+                    0.1 * advance_decline_line + 
+                    0.1 * new_highs_lows_diff + 
+                    0.1 * interest_rate_trend + 
+                    0.1 * gdp_growth_rate)
+    
+    return final_factor

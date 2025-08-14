@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_daily_return'] = df['daily_return'] - df['price_gap']
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price and High-to-Low Range Momentum
+    df['5_day_ema_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['price_momentum'] = df['5_day_ema_close'] - df['5_day_ema_close'].shift(1)
+    df['high_low_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+
+    # Adjust by Volume and Price Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['momentum_volume_adjustment'] = df['high_low_range_momentum'] * df['volume_change']
+    df['integrated_momentum'] = df['momentum_volume_adjustment'] + df['price_change']
+
+    # Confirm High-Low Spread with Volume and Adjusted by Amount Acceleration
+    df['amount_ema_5_day'] = df['amount'].ewm(span=5, adjust=False).mean()
+    df['amount_acceleration'] = df['amount_ema_5_day'] - df['amount_ema_5_day'].shift(1)
+    df['high_low_spread_volume_adjusted'] = df['high_low_range'] * df['volume_change']
+    df['high_low_spread_volume_adjusted'] = df['high_low_spread_volume_adjusted'].where(df['volume_change'] > 0, 0)
+    df['high_low_spread_amount_accelerated'] = df['high_low_spread_volume_adjusted'] * df['amount_acceleration']
+
+    # Smoothing Filter
+    df['sma_high_low_spread'] = df['high_low_spread_amount_accelerated'].rolling(window=10, min_periods=1).mean()
+
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['integrated_momentum_smoothed'] = df['price_momentum'] * df['sma_high_low_spread']
+
+    # Adjust by Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+
+    # Combine Adjusted Daily Return, Integrated Momentum, and Volume Change
+    df['combined_factor'] = (df['adjusted_daily_return'] * df['integrated_momentum_smoothed']) * df['volume_ratio']
+
+    # Final Alpha Factor Integration
+    df['alpha_factor'] = df['combined_factor'].apply(lambda x: max(x, 0))
+
+    return df['alpha_factor']
+```

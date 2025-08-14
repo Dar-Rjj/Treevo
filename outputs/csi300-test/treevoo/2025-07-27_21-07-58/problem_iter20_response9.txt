@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute Weighted Average Price Momentum over 5 Days
+    weights_price = np.array([1, 2, 3, 4, 5])
+    df['Price_Momentum'] = (df['Daily_Price_Change'].rolling(window=5).apply(lambda x: (x * weights_price).sum(), raw=True) / weights_price.sum())
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    
+    # Compute Weighted Average Volume Change over 10 Days
+    weights_volume = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    df['Volume_Change'] = (df['Daily_Volume_Change'].rolling(window=10).apply(lambda x: (x * weights_volume).sum(), raw=True) / weights_volume.sum())
+    
+    # Combine Price Momentum and Volume Surge
+    df['Momentum_Volume_Surge'] = df['Price_Momentum'] * df['Volume_Change']
+    
+    # Adjust by Exponential Moving Average of Volume
+    n = 20  # EMA period
+    alpha = 2 / (n + 1)
+    df['EMA_Volume'] = df['volume'].ewm(alpha=alpha, adjust=False).mean()
+    df['Volume_Ratio'] = df['volume'] / df['EMA_Volume']
+    
+    # Calculate Momentum Indicator
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Short_Term_Momentum'] = df['Daily_Returns'].rolling(window=5).sum()
+    df['Long_Term_Momentum'] = df['Daily_Returns'].rolling(window=20).sum()
+    
+    # Calculate Average True Range
+    df['True_Range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+    df['Average_True_Range'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Combine Momentum and Volatility
+    df['Combined_Momentum'] = (df['Short_Term_Momentum'] * 0.6) + (df['Long_Term_Momentum'] * 0.4)
+    df['Trend_Multiplier'] = df['close'] > df['close'].ewm(span=50, adjust=False).mean()
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum'] * df['Trend_Multiplier'].apply(lambda x: 1.5 if x else 1)
+    
+    # Final Combined Alpha Factor
+    df['Alpha_Factor'] = (df['Momentum_Volume_Surge'] + (df['Daily_Price_Change'] * df['Volume_Ratio'])) * df['Adjusted_Combined_Momentum']
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# data = pd.read_csv('market_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(data)
+# print(alpha_factor)
+```

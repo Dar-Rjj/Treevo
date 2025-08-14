@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation from Close
+    df['daily_return'] = df['close'].diff()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compare Daily Return Deviation with VWAP
+    df['deviation'] = df['close'] - df['vwap']
+    
+    # Check for Volume Increase
+    df['vol_14d_ma'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = df['volume'] > df['vol_14d_ma']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['open']) / df['open']
+    
+    # Adjust Intraday Return for Volume
+    df['vol_7d_ma'] = df['volume'].rolling(window=7).mean()
+    df['volume_diff'] = df['volume'] - df['vol_7d_ma']
+    df['adj_intraday_return'] = df['intraday_return'] * df['volume_diff']
+    
+    # Incorporate Price Volatility
+    df['close_std_7d'] = df['close'].rolling(window=7).std()
+    df['adj_intraday_return'] = df['adj_intraday_return'].where(
+        df['close_std_7d'] > df['close_std_7d'].median(), 
+        df['adj_intraday_return'] * 0.7
+    ).where(
+        df['close_std_7d'] <= df['close_std_7d'].median(), 
+        df['adj_intraday_return'] * 2.5
+    )
+    
+    # Compute Price Momentum Factor
+    n = 10
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 10
+    df['volume_momentum'] = df['volume'].diff().rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1, k2 = 1.0, 0.5
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['vol_20d_ma'] = df['volume'].rolling(window=20).mean()
+    df['vol_deviation'] = df['volume'] - df['vol_20d_ma']
+    df['adj_combined_momentum'] = df['combined_momentum'] / (df['vol_deviation'] + 1e-6)
+    
+    # Incorporate Momentum Shift
+    df['sma_5d'] = df['close'].rolling(window=5).mean()
+    df['sma_20d'] = df['close'].rolling(window=20).mean()
+    df['momentum_shift'] = np.where(
+        (df['sma_5d'] > df['sma_20d']) & (df['sma_5d'].shift(1) < df['sma_20d'].shift(1)), 1.5,
+        np.where(
+            (df['sma_5d'] < df['sma_20d']) & (df['sma_5d'].shift(1) > df['sma_20d'].shift(1)), -1.5, 0.0
+        )
+    )
+    df['adj_combined_momentum'] += df['momentum_shift']
+    
+    # Introduce Price and Volume Correlation
+    df['corr_close_volume'] = df[['close', 'volume']].rolling(window=10).corr().unstack().iloc[::2, :]['close']
+    df['adj_corr_combined_momentum'] = df['adj_combined_momentum'] * np.where(
+        df['corr_close_volume'] > 0, 1.2, 0.8
+    )
+    
+    # Incorporate Price Trend Smoothness
+    df['ema_10d'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30d'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['trend_smoothness'] = np.where(df['ema_10d'] > df['ema_30d'], 1.0, -1.0)
+   

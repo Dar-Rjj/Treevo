@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    daily_range = df['high'] - df['low']
+    normalized_range = daily_range / df['open']
+
+    # Open to Close Momentum
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    ema_open_close = open_to_close_return.ewm(span=5, min_periods=1).mean()
+
+    # Volume-Weighted Open-to-Close Return
+    volume_weighted_return = (df['close'] - df['open']) / df['open'] * df['volume']
+    ema_volume_weighted_return = volume_weighted_return.ewm(span=5, min_periods=1).mean()
+
+    # Price-Volume Trend Indicator
+    price_change = df['close'] - df['close'].shift(1)
+    price_volume_trend = (price_change * df['volume']).rolling(window=30, min_periods=1).sum()
+
+    # Volume-Adjusted Intraday Movement
+    intraday_movement = df['close'] - df['open']
+    average_20_day_volume = df['volume'].rolling(window=20, min_periods=1).mean()
+    adjusted_intraday_movement = intraday_movement / average_20_day_volume
+
+    # Combined Momentum and Volatility Factor
+    weight_range = 0.4
+    weight_momentum = 0.3
+    weight_vol_weighted = 0.3
+    combined_momentum_volatility = (weight_range * normalized_range + 
+                                    weight_momentum * ema_open_close + 
+                                    weight_vol_weighted * ema_volume_weighted_return).ewm(alpha=0.1, min_periods=1).mean()
+
+    # Volume-Sensitive Momentum Factor
+    weight_price_volume_trend = 0.4
+    weight_vol_weighted_momentum = 0.3
+    weight_adjusted_intraday = 0.3
+    volume_sensitive_momentum = (weight_price_volume_trend * price_volume_trend + 
+                                 weight_vol_weighted_momentum * ema_volume_weighted_return + 
+                                 weight_adjusted_intraday * adjusted_intraday_movement).ewm(alpha=0.1, min_periods=1).mean()
+
+    # Final Alpha Factor
+    final_weight_combined = 0.5
+    final_weight_volume_sensitive = 0.5
+    final_alpha_factor = (final_weight_combined * combined_momentum_volatility + 
+                          final_weight_volume_sensitive * volume_sensitive_momentum).ewm(alpha=0.1, min_periods=1).mean()
+
+    return final_alpha_factor
+```

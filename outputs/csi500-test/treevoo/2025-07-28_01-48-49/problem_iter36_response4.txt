@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) of closing prices over a 50-day period
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Relative Strength Index (RSI) based on closing prices over a 14-day period
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # Daily price movement
+    df['daily_price_movement'] = df['close'] - df['close'].shift(1)
+    
+    # Cumulative sum of daily price movements over the past 20 days
+    df['cumulative_movement_20'] = df['daily_price_movement'].rolling(window=20).sum()
+    
+    # Ratio of the current day's volume to the SMA of volume over a 20-day period
+    df['SMA_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio_20'] = df['volume'] / df['SMA_volume_20']
+    
+    # True range and average true range (ATR) over the last 14 days
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1, skipna=False)
+    df['ATR_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Price gaps: difference between the current day's open and the previous day's close
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Number of up-gaps and down-gaps in the past month
+    df['up_gap'] = df['price_gap'].apply(lambda x: 1 if x > 0 else 0)
+    df['down_gap'] = df['price_gap'].apply(lambda x: 1 if x < 0 else 0)
+    df['up_gaps_30'] = df['up_gap'].rolling(window=30).sum()
+    df['down_gaps_30'] = df['down_gap'].rolling(window=30).sum()
+    
+    # Volume spikes: days where the volume is more than two standard deviations above the 30-day SMA of volume
+    df['SMA_volume_30'] = df['volume'].rolling(window=30).mean()
+    df['std_volume_30'] = df['volume'].rolling(window=30).std()
+    df['volume_spike'] = (df['volume'] > df['SMA_volume_30'] + 2 * df['std_volume_30']).astype(int)
+    
+    # Rate of Change (ROC) between the current close and the close from 10 days ago
+    df['ROC_10'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10) * 100
+    
+    # Accumulation/Distribution Line with median of high, low, and close
+    df['median_price'] = df[['high', 'low', 'close']].median(axis=1)
+    money_flow_multiplier = (df['median_price'] - df['low']) - (df['high'] - df['median_price']) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['A_D_line'] = money_flow_volume.cumsum()
+    
+    # Combine all the sub-thoughts into a final alpha factor
+    alpha_factor = (
+        df['SMA_50'] + 
+        df['RSI_14'] + 
+        df['cumulative_movement_20'] + 
+        df['volume_ratio_20'] + 
+        df['ATR_14'] + 
+        (df['up_gaps_30'] - df['down_gaps_30']) + 
+        df['volume_spike'] + 
+        df['ROC_10'] + 
+        df['A_D_line']
+    )
+    
+    return alpha_factor

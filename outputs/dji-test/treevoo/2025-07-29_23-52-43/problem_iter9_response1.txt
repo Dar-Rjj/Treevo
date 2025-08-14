@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Breakout Intensity
+    breakout_intensity = (df['high'] - df['low']) / df['close']
+    breakout_intensity = breakout_intensity.where(breakout_intensity > 0, 0)
+    volume_weighted_breakout = breakout_intensity * df['volume']
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Identify Volume Spikes
+    daily_volume_change = df['volume'].pct_change()
+    spike_threshold = daily_volume_change.rolling(window=21).quantile(0.8) * 1.5
+    spike_condition = daily_volume_change > spike_threshold
+
+    # Filter with Spike Condition
+    filtered_breakout = volume_weighted_breakout.where(spike_condition, 0)
+
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = intraday_return * df['volume']
+
+    # Calculate Daily High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    moving_sum_high_low_diff = high_low_diff.rolling(window=10).sum()
+
+    # Calculate Volume-Adjusted Momentum (VAM)
+    sma_close = df['close'].rolling(window=20).mean()
+    momentum = sma_close.pct_change(periods=5)
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    vam = momentum * (df['volume'] / avg_volume_5)
+
+    # Calculate Price Volatility Indicator (PVI)
+    true_range = np.maximum(
+        df['high'] - df['low'],
+        np.abs(df['high'] - df['close'].shift(1)),
+        np.abs(df['low'] - df['close'].shift(1))
+    )
+    atr = true_range.rolling(window=14).mean()
+    pvi = vam / atr
+    smoothed_pvi = pvi.ewm(span=7, adjust=False).mean()
+
+    # Combine Factors
+    combined_factor = (filtered_breakout * vam) / smoothed_pvi
+    combined_factor = combined_factor * volume_weighted_intraday_return * moving_sum_high_low_diff
+
+    return combined_factor
+```

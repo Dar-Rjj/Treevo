@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+
+    # Compute Moving Average of Daily Returns
+    n = 20
+    df['ma_daily_return'] = df['daily_return'].rolling(window=n).mean()
+
+    # Calculate Volume Weight
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_weight'] = df['volume'] / df['avg_volume']
+
+    # Combine Moving Average and Volume Weight
+    df['vol_weighted_ma'] = df['ma_daily_return'] * df['volume_weight']
+
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['high_low_range']
+
+    # Calculate Volume-Weighted Breakout Indicator
+    df['vw_breakout_ind'] = (df['close'] - df['open']) * df['volume'] * df['price_breakout_ratio']
+
+    # Aggregate Indicators
+    df['agg_breakout'] = df['vw_breakout_ind'].rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+
+    # Generate Alpha Factor
+    alpha_factor = df['vol_weighted_ma'] + df['agg_breakout']
+    alpha_factor = alpha_factor.ewm(span=10, adjust=False).mean()  # Apply Exponential Moving Average
+
+    # Enhance Alpha Factor
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=n).std().mean(axis=1)
+    alpha_factor = (alpha_factor * df['daily_return']) / df['volatility']
+
+    # Introduce Trend Following Component
+    m = 50
+    df['long_term_ma'] = df['close'].rolling(window=m).mean()
+    df['short_term_ma'] = df['close'].rolling(window=n).mean()
+
+    # Generate Trend Signal
+    df['trend_signal'] = (df['short_term_ma'] > df['long_term_ma']).astype(int) * 2 - 1
+
+    # Integrate Trend Signal into Alpha Factor
+    alpha_factor = alpha_factor * df['trend_signal']
+
+    return alpha_factor
+```

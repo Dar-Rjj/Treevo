@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['range'] = df['high'] - df['low']
+    
+    # Calculate Rolling Median of High-to-Low Range
+    df['range_rolling_median_14'] = df['range'].rolling(window=14).median()
+    
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['open']
+    
+    # Compute 5-Day and 10-Day Exponential Moving Average of Price Change
+    df['ema_5'] = df['price_change'].ewm(span=5, adjust=False).mean()
+    df['ema_10'] = df['price_change'].ewm(span=10, adjust=False).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = 0
+    df.loc[df['ema_5'] > df['ema_10'], 'reversal_signal'] = 1
+    df.loc[df['ema_5'] < df['ema_10'], 'reversal_signal'] = -1
+    df['reversal_signal'] *= (df['range_rolling_median_14'] / df['range_rolling_median_14'].max())
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)
+    df['volume_filter'] = df['volume'] > volume_threshold
+    
+    # Calculate Intraday Price Change Ratio
+    df['high_low_ratio'] = (df['high'] - df['low']) / df['low']
+    df['intraday_trading_activity'] = df['volume'] / (df['high'] + df['low'])
+    df['intraday_price_change_ratio'] = df['high_low_ratio'] * df['intraday_trading_activity']
+    
+    # Measure Sustained Momentum
+    df['sustained_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume Weighted Momentum
+    df['volume_weighted_momentum'] = df['sustained_momentum'] * df['volume']
+    
+    # Calculate Upward and Downward Volume-Weighted Returns
+    df['positive_returns'] = df['price_change'].where(df['price_change'] > 0, 0) * df['volume']
+    df['negative_returns'] = df['price_change'].where(df['price_change'] < 0, 0) * df['volume']
+    
+    # Sum over 14 days
+    df['positive_sum_14'] = df['positive_returns'].rolling(window=14).sum()
+    df['negative_sum_14'] = df['negative_returns'].abs().rolling(window=14).sum()
+    
+    # Compute RSI
+    df['relative_strength'] = df['positive_sum_14'] / df['negative_sum_14']
+    df['rsi'] = 100 - (100 / (1 + df['relative_strength']))
+    
+    # Combine Factors
+    df['alpha_factor'] = (
+        df['intraday_price_change_ratio'] +
+        df['sustained_momentum'] +
+        df['volume_weighted_momentum'] +
+        df['rsi'] +
+        df['reversal_signal']
+    )
+    
+    # Apply Volume Filter
+    df['alpha_factor'] = df['alpha_factor'] * df['volume_filter']
+    
+    return df['alpha_factor']
+```

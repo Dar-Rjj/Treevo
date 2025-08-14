@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Evaluate Daily Volatility
+    df['Daily_Volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Measure the Gap Opening Effect
+    df['Gap_Opening_Effect'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume Impact Score
+    sum_volume_10_days = df['volume'].rolling(window=10).sum()
+    avg_high_10_days = df['high'].rolling(window=10).mean()
+    avg_low_10_days = df['low'].rolling(window=10).mean()
+    df['Volume_Impact_Score'] = (avg_high_10_days - avg_low_10_days) / sum_volume_10_days
+    
+    # Generate Intermediate Factor 1
+    df['Intermediate_Factor_1'] = df['Intraday_Return'] * df['Volume_Impact_Score']
+    
+    # Identify Volume Trend Changes
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Correlate Volume with Price Movement
+    df['Volume_Price_Correlation'] = (df['close'] - df['open']) / (df['volume'] / df['volume'].shift(1))
+    
+    # Calculate Price and Intraday Momentum
+    recent_close = df['close']
+    close_10_days_ago = df['close'].shift(10)
+    price_momentum = recent_close - close_10_days_ago
+    sum_volume_10_days = df['volume'].rolling(window=10).sum()
+    df['Adjusted_Price_Momentum'] = price_momentum / sum_volume_10_days
+    
+    # Confirm with Volume Trend
+    avg_volume_5_days = df['volume'].rolling(window=5).mean()
+    current_day_volume = df['volume']
+    volume_ratio = current_day_volume / avg_volume_5_days
+    
+    combined_momentum = df['Intraday_Return'] * df['Adjusted_Price_Momentum']
+    aggregated_momentum = combined_momentum.rolling(window=10).sum() / sum_volume_10_days
+    
+    df['Final_Factor'] = df['Intermediate_Factor_1'] * aggregated_momentum
+    df.loc[volume_ratio <= 1.2, 'Final_Factor'] = 0
+    
+    # Incorporate Financial Transaction Amounts
+    df['Transaction_Impact'] = (df['amount'] - df['amount'].shift(1)) / df['amount'].shift(1)
+    df['Price_Efficiency'] = (df['close'] - df['amount'] / df['volume']) / df['close'].shift(1)
+    df['Liquidity_Indicator'] = df['amount'] / df['close']
+    df['Order_Impact'] = df['Intraday_Return'] * (df['amount'] / df['volume'])
+    
+    return df['Final_Factor']
+```

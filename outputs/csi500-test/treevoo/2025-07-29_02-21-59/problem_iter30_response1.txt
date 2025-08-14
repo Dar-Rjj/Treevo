@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume and Amount Adjusted Close-to-Open Return
+    close_to_open_return = df['close'] / df['open'].shift(-1) - 1
+    volume_and_amount_weight = (df['volume'] + df['amount'])
+    volume_amount_adjusted_close_to_open_return = close_to_open_return * volume_and_amount_weight
+    
+    # Intraday High-Low Movement
+    intraday_high_low_movement = df['high'] / df['low'] - 1
+    volume_change = df['volume'] / df['volume'].shift(1) - 1
+    intraday_return = df['close'] / df['open'] - 1
+    adjusted_intraday_return = intraday_high_low_movement * volume_change + intraday_return
+    
+    # Adjust for Volume Volatility
+    volume_moving_avg = df['volume'].rolling(window=20).mean()
+    volume_std_dev = (df['volume'] - volume_moving_avg).pow(2).rolling(window=20).sum().apply(np.sqrt)
+    volume_volatility_adjusted_factor = (volume_amount_adjusted_close_to_open_return + adjusted_intraday_return) / (volume_std_dev + 1)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Weight by Volume and Amount Change
+    volume_change_for_weight = df['volume'] / df['volume'].shift(1) - 1
+    amount_change = df['amount'] / df['amount'].shift(1) - 1
+    
+    # Combine Intraday Factors
+    combined_intraday_factors = intraday_return * (intraday_volatility + volume_change_for_weight + amount_change)
+    
+    # Volume Weighted Close-to-Open Return
+    close_to_open_return_for_volume_weight = df['close'] / df['open'].shift(-1) - 1
+    volume_weighted_close_to_open_return = close_to_open_return_for_volume_weight * df['volume']
+    
+    # Sum of Daily Price Changes
+    daily_price_change = df['close'] - df['close'].shift(1)
+    sum_of_daily_price_changes = daily_price_change.rolling(window=20).sum()
+    
+    # Volume Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # PMI Score
+    pmi_score = sum_of_daily_price_changes * vwap
+    
+    # Cumulative Sum of Daily Log Returns
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    cumulative_sum_of_daily_log_returns = daily_log_return.rolling(window=20).sum()
+    
+    # 20-Day Momentum
+    twenty_day_momentum = df['close'] / df['close'].shift(20) - 1
+    
+    # Intraday Range to Volume Ratio
+    intraday_range = df['high'] - df['low']
+    intraday_range_to_volume_ratio = intraday_range / df['volume']
+    
+    # Close-to-High Distance
+    close_to_high_distance = df['high'] - df['close']
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        pmi_score * cumulative_sum_of_daily_log_returns +
+        combined_intraday_factors +
+        volume_weighted_close_to_open_return +
+        twenty_day_momentum +
+        intraday_range_to_volume_ratio +
+        close_to_high_distance
+    )
+    
+    return final_alpha_factor
+```

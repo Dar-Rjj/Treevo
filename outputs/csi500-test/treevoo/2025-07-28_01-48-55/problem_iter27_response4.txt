@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Price Momentum
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    adjusted_momentum = (df['close'] - df['close'].rolling(window=20).median()) * avg_volume_20 / df['volume']
+
+    # Calculate Intraday Reversal
+    intraday_reversal = (df['high'] - df['low']) - (df['open'] - df['close'])
+
+    # Measure Daily Volume Change
+    daily_volume_change = (df['volume'] / df['volume'].shift(1)) - 1
+
+    # Combine Adjusted Momentum, Intraday Reversal, and Volume Changes
+    intermediate_factor = (adjusted_momentum * 1.5) + (intraday_reversal * daily_volume_change)
+
+    # Calculate Exponential Moving Average (EMA)
+    alpha = 2 / (10 + 1)
+    ema = df['close'].ewm(span=10, adjust=False).mean()
+
+    # Calculate Weighted Moving Average (WMA)
+    wma_weights = pd.Series(range(1, 11), index=range(10, 0, -1))
+    wma = df['close'].rolling(window=10).apply(lambda x: (x * wma_weights).sum() / wma_weights.sum(), raw=True)
+
+    # Calculate High-Low Price Range
+    high_low_range = df['high'] - df['low']
+
+    # Calculate Volume Adjusted High-Low Range
+    volume_adjusted_high_low = high_low_range * df['volume'].pow(0.5)
+
+    # Calculate Price Momentum
+    price_momentum = df['close'] - ema
+
+    # Calculate Additional Price Momentum
+    additional_price_momentum = df['close'] - wma
+
+    # Calculate Volume Adjusted Spread
+    spread = df['high'] - df['low']
+    relative_volume = df['volume'] / avg_volume_20
+    volume_adjusted_spread = spread * relative_volume
+
+    # Calculate Momentum Factor
+    window_size = 10
+    momentum_factor = volume_adjusted_high_low.rolling(window=window_size).sum()
+
+    # Final Alpha Factor
+    final_alpha_factor = (
+        intermediate_factor +
+        price_momentum +
+        additional_price_momentum -
+        volume_adjusted_spread +
+        momentum_factor
+    )
+
+    return final_alpha_factor
+```

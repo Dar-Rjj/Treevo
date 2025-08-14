@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Changes
+    df['close_change'] = df['close'] - df['close'].shift(1)
+    
+    # Initialize VW-EWMA value and set smoothing factor (alpha)
+    alpha = 0.2
+    df['vw_ewma'] = 0.0
+    df.loc[df.index[0], 'vw_ewma'] = df.loc[df.index[0], 'close_change']
+    
+    # Iteratively update VW-EWMA value
+    for i in range(1, len(df)):
+        prev_vw_ewma = df.loc[df.index[i-1], 'vw_ewma']
+        current_close_change = df.loc[df.index[i], 'close_change']
+        volume_multiplier = df.loc[df.index[i], 'volume'] / df.loc[:df.index[i], 'volume'].sum()
+        
+        df.loc[df.index[i], 'vw_ewma'] = (prev_vw_ewma * (1 - alpha) + 
+                                          current_close_change * alpha) * volume_multiplier
+    
+    # Calculate Moving Average of High-Low Difference
+    lookback_period = 14
+    df['high_low_diff'] = df['high'] - df['low']
+    df['sma_high_low_diff'] = df['high_low_diff'].rolling(window=lookback_period).mean()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['high_low_diff'] - df['sma_high_low_diff']
+    
+    # Apply Smoothing
+    smoothing_factor = 0.2
+    df['smoothed_momentum'] = df['raw_momentum'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Final Dynamic Momentum Factor
+    df['dynamic_momentum'] = df['vw_ewma'] * df['smoothed_momentum']
+    
+    return df['dynamic_momentum']
+```

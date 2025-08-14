@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate log returns
+    df['log_returns'] = np.log(df['close']).diff()
+    
+    # Exponentially weighted moving average of the close price over the past 5 days
+    df['ewma_close_5d'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Momentum as the rate of change over the past 3 days
+    df['momentum_3d'] = df['close'].pct_change(periods=3)
+    
+    # Volatility as the exponentially weighted standard deviation of the close price over the past 5 days
+    df['volatility_5d_ewm'] = df['close'].ewm(span=5, adjust=False).std()
+    
+    # Liquidity as the ratio of amount to volume
+    df['liquidity'] = df['amount'] / df['volume']
+    
+    # Market sentiment (using the difference between high and low prices)
+    df['market_sentiment'] = (df['high'] - df['low']) / df['close']
+    
+    # Mean reversion signal (using the difference between the close price and its 5-day EWMA, normalized by the 5-day EWMA volatility)
+    df['mean_reversion'] = (df['close'] - df['ewma_close_5d']) / df['volatility_5d_ewm']
+    
+    # Relative Strength Index (RSI) with a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    df['rsi_14d'] = 100 - (100 / (1 + rs))
+    
+    # Moving Average Convergence Divergence (MACD)
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd'] - df['signal_line']
+    
+    # Simplified dynamic weights based on market conditions
+    df['dynamic_weight_trend'] = 1 / (1 + df['volatility_5d_ewm'])
+    df['dynamic_weight_momentum'] = 1 - df['dynamic_weight_trend']
+    
+    # Combine the key indicators into a single factor with dynamic, market-condition-based weights
+    factor = (
+        0.25 * df['log_returns'] +
+        0.10 * (df['dynamic_weight_trend'] * df['trend'] + df['dynamic_weight_momentum'] * df['momentum_3d']) -
+        0.15 * df['volatility_5d_ewm'] +
+        0.10 * df['liquidity'] +
+        0.05 * df['market_sentiment'] -
+        0.05 * df['mean_reversion'] +
+        0.05 * (50 - df['rsi_14d']) +
+        0.05 * df['macd_histogram']
+    )
+    
+    return factor.dropna()
+```

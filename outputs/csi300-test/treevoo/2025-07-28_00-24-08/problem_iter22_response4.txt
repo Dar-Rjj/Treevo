@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Aggregate Returns
+    df['aggregate_return'] = df['intraday_return'] + df['overnight_return'].shift(1)
+    
+    # Intraday Trend Strength
+    df['daily_range'] = df['high'] - df['low']
+    df['intraday_pct_change'] = (df['close'] - df['open']) / df['open']
+    
+    # Volume Adjusted Reversal Signal
+    df['volume_pct_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['close_to_next_open'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['inverse_close_to_next_open'] = -df['close_to_next_open']
+    
+    # Smoothed Moving Average of Composite Factor
+    composite_factor = df['aggregate_return'] + df['intraday_pct_change'] + df['inverse_close_to_next_open']
+    df['sma_composite'] = composite_factor.rolling(window=5).mean()
+    df['ema_composite'] = df['sma_composite'].ewm(span=5, adjust=False).mean()
+    
+    # Intraday High-Low Range Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Open-to-Close Direction
+    df['open_close_direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Volume Weighted Smoothed Returns
+    df['sma_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_weighted_returns'] = (df['close'] - df['close'].shift(1)) * (df['volume'] / df['sma_volume'])
+    
+    # Summarize Momentum-Reversal Indicator
+    df['momentum_reversal_indicator'] = df['intraday_return'] + df['volume_weighted_returns']
+    df['momentum_reversal_sign'] = np.sign(df['momentum_reversal_indicator'])
+    
+    # Weight High-Low Range by Volume
+    df['weighted_high_low_range'] = df['high_low_ratio'] * df['volume']
+    
+    # Adjust for Combined Volatility
+    df['volatility_adjusted_return'] = df['aggregate_return'] * df['weighted_high_low_range']
+    
+    # Integrate Amount Data
+    df['daily_dollar_volume'] = df['volume'] * df['close']
+    df['final_factor'] = df['ema_composite'] / df['daily_dollar_volume']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculating 5-day and 20-day simple moving averages of closing prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Identifying the crossover of 5-day and 20-day SMAs as a momentum indicator
+    df['Momentum_Signal'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+
+    # Computing the daily range (High - Low)
+    df['Daily_Range'] = df['high'] - df['low']
+
+    # Summing up the last 10 days' ranges to identify recent market volatility
+    df['Recent_Volatility'] = df['Daily_Range'].rolling(window=10).sum()
+
+    # Calculating average true range (ATR) over 14 days for volatility measurement
+    df['True_Range'] = df[['high', 'close']].shift(1).apply(lambda x: max(x['high']-x['close'], x['close']-df['low']), axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+
+    # Creating a 10-day average volume baseline
+    df['Avg_Volume_10'] = df['volume'].rolling(window=10).mean()
+
+    # Flagging days when volume exceeds the 10-day average by a certain threshold
+    df['Volume_Spike'] = (df['volume'] > 1.5 * df['Avg_Volume_10']).astype(int)
+
+    # Determining if close is above the open on high volume as an indication of strong buying interest
+    df['Buying_Pressure'] = ((df['close'] > df['open']) & (df['volume'] > df['Avg_Volume_10'])).astype(int)
+
+    # Detecting days with a close below the open and high volume, signaling strong selling pressure
+    df['Selling_Pressure'] = ((df['close'] < df['open']) & (df['volume'] > df['Avg_Volume_10'])).astype(int)
+
+    # Measuring percentage change in volume from one day to the next
+    df['Volume_Change'] = df['volume'].pct_change()
+
+    # Alerting when daily volume change surpasses 50% increase from the previous day
+    df['Significant_Volume_Change'] = (df['Volume_Change'] > 0.5).astype(int)
+
+    # Creating a composite score that weights both momentum and volume signals
+    df['Composite_Score'] = (df['Momentum_Signal'] * 0.6 + df['Volume_Spike'] * 0.4)
+
+    # Constructing a multi-factor model that considers momentum, volatility, and volume simultaneously
+    df['Multi_Factor_Score'] = (df['Momentum_Signal'] + df['Recent_Volatility'] + df['Volume_Spike'] + df['Buying_Pressure'] + df['Selling_Pressure'] + df['Significant_Volume_Change'])
+
+    # Experimenting with logical conditions to refine the signal, such as requiring both a positive momentum and a significant volume spike
+    df['Refined_Signal'] = ((df['Momentum_Signal'] == 1) & (df['Volume_Spike'] == 1)).astype(int)
+
+    return df['Refined_Signal']
+```

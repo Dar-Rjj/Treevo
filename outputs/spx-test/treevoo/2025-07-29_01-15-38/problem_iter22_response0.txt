@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    avg_vol_5 = df['volume'].rolling(window=5).mean()
+    relative_vol = df['volume'] / avg_vol_5
+    adjusted_momentum = short_term_momentum * relative_vol
+    
+    # Weight by Volume Surge
+    avg_vol_10 = df['volume'].rolling(window=10).mean()
+    volume_surge_weight = (df['volume'] > 1.5 * avg_vol_10) * 1.5 + \
+                          ((df['volume'] <= 1.5 * avg_vol_10) & (df['volume'] > avg_vol_10)) * 1.2 + \
+                          (df['volume'] <= avg_vol_10) * 1
+    weighted_momentum = adjusted_momentum * volume_surge_weight
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range_20 = daily_price_range.rolling(window=20).mean()
+    price_range_filter = (daily_price_range <= 1.5 * avg_daily_price_range_20)
+    filtered_momentum = weighted_momentum * price_range_filter
+    
+    # Apply Volatility Filter
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    std_dev_daily_returns_20 = daily_return.rolling(window=20).std()
+    volatility_filter = (std_dev_daily_returns_20 <= 0.03)
+    filtered_momentum = filtered_momentum * volatility_filter
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Oscillator
+    momentum_oscillator = short_term_momentum - long_term_momentum
+    
+    # Introduce High-Low Range Indicator
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range_5 = high_low_range.rolling(window=5).mean()
+    normalized_high_low_range = high_low_range / avg_high_low_range_5
+    
+    # Final Alpha Factor
+    final_factor = filtered_momentum * momentum_oscillator * normalized_high_low_range
+    
+    return final_factor
+```

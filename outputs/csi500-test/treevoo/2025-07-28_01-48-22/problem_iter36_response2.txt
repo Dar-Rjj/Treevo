@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # 5-day weighted moving average (WMA) of closing prices
+    weights = np.arange(1, 6)
+    wma_5 = df['close'].rolling(window=5).apply(lambda prices: np.dot(prices, weights)/weights.sum(), raw=True)
+    
+    # Signal based on today's close price compared to 5-day WMA
+    signal = df['close'] - wma_5
+    
+    # Short-term and long-term returns
+    short_term_return = (df['close'] / df['close'].shift(5)) - 1
+    long_term_return = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Momentum score
+    momentum_score = short_term_return + long_term_return
+    
+    # Intraday and historical momentum components
+    intraday_momentum = (df['close'] - df['open']) / df['open'] * df['volume']
+    historical_momentum = df['close'] - df['close'].shift(10)
+    combined_momentum = intraday_momentum + historical_momentum
+    ema_combined_momentum = combined_momentum.ewm(span=5).mean()
+    
+    # Volume and volatility adjustments
+    volume_change_20 = df['volume'] - df['volume'].shift(20)
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    adjusted_momentum = (long_term_return / volume_change_20) * avg_volume_10
+    
+    # Relative strength
+    relative_strength = short_term_return - long_term_return
+    
+    # High-low range and relative range
+    high_low_range = df['high'] - df['low']
+    avg_high_low_range_5 = high_low_range.rolling(window=5).mean()
+    relative_range = high_low_range / avg_high_low_range_5
+    
+    # Intraday and open-to-close returns
+    intraday_return = df['high'] - df['low']
+    open_close_return = df['close'] - df['open']
+    combined_return = intraday_return + open_close_return
+    
+    # Volume spike indicator
+    volume_std = df['volume'].rolling(window=20).std()
+    mean_volume = df['volume'].rolling(window=20).mean()
+    volume_spike = (df['volume'] > (mean_volume + 2 * volume_std)).astype(int)
+    combined_return_with_spike = combined_return * volume_spike
+    
+    # Volume and price integration
+    volume_difference = df['volume'] - df['volume'].shift(1)
+    vwap = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    volume_to_vwap_ratio = volume_difference / vwap
+    adjusted_close_change = 0.6 * volume_difference + 0.4 * avg_high_low_range_5 + (df['close'] - df['close'].shift(1))
+    
+    # Final alpha factor
+    final_factor = relative_range * volume_difference * volume_to_vwap_ratio * (df['close'] - df['close'].shift(1))
+    
+    # Weighting by volume and volatility
+    volume_average = df['volume'].rolling(window=5).mean()
+    volatility = df['close'].pct_change().abs().rolling(window=20).mean()
+    weighted_final_factor = relative_strength * (volume_average * volatility)
+    
+    return weighted_final_factor
+```

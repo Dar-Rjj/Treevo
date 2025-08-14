@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = (df['high'] - df['low']) / df['open']
+
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['sma_open_to_close'] = df['open_to_close_return'].rolling(window=5).mean()
+
+    # Volume Adjusted Intraday Movement
+    df['intraday_movement'] = (df['close'] - df['open'])
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_intraday_movement'] = df['intraday_movement'] / avg_volume_20
+
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_volume_trend'] = df['price_change'] * df['volume']
+    df['pvt_30_days'] = df['price_volume_trend'].rolling(window=30).sum()
+
+    # Combined Momentum and Volatility Factor
+    df['momentum_volatility_factor'] = 0.6 * df['daily_range'] + 0.4 * df['sma_open_to_close']
+    df['exp_smooth_momentum_volatility'] = df['momentum_volatility_factor'].ewm(alpha=0.2).mean()
+
+    # Volume-Sensitive Momentum Factor
+    df['volume_sensitive_momentum'] = 0.7 * df['pvt_30_days'] + 0.3 * df['volume_adjusted_intraday_movement']
+    df['exp_smooth_volume_sensitive_momentum'] = df['volume_sensitive_momentum'].ewm(alpha=0.2).mean()
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = 0.5 * df['exp_smooth_momentum_volatility'] + 0.5 * df['exp_smooth_volume_sensitive_momentum']
+    df['final_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=0.2).mean()
+
+    return df['final_alpha_factor'].dropna()
+```

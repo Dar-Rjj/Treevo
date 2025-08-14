@@ -1,0 +1,29 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=20, spike_threshold=2):
+    # Calculate daily price change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute volume-weighted daily return
+    df['Volume_Weighted_Return'] = df['Daily_Price_Change'] * df['volume']
+    df['Volume_Weighted_Return_Sum'] = df['Volume_Weighted_Return'].rolling(window=n_days).sum()
+    df['Total_Volume'] = df['volume'].rolling(window=n_days).sum()
+    df['Volume_Weighted_Daily_Return'] = df['Volume_Weighted_Return_Sum'] / df['Total_Volume']
+
+    # Incorporate dynamic volume spike indicator
+    # Calculate the rolling mean and standard deviation of volume
+    df['Rolling_Volume_Mean'] = df['volume'].rolling(window=n_days).mean()
+    df['Rolling_Volume_Std'] = df['volume'].rolling(window=n_days).std()
+
+    # Flag days where volume is above a dynamic threshold (mean + 2 * std_dev)
+    df['Volume_Spike'] = df['volume'] > (df['Rolling_Volume_Mean'] + spike_threshold * df['Rolling_Volume_Std'])
+
+    # Adjust volume-weighted daily return for volume spikes
+    df['Dynamic_Factor'] = 1 + (df['volume'] - df['Rolling_Volume_Mean']) / df['Rolling_Volume_Std']
+    df.loc[~df['Volume_Spike'], 'Dynamic_Factor'] = 1
+    df['Adjusted_Volume_Weighted_Return'] = df['Volume_Weighted_Daily_Return'] * df['Dynamic_Factor']
+
+    # Return the factor values as a pandas Series
+    return df['Adjusted_Volume_Weighted_Return']
+```

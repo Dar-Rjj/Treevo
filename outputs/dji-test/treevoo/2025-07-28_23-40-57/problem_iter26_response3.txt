@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=10):
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Proportion
+    df['Intraday_Volume'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Intraday Volume Intensity
+    df['Intraday_Volume_Intensity'] = df['Intraday_Volume'] / (df['high'] - df['low'])
+    
+    # Calculate Volume Impact Score
+    df['Volume_Sum_Over_n_Days'] = df['volume'].rolling(window=n).sum()
+    df['Average_High'] = df['high'].rolling(window=n).mean()
+    df['Average_Low'] = df['low'].rolling(window=n).mean()
+    df['Volume_Impact_Score'] = (df['Average_High'] - df['Average_Low']) / df['Volume_Sum_Over_n_Days']
+    
+    # Intermediate Factor 1
+    df['Intermediate_Factor_1'] = df['Intraday_Return'] * df['Volume_Impact_Score']
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(n)
+    
+    # Adjust Price Momentum by Volume
+    df['Cumulative_Volume_Over_N_Days'] = df['volume'].rolling(window=n).sum()
+    df['Adjusted_Price_Momentum'] = df['Price_Momentum'] / df['Cumulative_Volume_Over_N_Days']
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    df['Volume_Weighted_Momentum'] = df['Adjusted_Price_Momentum'] * df['volume']
+    df['Cumulative_Volume_Weighted_Momentum'] = df['Volume_Weighted_Momentum'].rolling(window=n).sum()
+    
+    # Confirm with Volume Trend
+    df['Average_Volume_Past_5_Days'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume_Past_5_Days']
+    
+    # Combined Momentum
+    df['Combined_Momentum'] = df['Price_Momentum'] * df['Intraday_Return']
+    df['Aggregated_Momentum'] = df['Cumulative_Volume_Weighted_Momentum'].rolling(window=m).sum()
+    
+    # Final Factor
+    df['Final_Factor'] = df.apply(lambda row: row['Intermediate_Factor_1'] * row['Aggregated_Momentum'] if row['Volume_Ratio'] > 1 else 0, axis=1)
+    
+    # Calculate Weighted Intraday Volume Intensity
+    df['Weighted_Intraday_Volume_Intensity'] = df['Intraday_Volume_Intensity'] * df['Intraday_Return']
+    
+    # Calculate Intraday and Breakout Momentum
+    df['Intraday_Breakout_Momentum'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Volume
+    df['Adjusted_Intraday_Breakout_Momentum'] = df['Intraday_Breakout_Momentum'] / df['Cumulative_Volume_Over_N_Days']
+    
+    # Aggregate Momentum Over M Days
+    df['Aggregated_Intraday_Breakout_Momentum'] = df['Adjusted_Intraday_Breakout_Momentum'].rolling(window=m).sum()
+    
+    return df['Final_Factor']
+```

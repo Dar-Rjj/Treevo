@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Short-Term Return
+    df['short_term_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Long-Term Return
+    df['long_term_return'] = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Returns
+    df['volume_weighted_short_term'] = df['short_term_return'] * df['volume']
+    df['volume_weighted_long_term'] = df['long_term_return'] * df['volume']
+    
+    # Adjusted Volume-Weighted Returns by Intraday Volatility
+    df['adjusted_volume_weighted_short_term'] = df['volume_weighted_short_term'] / df['intraday_volatility']
+    df['adjusted_volume_weighted_long_term'] = df['volume_weighted_long_term'] / df['intraday_volatility']
+    
+    # Integrated Volume and Price Momentum
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['integrated_momentum'] = df['volume_change'] * (df['close'] - df['close'].shift(1))
+    
+    # Momentum Factor
+    df['momentum_factor'] = df['adjusted_volume_weighted_short_term'] - df['adjusted_volume_weighted_long_term']
+    
+    # Reversal Indicator
+    df['reversal_indicator'] = -df['momentum_factor']
+    
+    # Daily Price Movement
+    df['daily_price_movement'] = df['close'] - df['open']
+    
+    # Uptrend Count
+    df['uptrend_count'] = (df['close'] > df['open']).rolling(window=10).sum()
+    
+    # Average True Range (ATR)
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_10'] = df['tr'].rolling(window=10).mean()
+    
+    # ATR Moving Average
+    df['atr_ma_20'] = df['atr_10'].rolling(window=20).mean()
+    
+    # ATR Signal
+    df['atr_signal'] = df['atr_10'] < df['atr_ma_20']
+    
+    # Trading Volume Relative to Price
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    df['positive_volume_score'] = ((df['close'] > df['open']) & (df['volume'] > avg_volume_30)).rolling(window=30).sum()
+    
+    # Intraday Bullishness
+    df['intraday_bullishness'] = (df['high'] - df['open']) / (df['open'] - df['low'])
+    
+    # Bullishness Ratio
+    df['bullishness_ratio'] = df['intraday_bullishness'].rolling(window=5).mean()
+    
+    # Combined Indicator
+    df['combined_indicator'] = (df['momentum_factor'] + df['integrated_momentum'] + df['uptrend_count'] + 
+                                df['atr_signal'].astype(int) + df['positive_volume_score'] + df['bullishness_ratio']) / 6
+    
+    # 5-Day Moving Average of Close Price
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+    
+    # 60-Day Moving Average of Close Price
+    df['ma_60'] = df['close'].rolling(window=60).mean()
+    
+    # Trend Indicator
+    df['trend_indicator'] = df['ma_5'] - df['ma_60']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['reversal_indicator'] + df['trend_indicator'] + df['combined_indicator']
+    
+    return df['alpha_factor']
+```

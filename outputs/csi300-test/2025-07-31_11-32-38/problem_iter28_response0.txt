@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Daily Return
+    df['Volume-Weighted Daily Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+
+    # Compute Intraday Return
+    df['Intraday Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Track Close-to-Open Return
+    df['Close-to-Open Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Determine the Logarithmic Volume Difference
+    df['Log Volume Difference'] = np.log(df['volume']) - np.log(df['volume'].shift(1))
+    
+    # Calculate 20-Day Moving Average of Volume
+    df['20D MA Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Weigh by Intraday Volume Activity
+    df['Intraday Volume Weight'] = df['volume'] / df['20D MA Volume']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['Combined Intraday Return'] = (np.abs(df['Intraday Return']) * df['Intraday Volume Weight'] + 
+                                     np.abs(df['Close-to-Open Return']) * df['Intraday Volume Weight'])
+    
+    # Adjust weights by integrating volume and intraday volatility
+    df['Adjusted Weight'] = df['Combined Intraday Return'] * df['Log Volume Difference']
+    
+    # Calculate Raw Momentum
+    n = 20
+    df['Raw Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Weigh by Cumulative Volume
+    df['Cumulative Volume'] = df['volume'].rolling(window=n).sum()
+    df['Volume-Weighted Momentum'] = df['Raw Momentum'] * df['Cumulative Volume']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['EMA Factor'] = df['Volume-Weighted Momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Incorporate Intraday Range Breakouts
+    df['Intraday Range Breakout'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    df['Breakout Weight'] = df['Intraday Range Breakout'] * df['volume']
+    
+    # Final Factor Calculation
+    df['Final Factor'] = df['Volume-Weighted Daily Return'] * (df['Adjusted Weight'] + df['Breakout Weight'])
+
+    return df['Final Factor']
+```

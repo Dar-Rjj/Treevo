@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=20, p=10, q=10):
+    # Calculate Price Momentum Factor
+    df['price_momentum'] = df['close'].diff(n)
+    
+    # Incorporate Trading Volume into the Analysis
+    df['avg_volume'] = df['volume'].rolling(window=m).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+    
+    # Explore the Relationship Between Open and Close Prices
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_close_sum'] = df['open_close_diff'].rolling(window=p).sum()
+    
+    # Analyze the Range of Daily Price Fluctuations
+    df['daily_range'] = df['high'] - df['low']
+    df['range_ma'] = df['daily_range'].rolling(window=q).mean()
+    
+    # Calculate Volume-Weighted Daily Returns
+    df['vw_daily_return'] = (df['close'] / df['close'].shift(1)) * (df['volume'] / df['volume'].shift(1))
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Logarithmic Volume Difference
+    df['log_volume_diff'] = np.log(df['volume'] / df['volume'].shift(1))
+    
+    # Weigh by Intraday Volume Activity
+    df['volume_20_day_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio_20_day'] = df['volume'] / df['volume_20_day_ma']
+    
+    # Integrate Components
+    df['intraday_weight'] = df['intraday_return'].abs()
+    df['close_to_open_weight'] = df['close_to_open_return'].abs()
+    
+    # Adjust weights by multiplying them with the Logarithmic Volume Difference
+    df['adjusted_intraday_weight'] = df['intraday_weight'] * df['log_volume_diff']
+    df['adjusted_close_to_open_weight'] = df['close_to_open_weight'] * df['log_volume_diff']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['combined_returns'] = (df['intraday_return'] * df['adjusted_intraday_weight']) + (df['close_to_open_return'] * df['adjusted_close_to_open_weight'])
+    
+    # Combine Volume-Weighted Momentum with Price Range
+    df['raw_momentum'] = df['close'] - df['close'].shift(n)
+    df['cumulative_volume'] = df['volume'].rolling(window=n).sum()
+    df['volume_weighted_momentum'] = df['raw_momentum'] / df['cumulative_volume']
+    df['price_range'] = df['high'] - df['low']
+    df['combined_momentum_range'] = df['volume_weighted_momentum'] + df['price_range']
+    
+    # Multiply Combined Momentum by Volume Ratio
+    df['combined_momentum_ratio'] = df['combined_momentum_range'] * df['volume_ratio']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['ema_5'] = df['combined_momentum_ratio'].ewm(span=5, adjust=False).mean()
+    
+    # Multiply Volume-Weighted Daily Returns by Adjusted Weights
+    df['vw_daily_return_adjusted'] = df['vw_daily_return'] * df['adjusted_intraday_weight'] * df['adjusted_close_to_open_weight']
+    
+    # Incorporate Intraday Range Breakouts
+    df['intraday_breakout'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    df['breakout_weight'] = df['intraday_breakout'] * df['volume_ratio_20_day']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['ema_5'] * df['vw_daily_return_adjusted'] * df['breakout_weight']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the multi-period momentum as the difference between today's close and the 5-day simple moving average of the close
+    multi_period_momentum = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Compute the exponential moving average (EMA) of the volume over 3 days for a more responsive liquidity measure
+    ema_volume_short = df['volume'].ewm(span=3, adjust=False).mean()
+    # Compute the exponential moving average (EMA) of the volume over 10 days for a more stable liquidity measure
+    ema_volume_long = df['volume'].ewm(span=10, adjust=False).mean()
+
+    # Calculate the ratio of the high to the 5-day EMA of the high to capture relative strength
+    relative_high_ema = df['high'] / df['high'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the ratio of the low to the 5-day EMA of the low to capture relative weakness
+    relative_low_ema = df['low'] / df['low'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the 5-day EMA of the open price to incorporate market depth
+    ema_open = df['open'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the 5-day EMA of the close price to incorporate market depth
+    ema_close = df['close'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the bid-ask spread proxy as the difference between the 5-day EMA of the high and the 5-day EMA of the low
+    bid_ask_spread_proxy = df['high'].ewm(span=5, adjust=False).mean() - df['low'].ewm(span=5, adjust=False).mean()
+
+    # Introduce a short-term volatility factor using the 5-day EMA of the absolute returns
+    volatility_factor_5 = abs(df['close'].pct_change()).ewm(span=5, adjust=False).mean()
+    # Introduce a medium-term volatility factor using the 20-day EMA of the absolute returns
+    volatility_factor_20 = abs(df['close'].pct_change()).ewm(span=20, adjust=False).mean()
+
+    # Interaction term between short and long EMA volumes
+    volume_interaction = ema_volume_short * ema_volume_long
+
+    # Combine the components into a single factor
+    factor_values = (multi_period_momentum * 
+                     volume_interaction * 
+                     relative_high_ema * 
+                     relative_low_ema * 
+                     (ema_open / ema_close) * 
+                     bid_ask_spread_proxy * 
+                     (volatility_factor_5 + volatility_factor_20))
+
+    return factor_values
+```

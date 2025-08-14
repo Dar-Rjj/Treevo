@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Volume-Weighted Close-Open Difference
+    volume_weighted_diff = (df['close'] - df['open']) * df['volume']
+    
+    # Combine Initial Factors
+    combined_factors_sum = high_low_spread_ratio + volume_weighted_diff
+    combined_factors_avg = (high_low_spread_ratio + volume_weighted_diff) / 2
+    
+    # Compute Adjusted Close Price
+    adjusted_close = df['close'] * df['volume']
+    
+    # Volume-Adjusted EMA Factor
+    ema_period = 21
+    ema = df['close'].ewm(span=ema_period, adjust=False).mean()
+    volume_adjusted_ema_factor = adjusted_close - ema
+    
+    # Medium-Term Reversal Factor
+    m_days = 10
+    daily_returns = (df['close'] - df['open']) / df['open']
+    medium_term_reversal = daily_returns.rolling(window=m_days).mean()
+    
+    # Generate Intraday Log-Return
+    intraday_log_return = (df['close'] - df['open']) / df['open']
+    
+    # True Range
+    true_range = df['high'] - df['low']
+    true_range = true_range.combine((df['close'].shift(1) - df['low']).abs(), max)
+    true_range = true_range.combine((df['close'].shift(1) - df['high']).abs(), max)
+    
+    # Scaled Intraday Log-Return
+    scaled_intraday_log_return = intraday_log_return / true_range
+    
+    # Volume Impact
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_impact = volume_change * scaled_intraday_log_return
+    
+    # Analyze Momentum
+    sma_short = df['close'].rolling(window=7).mean()
+    sma_long = df['close'].rolling(window=21).mean()
+    sma_diff = sma_short - sma_long
+    
+    # Evaluate Volume and Price Movement
+    volume_price_signal = (df['close'] - df['close'].shift(1)) * volume_change
+    
+    # Assess Volatility
+    volatility = df['close'].rolling(window=20).std()
+    
+    # Integrate Composite Alpha Factor
+    integrated_composite_alpha = combined_factors_sum + volume_adjusted_ema_factor + medium_term_reversal + volume_impact
+    
+    # Create Final Composite Score
+    composite_score = (sma_diff * 0.3) + (volume_price_signal * 0.2) + (volatility * 0.2)
+    
+    # Final Alpha Factor
+    final_alpha_factor = integrated_composite_alpha + composite_score
+    
+    return final_alpha_factor
+```

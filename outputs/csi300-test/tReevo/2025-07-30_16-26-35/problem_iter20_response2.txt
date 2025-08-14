@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'].shift(-1) - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    
+    # Compute Recent Intraday Range
+    recent_intraday_range = intraday_range.ewm(span=20, adjust=False).mean()
+    
+    # Compute Recent Close-to-Open Return
+    recent_close_to_open_return = close_to_open_return.ewm(span=20, adjust=False).mean()
+    
+    # Compute Recent VWAP
+    recent_vwap = vwap.ewm(span=20, adjust=False).mean()
+    
+    # Initial Alpha Factor
+    initial_alpha_factor = (recent_intraday_range * 0.6 + 
+                            recent_close_to_open_return * 0.3 + 
+                            recent_vwap * 0.1)
+    
+    # Incorporate Recency
+    days_since_start = (df.index - df.index[0]).days
+    recency_factor = 1 / (1 + days_since_start)
+    adjusted_alpha_factor = initial_alpha_factor * recency_factor
+    
+    # Incorporate Volume
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    further_adjusted_alpha_factor = adjusted_alpha_factor * (1 + (volume_ratio - 1) * 0.5)
+    
+    # Incorporate Volume Momentum
+    volume_momentum = (volume_ratio - 1).clip(lower=0)
+    final_alpha_factor = further_adjusted_alpha_factor + volume_momentum * 0.1
+    
+    return final_alpha_factor
+```

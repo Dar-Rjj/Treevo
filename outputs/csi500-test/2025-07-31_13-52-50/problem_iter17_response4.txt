@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = (df['return_deviation'] > df['return_deviation'].shift(1)) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Moving Average of Daily Returns
+    lookback_period = 20
+    df['ma_daily_return'] = df['daily_return'].rolling(window=lookback_period).mean()
+    
+    # Calculate Volume Weight
+    df['volume_weight'] = df['volume'] / df['volume'].rolling(window=lookback_period).mean()
+    
+    # Combine Moving Average and Volume Weight
+    df['weighted_ma_return'] = df['ma_daily_return'] * df['volume_weight']
+    
+    # Compute Price Momentum Factor
+    price_momentum_lookback = 20
+    df['price_momentum'] = df['daily_return'].rolling(window=price_momentum_lookback).sum()
+    
+    # Compute Volume Momentum Factor
+    volume_momentum_lookback = 20
+    df['volume_changes'] = df['volume'].diff()
+    df['volume_momentum'] = df['volume_changes'].rolling(window=volume_momentum_lookback).sum()
+    
+    # Combine Price and Volume Momentum
+    k1, k2 = 0.5, 0.5
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Momentum for Volume Volatility
+    df['volatility_adjustment'] = (df['volume'] - df['volume'].rolling(window=lookback_period).mean()) / (df['volume'].std() + 1e-6)
+    df['adjusted_momentum'] = df['combined_momentum'] / df['volatility_adjustment']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['high_low_range']
+    
+    # Calculate Volume-Weighted Breakout Indicator
+    df['breakout_indicator'] = (df['close'] - df['open']) * df['volume'] * df['price_breakout_ratio']
+    
+    # Aggregate Indicators
+    df['aggregate_breakout'] = df['breakout_indicator'].ewm(span=lookback_period, adjust=False).mean()
+    
+    # Final Composite Factor Calculation
+    trend_reversal_score = df['trend_reversal'].astype(int) * 2
+    df['composite_factor'] = trend_reversal_score + df['adjusted_momentum'] + df['aggregate_breakout']
+    
+    # Generate Alpha Factor
+    alpha_lookback = 20
+    df['alpha_factor'] = df['composite_factor'].rolling(window=alpha_lookback).mean()
+    
+    # Enhance Alpha Factor
+    df['alpha_factor_enhanced'] = df['alpha_factor'] * df['daily_return']
+    
+    # Adjust for Volatility
+    volatility_window = 20
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=volatility_window).std().mean(axis=1)
+    df['alpha_factor_normalized'] = df['alpha_factor_enhanced'] / df['volatility']
+    
+    return df['alpha_factor_normalized'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

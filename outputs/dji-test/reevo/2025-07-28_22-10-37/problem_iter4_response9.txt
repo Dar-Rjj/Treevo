@@ -1,0 +1,33 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between the close and open price
+    diff_close_open = df['close'] - df['open']
+    
+    # Calculate the average true range for a given period
+    period = 14
+    df['true_range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1).shift(1)
+    average_true_range = df['true_range'].rolling(window=period).mean()
+    
+    # Calculate the normalized factor as the ratio of the difference to the ATR
+    factor = diff_close_open / (average_true_range + 1e-7)
+    
+    # Calculate the ratio of today's volume to the average volume over the last 5 days.
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / (avg_5d_volume + 1e-7)
+    
+    # Calculate the price movement from yesterday's close to today's open (Overnight Movement)
+    overnight_movement = abs(df['open'] - df['close'].shift(1))
+    
+    # Calculate the ratio of overnight price movement to daily range
+    daily_range = df['high'] - df['low']
+    overnight_to_daily_ratio = overnight_movement / (daily_range + 1e-7)
+    
+    # Calculate the rolling mean of the overnight to daily ratio over 5 days
+    overnight_to_daily_ratio_sma_5 = overnight_to_daily_ratio.rolling(window=5).mean()
+    
+    # Adaptive weighting based on the rolling means
+    weight_factor = overnight_to_daily_ratio_sma_5
+    combined_signal = (factor * (0.7 - weight_factor)) + (volume_ratio * (0.3 + weight_factor))
+    
+    return combined_signal
+```

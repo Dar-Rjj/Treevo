@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=10, threshold=5):
+    # Compute Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Close-to-Open Return
+    close_to_open_return = df['close'] - df['open'].shift(1)
+    
+    # Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    combined_intraday_features = (df['open'] - intraday_midpoint) - opening_gap
+    
+    # Enhanced Intraday Factor
+    avg_intraday_range = intraday_range.rolling(window=n).mean()
+    enhanced_intraday_factor = avg_intraday_range * (close_to_open_return + price_change) + combined_intraday_features
+    
+    # Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=m).mean()
+    enhanced_intraday_factor *= avg_abs_price_change
+    
+    # Adjust for Volume and Price Spike Factors
+    volume_spike_factor = df['volume'] / df['volume'].shift(1)
+    price_spike_factor = (df['close'] - df['close'].shift(1)).abs() / (df['close'].shift(1) - df['close'].shift(2)).abs()
+    spike_factor = volume_spike_factor.where(volume_spike_factor < price_spike_factor, price_spike_factor)
+    adjusted_momentum = intraday_momentum * spike_factor
+    
+    # Scale Recent Volatility by Combined Spike Factor
+    scaled_volatility = avg_abs_price_change * spike_factor
+    capped_volatility = scaled_volatility.where(scaled_volatility < threshold, threshold)
+    
+    # Volume Weight
+    avg_volume = df['volume'].rolling(window=n).mean()
+    volume_weight = df['volume'] / avg_volume
+    adjusted_recent_volatility = capped_volatility * volume_weight
+    
+    # Final Factor
+    final_factor = enhanced_intraday_factor * adjusted_recent_volatility * volume_weight
+    
+    return final_factor
+```

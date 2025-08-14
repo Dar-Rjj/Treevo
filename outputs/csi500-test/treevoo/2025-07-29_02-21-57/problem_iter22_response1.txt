@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range and Daily Range
+    df['Previous Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['Previous Close'])
+    df['TR3'] = abs(df['low'] - df['Previous Close'])
+    df['True Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['Daily Range'] = df['high'] - df['low']
+
+    # Calculate 14-Period Average True Range (ATR) and 20-Day Moving Average of Daily Range
+    df['14-Period ATR'] = df['True Range'].rolling(window=14).mean()
+    df['20-Day Avg Daily Range'] = df['Daily Range'].rolling(window=20).mean()
+
+    # Identify Breakouts
+    df['Upward Breakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['Downward Breakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+
+    # Calculate Breakout Strength
+    df['Breakout Strength'] = np.where(
+        df['Upward Breakout'] == 1,
+        (df['close'] - df['high'].shift(1)) / df['20-Day Avg Daily Range'],
+        np.where(
+            df['Downward Breakout'] == 1,
+            (df['low'].shift(1) - df['close']) / df['20-Day Avg Daily Range'],
+            0
+        )
+    )
+
+    # Cumulate Breakout Strength
+    df['Cumulated Breakout Strength'] = df['Breakout Strength'].rolling(window=10).sum()
+
+    # Calculate Price Momentum
+    df['Price Momentum'] = df['close'] - df['close'].shift(14)
+
+    # Adjust Momentum by ATR
+    df['Adjusted Momentum'] = df['Price Momentum'] / df['14-Period ATR']
+
+    # Generate Alpha Factor
+    df['Alpha Factor'] = df['Adjusted Momentum'] + df['Cumulated Breakout Strength']
+
+    return df['Alpha Factor']
+```

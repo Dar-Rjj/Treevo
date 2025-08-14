@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Previous Day's Close-to-Open Return
+    df['prev_close_to_open_return'] = (df['open'].shift(1) - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Volume Surge Indicator
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_surge'] = df['volume'] > df['5_day_avg_volume']
+    
+    # Adjust by Volume Surge
+    def adjust_by_volume_surge(x):
+        if x:
+            return 1.5
+        else:
+            return 0.5
+    
+    df['volume_adjustment'] = df['volume_surge'].apply(adjust_by_volume_surge)
+    
+    # Integrate Factors
+    df['integrated_factor'] = (df['intraday_return'] * df['prev_close_to_open_return']) * df['volume_adjustment']
+    
+    # Intraday High-Low Range Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Open-to-Close Direction
+    df['open_to_close_direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Volume Weighted Smoothed Returns
+    n = 5  # Number of days for SMA
+    df['sma_volume'] = df['volume'].rolling(window=n).mean()
+    df['vol_weighted_returns'] = ((df['close'] - df['close'].shift(1)) * (df['volume'] / df['sma_volume']))
+    
+    # Hybrid Momentum-Reversal Indicator
+    df['hybrid_indicator'] = df['intraday_return'] + df['vol_weighted_returns']
+    df['momentum_reversal_sign'] = df['hybrid_indicator'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['integrated_factor'] * df['high_low_ratio'] * df['open_to_close_direction'] * df['momentum_reversal_sign']
+    
+    return df['final_alpha_factor']
+```

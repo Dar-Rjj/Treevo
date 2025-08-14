@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 10-Day Price Momentum
+    price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Adjust for Volume Trend
+    volume_ma_10 = df['volume'].rolling(window=10).mean()
+    volume_adjustment = df['volume'] - volume_ma_10
+    
+    # Combine Price Momentum and Volume Adjustment
+    combined_factor = price_momentum * volume_adjustment
+    combined_factor = np.maximum(combined_factor, 0)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Positive and Negative Returns
+    positive_returns = (daily_log_return > 0)
+    negative_returns = (daily_log_return <= 0)
+    
+    # Calculate Sum of Upward Volume
+    upward_volume = df.loc[positive_returns, 'volume']
+    sum_upward_volume = upward_volume.sum()
+    
+    # Calculate Sum of Downward Volume
+    downward_volume = df.loc[negative_returns, 'volume']
+    sum_downward_volume = downward_volume.sum()
+    
+    # Compute Trend Reversal Signal
+    total_volume = sum_upward_volume + sum_downward_volume
+    if total_volume == 0:
+        trend_reversal_signal = 0
+    else:
+        upward_volume_ratio = sum_upward_volume / total_volume
+        downward_volume_ratio = sum_downward_volume / total_volume
+        trend_reversal_signal = (upward_volume_ratio > downward_volume_ratio) * daily_log_return
+    
+    # Calculate Daily Return
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate Price Gap
+    price_gap = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    adjusted_daily_return = daily_return.copy()
+    adjusted_daily_return += np.where(price_gap > 0, -price_gap, price_gap)
+    adjusted_daily_return *= np.exp(-1 / 1)  # Exponential decay with half-life = 1 day
+    
+    # Final Volume Weighted Momentum
+    final_volume_weighted_momentum = df['volume'] * combined_factor * adjusted_daily_return
+    
+    # Combine All Signals
+    final_factor = combined_factor + trend_reversal_signal + final_volume_weighted_momentum
+    final_factor = np.maximum(final_factor, 0)
+    
+    return final_factor
+```

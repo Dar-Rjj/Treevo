@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Adaptive Volatility Calculation
+    df['Volatility'] = df[['high', 'low', 'close']].std(axis=1, ddof=0).rolling(window=20).mean()
+    df['Volatility_Ratio'] = df['Volatility'] / df['Volatility'].mean()
+    
+    # Adjust Volatility Threshold
+    def adjust_volatility_threshold(vol_ratio):
+        if vol_ratio > 1.5:
+            return 0.8
+        elif vol_ratio < 0.5:
+            return 1.2
+        else:
+            return 1.0
+    
+    df['Volatility_Threshold_Adjustment'] = df['Volatility_Ratio'].apply(adjust_volatility_threshold)
+    
+    # Adaptive Window Calculation
+    def adjust_window_size(vol_ratio):
+        if vol_ratio > 1.5:
+            return 10
+        elif vol_ratio < 0.5:
+            return 30
+        else:
+            return 20
+    
+    df['Adaptive_Window_Size'] = df['Volatility_Ratio'].apply(adjust_window_size)
+    
+    # Rolling Mean of Volume-Weighted Close-to-Open Return
+    df['Rolling_Mean'] = df.groupby('date')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=int(df.loc[x.index[-1], 'Adaptive_Window_Size'])).mean())
+    
+    # Rolling Standard Deviation of Volume-Weighted Close-to-Open Return
+    df['Rolling_Std'] = df.groupby('date')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=int(df.loc[x.index[-1], 'Adaptive_Window_Size'])).std())
+    
+    # Heuristic Factor
+    df['Heuristic_Factor'] = (df['Volume_Weighted_Return'] - df['Rolling_Mean']) / df['Rolling_Std']
+    
+    # Drop NaN values resulting from rolling calculations
+    df.dropna(inplace=True)
+    
+    return df['Heuristic_Factor']

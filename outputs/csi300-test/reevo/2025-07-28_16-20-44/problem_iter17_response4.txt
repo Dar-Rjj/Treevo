@@ -1,0 +1,34 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using a dynamic lookback period (10-30 days)
+    momentum = np.log(df['close']).diff(periods=20)
+
+    # Calculate the liquidity factor using a dynamic lookback period (10-40 days)
+    liquidity = df['volume'].rolling(window=30).mean()
+
+    # Calculate the market sentiment using the money flow ratio over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=10).mean()
+
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility = np.log(df['close']).diff().rolling(window=40).std()
+
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5 days
+    intraday_dynamics = (df['high'] / df['low']).rolling(window=5).mean()
+
+    # Adaptive weights for each factor based on their recent performance
+    momentum_weight = 1 if momentum.mean() > 0 else 0.5
+    liquidity_weight = 1 if liquidity.mean() > df['volume'].mean() else 0.5
+    sentiment_weight = 1 if market_sentiment.mean() > money_flow_ratio.mean() else 0.5
+    volatility_weight = 1 if volatility.mean() < np.log(df['close']).diff().std() else 0.5
+    intraday_weight = 1 if intraday_dynamics.mean() > (df['high'] / df['low']).mean() else 0.5
+
+    # Create a combined factor by multiplying the factors with adaptive weights
+    factor = (momentum * momentum_weight + 
+              liquidity * liquidity_weight + 
+              market_sentiment * sentiment_weight + 
+              1 / (volatility + 1e-6) * volatility_weight + 
+              intraday_dynamics * intraday_weight)
+
+    return factor
+```

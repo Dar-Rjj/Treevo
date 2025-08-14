@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_difference = short_term_ema - long_term_ema
+
+    # Assess Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    average_range_volatility = daily_range.rolling(window=30).mean()
+
+    # Incorporate Volume Influence
+    positive_volume_days = (df['volume'] > df['volume'].shift(1)).rolling(window=20).sum()
+    negative_volume_days = (df['volume'] < df['volume'].shift(1)).rolling(window=20).sum()
+    avg_30_day_volume = df['volume'].rolling(window=30).mean()
+    current_volume = df['volume']
+    volume_deviation_score = current_volume - avg_30_day_volume
+    volume_acceleration = (current_volume - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    # Combine Momentum and Volume Indicators
+    adjusted_short_term_momentum = short_term_ema * positive_volume_days
+    adjusted_long_term_momentum = long_term_ema * negative_volume_days
+    volatility_adjusted_momentum = momentum_difference * (1 / average_range_volatility)
+    combined_momentum = volatility_adjusted_momentum * volume_acceleration
+
+    # Calculate Volume Adjusted Range
+    volume_adjusted_range = (df['high'] - df['low']) / ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+
+    # Calculate Short-Term and Long-Term Rolling Average of Volume Adjusted Range
+    short_term_var_avg = volume_adjusted_range.rolling(window=10).mean()
+    long_term_var_avg = volume_adjusted_range.rolling(window=20).mean()
+
+    # Integrate Volume and Volatility Adjusted Momentum
+    integrated_momentum = (combined_momentum 
+                           + short_term_var_avg 
+                           - long_term_var_avg 
+                           + volume_deviation_score)
+
+    # Include Intraday Price Changes
+    open_close_change = (df['close'] - df['open']) / df['open']
+    high_low_change = (df['high'] - df['low']) / df['open']
+    avg_intraday_change = (open_close_change + high_low_change) / 2
+
+    # Simple Moving Average Crossover
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    sma_crossover = sma_50 - sma_200
+
+    # Rate of Change (ROC)
+    roc = df['close'].pct_change(periods=12)
+
+    # On-Balance Volume (OBV)
+    df['obv'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = df['obv']
+
+    # Final Alpha Factor
+    alpha_factor = (integrated_momentum 
+                    + sma_crossover 
+                    + roc 
+                    + avg_intraday_change 
+                    + obv)
+
+    return alpha_factor
+```

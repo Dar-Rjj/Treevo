@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day cumulative return (short-term momentum)
+    short_term_momentum = (df['close'] / df['close'].shift(10)) - 1
+    
+    # Calculate the 60-day cumulative return (medium-term trend)
+    medium_term_trend = (df['close'] / df['close'].shift(60)) - 1
+    
+    # Calculate the 180-day cumulative return (long-term trend)
+    long_term_trend = (df['close'] / df['close'].shift(180)) - 1
+    
+    # Calculate the 10-day standard deviation of daily returns (volatility)
+    volatility = df['close'].pct_change().rolling(window=10).std()
+    
+    # Normalize the volatility by its mean to get a risk adjustment factor
+    normalized_volatility = volatility / volatility.mean()
+    
+    # Calculate the percentage change in volume, indicating changes in liquidity or interest
+    vol_change = df['volume'].pct_change().fillna(0)
+    
+    # Calculate a weighted difference of high and low prices, giving more importance to the high price,
+    # this could indicate the strength of positive price movement
+    weighted_price_diff = (1.5 * df['high'] - 0.5 * df['low']) / (df['close'] + 1e-7)
+    
+    # Calculate the 5-day exponential moving average of the close price for smoothing
+    ema_close = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the 5-day exponential moving average of the volume for smoothing
+    ema_volume = df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Combine the short-term momentum, medium-term trend, long-term trend, and normalized volatility
+    # Higher volatility reduces the score, indicating higher risk
+    factor = (short_term_momentum + 0.5 * medium_term_trend + 0.3 * long_term_trend - normalized_volatility) * (1 + 0.5 * vol_change * weighted_price_diff)
+    
+    # Apply the 5-day exponential moving average to smooth the factor and reduce noise
+    smoothed_factor = factor.ewm(span=5, adjust=False).mean()
+    
+    # Incorporate the smoothed close price and volume into the final factor
+    final_factor = smoothed_factor * (ema_close / df['close']) * (ema_volume / df['volume'])
+    
+    return final_factor
+```

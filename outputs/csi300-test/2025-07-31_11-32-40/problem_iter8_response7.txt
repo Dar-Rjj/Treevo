@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Intraday Close-Open Return
+    close_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Volume Influence Ratio
+    upward_volume = df.loc[df['close'] > df['open'], 'volume'].rolling(window=5, min_periods=1).sum()
+    downward_volume = df.loc[df['close'] < df['open'], 'volume'].rolling(window=5, min_periods=1).sum()
+    volume_influence_ratio = upward_volume / downward_volume
+    
+    # Combine High-Low Spread and Close-Open Return
+    intraday_momentum = high_low_diff * close_open_return
+    
+    # Calculate Intraday Reversal
+    intraday_reversal = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    
+    # Adjust for Open Interest
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_intraday_reversal = intraday_reversal * (1 + volume_change)
+    
+    # Calculate Volume Weighted Close-to-Open Change
+    close_open_change = df['close'] - df['open']
+    volume_weighted_close_open_change = close_open_change * df['volume']
+    
+    # Consider Day-to-Day Open Price Change
+    day_to_day_open_change = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Final Alpha Factor Components
+    alpha_factor = (
+        intraday_momentum * volume_influence_ratio +
+        volume_weighted_close_open_change +
+        adjusted_intraday_reversal +
+        day_to_day_open_change
+    )
+    
+    # Calculate Moving Average
+    moving_average = alpha_factor.rolling(window=5, min_periods=1).mean()
+    
+    # Compare with Current Day Factor
+    score = (alpha_factor > moving_average).astype(int) - (alpha_factor < moving_average).astype(int)
+    
+    return score
+```

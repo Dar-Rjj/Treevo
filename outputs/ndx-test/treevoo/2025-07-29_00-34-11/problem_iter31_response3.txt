@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Volume-Weighted Ratios
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    avg_ratios = (high_low_ratio + open_close_ratio) / 2
+    volume_weighted_ratios = avg_ratios * df['volume']
+
+    # Measure Price-Volatility Alignment
+    intraday_volatility = df['high'] - df['low']
+    sentiment = (avg_ratios > intraday_volatility).astype(int)
+    sentiment[sentiment == 0] = -1  # Assign negative sentiment if the condition is not met
+
+    # Incorporate Improved VW-ARSI
+    price_diff = df['high'] - df['low']
+    gain = (df['close'].diff() > 0) * df['close'].diff()
+    loss = (df['close'].diff() < 0) * df['close'].diff().abs()
+    
+    sum_gains = gain.rolling(window=14).sum()
+    sum_losses = loss.rolling(window=14).sum()
+    relative_strength = sum_gains / sum_losses
+    arsi = 100 - (100 / (1 + relative_strength))
+    arsi_volume_adjusted = arsi * df['volume'].rolling(window=14).mean()
+
+    # Calculate Intraday Price Movement Ratio
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    avg_price_movement_ratio = (high_low_ratio + open_close_ratio) / 2
+
+    # Calculate Short-Term and Long-Term Returns
+    short_term_return = df['close'] / df['close'].shift(5) - 1
+    long_term_return = df['close'] / df['close'].shift(20) - 1
+
+    # Calculate Volume-Weighted Returns
+    volume_weighted_short_term_return = df['volume'] * short_term_return
+    volume_weighted_long_term_return = df['volume'] * long_term_return
+
+    # Adjust for Volatility and Sentiment
+    adjusted_short_term = volume_weighted_short_term_return / intraday_volatility
+    adjusted_long_term = volume_weighted_long_term_return - intraday_volatility
+    final_adjustment = adjusted_short_term * sentiment + adjusted_long_term * sentiment
+
+    # Incorporate Momentum
+    close_to_close_return = df['close'] - df['close'].shift(1)
+    momentum_adjusted_ratios = final_adjustment * close_to_close_return
+    final_factor = momentum_adjusted_ratios / df['volume']
+
+    return final_factor
+```

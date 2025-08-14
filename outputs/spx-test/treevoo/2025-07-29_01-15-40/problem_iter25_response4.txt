@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=5, k=5):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Compute Average Intraday High-Low Spread over past N days
+    df['Avg_Intraday_High_Low_Spread'] = df['Intraday_High_Low_Spread'].rolling(window=n).mean()
+    
+    # Compute High-Low Momentum Score and Adjust by Volume
+    df['High_Low_Momentum_Score'] = (df['Intraday_High_Low_Spread'] - df['Avg_Intraday_High_Low_Spread']).apply(lambda x: 1 if x > 0 else -1)
+    df['High_Low_Momentum_Score_Adjusted'] = df['High_Low_Momentum_Score'] * df['volume']
+    
+    # Calculate Price Momentum
+    df['Price_Change'] = df['close'].diff(periods=n)
+    df['Price_Momentum'] = df['Price_Change'].rolling(window=n).sum()
+    
+    # Calculate Volume Trend
+    df['Volume_Change'] = df['volume'].diff(periods=n)
+    df['Volume_Trend'] = df['Volume_Change'].rolling(window=n).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Avg_Daily_Range'] = df['Daily_Range'].rolling(window=m).mean()
+    df['Range_Momentum'] = (df['Daily_Range'] - df['Avg_Daily_Range']).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Integrate Open-Price and Close-Price Movement
+    df['Open_Close_Price_Diff'] = df['close'] - df['open']
+    df['Open_Price_Movement'] = df['Open_Close_Price_Diff'].rolling(window=n).sum()
+    
+    # Incorporate Intraday Volatility
+    df['Intraday_Volatility'] = 0.5 * (df['high'] - df['low'])**2 - (2 * math.log(2) - 1) * (df['close'] - df['open'])**2
+    df['Avg_Intraday_Volatility'] = df['Intraday_Volatility'].rolling(window=k).mean()
+    df['Intraday_Volatility_Score'] = (df['Intraday_Volatility'] - df['Avg_Intraday_Volatility']).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Combine Factors
+    factor = (
+        0.3 * df['High_Low_Momentum_Score_Adjusted'] +
+        0.2 * df['Price_Momentum'] +
+        0.1 * df['Volume_Trend'] +
+        0.2 * df['Range_Momentum'] +
+        0.1 * df['Open_Price_Movement'] +
+        0.1 * df['Intraday_Volatility_Score']
+    )
+    
+    return factor
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

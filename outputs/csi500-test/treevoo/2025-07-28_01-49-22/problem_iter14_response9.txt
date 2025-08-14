@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    df['hl_ratio'] = df['high_low_range'] / df['high_low_range'].shift(1)
+    
+    # Smooth High-Low Range Ratio with EMA
+    ema_window = 10
+    df['smoothed_hl_ratio'] = df['hl_ratio'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Generate Alpha Factor with Dynamic Threshold
+    dynamic_threshold = df['smoothed_hl_ratio'].median()
+    df['alpha_signal'] = np.where(df['smoothed_hl_ratio'] > dynamic_threshold, 1, -1)
+    
+    # Multiply by Logarithm of Volume
+    df['log_volume'] = np.log(df['volume'])
+    df['alpha_factor'] = df['alpha_signal'] * df['log_volume']
+    
+    # Calculate Daily Close-Price Change
+    df['close_change'] = df['close'] - df['close'].shift(1)
+    
+    # Adjust Alpha Factor by Close-Price Change
+    df['adjusted_alpha_factor'] = df['alpha_factor'] * df['close_change']
+    
+    # Calculate Daily High-Low Range Volatility
+    n_period = 5
+    df['hl_volatility'] = df['high_low_range'].rolling(window=n_period).sum() / n_period
+    
+    # Adjust Volatility by Volume
+    df['vol_ema'] = df['volume'].ewm(span=n_period, adjust=False).mean()
+    df['adjusted_volatility'] = df['hl_volatility'] * df['vol_ema']
+    
+    # Incorporate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    close_open_weight = 0.5  # Fixed weight for the close-open difference
+    df['final_alpha_factor'] = df['adjusted_alpha_factor'] + close_open_weight * df['close_open_diff']
+    
+    return df['final_alpha_factor']
+```

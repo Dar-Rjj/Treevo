@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate 20-day Moving Average of Volume
+    volume_20ma = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Volume Trend
+    volume_trend = df['volume'] - volume_20ma
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_return = close_to_open_return * intraday_range
+    
+    # Calculate Volume-Weighted Volatility
+    avg_intraday_range = intraday_range.rolling(window=20).mean()
+    avg_daily_amount = df['amount'].rolling(window=20).mean()
+    volume_weighted_volatility = (avg_intraday_range / df['volume']) * avg_daily_amount
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    combined_factor_1 = adjusted_return * volume_weighted_volatility * volume_change
+    
+    # Incorporate Volume Trend
+    combined_factor_2 = combined_factor_1 * volume_trend
+    
+    # Calculate Daily Price Return
+    N = 5  # Example: 5-day return
+    daily_price_return = df['close'] / df['close'].shift(N) - 1
+    
+    # Identify Volume Spike
+    volume_moving_avg = df['volume'].rolling(window=20).mean()
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_spike = (df['volume'] > (volume_moving_avg + 3 * volume_std)).astype(int)
+    
+    # Adjust Daily Price Return for Volume Spike
+    K = 2  # Example constant
+    adjusted_daily_price_return = daily_price_return * (1 + (K - 1) * volume_spike)
+    
+    # Compute Cumulative Sum of Adjusted Price Return
+    cumulative_adjusted_return = adjusted_daily_price_return.cumsum()
+    
+    # Compute Cumulative Sum of Volume Change
+    cumulative_volume_change = volume_change.cumsum()
+    
+    # Introduce Enhanced Momentum Factor
+    close_50ma = df['close'].rolling(window=50).mean()
+    close_200ma = df['close'].rolling(window=200).mean()
+    enhanced_momentum = df['close'] - close_50ma - close_200ma
+    
+    # Incorporate Enhanced Momentum Factor
+    final_momentum_factor = enhanced_momentum * adjusted_daily_price_return
+    
+    # Final Alpha Factor
+    alpha_factor = (final_momentum_factor 
+                    + cumulative_adjusted_return 
+                    + cumulative_volume_change 
+                    + combined_factor_2)
+    
+    return alpha_factor
+```

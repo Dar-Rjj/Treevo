@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term VWMA
+    short_term = 10
+    long_term = 30
+    
+    df['VWAP_short'] = (df['close'] * df['volume']).rolling(window=short_term).sum() / df['volume'].rolling(window=short_term).sum()
+    df['VWAP_long'] = (df['close'] * df['volume']).rolling(window=long_term).sum() / df['volume'].rolling(window=long_term).sum()
+
+    # Generate Crossover Signal
+    df['crossover_signal'] = 0
+    df.loc[df['VWAP_short'] > df['VWAP_long'], 'crossover_signal'] = 1
+    df.loc[df['VWAP_short'] < df['VWAP_long'], 'crossover_signal'] = -1
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    momentum_days = 5
+    df['momentum_5d'] = df['close'].pct_change(momentum_days)
+    df['volume_sum_5d'] = df['volume'].rolling(window=momentum_days).sum()
+    df['volume_adjusted_momentum'] = df['momentum_5d'] * df['volume_sum_5d']
+
+    # Evaluate Volume Adjusted Momentum
+    df['momentum_signal'] = 0
+    df.loc[df['volume_adjusted_momentum'] > 0, 'momentum_signal'] = 1
+    df.loc[df['volume_adjusted_momentum'] < 0, 'momentum_signal'] = -1
+
+    # Combine Crossover and Momentum Signals
+    df['combined_signal'] = 0
+    df.loc[(df['crossover_signal'] == 1) & (df['momentum_signal'] == 1), 'combined_signal'] = 2
+    df.loc[(df['crossover_signal'] == -1) & (df['momentum_signal'] == -1), 'combined_signal'] = -2
+    df.loc[(df['crossover_signal'] == 1) & (df['momentum_signal'] != 1), 'combined_signal'] = 1
+    df.loc[(df['crossover_signal'] == -1) & (df['momentum_signal'] != -1), 'combined_signal'] = -1
+
+    # Calculate True Range and ATR
+    df['tr'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    atr_period = 14
+    df['atr_14'] = df['tr'].rolling(window=atr_period).mean()
+
+    # Calculate Price Momentum and Adjust by ATR
+    df['price_momentum_14d'] = df['close'] - df['close'].shift(atr_period)
+    df['atr_adjusted_momentum'] = df['price_momentum_14d'] / df['atr_14']
+
+    # Generate Alpha Factor
+    df['alpha_factor'] = df['close'].pct_change(1) + df['atr_adjusted_momentum']
+    
+    # Final Signal based on Alpha Factor and Combined Signal
+    df['final_signal'] = 0
+    df.loc[(df['alpha_factor'] > 0) & (df['combined_signal'] >= 1), 'final_signal'] = 2
+    df.loc[(df['alpha_factor'] < 0) & (df['combined_signal'] <= -1), 'final_signal'] = -2
+    df.loc[(df['alpha_factor'] > 0) & (df['combined_signal'] == 0), 'final_signal'] = 1
+    df.loc[(df['alpha_factor'] < 0) & (df['combined_signal'] == 0), 'final_signal'] = -1
+
+    return df['final_signal']
+```

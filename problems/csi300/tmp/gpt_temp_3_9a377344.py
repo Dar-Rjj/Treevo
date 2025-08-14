@@ -1,0 +1,43 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+
+    # Compute Previous Day's Close-to-Open Return
+    df['Prev_Close_to_Open_Return'] = df['open'] - df['close'].shift(1)
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Price_Volume_High'] = df['high'] * df['volume']
+    df['Price_Volume_Low'] = df['low'] * df['volume']
+    df['Price_Volume_Close'] = df['close'] * df['volume']
+    df['Total_Price_Volume'] = df[['Price_Volume_High', 'Price_Volume_Low', 'Price_Volume_Close']].sum(axis=1)
+    df['Total_Volume'] = 3 * df['volume']
+    df['VWAP'] = df['Total_Price_Volume'] / df['Total_Volume']
+
+    # Combine Intraday Momentum and VWAP
+    df['Combined_Value'] = df['VWAP'] - df['Intraday_High_Low_Spread']
+    df['Volume_Weighted_Combined_Value'] = df['Combined_Value'] * df['volume']
+
+    # Integrate Volatility
+    # Calculate 30-Day Historical Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volatility'] = df['Daily_Return'].rolling(window=30).std() * np.sqrt(252)
+    
+    # Incorporate Market Cap
+    # Assume market cap is available in the DataFrame
+    df['Market_Cap_Norm_Factor'] = df['Volume_Weighted_Combined_Value'] / df['market_cap']
+
+    # Smooth the Factor using Exponential Moving Average (EMA) over the last 20 days
+    df['Alpha_Factor'] = df['Market_Cap_Norm_Factor'].ewm(span=20, adjust=False).mean()
+
+    # Return the alpha factor
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

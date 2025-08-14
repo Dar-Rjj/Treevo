@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Reversal
+    df['Intraday_Reversal'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Integrated Momentum
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Integrated_Momentum'] = (df['Daily_Log_Return'] * df['Volume_Change']).rolling(window=15).sum()
+    
+    # Exponential Moving Averages
+    df['7_EMA'] = df['close'].ewm(span=7, adjust=False).mean()
+    df['21_EMA'] = df['close'].ewm(span=21, adjust=False).mean()
+    df['Crossover_Signal'] = np.where(df['7_EMA'] > df['21_EMA'], 1, -1)
+    df['Integrated_Momentum_Adjusted'] = df['Integrated_Momentum'] + df['Crossover_Signal']
+    
+    # Enhanced Volume Thrust
+    df['Upward_Thrust'] = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    df['Downward_Thrust'] = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    df['Price_Range_Factor'] = (df['high'] - df['low']) / df['low']
+    df['Enhanced_Volume_Thrust'] = df['Upward_Thrust'] - df['Downward_Thrust'] + df['Price_Range_Factor']
+    
+    # Adjusted Price Momentum
+    df['Median_Close_20'] = df['close'].rolling(window=20).median()
+    df['Average_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Adjusted_Price_Momentum'] = (df['close'] - df['Median_Close_20']) * df['Average_Volume_20']
+    
+    # Enhanced Momentum Factor
+    weights = np.arange(1, 6)  # Linearly increasing weights
+    df['Volume_Adjusted_High_Low_Range'] = (df['high'] - df['low']) * df['volume']
+    df['Enhanced_Momentum_Factor'] = df['Volume_Adjusted_High_Low_Range'].rolling(window=5).apply(lambda x: np.sum(x * weights), raw=True)
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Integrated_Momentum_Adjusted'] +
+        df['Enhanced_Volume_Thrust'] +
+        df['Adjusted_Price_Momentum'] +
+        df['Enhanced_Momentum_Factor']
+    )
+    
+    return df['Final_Alpha_Factor']
+```

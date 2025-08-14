@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted High-to-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['Adjusted_High_Low_Range'] = df['High_Low_Range'] * np.sqrt(df['volume'])
+    
+    # Calculate 30-day Price Momentum
+    df['30Day_Price_Momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Enhance Price Momentum with High-Low Range
+    highest_high_30 = df['high'].rolling(window=30).max()
+    lowest_low_30 = df['low'].rolling(window=30).min()
+    high_low_range_30 = highest_high_30 - lowest_low_30
+    df['Enhanced_Price_Momentum'] = df['30Day_Price_Momentum'] / high_low_range_30
+    
+    # Identify Volume Shock
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    df['Volume_Shock'] = (df['volume'] > 2 * avg_volume_30).astype(int)
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) + (df['close'] - df['open'])
+    df['Intraday_Volatility'] = intraday_volatility.rolling(window=30).std()
+    
+    # Adjust Intraday Return by Intraday Volatility
+    df['Intraday_Volatility_Adjusted'] = df['Intraday_Return'] / df['Intraday_Volatility']
+    
+    # Combine Adjusted Range, 30-day Momentum, Volume Shock, and Intraday Adjusted
+    df['Combined_Factor'] = (df['Adjusted_High_Low_Range'] + df['30Day_Price_Momentum']) * df['Volume_Shock'] * df['Intraday_Volatility_Adjusted']
+    
+    # Calculate Cumulative High-Low Range
+    df['Cumulative_High_Low_Range'] = df['High_Low_Range'].rolling(window=30).sum()
+    
+    # Calculate Cumulative Open-to-Close Price Change
+    df['Open_Close_Price_Change'] = df['close'] - df['open']
+    df['Cumulative_Open_Close_Price_Change'] = df['Open_Close_Price_Change'].rolling(window=30).sum()
+    
+    # Final Combined Alpha Factor
+    df['High_Low_Range_Momentum'] = df['Cumulative_High_Low_Range'] / df['Cumulative_Open_Close_Price_Change']
+    df['Final_Combined_Alpha_Factor'] = df['Combined_Factor'] * df['High_Low_Range_Momentum'] * (df['High_Low_Range'] - df['High_Low_Range'].shift(30))
+    
+    # Incorporate Volume Trend
+    df['30Day_Volume_Momentum'] = (df['volume'] - df['volume'].shift(30)) / df['volume'].shift(30)
+    df['Final_Combined_Alpha_Factor'] *= df['30Day_Volume_Momentum']
+    
+    return df['Final_Combined_Alpha_Factor']
+```

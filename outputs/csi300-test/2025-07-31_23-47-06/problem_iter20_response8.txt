@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum'] = (df['High_Low_Range'] + df['Close_Open_Diff']) * df['volume']
+    
+    # Adaptive Smoothing via Moving Average
+    df['EMA_10_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Dynamic Market Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Absolute_Daily_Return'] = df['Daily_Return'].abs()
+    df['Dynamic_Market_Volatility'] = df['Daily_Return'].rolling(window=10).std()
+    df['Modified_Volume_Adjusted_Momentum'] = df['EMA_10_Volume_Adjusted_Momentum'] / df['Dynamic_Market_Volatility']
+    
+    # Integrate Non-Linear Transformation
+    df['Sqrt_Transformed_Momentum'] = np.sqrt(df['Modified_Volume_Adjusted_Momentum'])
+    df['Log_Transformed_Momentum'] = np.log(df['Modified_Volume_Adjusted_Momentum'])
+    
+    # Incorporate Trend Reversal Signal
+    df['Short_Term_Momentum'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_Momentum'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    df['Reversal_Signal'] = np.where(df['Momentum_Reversal'] > 0, 1, -1)
+    
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    df['EMA_5_Reversal'] = df['Reversal_Signal'].ewm(span=5, adjust=False).mean()
+    df['EMA_10_Reversal'] = df['Reversal_Signal'].ewm(span=10, adjust=False).mean()
+    df['Smoothed_Reversal_Signal'] = (df['EMA_5_Reversal'] + df['EMA_10_Reversal']) / 2
+    
+    # Combine Smoothed Reversal Signal with Non-Linearly Transformed Momentum
+    df['Interim_Alpha_Factor'] = df['Sqrt_Transformed_Momentum'] + df['Log_Transformed_Momentum'] + df['Smoothed_Reversal_Signal']
+    
+    # Final Advanced Adaptive Smoothing
+    df['EMA_5_Interim_Alpha'] = df['Interim_Alpha_Factor'].ewm(span=5, adjust=False).mean()
+    df['EMA_10_Interim_Alpha'] = df['Interim_Alpha_Factor'].ewm(span=10, adjust=False).mean()
+    df['Final_Alpha_Factor'] = (df['EMA_5_Interim_Alpha'] + df['EMA_10_Interim_Alpha']) / 2
+    
+    return df['Final_Alpha_Factor']
+```

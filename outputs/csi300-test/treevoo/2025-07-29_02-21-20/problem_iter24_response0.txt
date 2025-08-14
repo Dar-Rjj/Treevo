@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    adjusted_close = df['close'] - df['open']
+
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    weighted_avg_momentum = (0.6 * high_indicator + 0.4 * low_indicator)
+
+    # Volume-Impacted Intraday Momentum
+    ema_volume_10 = df['volume'].ewm(span=10).mean()
+    normalized_volume = df['volume'] / ema_volume_10
+    volume_impacted_momentum = weighted_avg_momentum * normalized_volume
+
+    # Weighted Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    ema_intraday_return_vol_12 = (intraday_return * df['volume']).ewm(span=12).mean()
+    recent_volume_7 = df['volume'].rolling(window=7).mean()
+    weighted_intraday_momentum = ema_intraday_return_vol_12 * recent_volume_7
+
+    # Adjusted High-Low Breakout Potential
+    high_low_range = df['high'] - df['low']
+    ema_high_low_range_vol_25 = (high_low_range * df['volume']).ewm(span=25).mean()
+    recent_volume_15 = df['volume'].rolling(window=15).mean()
+    adjusted_high_low_breakout_potential = ema_high_low_range_vol_25 * recent_volume_15
+
+    # Momentum Reversal Indicator
+    momentum_reversal = (intraday_return - weighted_intraday_momentum) / adjusted_high_low_breakout_potential
+
+    # Long-Term Momentum Adjusted for Volume
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    volume_ratio = df['volume'] / df['volume'].shift(20)
+    long_term_momentum_adjusted = long_term_momentum * volume_ratio
+
+    # Price-Volume Synchronization
+    price_change = df['close'] - df['close'].shift(1)
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_volume_corr = price_change.rolling(window=20).corr(volume_change)
+
+    # Final Alpha Factor Synthesis
+    total_factor = (
+        adjusted_close + 
+        volume_impacted_momentum + 
+        weighted_intraday_momentum + 
+        adjusted_high_low_breakout_potential + 
+        long_term_momentum_adjusted + 
+        price_volume_corr
+    )
+    final_alpha_factor = total_factor / df['open']
+
+    return final_alpha_factor
+```

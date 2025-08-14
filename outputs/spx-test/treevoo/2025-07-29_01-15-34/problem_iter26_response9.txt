@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum Score
+    df['daily_return'] = df['close'].pct_change()
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum().rank(pct=True) * 100
+    df['monthly_return'] = df['close'].pct_change(20)
+    df['long_term_momentum'] = df['monthly_return'].rank(pct=True) * 100
+    df['price_momentum_score'] = 0.6 * df['short_term_momentum'] + 0.4 * df['long_term_momentum']
+    
+    # Calculate Volume Activity Score
+    df['daily_volume_change'] = df['volume'].pct_change()
+    df['avg_daily_volume_change'] = df['daily_volume_change'].rolling(window=5).mean().rank(pct=True) * 100
+    df['total_volume_20_days'] = df['volume'].rolling(window=20).sum().rank(pct=True) * 100
+    df['volume_activity_score'] = 0.6 * df['avg_daily_volume_change'] + 0.4 * df['total_volume_20_days']
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    df['closing_position'] = (df['close'] - df['open']) / df['intraday_range']
+    
+    # Calculate Intraday Volume Intensity
+    df['past_10_day_volume_sum'] = df['volume'].rolling(window=10).sum()
+    df['volume_intensity'] = df['volume'] / df['past_10_day_volume_sum']
+    
+    # Adjust for Recent Price Trend
+    df['ema_20'] = df['close'].ewm(span=20).mean()
+    df['recent_price_trend'] = df['close'] - df['ema_20']
+    
+    # Combine Factors
+    df['combined_factors'] = df['volume_intensity'] * df['closing_position'] + df['recent_price_trend']
+    
+    # Weighted Sum of Scores
+    df['weighted_scores'] = 0.6 * df['price_momentum_score'] + 0.3 * df['volume_activity_score'] + 0.1 * df['intraday_range']
+    
+    # Final Alpha Factor Combination
+    df['alpha_factor'] = df['combined_factors'] * df['weighted_scores']
+    
+    # Add a Sentiment Score (Assuming `sentiment` is a column in the DataFrame)
+    df['sentiment_rank'] = df['sentiment'].rank(pct=True) * 100
+    df['alpha_factor'] += 0.2 * df['sentiment_rank']
+    
+    return df['alpha_factor']
+```

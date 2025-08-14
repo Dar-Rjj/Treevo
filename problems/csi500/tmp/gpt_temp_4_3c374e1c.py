@@ -1,0 +1,59 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_mom = df['close'] - df['close'].rolling(window=10).mean()
+    
+    # Calculate Medium-Term Price Momentum
+    medium_term_mom = df['close'] - df['close'].rolling(window=30).mean()
+    
+    # Calculate Long-Term Price Momentum
+    long_term_mom = df['close'] - df['close'].rolling(window=50).mean()
+    
+    # Combine Multi-Period Momenta
+    combined_momentum = short_term_mom + medium_term_mom + long_term_mom
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Combined Momentum by Volume-Weighted Average Return
+    adjusted_combined_momentum = combined_momentum * volume_weighted_returns
+    
+    # Assess Trend Following Potential
+    trend_following_component = 1 if df['close'].rolling(window=50).mean().iloc[-1] > df['close'].iloc[-1] else 0.5
+    
+    # Determine Final Factor Value
+    final_factor_value = adjusted_combined_momentum + trend_following_component
+    
+    # Additional Enhancements
+    # Calculate Short-Term Volatility
+    short_term_vol = (df['high'] - df['low']).rolling(window=10).mean()
+    
+    # Calculate Medium-Term Volatility
+    medium_term_vol = (df['high'] - df['low']).rolling(window=30).mean()
+    
+    # Calculate Long-Term Volatility
+    long_term_vol = (df['high'] - df['low']).rolling(window=50).mean()
+    
+    # Combine Multi-Period Volatilities
+    combined_volatility = short_term_vol + medium_term_vol + long_term_vol
+    
+    # Adjust Combined Momentum by Combined Volatility
+    adjusted_combined_momentum_vol = adjusted_combined_momentum / combined_volatility
+    
+    # Re-evaluate Final Factor Value
+    final_factor_value = adjusted_combined_momentum_vol + trend_following_component
+    
+    # Consider Market Microstructure and Sentiment
+    # Integrate Liquidity Measures
+    liquidity_measure = df['volume']
+    final_factor_value = final_factor_value * (liquidity_measure / liquidity_measure.mean())
+    
+    # Incorporate Sentiment Indicators
+    # Assuming `sentiment_score` is a column in the DataFrame
+    sentiment_score = df['sentiment_score']
+    final_factor_value = final_factor_value * sentiment_score
+    
+    return final_factor_value

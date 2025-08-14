@@ -1,0 +1,21 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price momentum using an adaptive window based on volatility
+    vol_window = 20
+    volatility = df['close'].rolling(window=vol_window).std()
+    momentum_window = (volatility / volatility.mean() * 10).astype(int)
+    price_momentum = df['close'].pct_change(periods=momentum_window)
+    
+    # Calculate the money flow ratio as the average of (high - low) * volume over the last 5 days
+    # This aims to capture the strength of money inflow or outflow over recent trading days
+    money_flow_ratio = ((df['high'] - df['low']) * df['volume']).rolling(window=5).mean()
+    
+    # Incorporate volume-weighted average price (VWAP) to capture market microstructure
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_slope = vwap.pct_change(periods=20)
+    
+    # Combine the three factors into a single alpha factor
+    # Weighted sum based on heuristic importance assigned to each component
+    factor_values = 0.4 * price_momentum + 0.3 * money_flow_ratio + 0.3 * vwap_slope
+
+    return factor_values

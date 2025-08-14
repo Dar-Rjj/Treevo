@@ -1,0 +1,41 @@
+def heuristics_v2(df, dynamic_window_optimizer=True, weight_optimizer=True):
+    # Define the lookback periods
+    sma_lookback = 20
+    vol_adj_lookback = 10
+    momentum_lookback = 5
+    price_change_lookback = 3
+    sentiment_lookback = 10
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High-Low'] = df['high'] - df['low']
+    df['Vol-Adj-High-Low'] = df['High-Low'] * df['volume']
+    df['Vol-Adj-Vol'] = df['Vol-Adj-High-Low'].rolling(window=vol_adj_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Price-Change'] = df['close'].pct_change(price_change_lookback)
+    df['High-Low-Range'] = df['high'] - df['low']
+    
+    # Integrate Market Sentiment
+    df['Net-Return'] = df['close'].pct_change(sentiment_lookback)
+    df['Positive-Return'] = df['Net-Return'].apply(lambda x: x if x > 0 else 0)
+    df['Negative-Return'] = df['Net-Return'].apply(lambda x: x if x < 0 else 0)
+    df['Sentiment-Score'] = df['Positive-Return'] - df['Negative-Return']
+    
+    # Dynamically Adjust Lookback Periods
+    if dynamic_window_optimizer:
+        def evaluate_sharpe_ratio(params):
+            sma_lb, vol_adj_lb, mom_lb, pc_lb, sent_lb = map(int, params)
+            df['SMA'] = df['close'].rolling(window=sma_lb).mean()
+            df['Vol-Adj-Vol'] = (df['high'] - df['low']) * df['volume']
+            df['Vol-Adj-Vol'] = df['Vol-Adj-Vol'].rolling(window=vol_adj_lb).mean()
+            df['Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=mom_lb).mean()
+            df['Price-Change'] = df['close'].pct_change(pc_lb)
+            df['Sentiment-Score'] = (df['close'].pct_change(sent_lb) > 0).astype(float)
+            factor = df[['Momentum', 'Vol-Adj-Vol', 'Price-Change', 'Sentiment-Score']].dropna().sum(axis=1)
+            returns = df['close'].pct_change()

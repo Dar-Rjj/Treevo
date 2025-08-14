@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday Range'] = df['high'] - df['low']
+    df['Intraday Return'] = df['Intraday Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+
+    # Combine Intraday and Overnight Returns
+    df['Combined Return'] = df['Intraday Return'] + df['Overnight Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume-Weighted Typical Price'] = df['Typical Price'] * df['volume']
+    df['VWAP'] = df['Volume-Weighted Typical Price'].cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal Indicator'] = np.where(df['VWAP'] > df['close'], 1, -1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated Reversal Return'] = df['Combined Return'] * df['Reversal Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume-Weighted Return'] = (df['Return'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial Alpha Factor'] = df['Integrated Reversal Return'] + df['Volume-Weighted Return']
+
+    # Calculate Rolling Averages
+    df['5-day Rolling Average'] = df['close'].rolling(window=5).mean()
+    df['20-day Rolling Average'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Volatility
+    df['Daily Returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility'] = df['Daily Returns'].rolling(window=20).std()
+
+    # Adjust for Volatility
+    df['Volatility-Adjusted Alpha Factor'] = df['Initial Alpha Factor'] / df['Volatility']
+
+    # Incorporate Transaction Amount
+    df['Amount-Weighted Return'] = (df['close'] - df['open']) / df['open'] * df['amount']
+    df['Amount-Weighted Return'] = (df['Amount-Weighted Return'] * df['amount']).cumsum() / df['amount'].cumsum()
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    df['Intermediate Alpha Factor'] = df['Volatility-Adjusted Alpha Factor'] + df['Amount-Weighted Return']
+
+    # Calculate Moving Average Convergence Divergence (MACD)
+    df['12-day EMA'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['26-day EMA'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD Line'] = df['12-day EMA'] - df['26-day EMA']
+    df['Signal Line'] = df['MACD Line'].ewm(span=9, adjust=False).mean()
+    df['MACD Histogram'] = df['MACD Line'] - df['Signal Line']
+
+    # Integrate MACD with Intermediate Alpha Factor
+    macd_weight = 0.1
+    df['Updated Alpha Factor'] = df['Intermediate Alpha Factor'] + df['MACD Histogram'] * macd_weight
+
+    # Calculate Relative Strength Index (RSI)
+    df['Gains'] = np.where(df['close'] > df['close'].shift(1), df['close'] - df['close'].shift(1), 0)
+    df['Losses'] = np.where(df['close'] < df['close'].shift(1), df['close'].shift(1) - df['close'], 0)
+    df['Average Gain'] = df['Gains'].rolling(window=14).mean()
+    df['Average Loss'] = df['Losses'].rolling(window=14).mean()
+    df['Relative Strength'] = df['Average Gain'] / df['Average Loss']
+    df['RSI'] = 100 - (100 / (1 + df['Relative Strength']))
+
+    # Integrate RSI with Updated Alpha Factor
+    rsi_weight = 0.1
+    df['Normalized

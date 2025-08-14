@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return and Adjusted Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    df['volatility'] = df['high'] - df['low']
+    df['adjusted_intraday_return'] = df['intraday_return'] / df['volatility']
+    
+    # Compute 20-day Price Momentum
+    df['20_day_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Analyze Volume and Amount Shocks
+    df['30_day_avg_volume'] = df['volume'].rolling(window=30).mean()
+    df['30_day_avg_amount'] = df['amount'].rolling(window=30).mean()
+    df['volume_shock'] = (df['volume'] > 1.5 * df['30_day_avg_volume']).astype(int)
+    df['amount_shock'] = (df['amount'] > 1.5 * df['30_day_avg_amount']).astype(int)
+    
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    df['high_low_range'] = df['high'] - df['low']
+    df['volume_adjusted_high_low'] = df['high_low_range'] * np.sqrt(df['volume'])
+    df['cumulative_high_low'] = df['volume_adjusted_high_low'].rolling(window=7).sum()
+    df['high_to_low_ratio'] = df['high'] / df['low']
+    
+    # Analyze Volume Trends and Momentum
+    df['7_day_vol_ma'] = df['volume'].rolling(window=7).mean()
+    df['volume_trend'] = (df['volume'] > df['7_day_vol_ma']).astype(int)
+    df['volume_momentum'] = df['volume'].rolling(window=7).sum() - df['volume'].shift(7).rolling(window=7).sum()
+    
+    # Integrate Open-Close Momentum with Volatility Indicators
+    df['open_close_change'] = df['close'] - df['open']
+    df['ema_7_close'] = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Synthesize Components into Alpha Factor
+    df['combined_volume_trend_high_low'] = df['high_to_low_ratio'] * df['volume_trend']
+    df['integrated_volume_momentum'] = df['high_low_range'] * np.sqrt(df['volume']) * df['volume_momentum']
+    df['open_close_with_volume_high_low'] = df['open_close_change'] * df['high_low_range'] * np.sqrt(df['volume'])
+    df['adjusted_volume_momentum'] = df['volume_momentum'] * (df['high'] / df['low'])
+    df['inverted_volume_momentum'] = -1 * df['volume_momentum']
+    df['composite_alpha'] = (df['inverted_volume_momentum'] + df['adjusted_volume_momentum'] + 
+                            df['high_low_range'] * df['volume'] * df['volume_momentum'])
+    
+    # Weighted and Integrated Alpha Factor
+    df['weighted_intraday_return'] = 0.25 * df['adjusted_intraday_return']
+    df['weighted_20_day_momentum'] = 0.4 * df['20_day_momentum']
+    df['weighted_volume_amount_shocks'] = 0.1 * df['volume_shock'] * df['amount_shock']
+    df['weighted_adjusted_volume_momentum'] = 0.15 * df['adjusted_volume_momentum']
+    df['weighted_inverted_volume_momentum'] = 0.05 * df['inverted_volume_momentum']
+    df['weighted_composite_alpha'] = 0.05 * df['composite_alpha']
+    
+    df['integrated_alpha'] = (
+        df['weighted_intraday_return'] + 
+        df['weighted_20_day_momentum'] + 
+        df['weighted_volume_amount_shocks'] + 
+        df['weighted_adjusted_volume_momentum'] + 
+        df['weighted_inverted_volume_momentum'] + 
+        df['weighted_composite_alpha']
+    )
+    
+    # Calculate Relative Strength
+    df['50_day_sma_close'] = df['close'].rolling(window=50).mean()
+    df['relative_strength'] = df['close'] / df['50_day_sma_close']
+    
+    # Incorporate Relative Strength into Alpha Factor
+    df['final_alpha'] = df['integrated_alpha'] * df['relative_strength']
+    
+    return df['final_alpha']
+```

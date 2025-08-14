@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['Prev_Day_Overnight_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['Aggregate_Returns'] = df['Intraday_Return'] + df['Prev_Day_Overnight_Return']
+    
+    # Adjust for Volume
+    df['Volume_Adjusted_Returns'] = df['Aggregate_Returns'] * df['volume']
+    
+    # Weight by Intraday Volatility
+    df['Weighted_Adjusted_Returns'] = df['Intraday_Volatility'] * df['Volume_Adjusted_Returns']
+    
+    # Smoothed Moving Average
+    df['SMA_5D'] = df['Weighted_Adjusted_Returns'].rolling(window=5).mean()
+    df['Smoothed_SMA'] = df['SMA_5D'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Short-Term Price Momentum
+    df['Short_Term_Momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Calculate Long-Term Price Momentum
+    df['Long_Term_Momentum'] = df['close'] - df['close'].shift(25)
+    
+    # Compute Price Momentum Ratio
+    df['Price_Momentum_Ratio'] = df['Short_Term_Momentum'] / df['Long_Term_Momentum']
+    
+    # Integrate Intraday and Previous Day's Returns
+    df['Integrated_Returns'] = df['Intraday_Return'] * df['Prev_Day_Overnight_Return']
+    
+    # Combine Price Momentum and Intraday Reversal
+    df['Combined_Price_Momentum_Intraday_Reversal'] = df['Price_Momentum_Ratio'] * df['Integrated_Returns']
+    
+    # Conditionally Adjust by Volume Surge
+    df['7D_Avg_Volume'] = df['volume'].rolling(window=7).mean()
+    df['Volume_Adjustment'] = np.where(df['volume'] > df['7D_Avg_Volume'], 1.8, 0.7)
+    df['Adjusted_Combined_Factor'] = df['Combined_Price_Momentum_Intraday_Reversal'] * df['Volume_Adjustment']
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = df['Daily_Log_Return'].rolling(window=20).sum()
+    
+    # Apply Volume Confirmation
+    df['Volume_Confirmation'] = np.where(df['volume'] > df['volume'].shift(1), 1, 0)
+    df['Final_Momentum_Factor'] = df['Price_Momentum'] * df['Volume_Confirmation']
+    
+    # Incorporate High-Low Volatility into Final Factor
+    df['High_Low_Volatility'] = df['High_Low_Range'] * df['Intraday_Volatility']
+    
+    # Integrate Amount Data
+    df['Daily_Dollar_Volume'] = df['volume'] * df['close']
+    df['Adjusted_SMA'] = df['Smoothed_SMA'] * df['Daily_Dollar_Volume']
+    
+    # Combine All Factors
+    df['Final_Alpha_Factor'] = df['Adjusted_SMA'] + df['Adjusted_Combined_Factor'] + df['Final_Momentum_Factor'] + df['High_Low_Volatility']
+    
+    return df['Final_Alpha_Factor']
+```

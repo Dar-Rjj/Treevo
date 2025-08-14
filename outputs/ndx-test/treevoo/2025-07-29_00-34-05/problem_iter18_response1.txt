@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Momentum
+    df['momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Impact Adjustment
+    df['avg_vol_30'] = df['volume'].rolling(window=30).mean()
+    df['vol_impact_adj'] = df['volume'] / df['avg_vol_30']
+    
+    # Daily Dynamic Price Range
+    df['daily_dynamic_range'] = (df['high'] - df['low']) * (df['close'] / df['low'])
+    
+    # Average Trading Price
+    df['avg_trading_price'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    
+    # Volume Adjusted Dynamic Range
+    df['vol_adj_dyn_range'] = (df['daily_dynamic_range'] / df['avg_trading_price']).replace([np.inf, -np.inf], 0) * df['volume']
+    
+    # Short-Term Rolling Avg of Volume Adjusted Dynamic Range
+    df['short_term_avg'] = df['vol_adj_dyn_range'].rolling(window=15).mean()
+    
+    # Long-Term Rolling Avg of Volume Adjusted Dynamic Range
+    df['long_term_avg'] = df['vol_adj_dyn_range'].rolling(window=25).mean()
+    
+    # Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=30).std()
+    
+    # Trade Activity Influence
+    df['avg_amount_30'] = df['amount'].rolling(window=30).mean()
+    df['trade_activity_influence'] = df['amount'] / df['avg_amount_30']
+    
+    # Combine Momentum and Volume Impact
+    df['combined_mom_vol'] = df['momentum'] * df['vol_impact_adj']
+    
+    # Adjust for Price Volatility
+    df['adj_combined_mom_vol'] = df['combined_mom_vol'] / df['price_volatility']
+    
+    # High-Low Range Momentum
+    n = 7
+    alpha = 2 / (n + 1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['ema_high_low'] = df['high_low_range'].ewm(alpha=alpha, adjust=False).mean()
+    df['daily_change_ema'] = df['ema_high_low'] - df['ema_high_low'].shift(1)
+    
+    # Volume Shock
+    df['volume_pct_change'] = df['volume'].pct_change()
+    vol_threshold = 0.6
+    df['volume_shock'] = (df['volume_pct_change'].abs() > vol_threshold).astype(int) * np.sign(df['volume_pct_change'])
+    
+    # Combine Indicators
+    df['combined_indicator'] = df['daily_change_ema'] * df['volume_shock']
+    
+    # Finalize Alpha Factor
+    df['alpha_factor'] = (df['short_term_avg'] - df['long_term_avg']) * df['combined_indicator'] * df['adj_combined_mom_vol'] * df['trade_activity_influence']
+    
+    return df['alpha_factor']
+```

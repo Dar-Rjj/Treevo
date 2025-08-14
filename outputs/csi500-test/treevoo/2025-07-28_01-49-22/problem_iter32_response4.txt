@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Smooth High-Low Range
+    smoothed_high_low_range = high_low_range.ewm(span=10).mean()
+    
+    # Generate Intraday Momentum Signal
+    intraday_signal = (smoothed_high_low_range > 1.15).astype(int) * 2 - 1
+    
+    # Calculate Volume-Weighted High-Low Range
+    volume_weighted_high_low_range = (high_low_range * df['volume']).ewm(span=10).mean()
+    
+    # Adjust for Volatility
+    volatility = df['close'].rolling(window=20).std()
+    adjusted_alpha_factor = volume_weighted_high_low_range / volatility
+    
+    # Calculate Absolute Close-to-Close Return
+    close_to_close_return = df['close'].diff().abs()
+    
+    # Combine High-Low and Close-to-Close Returns
+    combined_value = smoothed_high_low_range - close_to_close_return
+    
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = volume_weighted_high_low_range + combined_value + intraday_range_ratio - (df['open'] - df['close'].shift(1))
+    
+    # Adjust Intermediate Alpha Factor based on Intraday Signal
+    intermediate_alpha_factor = np.where(intraday_signal > 0, intermediate_alpha_factor * 1.65, intermediate_alpha_factor * 0.35)
+    
+    # Incorporate Dynamic Threshold Adjustment
+    intraday_range_ma = intraday_range_ratio.rolling(window=10).mean()
+    intermediate_alpha_factor = np.where(intraday_range_ratio > intraday_range_ma, intermediate_alpha_factor * 1.65, intermediate_alpha_factor * 0.35)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=10).mean()
+    
+    # Calculate Close Price Momentum
+    close_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = (intermediate_alpha_factor + close_to_close_return + close_momentum) * intraday_volatility
+    
+    # Introduce Volume Momentum
+    avg_volume = df['volume'].rolling(window=10).mean()
+    volume_momentum = df['volume'] / avg_volume
+    final_alpha_factor = np.where(volume_momentum > 1, final_alpha_factor * 1.15, final_alpha_factor * 0.85)
+    
+    # Weight by Volume
+    final_alpha_factor = final_alpha_factor * df['volume']
+    final_alpha_factor = final_alpha_factor.ewm(span=5).mean()
+    
+    return final_alpha_factor
+```

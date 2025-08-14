@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(0, x))
+    
+    # Combine Returns and Breakout Intensity
+    df['combined_returns'] = df['intraday_return'] + df['close_to_open_return'] + df['breakout_intensity']
+    
+    # Weight by Volume
+    df['weighted_combined_returns'] = df['volume'] * df['combined_returns']
+    
+    # Adjust for Volatility
+    df['rolling_volatility'] = df['high'] - df['low']
+    df['rolling_volatility'] = df['rolling_volatility'].rolling(window=10).std()
+    df['adjusted_metrics'] = df['weighted_combined_returns'] / df['rolling_volatility']
+    
+    # Incorporate Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    df['combined_momentum'] = df['adjusted_metrics'] + df['short_term_momentum'] + df['long_term_momentum']
+    
+    # Enhance Weighting with Trade Activity
+    avg_volume = df['volume'].rolling(window=10).mean()
+    df['trade_activity_weight'] = df['volume'] / avg_volume
+    df['enhanced_metrics'] = df['combined_momentum'] * df['trade_activity_weight']
+    
+    # Measure Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / (df['close'] - df['open'])
+    
+    # Evaluate High and Low Prices
+    df['high_to_low_ratio'] = df['high'] / df['low']
+    df['price_range'] = df['high'] - df['low']
+    
+    # Analyze Trading Volume Changes
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['volume_change_ratio'].rolling(window=21).quantile(0.75) * 1.5
+    df['spike_condition'] = df['volume_change_ratio'] > spike_threshold
+    
+    # Final Factor Integration
+    df['final_factor'] = (df['enhanced_metrics'] + df['intraday_volatility'] + df['high_to_low_ratio'] + df['price_range'] + df['volume_change_ratio']) * df['spike_condition']
+    
+    return df['final_factor'].dropna()
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday Price Indicators
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum_HL'] = df['High_Low_Range'] * df['volume']
+    df['Volume_Adjusted_Momentum_CO'] = df['Close_Open_Diff'] * df['volume']
+
+    # Apply Adaptive Smoothing
+    df['EMA_10_VAM_HL'] = df['Volume_Adjusted_Momentum_HL'].ewm(span=10).mean()
+    df['EMA_10_VAM_CO'] = df['Volume_Adjusted_Momentum_CO'].ewm(span=10).mean()
+
+    # Adjust for Dynamic Market Volatility
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Abs_Daily_Returns'] = np.abs(df['Daily_Returns'])
+    df['Market_Volatility'] = df['Daily_Returns'].rolling(window=10).std()
+
+    df['Modified_VAM_HL'] = df['EMA_10_VAM_HL'] / df['Market_Volatility']
+    df['Modified_VAM_CO'] = df['EMA_10_VAM_CO'] / df['Market_Volatility']
+
+    # Integrate Non-Linear Transformations
+    df['Sqrt_Modified_VAM_HL'] = np.sqrt(np.abs(df['Modified_VAM_HL']))
+    df['Log_Modified_VAM_CO'] = np.log1p(np.abs(df['Modified_VAM_CO']))
+
+    # Incorporate Early Reversal Signals
+    df['Short_Term_Momentum'] = df['close'].ewm(span=5).mean()
+    df['Long_Term_Momentum'] = df['close'].ewm(span=20).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+
+    # Apply Early Signal Indicator
+    df['EMA_3_Short_Term'] = df['Short_Term_Momentum'].ewm(span=3).mean()
+    df['EMA_3_Long_Term'] = df['Long_Term_Momentum'].ewm(span=3).mean()
+    df['Early_Reversal_Signal'] = (df['EMA_3_Short_Term'] > df['EMA_3_Long_Term']).astype(int) - (df['EMA_3_Short_Term'] < df['EMA_3_Long_Term']).astype(int)
+
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    df['Smoothed_EMA_5'] = df['Early_Reversal_Signal'].ewm(span=5).mean()
+    df['Smoothed_EMA_10'] = df['Early_Reversal_Signal'].ewm(span=10).mean()
+    df['Smoothed_Reversal_Signal'] = (df['Smoothed_EMA_5'] + df['Smoothed_EMA_10']) / 2
+
+    # Combine Smoothed Reversal Signal with Non-Linearly Transformed Momentum
+    df['Interim_Alpha_Factor'] = df['Sqrt_Modified_VAM_HL'] + df['Log_Modified_VAM_CO'] + df['Smoothed_Reversal_Signal']
+
+    # Refine Final Alpha Factor
+    df['Final_Alpha_5'] = df['Interim_Alpha_Factor'].ewm(span=5).mean()
+    df['Final_Alpha_10'] = df['Interim_Alpha_Factor'].ewm(span=10).mean()
+    df['Final_Alpha_Factor'] = (df['Final_Alpha_5'] + df['Final_Alpha_10']) / 2
+
+    return df['Final_Alpha_Factor']
+```

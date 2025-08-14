@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Exponential Moving Averages (EMA)
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Calculate True Range (TR) and Average True Range (ATR)
+    df['TR'] = df[['high', 'close']].shift(1).max(axis=1) - df[['low', 'close']].shift(1).min(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+
+    # Identify New Highs or Lows
+    df['New_High'] = (df['high'] > df['high'].rolling(window=5).max()).astype(int)
+    df['New_Low'] = (df['low'] < df['low'].rolling(window=5).min()).astype(int)
+
+    # Calculate Rate of Change (ROC)
+    df['ROC_12'] = (df['close'] / df['close'].shift(12)) - 1
+
+    # Calculate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['VWAP'] = df['VWAP'].cumsum() / df['volume'].cumsum()
+
+    # Calculate Money Flow Index (MFI)
+    df['Raw_Money_Flow'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    positive_money_flow = df[df['Raw_Money_Flow'] > 0]['Raw_Money_Flow'].rolling(window=14).sum()
+    negative_money_flow = abs(df[df['Raw_Money_Flow'] < 0]['Raw_Money_Flow'].rolling(window=14).sum())
+    df['MFI_14'] = 100 - (100 / (1 + (positive_money_flow / negative_money_flow)))
+
+    # Calculate Accumulation/Distribution Line (ADL)
+    money_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    adl = [0]
+    for i in range(1, len(df)):
+        adl.append(adl[-1] + (money_multiplier[i] * df['volume'][i]))
+    df['ADL'] = adl
+
+    # Generate the alpha factor
+    df['alpha_factor'] = (df['SMA_10'] - df['SMA_20']) + (df['EMA_10'] - df['EMA_20']) + \
+                         (df['ATR_14'] / df['close']) + (df['ROC_12'] * 100) + \
+                         (df['RSI_14'] - 50) + (df['OBV'] / df['volume']) + \
+                         (df['VWAP'] / df['close']) + (df['MFI_14'] - 50) + (df['ADL'] / df['volume'])
+
+    return df['alpha_factor']
+```

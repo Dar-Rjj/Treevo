@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = (df['close'].diff() > 0) * df['close'].diff()
+    df['loss'] = (df['close'].diff() < 0) * (-df['close'].diff())
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    df['sum_gain'] = df['gain'].rolling(window=14).sum()
+    df['sum_loss'] = df['loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    df['rs'] = df['sum_gain'] / df['sum_loss']
+    
+    # Convert to ARSI
+    df['arsi'] = 100 - (100 / (1 + df['rs']))
+    df['arsi'] *= df['volume'].rolling(window=14).mean()
+    df['arsi'] *= (df['close'] / df['open'])
+    
+    # Calculate Intraday Price Movement Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    df['open_close_ratio'] = df['close'] / df['open']
+    df['intraday_movement_ratio'] = (df['high_low_ratio'] + df['open_close_ratio']) / 2
+    
+    # Measure Price-Volatility Alignment
+    df['price_range'] = df['high'] - df['low']
+    df['volatility_weighted'] = df['volume'] * df['price_range']
+    df['alignment'] = df['intraday_movement_ratio'] / df['volatility_weighted']
+    df['sentiment'] = df['alignment'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Volume-Weighted Short-Term Return
+    df['volume_weighted_short_term_return'] = df['volume'] * df['short_term_return']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    df['volume_weighted_long_term_return'] = df['volume'] * df['long_term_return']
+    
+    # Calculate Short-Term Volatility
+    df['tr'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['atr'] = df['tr'].rolling(window=5).mean()
+    
+    # Adjust for Volatility and Sentiment
+    df['factor'] = (df['volume_weighted_short_term_return'] / df['atr']) - df['volume_weighted_long_term_return']
+    df['factor'] += df['sentiment'] * 0.1  # Adjust based on Intraday Sentiment
+    
+    return df['factor']
+```

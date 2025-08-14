@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5, M=10, K=14, L=7, P=10, momentum_lookback=10, intraday_volatility_lookback=10, ema_lookback=20):
+    # Calculate Daily Open-Close Price Spread
+    df['spread'] = df['open'] - df['close']
+    
+    # Experiment with Rolling Window Sums of Open-Close Spread
+    df['rolling_sum_spread'] = df['spread'].rolling(window=N).sum()
+    
+    # Calculate Percentage Change in Closing Price
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Create a rolling window standard deviation of daily returns over the past M days to assess volatility
+    df['volatility'] = df['daily_return'].rolling(window=M).std()
+    
+    # Analyze Volume-Price Interaction
+    df['volume_price_ratio'] = df['volume'] / (df['close'] - df['open'])
+    
+    # Determine the average of this ratio over the last K days
+    df['avg_volume_price_ratio'] = df['volume_price_ratio'].rolling(window=K).mean()
+    
+    # Investigate Intraday Volatility
+    df['intraday_range'] = df['high'] - df['low']
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=L).mean()
+    
+    # Combine Close-Open Difference, Daily Volume, and Interactions
+    df['factor_combination'] = df['spread'] * df['volume'] * df['avg_volume_price_ratio']
+    
+    # Evaluate Cumulative Positive vs. Negative Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: 1 if x > 0 else 0)
+    df['negative_returns'] = df['daily_return'].apply(lambda x: 1 if x < 0 else 0)
+    df['cumulative_positive'] = df['positive_returns'].rolling(window=P).sum()
+    df['cumulative_negative'] = df['negative_returns'].rolling(window=P).sum()
+    
+    # Calculate Volume-Weighted Momentum
+    df['momentum'] = df['close'] - df['close'].rolling(window=momentum_lookback).mean()
+    df['adjusted_momentum'] = df['momentum'] * abs(df['spread']) / df['intraday_range'] * df['volume']
+    df['sum_weighted_momentum'] = df['adjusted_momentum'].rolling(window=momentum_lookback).sum()
+    df['total_volume_momentum'] = df['volume'].rolling(window=momentum_lookback).sum()
+    df['final_momentum_factor'] = df['sum_weighted_momentum'] / df['total_volume_momentum']
+    
+    # Calculate Intraday Volatility
+    df['true_range'] = df[['high' - 'low', 'high' - df['close'].shift(1), 'close'.shift(1) - 'low']].max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=intraday_volatility_lookback).mean()
+    df['weighted_intraday_volatility'] = df['atr'] * df['volume']
+    df['sum_weighted_intraday_volatility'] = df['weighted_intraday_volatility'].rolling(window=intraday_volatility_lookback).sum()
+    df['total_volume_intraday'] = df['volume'].rolling(window=intraday_volatility_lookback).sum()
+    df['final_intraday_volatility_factor'] = df['sum_weighted_intraday_volatility'] / df['total_volume_intraday']
+    
+    # Calculate Price Movement Consistency
+    df['ema_close'] = df['close'].ewm(span=ema_lookback, adjust=False).mean()
+    df['std_dev_daily_returns'] = df['daily_return'].rolling(window=ema_lookback).std()
+    df['final_consistency_factor'] = df['std_dev_daily_returns'] / df['ema_close']
+    
+    # Combine Final Alpha Factors
+    df['alpha_factor'] = df['final_momentum_factor'] + df['final_intraday_volatility_factor'] + df['final_consistency_factor']
+    
+    return df['alpha_factor']
+```

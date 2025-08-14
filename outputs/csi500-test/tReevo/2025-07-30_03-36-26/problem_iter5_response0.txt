@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['dollar_value'] = df['close'] * df['volume']
+    total_volume = df['total_volume'].sum()
+    total_dollar_value = df['dollar_value'].sum()
+    df['vwap'] = total_dollar_value / total_volume
+    
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Calculate Exponential Moving Average (EMA) of VWAP
+    alpha = 0.1  # Smoothing factor
+    df['vwap_ema'] = df['vwap'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Calculate VWAP EMA Deviation
+    df['vwap_ema_deviation'] = df['vwap'] - df['vwap_ema']
+    
+    # Calculate Volume Trend
+    df['volume_trend'] = df['volume'].pct_change()
+    
+    # Calculate Multi-Period Momentum
+    periods = [5, 10, 20]  # Multiple periods
+    for period in periods:
+        df[f'momentum_{period}'] = df['close'].pct_change(periods=period)
+    
+    # Calculate Price Volatility (Average True Range)
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Integrate Factors into Final Alpha Signal
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+    df['alpha_signal'] = (
+        df['cumulative_vwap_deviation'] + 
+        df['vwap_ema_deviation'] + 
+        df['volume_trend'] + 
+        df['momentum_5'] + 
+        df['momentum_10'] + 
+        df['momentum_20'] + 
+        df['atr']
+    )
+    
+    return df['alpha_signal']
+```

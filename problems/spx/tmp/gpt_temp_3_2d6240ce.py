@@ -1,0 +1,40 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-day and 20-day Simple Moving Averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # SMA crossover signal
+    df['SMA_signal'] = 0
+    df.loc[df['SMA_5'] > df['SMA_20'], 'SMA_signal'] = 1
+    df.loc[df['SMA_5'] < df['SMA_20'], 'SMA_signal'] = -1
+    
+    # Calculate True Range (TR)
+    df['previous_close'] = df['close'].shift(1)
+    df['TR'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['previous_close']), abs(x['low'] - x['previous_close'])), axis=1
+    )
+    
+    # Compute 14-day Average True Range (ATR)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # ATR breakout signal
+    atr_threshold = 1.5 * df['ATR_14']
+    df['ATR_signal'] = 0
+    df.loc[df['TR'] > atr_threshold, 'ATR_signal'] = 1
+    
+    # Calculate Relative Volume (RV)
+    df['average_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['RV'] = df['volume'] / df['average_volume_20']
+    
+    # RV signal
+    df['RV_signal'] = 0
+    df.loc[df['RV'] > 1.5, 'RV_signal'] = 1
+    df.loc[df['RV'] < 0.7, 'RV_signal'] = -1
+    
+    # Combine signals to create the composite alpha factor
+    df['alpha_factor'] = df['SMA_signal'] + df['ATR_signal'] + df['RV_signal']
+    
+    return df['alpha_factor']

@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Momentum
+    df['price_momentum'] = df['close'].pct_change()
+    
+    # Compute Daily Price Change Percentage
+    df['daily_price_change'] = df['close'].diff() / df['close'].shift(1)
+    
+    # Compute Average Price Momentum over 5 Days
+    df['avg_5d_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['daily_volume_change'] = df['volume'].diff()
+    
+    # Compute Average Volume Change over 10 Days
+    df['avg_10d_volume_change'] = df['daily_volume_change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['combined_mom_vol'] = df['avg_5d_momentum'] * df['avg_10d_volume_change']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'].diff()
+    
+    # Combine High-Low Range and Volume
+    df['combined_high_low_vol'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['avg_21d_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_21d_volume']
+    
+    # Adjust by Average Amount
+    df['avg_21d_amount'] = df['amount'].rolling(window=21).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_21d_amount']
+    
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['adjusted_mom_vol_amount'] = df['price_momentum'] * df['volume_ratio'] * df['amount_ratio']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Moving Average of Positive Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: x if x > 0 else 0)
+    df['ma_21d_positive_returns'] = df['positive_returns'].rolling(window=21).mean()
+    
+    # Volume Adjusted Momentum
+    df['cumulative_21d_volume'] = df['volume'].rolling(window=21).sum()
+    df['volume_adjusted_mom'] = (df['ma_21d_positive_returns'] * df['cumulative_21d_volume']) / 21
+    
+    # Introduce New Component: Price-Volume Divergence
+    df['daily_volume_change_pct'] = df['daily_volume_change'] / df['volume'].shift(1)
+    df['price_vol_divergence'] = df['daily_return'] - df['daily_volume_change_pct']
+    
+    # Combine Components
+    df['combined_mom_vol_surge'] = df['combined_mom_vol'] + df['adjusted_mom_vol_amount'] + df['volume_adjusted_mom'] + df['combined_high_low_vol']
+    
+    # Calculate 21-Day Price Volatility
+    df['21d_volatility'] = df['close'].rolling(window=21).std()
+    
+    # Introduce New Component: Price-Amount Divergence
+    df['daily_amount_change'] = df['amount'].diff()
+    df['daily_amount_change_pct'] = df['daily_amount_change'] / df['amount'].shift(1)
+    df['price_amount_divergence'] = df['daily_return'] - df['daily_amount_change_pct']
+    
+    # Adjust by Price Volatility
+    df['volatility_adjustment'] = df['21d_volatility'].apply(lambda x: 1.5 if x > 0.01 else 1.0)
+    
+    # Final Combined Alpha Factor
+    df['final_alpha_factor'] = (df['combined_mom_vol_surge'] + df['price_vol_divergence'] + df['price_amount_divergence']) * df['volatility_adjustment']
+    
+    return df['final_alpha_factor']
+```

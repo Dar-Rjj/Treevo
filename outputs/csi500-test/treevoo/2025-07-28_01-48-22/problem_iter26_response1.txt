@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Day Range
+    df['day_range'] = df['high'] - df['low']
+    
+    # Measure Relative Day Range to Previous Close
+    df['rel_day_range'] = df['day_range'] / df['close'].shift(1)
+    
+    # Compute Average Volume over a Fixed Period (e.g., 20 days)
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Determine if Volume is Above or Below its Average
+    df['volume_above_avg'] = df['volume'] > df['avg_volume']
+    
+    # Assess the Impact of Volume on Daily Returns
+    df['volume_impact_return'] = df['close'].pct_change() * df['volume_above_avg']
+    
+    # Calculate Simple Moving Averages for Different Periods
+    df['sma_short'] = df['close'].rolling(window=5).mean()
+    df['sma_long'] = df['close'].rolling(window=20).mean()
+    
+    # Generate Buy/Sell Signal (SMA[short] > SMA[long])
+    df['sma_signal'] = df['sma_short'] > df['sma_long']
+    
+    # Determine Price Trend Consistency Over Time
+    df['return'] = df['close'].pct_change()
+    df['consecutive_returns'] = (df['return'] > 0).groupby((df['return'] <= 0).cumsum()).cumsum()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Compare VWAP with Closing Price
+    df['vwap_diff'] = df['close'] - df['vwap']
+    
+    # Calculate Daily Return (Close - Open)
+    df['daily_return'] = df['close'] - df['open']
+    
+    # Classify Gaps as Up, Down, or No Gap
+    df['gap'] = 'No Gap'
+    df.loc[df['open'] > df['close'].shift(1), 'gap'] = 'Up'
+    df.loc[df['open'] < df['close'].shift(1), 'gap'] = 'Down'
+    
+    # Evaluate the Sustainability of Gaps Over the Next Few Days
+    df['gap_sustainability'] = df['gap'] == df['gap'].shift(1)
+    
+    # Combine all alpha factors into a single factor
+    alpha_factor = (
+        df['rel_day_range'] +
+        df['volume_impact_return'] +
+        df['sma_signal'].astype(int) +
+        df['consecutive_returns'] +
+        df['vwap_diff'] +
+        df['daily_return'] +
+        df['gap_sustainability'].astype(int)
+    )
+    
+    return alpha_factor
+```

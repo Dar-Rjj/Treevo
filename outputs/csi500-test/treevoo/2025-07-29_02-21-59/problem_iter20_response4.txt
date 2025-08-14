@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Weight by Volume
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Integrate Intraday High-Low Movement
+    df['intraday_high_low_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Adjust by Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['intraday_return_adjusted'] = df['intraday_high_low_ratio'] * (df['close'] - df['open']) / df['open'] * df['volume_change']
+    
+    # Adjust for Volume Volatility
+    df['volume_moving_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_std'] = df['volume'].rolling(window=20).std()
+    df['volume_volatility_adjustment'] = df['volume'] / df['volume_moving_avg'] * df['volume_std']
+    
+    # Combine intraday momentum and volume adjustments
+    df['integrated_intraday_momentum'] = df['volume_weighted_return'] + df['intraday_return_adjusted'] / df['volume_volatility_adjustment']
+    
+    # Cumulative Price and Volume Momentum
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    df['sum_of_daily_price_changes'] = df['daily_price_change'].rolling(window=20).sum()
+    
+    # Calculate VWAP
+    df['VWAP'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # PMI Score
+    df['PMI_score'] = df['sum_of_daily_price_changes'] * df['VWAP']
+    
+    # Calculate Daily Log Return
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['cumulative_sum_of_daily_log_returns'] = df['daily_log_return'].rolling(window=20).sum()
+    
+    # 20-Day Momentum
+    df['20_day_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['PMI_score'] * df['cumulative_sum_of_daily_log_returns'] +
+                                df['integrated_intraday_momentum'] +
+                                df['cumulative_sum_of_daily_log_returns'] +
+                                df['20_day_momentum'])
+    
+    return df['final_alpha_factor']
+```

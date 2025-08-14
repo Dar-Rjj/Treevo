@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].diff()
+
+    # Calculate Smoothed Momentum
+    smoothed_momentum = df['daily_return'].rolling(window=20).sum() / df['volume'].rolling(window=20).mean()
+
+    # Incorporate Enhanced Price Reversion
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    
+    df['proximity_high'] = (df['10_day_high'] - df['close']) / (df['10_day_high'] - df['10_day_low'])
+    df['proximity_low'] = (df['close'] - df['10_day_low']) / (df['10_day_high'] - df['10_day_low'])
+    
+    df['min_proximity'] = df[['proximity_high', 'proximity_low']].min(axis=1)
+    df['inverted_proximity'] = 1 / df['min_proximity']
+    
+    std_dev = df['daily_return'].rolling(window=20).std()
+    adjusted_proximity = df['inverted_proximity'] / std_dev
+
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_average = (open_high_diff + open_low_diff) * df['volume']
+    volatility_factor = weighted_average.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Weight Smoothed Momentum
+    weighted_momentum = smoothed_momentum * adjusted_proximity * volatility_factor
+
+    # Amount per Unit Close Price Rate of Change
+    n = 5  # You can change this value as needed
+    amount_sum = df['amount'].rolling(window=n).sum()
+    close_price = df['close']
+    ratio_t = amount_sum / close_price
+    ratio_t_n = (df['amount'].shift(n).rolling(window=n).sum()) / close_price.shift(n)
+    rate_of_change = ratio_t - ratio_t_n
+
+    # Final Alpha Factor
+    alpha_factor = weighted_momentum + rate_of_change
+
+    return alpha_factor
+```

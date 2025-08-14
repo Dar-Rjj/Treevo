@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['open']) / df['open']
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'].diff()
+    
+    # Adjust Raw Momentum based on volume spike
+    df['volume_change'] = df['volume'].diff()
+    df['volume_change_mean'] = df['volume_change'].rolling(window=20).mean().shift(1)
+    df['volume_spike'] = (df['volume_change'].abs() > 2 * df['volume_change'].rolling(window=20).std()).astype(int)
+    df['adjusted_momentum'] = df['raw_momentum'] * (1 - 0.5 * df['volume_spike'])
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    
+    # Integrate Volume Impact
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['volume_impact'] = (df['intraday_high_low_spread'] * df['volume']) / df['avg_volume_5d']
+    
+    # Combine Intraday Factors
+    df['combined_intraday_factors'] = df['intraday_high_low_spread'] + df['intraday_return']
+    
+    # Initial Alpha Signal
+    df['initial_alpha_signal'] = df['adjusted_momentum'] * df['combined_intraday_factors'] * df['weighted_price_movement']
+    
+    # Compute Smoothed Price Momentum
+    df['smoothed_price_momentum'] = df['close'].diff().rolling(window=5).mean()
+    
+    # Compute Weighted Volume Indicator
+    df['volume_change_sign'] = np.sign(df['volume_change'])
+    df['weighted_volume_indicator'] = (df['volume_change'] * df['volume_change_sign']).rolling(window=5).mean()
+    
+    # Incorporate Close Price Trend
+    df['close_price_change'] = df['close'].diff()
+    df['ema_close_price_change'] = df['close_price_change'].ewm(span=7, adjust=False).mean().shift(1)
+    df['close_price_trend'] = df['close_price_change'] - df['ema_close_price_change']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['initial_alpha_signal'] * df['smoothed_price_momentum'] * df['weighted_volume_indicator'] * df['close_price_trend']
+    
+    # Adjust for Volatility
+    df['std_close_10d'] = df['close'].rolling(window=10).std()
+    df['final_alpha_factor'] = df['final_alpha_factor'] / (1 + 1.5 * df['std_close_10d'])
+    
+    return df['final_alpha_factor']
+```

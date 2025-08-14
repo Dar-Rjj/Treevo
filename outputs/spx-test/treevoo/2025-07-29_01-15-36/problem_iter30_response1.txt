@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=14):
+    # Simple returns
+    df['simple_returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Logarithmic returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Cumulative returns over N periods
+    df['cumulative_returns'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Simple moving average (SMA)
+    df['sma'] = df['close'].rolling(window=n).mean()
+    
+    # Exponential moving average (EMA)
+    df['ema'] = df['close'].ewm(span=n, adjust=False).mean()
+    
+    # Rate of change (ROC)
+    df['roc'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Moving Average Convergence Divergence (MACD)
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    
+    # Daily range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # True range
+    df['true_range'] = df[['high' - 'low', 
+                            abs('high' - df['close'].shift(1)), 
+                            abs('low' - df['close'].shift(1))]].max(axis=1)
+    
+    # Average true range (ATR)
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Standard Deviation of returns
+    df['std_dev'] = df['log_returns'].rolling(window=n).std()
+    
+    # On-balance volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    
+    # Chaikin money flow (CMF)
+    df['cmf_numerator'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) * df['volume'] / (df['high'] - df['low'])
+    df['cmf_denominator'] = df['volume']
+    df['cmf'] = df['cmf_numerator'].rolling(window=n).sum() / df['cmf_denominator'].rolling(window=n).sum()
+    
+    # Volume-weighted average price (VWAP)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['vwap_numerator'] = df['typical_price'] * df['volume']
+    df['vwap'] = df['vwap_numerator'].rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Money flow index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['money_flow'].where(df['typical_price'] > df['typical_price'].shift(1), 0)
+    df['negative_money_flow'] = df['money_flow'].where(df['typical_price'] < df['typical_price'].shift(1), 0)
+    df['positive_money_flow_sum'] = df['positive_money_flow'].rolling(window=n).sum()
+    df['negative_money_flow_sum'] = df['negative_money_flow'].rolling(window=n).sum()
+    df['mfi'] = 100 - (100 / (1 + (df['positive_money_flow_sum'] / df['negative_money_flow_sum'])))
+    
+    # Relative Strength Index (RSI)
+    df['gain'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['loss'] = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    df['avg_gain'] = df['gain'].rolling

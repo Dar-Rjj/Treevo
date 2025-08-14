@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Long-Term (10-day) Metrics
+    high_low_vol_10 = (df['high'] - df['low']).rolling(window=10).sum() * df['volume'].rolling(window=10).sum()
+    total_volume_10 = df['volume'].rolling(window=10).sum()
+    long_term_weighted_price_diff_10 = high_low_vol_10 / total_volume_10
+    long_term_open_to_close_momentum_10 = df['close'] - df['open'].shift(10)
+    long_term_cumulative_weighted_avg_10 = long_term_weighted_price_diff_10 / total_volume_10
+    long_term_avg_daily_return_10 = (df['close'] - df['close'].shift(1)).rolling(window=10).sum() / 10
+    
+    # Adjust for Adaptive Volatility (10-day)
+    daily_returns_10 = df['close'].pct_change()
+    ewm_std_10 = daily_returns_10.ewm(span=10, adjust=False).std()
+    final_10_day_alpha_factor = (long_term_cumulative_weighted_avg_10 - long_term_avg_daily_return_10) / ewm_std_10
+    
+    # Recalculate Metrics Using a 5-Day Window
+    high_low_vol_5 = (df['high'] - df['low']).rolling(window=5).sum() * df['volume'].rolling(window=5).sum()
+    total_volume_5 = df['volume'].rolling(window=5).sum()
+    short_term_weighted_price_diff_5 = high_low_vol_5 / total_volume_5
+    short_term_open_to_close_momentum_5 = df['close'] - df['open'].shift(5)
+    short_term_cumulative_weighted_avg_5 = short_term_weighted_price_diff_5 / total_volume_5
+    short_term_avg_daily_return_5 = (df['close'] - df['close'].shift(1)).rolling(window=5).sum() / 5
+    
+    # Adjust for Adaptive Volatility (5-day)
+    daily_returns_5 = df['close'].pct_change()
+    ewm_std_5 = daily_returns_5.ewm(span=5, adjust=False).std()
+    final_5_day_alpha_factor = (short_term_cumulative_weighted_avg_5 - short_term_avg_daily_return_5) / ewm_std_5
+    
+    # Combine 10-Day and 5-Day Metrics with Dynamic Weights
+    relative_volatility_ratio = ewm_std_5 / ewm_std_10
+    ten_day_metric_weight = 1 / (1 + relative_volatility_ratio)
+    five_day_metric_weight = relative_volatility_ratio / (1 + relative_volatility_ratio)
+    combined_alpha_factor = (final_10_day_alpha_factor * ten_day_metric_weight) + (final_5_day_alpha_factor * five_day_metric_weight)
+    
+    # Integrate Trading Volume Effectively
+    five_day_avg_volume = df['volume'].rolling(window=5).mean()
+    final_alpha_factor = combined_alpha_factor * five_day_avg_volume
+    
+    return final_alpha_factor
+```

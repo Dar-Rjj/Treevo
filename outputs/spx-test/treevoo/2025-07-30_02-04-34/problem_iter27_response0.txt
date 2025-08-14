@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 7-day and 21-day simple moving averages (SMA) for the closing prices
+    df['SMA_7'] = df['close'].rolling(window=7).mean()
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+    
+    # Create an alpha factor as the difference between the 7-day SMA and the 21-day SMA
+    df['alpha_factor_1'] = df['SMA_7'] - df['SMA_21']
+    
+    # Define a 30-day price return as the percentage change in the closing price from 30 days ago
+    df['price_return_30'] = df['close'].pct_change(periods=30)
+    df['alpha_factor_2'] = df['price_return_30']
+    
+    # Construct a 14-day average direction index (ADX) using high and low prices to measure trend strength
+    def true_range(high, low, close_prev):
+        tr1 = high - low
+        tr2 = abs(high - close_prev)
+        tr3 = abs(low - close_prev)
+        return max(tr1, tr2, tr3)
+    
+    df['TR'] = df.apply(lambda x: true_range(x['high'], x['low'], df['close'].shift(1).loc[x.name]), axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    df['DM_pos'] = df['high'].diff().apply(lambda x: max(x, 0))
+    df['DM_neg'] = df['low'].diff().apply(lambda x: -min(x, 0))
+    df['DI_pos'] = 100 * (df['DM_pos'].rolling(window=14).sum() / df['ATR_14'])
+    df['DI_neg'] = 100 * (df['DM_neg'].rolling(window=14).sum() / df['ATR_14'])
+    df['DX'] = 100 * (abs(df['DI_pos'] - df['DI_neg']) / (df['DI_pos'] + df['DI_neg']))
+    df['ADX'] = df['DX'].rolling(window=14).mean()
+    df['alpha_factor_3'] = df['ADX']
+    
+    # Formulate a 10-day average daily trading volume
+    df['avg_vol_10'] = df['volume'].rolling(window=10).mean()
+    # Develop an alpha factor as the ratio of the current day's volume to the 10-day average daily trading volume
+    df['alpha_factor_4'] = df['volume'] / df['avg_vol_10']
+    
+    # Calculate the 10-day cumulative volume delta
+    df['vol_delta'] = df['volume'] * (df['close'] > df['close'].shift(1)).astype(int) - df['volume'] * (df['close'] < df['close'].shift(1)).astype(int)
+    df['cum_vol_delta_10'] = df['vol_delta'].rolling(window=10).sum()
+    df['alpha_factor_5'] = df['cum_vol_delta_10']
+    
+    # Calculate the 5-day exponential moving average (EMA) of the volume
+    df['EMA_vol_5'] = df['volume'].ewm(span=5, adjust=False).mean()
+    # Develop an alpha factor as the ratio of the current day's volume to the 5-day EMA of the volume
+    df['alpha_factor_6'] = df['volume'] / df['EMA_vol_5']
+    
+    # Generate a 10-day money flow index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['raw_money_flow'] * (df['typical_price'] > df['typical_price'].shift(1)).astype(int)
+    df['negative_money_flow'] = df['raw_money_flow'] * (df['typical_price'] < df['typical_price'].shift(1)).astype(int)
+    df['money_ratio'] = df['positive_money_flow'].rolling(window=10).sum() / df['negative_money_flow'].rolling(window=10).sum()
+    df['MFI'] = 100 - (100 / (1 + df['money_ratio']))
+    df['alpha_factor_7'] = df['MFI']
+    
+    # Measure the 10-day accumulation/distribution line (A/D Line

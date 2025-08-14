@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Compute High-to-Low Range
+    df['high_to_low_range'] = df['high'] - df['low']
+    
+    # Compute 5-Day and 20-Day Moving Average of Price Change
+    df['5_day_ma_price_change'] = df['daily_price_change'].rolling(window=5).mean()
+    df['20_day_ma_price_change'] = df['daily_price_change'].rolling(window=20).mean()
+    
+    # Determine Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Compute Short-Term and Long-Term Momentum
+    df['5_day_sum_returns'] = df['daily_returns'].rolling(window=5).sum()
+    df['20_day_sum_returns'] = df['daily_returns'].rolling(window=20).sum()
+    df['5_day_sma_close'] = df['close'].rolling(window=5).mean()
+    df['20_day_sma_close'] = df['close'].rolling(window=20).mean()
+    df['short_term_momentum'] = df['5_day_sum_returns'] - df['5_day_sma_close']
+    df['long_term_momentum'] = df['20_day_sum_returns'] - df['20_day_sma_close']
+    
+    # Calculate Average True Range for Volatility
+    df['true_range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Adjust by Volume
+    df['10_day_ma_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_ratio'] = df['volume'] / df['10_day_ma_volume']
+    
+    # Adjust by Amount
+    df['7_day_ma_amount'] = df['amount'].rolling(window=7).mean()
+    df['amount_ratio'] = df['amount'] / df['7_day_ma_amount']
+    
+    # Introduce High-to-Low Range Momentum Adjustment
+    df['high_to_low_range_mom_adj'] = (df['high_to_low_range'] / df['high_to_low_range'].shift(1)) * df['10_day_ma_volume']
+    
+    # Combine Momentum, Volatility, and Volume-Amount Adjustment
+    df['combined_factor'] = (
+        (df['5_day_ma_price_change'] * df['high_to_low_range_mom_adj'] * df['10_day_ma_volume']) +
+        (df['short_term_momentum'] + df['long_term_momentum']) / df['atr']
+    ) * df['volume_ratio'] * df['amount_ratio']
+    
+    # Enhance Signal with Price Change and Volume Ratio
+    df['enhanced_signal'] = df['daily_price_change'] * df['volume_ratio']
+    
+    # Introduce Price Volatility Adjustment
+    df['10_day_std_daily_price_change'] = df['daily_price_change'].rolling(window=10).std()
+    
+    # Adjust Combined Factor by Price Volatility
+    df['adjusted_combined_factor'] = df['combined_factor'] / df['10_day_std_daily_price_change']
+    
+    return df['adjusted_combined_factor'].dropna()
+```

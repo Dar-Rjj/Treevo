@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Momentum signal based on the exponential moving average (EMA)
+    ema_close_20 = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_signal = (df['close'] - ema_close_20) * df['volume']
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Money Flow Ratio
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_flow.rolling(window=30).sum() / negative_flow.rolling(window=30).sum()
+
+    # Trend following indicator: 60-day Exponential Moving Average (EMA)
+    trend_following = df['close'].ewm(span=60, adjust=False).mean()
+
+    # Liquidity measure: Volume-to-Amount ratio
+    liquidity_measure = df['volume'] / df['amount']
+
+    # Intraday volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+
+    # Bollinger Bands %B
+    avg_close_30 = df['close'].rolling(window=30).mean()
+    std_close_30 = df['close'].rolling(window=30).std()
+    bollinger_bands_high = avg_close_30 + (2 * std_close_30)
+    bollinger_bands_low = avg_close_30 - (2 * std_close_30)
+    bollinger_bands_percent_b = (df['close'] - bollinger_bands_low) / (bollinger_bands_high - bollinger_bands_low)
+
+    # Adjusted weights for the final alpha factor
+    alpha_factor = (
+        momentum_signal * 0.4 +
+        rsi * 0.25 +
+        money_ratio * 0.15 +
+        (df['close'] - trend_following) * 0.07 +
+        liquidity_measure * 0.05 +
+        intraday_volatility * 0.05 +
+        bollinger_bands_percent_b * 0.03
+    ).fillna(0)
+
+    return alpha_factor
+```

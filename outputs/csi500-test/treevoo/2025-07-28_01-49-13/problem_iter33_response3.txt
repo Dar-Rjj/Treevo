@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+
+    # Calculate Intraday Midpoint to Open Ratio
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    intraday_midpoint_open_ratio = intraday_midpoint / df['open']
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = df['amount'] / df['volume']
+
+    # Adjust Close-to-Open Return by Intraday Range
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    adjusted_close_to_open_return = close_to_open_return / intraday_range
+
+    # Calculate Rate of Change in Closing Price
+    roc_5 = df['close'].pct_change(5)
+    roc_20 = df['close'].pct_change(20)
+
+    # Evaluate Moving Average Crossovers
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_crossover_5_20 = sma_5 > sma_20
+    sma_crossover_20_50 = sma_20 > sma_50
+
+    # Examine Relationships Between Different Price Points
+    day_range = df['close'] - df['open']
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+
+    # Assess Volatility-Adjusted Returns
+    volatility = df['close'].rolling(window=20).std()
+    volatility_adjusted_return = (df['close'] / df['close'].shift(1)) / volatility
+
+    # Measure the ratio of today's volume to the average volume over the past 20 days
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    volume_ratio = df['volume'] / avg_volume_20
+
+    # Identify days with exceptionally high or low volume relative to the recent average
+    exceptional_volume = (df['volume'] > avg_volume_20 * 1.5) | (df['volume'] < avg_volume_20 * 0.5)
+
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+
+    # Compute Cumulative Price Change
+    cumulative_price_change = daily_price_change.cumsum()
+
+    # Calculate Close-to-Next Day Open Return
+    close_to_next_day_open_return = (vwap.shift(-1) - df['open'].shift(-1)) / df['open'].shift(-1)
+
+    # Weighted Sum of Returns by Volume
+    weighted_sum_of_returns = close_to_next_day_open_return * df['volume']
+
+    # Calculate Adjusted Close-to-Open Envelope
+    max_adjusted_close = df['close'].rolling(window=20).max()
+    min_open = df['open'].rolling(window=20).min()
+
+    # Integrate Volatility Factor
+    daily_volatility = (df['high'] - df['low']) / df['close']
+    smoothed_volatility = daily_volatility.ewm(span=20, adjust=False).mean()
+
+    # Final Factor Adjustment
+    final_factor = (intraday_midpoint_open_ratio * weighted_sum_of_returns 
+                    + (max_adjusted_close - min_open) 
+                    + adjusted_close_to_open_return)
+
+    # Compute Cumulative Price Momentum
+    cumulative_price_momentum = daily_price_change.ewm(span=20, adjust=False).mean()
+    cumulative_volume = df['volume'].cumsum()
+    adjusted_cumulative_momentum = cumulative_price_momentum / cumulative_volume
+
+    # Combine all factors
+    alpha_factor = final_factor * adjusted_cumulative_momentum
+
+    return alpha_factor
+```

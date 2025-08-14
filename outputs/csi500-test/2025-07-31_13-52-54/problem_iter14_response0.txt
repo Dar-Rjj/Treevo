@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 50-day Simple Moving Average (SMA) of closing prices
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Generate a binary trend signal; 1 if the current close is above the SMA, 0 otherwise
+    df['trend_signal'] = (df['close'] > df['SMA_50']).astype(int)
+    
+    # Calculate the difference between today’s high and the previous day’s high
+    df['high_diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day’s low
+    df['low_diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    df['momentum_score'] = df['high_diff'] + df['low_diff']
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    df['momentum_signal'] = (df['momentum_score'] > 0).astype(int)
+    
+    # Calculate the daily volume percentage change from the previous day
+    df['volume_pct_change'] = df['volume'].pct_change()
+    
+    # Assign a value indicating strong buying (positive change) or selling (negative change) pressure
+    df['intensity_signal'] = df['volume_pct_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Volume-Average Price
+    df['volume_avg_price'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Ratio: High-Low Spread divided by Volume-Average Price
+    df['high_low_vol_ratio'] = df['high_low_spread'] / df['volume_avg_price']
+    
+    # Multiply the return (close to close) by the volume traded
+    df['return_volume'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Combine all factors into a composite alpha factor
+    df['alpha_factor'] = (
+        df['trend_signal'] * 0.3 +
+        df['momentum_signal'] * 0.3 +
+        df['intensity_signal'] * 0.4
+    ) * df['high_low_vol_ratio']
+    
+    # Drop intermediate columns
+    df.drop(columns=['SMA_50', 'trend_signal', 'high_diff', 'low_diff', 'momentum_score', 'momentum_signal',
+                     'volume_pct_change', 'intensity_signal', 'high_low_spread', 'volume_avg_price', 'high_low_vol_ratio'],
+            inplace=True)
+    
+    return df['alpha_factor']
+```

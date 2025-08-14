@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Averaged Daily Return
+    df['Volume_Adjusted_Return'] = (df['Daily_Price_Change'] * df['volume']).rolling(window=7).sum() / df['volume'].rolling(window=7).sum()
+    
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Adjust for Volatility and Volume
+    df['Short_Term_Volatility'] = df['close'].rolling(window=7).std()
+    df['Volume_Factor'] = df['volume'] / df['volume'].rolling(window=7).mean()
+    df['Weighted_Raw_Momentum'] = df['Raw_Momentum'] / (df['Short_Term_Volatility'] * df['Volume_Factor'])
+    
+    # Combine Factors
+    df['Combined_Factor'] = df['Weighted_Raw_Momentum'] * df['Volume_Adjusted_Return']
+    
+    # Calculate M-Day Exponential Moving Average (EMA) Volume
+    df['EMA_Volume_20'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['Volume_Score'] = np.where(df['volume'] > df['EMA_Volume_20'], 1, -1)
+    
+    # Calculate K-Day Exponential Moving Average (EMA) Amount
+    df['EMA_Amount_20'] = df['amount'].ewm(span=20, adjust=False).mean()
+    df['Amount_Score'] = np.where(df['amount'] > df['EMA_Amount_20'], 1, -1)
+    
+    # Compute LMA-SMA Difference
+    df['LMA'] = df['close'].rolling(window=200).mean()
+    df['SMA'] = df['close'].rolling(window=50).mean()
+    df['LMA_SMA_Diff'] = df['LMA'] - df['SMA']
+    
+    # Apply EMA Smoothing
+    df['Smoothed_LMA_SMA'] = df['LMA_SMA_Diff'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['Daily_Return'] = df['close'] - df['close'].shift(1)
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    df['Adjusted_Return'] = df['Daily_Return'] / df['Intraday_Volatility']
+    
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Return'].rolling(window=5).mean()
+    
+    # Calculate Short-Term Momentum
+    df['Log_Returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['Short_Term_Momentum'] = df['Log_Returns'].rolling(window=7).sum()
+    
+    # Calculate Medium-Term Momentum
+    df['Medium_Term_Momentum'] = df['Log_Returns'].rolling(window=14).sum()
+    
+    # Combine Short and Medium-Term Momentum
+    df['Combined_Momentum'] = df['Short_Term_Momentum'] - df['Medium_Term_Momentum']
+    
+    # Introduce Price Volatility Component
+    df['Price_Volatility'] = (df['high'] - df['low']).rolling(window=10).std()
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum'] / df['Price_Volatility']
+    
+    # Confirm with Volume Trends
+    df['Average_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Trend_Score'] = np.where(df['volume'] > df['Average_Volume_20'], 1, -1)
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = df['Combined_Factor'] + df['Smoothed_Adjusted_Return'] + df['Volume_Score'] * df['Amount_Score'] * df['Volume_Trend_Score'] * df['Adjusted_Combined_Momentum']
+    
+    return df['Final_Factor']
+```

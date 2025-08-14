@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] / df['open'] - 1
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    combined_factors = (close_to_open_return * df['volume']) / daily_volatility
+    
+    # Adjust for Momentum
+    momentum_adjustment = (df['close'].diff().rolling(window=5).sum() * df['volume'].rolling(window=5).mean())
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Compute 10-Day Price Momentum
+    price_momentum_10d = df['close'] - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    volume_change_indicator = np.where(df['volume'] > df['volume'].shift(), 1, -1)
+    
+    # Calculate Price Trend Indicator
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    price_trend_indicator = np.where(short_sma > long_sma, 1, -1)
+    
+    # Combine Intraday and 10-Day Momentum
+    combined_momentum = price_momentum_10d + intraday_return
+    
+    # Apply Volume Confirmation
+    confirmed_momentum = combined_momentum * np.where(volume_change_indicator > 0, 1, 0)
+    
+    # Integrate Both Metrics
+    integrated_metrics = 0.5 * (combined_factors + confirmed_momentum)
+    
+    # Incorporate Volume and Amount Momentum
+    volume_change = df['volume'] - df['volume'].rolling(window=9).mean()
+    amount_change = df['amount'] - df['amount'].rolling(window=9).mean()
+    combined_volume_amount_momentum = volume_change * amount_change / (df['high'] - df['low'])
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = 0.5 * (integrated_metrics + combined_volume_amount_momentum * intraday_return)
+    
+    return final_alpha_factor
+```

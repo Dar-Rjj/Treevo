@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Adjust for Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_high_low_spread = high_low_spread * np.where(volume_change > 0, volume_change, 0)
+    
+    # Apply Simple Moving Average (SMA) with a period of 5 days
+    sma_5 = adjusted_high_low_spread.rolling(window=5).mean()
+    
+    # Calculate 10-Day Price Momentum
+    price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Adjust for Volume Trend
+    volume_trend = df['volume'] - df['volume'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Trend Adjustment
+    combined_momentum = price_momentum * volume_trend
+    combined_momentum = np.maximum(combined_momentum, 0)
+    
+    # Calculate Daily Log Return
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Positive and Negative Returns
+    positive_returns = log_return > 0
+    negative_returns = log_return <= 0
+    
+    # Calculate Sum of Upward Volume
+    upward_volume = df[positive_returns]['volume']
+    sum_upward_volume = upward_volume.sum()
+    
+    # Calculate Sum of Downward Volume
+    downward_volume = df[negative_returns]['volume']
+    sum_downward_volume = downward_volume.sum()
+    
+    # Compute Trend Reversal Signal
+    total_volume = sum_upward_volume + sum_downward_volume
+    upward_volume_ratio = sum_upward_volume / total_volume
+    downward_volume_ratio = sum_downward_volume / total_volume
+    trend_reversal_signal = np.where(upward_volume_ratio > downward_volume_ratio, 1, -1) * log_return
+    
+    # Calculate Price Gap
+    price_gap = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    adjusted_return = log_return.copy()
+    adjusted_return += np.where(price_gap > 0, -price_gap, price_gap)
+    adjusted_return *= np.exp(-1)  # Exponential Decay with half-life = 1 day
+    
+    # Final Volume Weighted Momentum
+    final_volume_weighted_momentum = df['volume'] * combined_momentum * adjusted_return
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_momentum + trend_reversal_signal + final_volume_weighted_momentum
+    final_alpha_factor = np.maximum(final_alpha_factor, 0)
+    
+    return pd.Series(final_alpha_factor, index=df.index)
+```

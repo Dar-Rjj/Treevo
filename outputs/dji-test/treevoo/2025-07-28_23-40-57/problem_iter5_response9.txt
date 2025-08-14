@@ -1,0 +1,31 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=10, m_days=5, short_ema_period=12, long_ema_period=26):
+    # Calculate Intraday and Breakout Price Movements
+    df['intraday_movement'] = df['high'] - df['low']
+    df['breakout_momentum'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Volume
+    df['volume_weighted_intraday'] = df['intraday_movement'] * df['volume']
+    df['cumulative_volume'] = df['volume'].rolling(window=n_days).sum()
+    df['volume_adjusted_breakout'] = df['breakout_momentum'] / df['cumulative_volume']
+
+    # Incorporate Opening Trend and Amount Impact
+    df['opening_trend_impact'] = df['open'] - df['close'].shift(1)
+    df['amount_weighted_opening_trend'] = df['opening_trend_impact'] * df['amount']
+    
+    # Combine Weighted Movements
+    df['combined_movements'] = df['volume_weighted_intraday'] + df['volume_adjusted_breakout'] + df['amount_weighted_opening_trend']
+
+    # Incorporate Trend Strength
+    df['short_ema'] = df['close'].ewm(span=short_ema_period, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=long_ema_period, adjust=False).mean()
+    df['macd'] = df['short_ema'] - df['long_ema']
+    df['trend_adjusted_combined'] = df['combined_movements'] * df['macd']
+
+    # Aggregate Momentum Over M Days
+    df['aggregated_momentum'] = df['trend_adjusted_combined'].rolling(window=m_days).sum()
+
+    return df['aggregated_momentum']
+```

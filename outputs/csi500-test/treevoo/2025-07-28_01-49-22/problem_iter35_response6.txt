@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Smooth High-Low Range
+    df['Smoothed_High_Low_Range'] = df['High_Low_Range'].ewm(span=10).mean()
+    
+    # Generate Intraday Momentum Signal
+    df['Intraday_Momentum_Signal'] = np.where(df['Smoothed_High_Low_Range'] > 1.0, 1, -1)
+    
+    # Calculate Volume-Weighted High-Low Range
+    df['Volume_Weighted_High_Low_Range'] = df['High_Low_Range'] * df['volume']
+    df['Smoothed_Volume_Weighted_High_Low_Range'] = df['Volume_Weighted_High_Low_Range'].ewm(span=10).mean()
+    
+    # Calculate Absolute Close-to-Close Return
+    df['Close_to_Close_Return'] = np.abs(df['close'] - df['close'].shift(1))
+    
+    # Combine High-Low and Close-to-Close Returns
+    df['Combined_Value'] = df['High_Low_Range'] * df['Close_to_Close_Return']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['High_Low_Range'].rolling(window=20).mean()
+    
+    # Calculate Combined Value Momentum
+    df['Combined_Value_Momentum'] = (df['Combined_Value'] / df['Combined_Value'].shift(1)) - 1
+    
+    # Calculate Close Price Momentum
+    df['Close_Price_Momentum'] = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=30).sum()
+    
+    # Generate Intermediate Alpha Factor
+    df['Intermediate_Alpha_Factor'] = (
+        df['Smoothed_Volume_Weighted_High_Low_Range'] + 
+        df['Combined_Value_Momentum'] + 
+        (df['high'] - df['low']) / (df['high'] + df['low']) - 
+        (df['open'] - df['close'].shift(1))
+    )
+    
+    # Introduce Dynamic Threshold Adjustment
+    df['HL_Range_Ratio_MA'] = (df['high'] - df['low']) / (df['high'] + df['low']).rolling(window=20).mean()
+    df['Dynamic_Threshold_Signal'] = np.where(
+        (df['high'] - df['low']) / (df['high'] + df['low']) > df['HL_Range_Ratio_MA'], 1, -1
+    )
+    
+    # Adjust Intermediate Alpha Factor
+    df['Adjusted_Intermediate_Alpha_Factor'] = df['Intermediate_Alpha_Factor'] * np.where(
+        df['Intraday_Momentum_Signal'] > 0, 1.5, 0.5
+    ) * np.where(
+        (df['high'] - df['low']) / (df['high'] + df['low']) > 1.2, 2.0, 
+        np.where((df['high'] - df['low']) / (df['high'] + df['low']) < 0.8, 0.5, 1.0)
+    )
+    
+    # Adjust for Volatility
+    df['Volatility'] = df['close'].rolling(window=20).std()
+    df['Alpha_Factor'] = df['Adjusted_Intermediate_Alpha_Factor'] / df['Volatility']
+    
+    # Introduce Additional Momentum Component
+    df['MA_50'] = df['close'].rolling(window=50).mean()
+    df['MA_200'] = df['close'].rolling(window=200).mean()
+    df['Long_Term_Momentum'] = np.where(df['MA_50'] > df['MA_200'], 1.2, 0.8)
+    df['Alpha_Factor'] *= df['Long_Term_Momentum']
+    
+    # Introduce Volume Momentum
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume_20']
+    df['Volume_Momentum_Adjustment'] = np.where(df['Volume_Ratio'] > 1.2, 1.25, 
+                                                np.where(df['Volume_Ratio'] < 0.8, 0.75, 1.0))
+    df['Alpha_Factor'] *= df['Volume_Momentum_Adjustment']
+    
+    # Weight by Volume

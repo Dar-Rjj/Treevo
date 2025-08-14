@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Returns
+    intraday_returns = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Returns
+    open_to_close_returns = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    relative_volume = df['volume'] / df['volume'].rolling(window=5).mean()
+    volume_adjusted_momentum = short_term_momentum * relative_volume
+    
+    # Weight Combined Returns by Volume Trend
+    volume_trend = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    weighted_returns = combined_returns * volume_trend
+    
+    # Integrate Volume-Adjusted Short-Term Momentum and Weighted Returns
+    integrated_momentum = volume_adjusted_momentum + weighted_returns
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_range_20 = daily_price_range.rolling(window=20).mean()
+    factor_value = np.where(daily_price_range > 1.5 * avg_range_20, 0, integrated_momentum)
+    
+    # Incorporate Volatility Component
+    close_prices = df['close']
+    close_avg_20 = close_prices.rolling(window=20).mean()
+    daily_volatility = np.sqrt(((close_prices - close_avg_20) ** 2).rolling(window=20).sum() / 20)
+    historical_volatility = daily_volatility.rolling(window=20).mean()
+    volatility_adjustment = np.where(daily_volatility > historical_volatility, 1, -1)
+    final_factor_value = factor_value * volatility_adjustment
+    
+    return pd.Series(final_factor_value, index=df.index)
+```

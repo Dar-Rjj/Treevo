@@ -1,0 +1,41 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['PriceRange'] = df['High'] - df['Low']
+
+    # Calculate True Average Price
+    df['TrueAvgPrice'] = (df['High'] + df['Low'] + df['Close']) / 3
+
+    # Calculate Price Range Volatility (Moving Standard Deviation over N days, e.g., 21 days)
+    df['PriceRangeVolatility'] = df['PriceRange'].rolling(window=21).std()
+
+    # Calculate Daily Return
+    df['DailyReturn'] = df['Close'].pct_change()
+
+    # Calculate Rolling Average Daily Return (e.g., 21 days)
+    df['RollingAvgReturn'] = df['DailyReturn'].rolling(window=21).mean()
+
+    # Calculate Rolling Volatility of Close Prices (e.g., 20 days)
+    df['RollingVolatility'] = df['Close'].rolling(window=20).std()
+
+    # Adjust Momentum by Volatility
+    df['AdjustedMomentum'] = df['RollingAvgReturn'] / df['RollingVolatility']
+
+    # Calculate Volume-Price Movement Score
+    df['VolumePriceMovementScore'] = df['Volume'] * (df['High'] - df['Low'])
+
+    # Multiply Score by Daily Price Range
+    df['WeightedVolumePriceMovement'] = df['VolumePriceMovementScore'] * df['PriceRange']
+
+    # Adjusted True Average Price
+    df['AdjustedTrueAvgPrice'] = df['TrueAvgPrice'] / df['PriceRangeVolatility']
+
+    # Final Momentum Indicator
+    df['FinalMomentumIndicator'] = df['AdjustedTrueAvgPrice'] * df['WeightedVolumePriceMovement']
+
+    # Integrate with Adjusted Momentum
+    df['IntegratedMomentum'] = df['AdjustedMomentum'] * df['FinalMomentumIndicator']
+
+    return df['IntegratedMomentum'].dropna()

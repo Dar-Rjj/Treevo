@@ -1,0 +1,85 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    df['IRWAP'] = (df['close'] * df['volume']).rolling(window=1).sum() / df['volume'].rolling(window=1).sum()
+    
+    # Evaluate IRWAP Difference
+    df['IRWAP_Diff'] = df['close'] - df['IRWAP']
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Adjusted_Return'] = df['Daily_Return'] / df['Intraday_Spread']
+    
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Return'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Short-Term Momentum
+    df['Short_Term_Momentum'] = df['close'].pct_change().rolling(window=7).mean()
+    
+    # Calculate Long-Term Momentum
+    df['Long_Term_Momentum'] = df['close'].pct_change().rolling(window=25).mean()
+    
+    # Combine Short and Long-Term Momentum
+    df['Combined_Momentum'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    
+    # Introduce Price Volatility Component
+    df['Price_Volatility'] = (df['high'] - df['low']).rolling(window=10).std()
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum'] * (1 / df['Price_Volatility'])
+    
+    # Confirm with Volume Trends
+    df['Avg_Volume_30D'] = df['volume'].rolling(window=30).mean()
+    df['Volume_Trend'] = np.where(df['volume'] > df['Avg_Volume_30D'], 1, -1)
+    
+    # Calculate Intraday Strength
+    df['Intraday_Strength'] = (df['close'] - df['open']) / df['Intraday_Spread']
+    
+    # Smooth Intraday Strength
+    df['Smoothed_Intraday_Strength'] = df['Intraday_Strength'].ewm(span=5, adjust=False).mean()
+    
+    # Compute Intraday Balance
+    df['Intraday_Balance'] = (df['high'] + df['low']) / 2 - df['close']
+    
+    # Smooth Intraday Balance
+    df['Smoothed_Intraday_Balance'] = df['Intraday_Balance'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Adjusted Volume
+    df['Adjusted_Volume'] = df['volume'] / df['Intraday_Spread']
+    
+    # Integrate Volume-Adjusted Log Return
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Volume_Adjusted_Log_Return'] = df['Log_Return'] * df['Adjusted_Volume']
+    
+    # Calculate Long-Term (LMA) and Short-Term (SMA) Moving Averages
+    df['LMA'] = df['close'].rolling(window=200).mean()
+    df['SMA'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate Volume-Weighted Difference Between LMA and SMA
+    df['VW_Diff'] = (df['LMA'] - df['SMA']) * df['volume']
+    df['VW_Diff_Smoothed'] = df['VW_Diff'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Compute Volume Change
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Weighted Moving Average of Log Returns
+    df['WMA_Log_Returns'] = df['Daily_Log_Return'].ewm(span=5, adjust=False).mean()
+    
+    # Volume Change Momentum
+    df['Volume_Change_Momentum'] = df['Volume_Change'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Weighted Moving Average of Daily Ranges
+    df['WMA_Daily_Ranges'] = df['Daily_Range'].ewm(span=5, adjust=False).mean()
+    
+    # Combine Factors
+    df

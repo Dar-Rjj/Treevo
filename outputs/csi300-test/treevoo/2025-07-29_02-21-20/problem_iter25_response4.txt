@@ -1,0 +1,32 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, intraday_lookback=10, long_term_lookback=20, spike_threshold=5):
+    # Calculate Adjusted Close Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    df['high_low_spread'] = df['high'] - df['low']
+    df['avg_high_low_spread'] = df['high_low_spread'].rolling(window=intraday_lookback).mean()
+    
+    # Compute Volume Moving Average
+    df['vol_ma'] = df['volume'].rolling(window=intraday_lookback).mean()
+    df['volume_impact_factor'] = df['volume'] / df['vol_ma']
+    df['intraday_momentum_adjusted'] = df['avg_high_low_spread'] * df['volume_impact_factor']
+    
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(long_term_lookback)) / df['close'].shift(long_term_lookback)
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(long_term_lookback)
+    df['long_term_momentum_adjusted'] = df['long_term_momentum'] * df['volume_ratio']
+    
+    # Add Volume Spike Filter
+    df['volume_spike'] = df['volume'] / df['volume'].shift(1)
+    df['filtered_long_term_momentum'] = df['long_term_momentum_adjusted'].where(df['volume_spike'] <= spike_threshold, 0)
+    
+    # Consolidate All Factors
+    df['factor_value'] = (df['adjusted_close'] + 
+                          df['intraday_momentum_adjusted'] + 
+                          df['filtered_long_term_momentum']) / df['open']
+    
+    return df['factor_value']
+```

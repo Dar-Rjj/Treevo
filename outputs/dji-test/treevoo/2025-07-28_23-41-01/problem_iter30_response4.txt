@@ -1,0 +1,83 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Cumulative 5-day return
+    df['cumulative_5d_return'] = (1 + df['daily_return']).rolling(window=5).apply(lambda x: x.prod(), raw=True) - 1
+    
+    # Short-term and long-term moving averages
+    df['MA_5'] = df['close'].rolling(window=5).mean()
+    df['MA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Position of the short-term MA relative to the long-term MA
+    df['MA_position'] = df['MA_5'] - df['MA_20']
+    
+    # Number of days since last MA crossover
+    df['MA_crossover'] = df['MA_5'] > df['MA_20']
+    df['days_since_MA_crossover'] = df.groupby((df['MA_crossover'] != df['MA_crossover'].shift()).cumsum())['MA_crossover'].transform('count')
+    
+    # Detect potential breakouts
+    df['breakout_high'] = df['close'] > df['high'].rolling(window=5).max()
+    df['breakout_low'] = df['close'] < df['low'].rolling(window=5).min()
+    
+    # Compute true range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['close'].shift()).abs()
+    df['tr3'] = (df['low'] - df['close'].shift()).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    
+    # Average true range over 14 days
+    df['ATR_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Difference between current ATR and previous ATR
+    df['ATR_diff'] = df['ATR_14'].diff()
+    
+    # Volume ratio
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_20']
+    
+    # Significant trading days based on volume ratio
+    df['significant_trading_day'] = df['volume_ratio'] > 1.5
+    
+    # Evaluate the relationship between volume and price changes
+    df['volume_spike'] = df['volume'] > 1.5 * df['avg_volume_20']
+    df['price_move_significance'] = df['daily_return'].abs() > 0.02
+    df['volume_price_move'] = df['volume_spike'] & df['price_move_significance']
+    
+    # Daily trading range percentage
+    df['daily_range_pct'] = (df['high'] - df['low']) / df['close'] * 100
+    
+    # Consistency of daily trading range
+    df['range_consistency_10d'] = df['daily_range_pct'].rolling(window=10).std()
+    
+    # Frequency and magnitude of large trading ranges
+    df['large_trading_range'] = df['daily_range_pct'] > 2
+    df['large_range_continued'] = df['large_trading_range'] & (df['daily_return'] * df['daily_return'].shift() > 0)
+    
+    # Opening gap analysis
+    df['open_gap'] = df['open'] - df['close'].shift()
+    df['gap_direction'] = df['open_gap'].apply(lambda x: 'up' if x > 0 else ('down' if x < 0 else 'no-gap'))
+    
+    # Price movement following an opening gap
+    df['gap_filled'] = (df['open_gap'] * (df['close'] - df['open'])) <= 0
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['cumulative_5d_return'] +
+        df['MA_position'] +
+        df['days_since_MA_crossover'] +
+        df['breakout_high'].astype(int) - df['breakout_low'].astype(int) +
+        df['ATR_diff'] +
+        df['volume_ratio'] +
+        df['significant_trading_day'].astype(int) +
+        df['volume_price_move'].astype(int) +
+        1 / df['range_consistency_10d'] +
+        df['large_range_continued'].astype(int) +
+        df['open_gap'] + (df['gap_filled'].astype(int) - 0.5)
+    )
+    
+    return alpha_factor
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, m=10):
+    # Calculate Day-to-Day Log Return of Close Price
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate True Range
+    df['true_range'] = np.maximum(
+        np.maximum(
+            df['high'] - df['low'],
+            np.abs(df['high'] - df['close'].shift(1))
+        ),
+        np.abs(df['low'] - df['close'].shift(1))
+    )
+    
+    # Compute Volume-Weighted Moving Sum of Log Returns
+    df['volume_weighted_log_returns'] = (df['log_return'] * df['volume']).rolling(window=n).sum()
+    
+    # Compute Volume-Adjusted Factor
+    df['volume_adjusted_factor'] = df['volume_weighted_log_returns'] / df['volume'].rolling(window=n).sum()
+    
+    # Compute Average True Range (ATR)
+    df['atr'] = df['true_range'].rolling(window=n).sum() / n
+    
+    # Incorporate Volume Weight
+    df['volume_weighted_atr'] = df['atr'] * df['volume_adjusted_factor']
+    
+    # Apply Exponential Smoothing
+    weights = np.exp(np.linspace(0, -1, n))
+    weights /= weights.sum()
+    df['exp_smoothed_volume_weighted_atr'] = df['volume_weighted_atr'].rolling(window=n).apply(lambda x: (x * weights).sum(), raw=True)
+    
+    # Incorporate Volume Trend
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_trend_ratio'] = df['volume'] / df['average_volume']
+    df['volume_trend_adjusted_factor'] = df['exp_smoothed_volume_weighted_atr'] * df['volume_trend_ratio']
+    
+    # Introduce Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].rolling(window=m).mean()
+    
+    # Combine Momentum and Volume-Weighted Factors
+    df['combined_factor'] = df['price_momentum'] * df['volume_trend_adjusted_factor']
+    
+    # Introduce Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=m).std()
+    
+    # Adjust Combined Factor by Volatility
+    df['adjusted_combined_factor'] = df['combined_factor'] / df['price_volatility']
+    
+    return df['adjusted_combined_factor'].dropna()
+```

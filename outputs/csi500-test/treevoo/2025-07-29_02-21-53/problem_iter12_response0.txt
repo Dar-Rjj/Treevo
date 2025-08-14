@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Compute Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Smooth High-Low Range with 20-day EMA
+    df['smoothed_high_low_range'] = df['high_low_diff'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Long-Term (50-day) High-Low Range
+    df['long_term_high_low_range'] = df[['high', 'low']].rolling(window=50).max().diff()
+    
+    # Sum of High-Low Differences over a Period
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=20).sum()
+    
+    # Sum of Close-Open Differences over a Period
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=20).sum()
+    
+    # Calculate Standard Deviation of Close Prices for Volatility
+    df['close_std'] = df['close'].rolling(window=20).std()
+    
+    # Weight by Recent Price Volatility
+    df['volatility_weight'] = df['close_std'] / df['close_std'].rolling(window=20).mean()
+    
+    # Compute Combined Price and High-Low Range Momentum
+    df['combined_momentum'] = (df['sum_high_low_diff'] + df['sum_close_open_diff']) * df['volatility_weight'] + \
+                              (df['long_term_high_low_range'] - df['smoothed_high_low_range'])
+    
+    # Compute Average Volume
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Identify Days with High Volume
+    df['high_volume'] = df['volume'] > 1.5 * df['avg_volume']
+    
+    # Compute Volume Ratio
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+    
+    # Multiply Combined Momentum Score by Volume Ratio
+    df['weighted_momentum'] = df['combined_momentum'] * df['volume_ratio']
+    
+    # Combine with High-Low Range Momentum
+    df['final_factor'] = df['weighted_momentum'] + df['smoothed_high_low_range']
+    
+    # Adjust for Market Trends and Volume Spike Impact
+    if 'market_index' in df.columns:
+        df['market_return'] = df['market_index'].pct_change()
+        df['final_factor'] = df['final_factor'] + df['market_return']
+    
+    # Identify Sudden Volume Spikes
+    df['volume_spike'] = (df['volume'] / df['avg_volume']) > 2.0
+    
+    # Adjust Alpha Factor for Volume Spike
+    df['final_factor'] = df['final_factor'] + df['volume_spike'] * 0.5 * df['final_factor']
+    
+    # Introduce a Decay Factor for Sustained High Volume
+    df['decay_factor'] = 1.0
+    df.loc[df['high_volume'], 'decay_factor'] = 0.95 ** (df['high_volume'].groupby((~df['high_volume']).cumsum()).cumcount())
+    
+    # Apply Decay Factor to Final Alpha Factor
+    df['final_factor'] = df['final_factor'] * df['decay_factor']
+    
+    return df['final_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

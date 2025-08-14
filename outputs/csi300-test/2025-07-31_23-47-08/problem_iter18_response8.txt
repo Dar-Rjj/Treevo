@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday Range'] = df['high'] - df['low']
+    df['Intraday Return'] = df['Intraday Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+
+    # Combine Intraday and Overnight Returns
+    df['Combined Return'] = df['Intraday Return'] + df['Overnight Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume-Weighted Price'] = df['Typical Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    vwap = df['Volume-Weighted Price'].sum() / total_volume
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal Indicator'] = df.apply(lambda row: 1 if vwap > row['close'] else -1, axis=1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated Reversal Return'] = df['Combined Return'] * df['Reversal Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume-Weighted Return'] = (df['Return'] * df['volume']).sum() / total_volume
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial Alpha Factor'] = df['Integrated Reversal Return'] + df['Volume-Weighted Return']
+
+    # Calculate Rolling Averages
+    df['5-day MA'] = df['close'].rolling(window=5).mean()
+    df['20-day MA'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Volatility
+    df['Daily Returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['20-day Std Dev'] = df['Daily Returns'].rolling(window=20).std()
+    df['5-day EMA Abs Returns'] = df['Daily Returns'].abs().ewm(span=5).mean()
+
+    # Adjust for Volatility
+    df['Vol-Adjusted Alpha (Std Dev)'] = df['Initial Alpha Factor'] / df['20-day Std Dev']
+    df['Vol-Adjusted Alpha (EMA)'] = df['Initial Alpha Factor'] / df['5-day EMA Abs Returns']
+
+    # Incorporate Transaction Amount
+    df['Amount-Weighted Return'] = (df['close'] - df['open']) / df['open'] * df['amount']
+    total_amount = df['amount'].sum()
+    amount_weighted_return = df['Amount-Weighted Return'].sum() / total_amount
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factors
+    df['Final Alpha (Std Dev)'] = df['Vol-Adjusted Alpha (Std Dev)'] + amount_weighted_return
+    df['Final Alpha (EMA)'] = df['Vol-Adjusted Alpha (EMA)'] + amount_weighted_return
+
+    # Dynamic Weighting of Volume and Amount
+    dynamic_weight = df['volume'] / (df['volume'] + df['amount'])
+    df['Volume-Weighted Alpha Factor'] = df['Final Alpha (Std Dev)']
+    df['Amount-Weighted Alpha Factor'] = df['Final Alpha (EMA)']
+    df['Final Alpha Factor'] = (dynamic_weight * df['Volume-Weighted Alpha Factor']) + ((1 - dynamic_weight) * df['Amount-Weighted Alpha Factor'])
+
+    return df['Final Alpha Factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': ...,
+#     'open': ...,
+#     'high': ...,
+#     'low': ...,
+#     'close': ...,
+#     'amount': ...,
+#     'volume': ...
+# })
+# alpha_factor = heuristics_v2(df)
+```

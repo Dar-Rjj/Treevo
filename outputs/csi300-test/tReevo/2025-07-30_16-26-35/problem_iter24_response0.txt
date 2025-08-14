@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'].shift(-1) - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+
+    # Calculate Intraday Momentum
+    df['Intraday_Momentum'] = df['close'] - df['open']
+    
+    # Compute Volume Ratio
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Adaptive Weighting
+    df['W_recent_range'] = 0.5 + 0.1 * (df['Volume_Ratio'] - 1)
+    df['W_older_range'] = 1 - df['W_recent_range']
+    df['W_recent_close_open'] = 0.3 + 0.1 * (df['Volume_Ratio'] - 1)
+    df['W_older_close_open'] = 1 - df['W_recent_close_open']
+    df['W_recent_vwap'] = 0.1 + 0.1 * (df['Volume_Ratio'] - 1)
+    df['W_older_vwap'] = 1 - df['W_recent_vwap']
+    df['W_recent_momentum'] = 0.1 + 0.1 * (df['Volume_Ratio'] - 1)
+    df['W_older_momentum'] = 1 - df['W_recent_momentum']
+
+    # Combine Intraday Range, Close-to-Open Return, VWAP, and Intraday Momentum with Adaptive Weighting
+    df['Recent_Intraday_Range'] = df['W_recent_range'] * df['Intraday_Range']
+    df['Recent_Close_to_Open_Return'] = df['W_recent_close_open'] * df['Close_to_Open_Return']
+    df['Recent_VWAP'] = df['W_recent_vwap'] * df['VWAP']
+    df['Recent_Intraday_Momentum'] = df['W_recent_momentum'] * df['Intraday_Momentum']
+    
+    # Initial Alpha Factor
+    df['Initial_Alpha_Factor'] = (df['Recent_Intraday_Range'] + 
+                                  df['Recent_Close_to_Open_Return'] + 
+                                  df['Recent_VWAP'] + 
+                                  df['Recent_Intraday_Momentum'])
+    
+    # Adjust Alpha Factor based on Volume Ratio
+    df['Adjusted_Alpha_Factor'] = df['Initial_Alpha_Factor'] * (1 + (df['Volume_Ratio'] - 1) * 0.7)
+    
+    # Advanced Volume Momentum
+    df['Volume_Momentum'] = df['Volume_Ratio'] - 1
+    df['Volume_Momentum'] = df['Volume_Momentum'].apply(lambda x: max(0, x))
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_Alpha_Factor'] + df['Volume_Momentum'] * 0.3
+    
+    return df['Final_Alpha_Factor'].shift(1)
+```

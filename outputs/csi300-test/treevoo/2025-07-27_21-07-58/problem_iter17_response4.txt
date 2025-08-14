@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, m=20):
+    # Calculate 1-Period Price Momentum
+    df['Close_t-1'] = df['close'].shift(1)
+    df['Price_Momentum'] = df['close'] - df['Close_t-1']
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['Prev_High_Low_Range'] = df['High_Low_Range'].shift(1)
+    df['Change_High_Low_Range'] = df['High_Low_Range'] - df['Prev_High_Low_Range']
+    
+    # Calculate Price Momentum Component
+    df['Daily_Price_Change_Pct'] = (df['close'] - df['Close_t-1']) / df['Close_t-1']
+    df['EMA_Price_Momentum'] = df['Daily_Price_Change_Pct'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Volume Surge Component
+    df['Prev_Volume'] = df['volume'].shift(1)
+    df['Daily_Volume_Change_Pct'] = (df['volume'] - df['Prev_Volume']) / df['Prev_Volume']
+    df['10_Day_Avg_Volume_Change'] = df['Daily_Volume_Change_Pct'].rolling(window=10).mean()
+    
+    # Combine High-Low Range and Volume
+    df['High_Low_Volume'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['21_Day_Avg_Volume'] = df['volume'].rolling(window=21).mean()
+    df['Volume_Ratio'] = df['volume'] / df['21_Day_Avg_Volume']
+    
+    # Adjust by Average Amount
+    df['Average_Amount'] = df['amount'].rolling(window=m).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Average_Amount']
+    
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['Adjusted_Momentum'] = (df['Price_Momentum'] * df['Volume_Ratio']) * df['Amount_Ratio']
+    
+    # Combine Components
+    df['Momentum_Volume_Component'] = df['EMA_Price_Momentum'] * df['10_Day_Avg_Volume_Change']
+    df['Final_Alpha_Factor'] = df['High_Low_Volume'] + df['Momentum_Volume_Component'] + df['Adjusted_Momentum']
+
+    return df['Final_Alpha_Factor']
+```

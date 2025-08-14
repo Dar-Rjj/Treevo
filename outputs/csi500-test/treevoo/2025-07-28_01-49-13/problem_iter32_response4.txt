@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Momentum Factor: Sum of daily return over a 30-day window
+    df['momentum'] = df['daily_return'].rolling(window=30).sum()
+    
+    # Mean Reversion Factor: (Close_t - Average(Close over a 30-day window)) / Standard Deviation(Close over a 30-day window)
+    df['mean_reversion'] = (df['close'] - df['close'].rolling(window=30).mean()) / df['close'].rolling(window=30).std()
+    
+    # Risk-Adjusted Return: Sum(daily return over a 30-day window) / Standard Deviation(daily returns over a 30-day window)
+    df['risk_adjusted_return'] = df['daily_return'].rolling(window=30).sum() / df['daily_return'].rolling(window=30).std()
+    
+    # Price range: (High_t - Low_t) / Close_{t-1}
+    df['price_range'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Price range volatility: Standard deviation of price range over a 30-day window
+    df['price_range_volatility'] = df['price_range'].rolling(window=30).std()
+    
+    # Risk-adjusted price range: (Sum(price range over a 30-day window)) / (Standard deviation of price range over a 30-day window)
+    df['risk_adjusted_price_range'] = df['price_range'].rolling(window=30).sum() / df['price_range_volatility']
+    
+    # Close to Open Returns: (Close(t) - Open(t)) / Open(t)
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Average Volume Over N Days: Mean(Volume, N)
+    df['average_volume_30'] = df['volume'].rolling(window=30).mean()
+    
+    # Daily Volume Change: (Volume_t - Volume_{t-1})
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Significant Volume Spike: if (Volume_t > 2 * Average(Volume over a 30-day window))
+    df['significant_volume_spike'] = (df['volume'] > 2 * df['average_volume_30']).astype(int)
+    
+    # Impact on Price when Significant Volume Spike Occurs: (Close_t - Close_{t-1}) / Close_{t-1} when Significant Volume Spike Occurs
+    df['impact_on_price'] = df['daily_return'] * df['significant_volume_spike']
+    
+    # Volume trend: (Average(volume over last 5 days) - Average(volume over a 30-day window)) / Average(volume over a 30-day window)
+    df['volume_trend'] = (df['volume'].rolling(window=5).mean() - df['average_volume_30']) / df['average_volume_30']
+    
+    # Volume Price Trend (VPT): VPT(t) = VPT(t-1) + (Volume * ((Close - Close(t-1)) / Close(t-1)))
+    df['vpt'] = 0.0
+    vpt_values = []
+    for i in range(1, len(df)):
+        vpt_value = vpt_values[-1] if vpt_values else 0
+        vpt_value += df['volume'].iloc[i] * (df['close'].iloc[i] - df['close'].iloc[i-1]) / df['close'].iloc[i-1]
+        vpt_values.append(vpt_value)
+    df['vpt'][1:] = vpt_values
+    
+    # Daily Transaction Amount: Close * Volume
+    df['transaction_amount'] = df['close'] * df['volume']
+    
+    # Change in Transaction Amount: (Transaction Amount(t) - Transaction Amount(t-1)) / Transaction Amount(t-1)
+    df['change_in_transaction_amount'] = (df['transaction_amount'] - df['transaction_amount'].shift(1)) / df['transaction_amount'].shift(1)
+    
+    # Combining Price and Volume Signals: (Price Signal) * (Volume Signal)
+    df['composite_alpha_factor'] = df['momentum'] * df['volume_trend']
+    
+    # Output the final composite alpha factor
+    return df['composite_alpha_factor']
+```

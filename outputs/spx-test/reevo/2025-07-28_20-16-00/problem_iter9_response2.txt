@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive ATR
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)
+    atr_14 = true_range.rolling(window=14).mean()
+    atr_7 = true_range.rolling(window=7).mean()
+    adaptive_atr = (atr_14 + atr_7) / 2
+
+    # Multi-period momentum
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    momentum_short = (df['close'] > sma_5).astype(int)
+    momentum_long = (sma_5 > sma_20).astype(int)
+
+    # Volume shocks
+    avg_volume_14 = df['volume'].rolling(window=14).mean()
+    volume_shock = (df['volume'] > (avg_volume_14 * 1.5)).astype(int)
+
+    # Mean reversion and trend strength
+    daily_volatility = df['high'] - df['low']
+    mean_reversion_signal = (1 / (daily_volatility + 1e-7))
+    trend_strength_signal = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=3).sum() / df['volume'].rolling(window=3).sum()
+
+    # RSI (Relative Strength Index)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Combine factors
+    factor = (mean_reversion_signal * momentum_short * momentum_long * (rsi / 100) * (1 / (adaptive_atr + 1e-7)) * trend_strength_signal * volume_shock)
+
+    return factor
+```

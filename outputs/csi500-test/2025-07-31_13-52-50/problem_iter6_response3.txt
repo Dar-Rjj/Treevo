@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = intraday_return.rolling(window=5).mean()
+    exponential_weights = np.exp(np.linspace(0, -1, 5))
+    intraday_momentum_smoothed = (intraday_return.rolling(window=5).apply(lambda x: (x * exponential_weights).sum(), raw=True))
+
+    # Evaluate Liquidity
+    average_volume = df['volume'].rolling(window=10).mean()
+    dollar_volume = df['volume'] * df['close']
+    price_impact = (df['close'].diff().abs() / dollar_volume).fillna(0)
+    liquidity = average_volume * price_impact * 1e-6  # Scale by a constant
+
+    # Evaluate Volatility
+    daily_returns = df['close'].pct_change()
+    historical_volatility = daily_returns.rolling(window=20).std()
+    volatility_smoothed = (historical_volatility.rolling(window=20).apply(lambda x: (x * exponential_weights).sum(), raw=True))
+
+    # Introduce Range Indicator
+    range_indicator = (df['high'] - df['low']) / df['close']
+    range_smoothed = (range_indicator.rolling(window=15).apply(lambda x: (x * exponential_weights).sum(), raw=True))
+
+    # Combine Intraday Momentum, Liquidity, Volatility, and Range
+    alpha_factor = (intraday_momentum_smoothed * liquidity) / volatility_smoothed * range_smoothed
+
+    # Generate Alpha Factor
+    alpha_factor = alpha_factor.clip(lower=0)
+    alpha_factor = alpha_factor.where(alpha_factor > 0.01, 0)  # Apply threshold for stability
+
+    return alpha_factor
+```

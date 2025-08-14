@@ -1,0 +1,32 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(data: pd.DataFrame) -> pd.Series:
+    # Calculate Daily VWAP
+    data['dollar_value'] = data['close'] * data['volume']
+    daily_vwap = (data.groupby(level=0)['dollar_value'].sum() / 
+                  data.groupby(level=0)['volume'].sum())
+    data['vwap'] = daily_vwap
+    
+    # Calculate VWAP Deviation
+    data['vwap_deviation'] = data['close'] - data['vwap']
+    
+    # Calculate Cumulative VWAP Deviation
+    data['cum_vwap_dev'] = data.groupby('ticker')['vwap_deviation'].cumsum()
+    
+    # Integrate Short-Term Momentum
+    short_term_mom = 5
+    data['short_term_mom'] = (data['close'] - data['close'].shift(short_term_mom)) / data['close'].shift(short_term_mom)
+    
+    # Integrate Medium-Term Momentum
+    medium_term_mom = 10
+    data['medium_term_mom'] = (data['close'] - data['close'].shift(medium_term_mom)) / data['close'].shift(medium_term_mom)
+    
+    # Adaptive Weighting
+    alpha_factor = (
+        data['cum_vwap_dev'] * 0.5 + 
+        data['short_term_mom'] * 0.3 + 
+        data['medium_term_mom'] * 0.2
+    )
+    
+    return alpha_factor

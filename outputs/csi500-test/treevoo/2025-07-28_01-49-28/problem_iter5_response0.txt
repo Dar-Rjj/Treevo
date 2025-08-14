@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data: pd.DataFrame) -> pd.Series:
+    # Volume-Adjusted Close Price Momentum
+    simple_momentum_21 = data['close'].pct_change(21)
+    simple_momentum_63 = data['close'].pct_change(63)
+    volume_factor_21 = data['volume'].rolling(window=21).mean()
+    volume_factor_63 = data['volume'].rolling(window=63).mean()
+    adjusted_momentum_21 = simple_momentum_21 * (volume_factor_21 / volume_factor_21.mean())
+    adjusted_momentum_63 = simple_momentum_63 * (volume_factor_63 / volume_factor_63.mean())
+
+    # Combined Price Momentum
+    momentum_21 = data['close'] - data['close'].shift(21)
+    momentum_63 = data['close'] - data['close'].shift(63)
+    combined_momentum = 0.5 * momentum_21 + 0.5 * momentum_63
+
+    # Volume Reversal Indicator
+    avg_volume_21 = data['volume'].rolling(window=21).mean()
+    avg_volume_63 = data['volume'].rolling(window=63).mean()
+    volume_reversal = (avg_volume_21 - avg_volume_63) / avg_volume_63
+
+    # Open-High-Low Volatility Factor
+    open_high_diff = data['high'] - data['open']
+    open_low_diff = data['open'] - data['low']
+    weighted_volatility = (data['volume'] * open_high_diff + data['volume'] * open_low_diff) / data['volume'].sum()
+
+    # Price-Amount Interaction Effect
+    amount_per_close = data['amount'].rolling(window=21).sum() / data['close']
+    amount_per_close_shifted = data['amount'].rolling(window=42).sum().shift(21) / data['close'].shift(21)
+    interaction_effect = amount_per_close - amount_per_close_shifted
+
+    # Volume-Adjusted Daily Range
+    daily_range = data['high'] - data['low']
+    adjusted_daily_range = daily_range * data['volume']
+
+    # Volume-Adjusted Open-to-Close Movement
+    open_to_close = data['close'] - data['open']
+    adjusted_open_to_close = open_to_close * data['volume']
+
+    # Combined Breakout Indicator
+    breakout_indicator = adjusted_daily_range + adjusted_open_to_close
+    strong_move_threshold = breakout_indicator.quantile(0.9)
+    breakout_signal = (breakout_indicator > strong_move_threshold).astype(int)
+
+    # Final Alpha Factor
+    alpha_factor = (
+        0.2 * adjusted_momentum_21 +
+        0.2 * adjusted_momentum_63 +
+        0.2 * combined_momentum +
+        0.1 * volume_reversal +
+        0.1 * weighted_volatility +
+        0.1 * interaction_effect +
+        0.1 * breakout_signal
+    )
+
+    return alpha_factor
+```

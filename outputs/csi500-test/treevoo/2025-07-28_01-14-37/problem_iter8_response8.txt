@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=10):
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    intraday_volatility = df['high_low_range'].rolling(window=n).mean()
+
+    # Calculate Daily Return
+    df['daily_return'] = df['close'] / df['close'].shift(1) - 1
+
+    # Calculate Cumulative Return over a specified window (e.g., 5 days)
+    cumulative_return = df['daily_return'].rolling(window=n).sum()
+
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=n).mean()
+    volume_adjusted_cumulative_return = cumulative_return * average_volume
+
+    # Adjust by Price Volatility
+    close_std = df['close'].rolling(window=n).std()
+    price_volatility_adjusted_cumulative_return = (volume_adjusted_cumulative_return / close_std) + 1
+
+    # Calculate Weighted Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(m))
+    exponential_weights = np.exp(np.arange(m-1, -1, -1) * 0.1)  # example weights
+    weighted_log_returns = log_returns.rolling(window=m).apply(lambda x: np.sum(x * exponential_weights), raw=True)
+    weighted_momentum = weighted_log_returns / intraday_volatility
+
+    # Determine Trend Direction
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    trend_direction = np.where(short_ema > long_ema, 1, -1)
+
+    # Confirm with Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_momentum = trend_direction * volume_change
+    final_momentum = (weighted_momentum + adjusted_momentum) / 2
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    relative_strength = short_ema - long_ema
+    volume_weighted_price_movement = (df['close'] * df['volume']).rolling(window=n).mean()
+    integrated_factor = (relative_strength / volume_weighted_price_movement) + price_volatility_adjusted_cumulative_return
+
+    return integrated_factor
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    momentum_lookback = 50
+    df['PriceMomentum'] = df['close'].pct_change(momentum_lookback)
+    
+    # Calculate Volume Acceleration
+    volume_lookback = 20
+    df['VolumeAcceleration'] = df['volume'].pct_change(volume_lookback)
+    
+    # Combine Momentum and Volume
+    df['IntermediateFactor'] = df['PriceMomentum'] * df['VolumeAcceleration']
+    
+    # Calculate High-to-Low Range
+    df['HighLowRange'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['AdjustedHighLowRange'] = df['HighLowRange'] * df['volume']
+    
+    # Detect Volume Spike
+    df['Volume5DayMA'] = df['volume'].rolling(window=5).mean()
+    df['VolumeSpikeFlag'] = (df['volume'] > 1.5 * df['Volume5DayMA']).astype(int)
+    
+    # Calculate Volume Trend
+    volume_trend_window = 10
+    df['VolumeTrend'] = (df['volume'] > df['volume'].rolling(window=volume_trend_window).mean()).astype(int) * 2 - 1
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = df[['high', 'low', 'close', 'open']].std(axis=1)
+    
+    # Adjust Intraday Return
+    df['IntradayVolatilityAdjusted'] = df['IntradayReturn'] / df['IntradayVolatility']
+    
+    # Calculate Volume Displacement
+    df['VolumeDisplacement'] = df['volume'] - df['volume'].shift(1)
+    
+    # Combine Intraday Factors
+    df['IntradayCombinedFactor'] = df['IntradayVolatilityAdjusted'] * df['VolumeDisplacement']
+    
+    # Calculate Trading Range Expansion
+    range_expansion_lookback = 20
+    df['TrueRange'] = df['high'] - df['low'].abs().shift(1)
+    df['AverageTrueRange'] = df['TrueRange'].rolling(window=range_expansion_lookback).mean()
+    
+    # Final Combination
+    df['AdjustedHighLowRangeWithTrend'] = df['AdjustedHighLowRange'] * df['VolumeTrend']
+    df['FinalFactor'] = (
+        df['IntermediateFactor'] +
+        df['AdjustedHighLowRangeWithTrend'] * (1 + df['VolumeSpikeFlag']) +
+        df['IntradayCombinedFactor'] +
+        df['VolumeAcceleration'] +
+        df['AverageTrueRange']
+    )
+    
+    return df['FinalFactor']
+```

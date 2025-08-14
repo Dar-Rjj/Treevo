@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low, to gauge the day's volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Adaptive window for simple moving average based on the 30-day ATR
+    atr_30 = (df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)).rolling(window=30).mean()
+    adaptive_window = (5 + (atr_30 / atr_30.rolling(window=30).mean()).fillna(0)).astype(int)
+    
+    # Calculate a simple moving average for the close price over an adaptive window as a basic trend indicator
+    sma_adaptive = df['close'].rolling(window=adaptive_window).mean()
+    
+    # Determine if today's close is above the adaptive SMA, indicating an upward momentum
+    momentum = (df['close'] > sma_adaptive).astype(int)
+    
+    # Calculate the volume-weighted return of the last 3 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=3).sum() / df['volume'].rolling(window=3).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the ATR (Average True Range) for the last 14 days
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Dynamic weighting based on the ratio of the current day's volume to the 14-day average volume
+    avg_volume_14 = df['volume'].rolling(window=14).mean()
+    volume_ratio = df['volume'] / avg_volume_14
+    
+    # Incorporate seasonality by adding a sine wave with a period of one year
+    date_index = pd.to_datetime(df.index)
+    seasonal_factor = np.sin(2 * np.pi * (date_index.dayofyear / 365))
+    
+    # Create a factor combining volatility (as inverse, higher volatility might lead to reversion), momentum, RSI, ATR, and volume ratio
+    factor = (1 / (daily_volatility + 1e-7)) * momentum * (rsi / 100) * (1 / (atr + 1e-7)) * weighted_return * volume_ratio * (1 + 0.5 * seasonal_factor)
+    
+    return factor
+```

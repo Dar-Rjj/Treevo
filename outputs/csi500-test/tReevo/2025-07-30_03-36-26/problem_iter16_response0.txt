@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    total_volume = df['volume'].sum()
+    total_dollar_value = (df['close'] * df['volume']).sum()
+    vwap = total_dollar_value / total_volume
+
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - vwap
+
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+
+    # Integrate Dynamic Short-Term Momentum
+    short_term_periods = [5, 7, 10]
+    short_term_momentum = {}
+    for period in short_term_periods:
+        momentum = df['vwap_deviation'].rolling(window=period).sum()
+        short_term_momentum[period] = momentum.sum()
+    optimal_short_term_period = max(short_term_momentum, key=short_term_momentum.get)
+    df['short_term_momentum'] = df['vwap_deviation'].rolling(window=optimal_short_term_period).sum()
+
+    # Integrate Dynamic Medium-Term Momentum
+    medium_term_periods = [10, 15, 20]
+    medium_term_momentum = {}
+    for period in medium_term_periods:
+        momentum = df['vwap_deviation'].rolling(window=period).sum()
+        medium_term_momentum[period] = momentum.sum()
+    optimal_medium_term_period = max(medium_term_momentum, key=medium_term_momentum.get)
+    df['medium_term_momentum'] = df['vwap_deviation'].rolling(window=optimal_medium_term_period).sum()
+
+    # Integrate Dynamic Long-Term Momentum
+    long_term_periods = [20, 30, 40]
+    long_term_momentum = {}
+    for period in long_term_periods:
+        momentum = df['vwap_deviation'].rolling(window=period).sum()
+        long_term_momentum[period] = momentum.sum()
+    optimal_long_term_period = max(long_term_momentum, key=long_term_momentum.get)
+    df['long_term_momentum'] = df['vwap_deviation'].rolling(window=optimal_long_term_period).sum()
+
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['absolute_vwap_deviation'] = np.abs(df['close'] - vwap)
+    df['intraday_volatility'] = df['high_low_range'] + df['absolute_vwap_deviation']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['cumulative_vwap_deviation'] +
+        df['short_term_momentum'] +
+        df['medium_term_momentum'] +
+        df['long_term_momentum'] +
+        df['intraday_volatility']
+    )
+
+    return df['alpha_factor']
+```

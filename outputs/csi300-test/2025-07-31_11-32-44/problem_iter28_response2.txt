@@ -1,0 +1,33 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Raw Momentum
+    df['N_day_close_pct_change'] = df['close'].pct_change(5)
+    decay_factor = 0.9 ** (45 / 5)
+    df['enhanced_raw_momentum'] = df['N_day_close_pct_change'] * (df['close'] / (df['close'].shift(45) * decay_factor))
+
+    # Calculate Volume-Adjusted Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    df['volume_adjusted_intraday_volatility'] = df['intraday_volatility'] / np.log(df['volume'])
+
+    # Combine Momentum, Intraday Volatility, and High-Low Range
+    df['combined_factor'] = (df['enhanced_raw_momentum'] * 
+                             df['volume_adjusted_intraday_volatility'] * 
+                             (df['high'] - df['low']))
+
+    # Confirm with Absolute Volume Delta
+    df['volume_delta'] = df['volume'] - df['volume'].shift(45)
+    df['combined_factor'] *= df['volume_delta'].abs()
+
+    # Integrate with Trend Continuity and Filter
+    df['trend_continuity'] = np.sign(df['close'] - df['close'].shift(1))
+    df['alpha_factor'] = df['combined_factor'] * df['trend_continuity']
+    df['alpha_factor'] = np.where(np.abs(df['alpha_factor']) < 0.8, 0, df['alpha_factor'])
+
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

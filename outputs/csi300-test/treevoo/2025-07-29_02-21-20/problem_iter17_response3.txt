@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close Price Adjustment by Open Price
+    close_price_adjustment = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    intraday_momentum = (high_price_indicator + low_price_indicator) / 2
+    
+    # Adjust for Volume Impact on Intraday Momentum
+    volume_impact_intraday = df['volume'] * intraday_momentum
+    
+    # Incorporate Longer-Term Momentum Adjusted for Volume
+    lookback_period = 20
+    long_term_momentum = (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+    volume_ratio = df['volume'] / df['volume'].shift(lookback_period)
+    final_long_term_factor = long_term_momentum * np.cbrt(volume_ratio)
+    
+    # Consolidate All Factors
+    total_factor = close_price_adjustment + volume_impact_intraday + final_long_term_factor
+    consolidated_factor = total_factor / df['open']
+    
+    # Calculate Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01
+    significant_price_increase = (daily_price_return > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    past_week_median_volume = df['volume'].rolling(window=5).median()
+    volume_spike_indicator = (df['volume'] > past_week_median_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_price_momentum = daily_price_return * significant_price_increase
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = weighted_price_momentum * volume_spike_indicator
+    
+    # Simple Moving Average (SMA) Factors
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    sma_momentum = sma_5 - sma_20
+    
+    # Volume-weighted Average Price (VWAP) as a Factor
+    vwap = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_sma_10 = vwap.rolling(window=10).mean()
+    vwap_signal = vwap - vwap_sma_10
+    
+    # Price Range-Based Indicators
+    tr = pd.DataFrame({
+        'h-l': df['high'] - df['low'],
+        'h-pc': abs(df['high'] - df['close'].shift(1)),
+        'l-pc': abs(df['low'] - df['close'].shift(1))
+    }).max(axis=1)
+    atr = tr.rolling(window=14).mean()
+    
+    # Accumulation/Distribution Line (A/D Line) for Insights
+    mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    ad_line = (mfm * df['volume']).cumsum()
+    ad_slope = ad_line.diff(periods=30)
+    
+    # Final Alpha Factor Synthesis
+    alpha_factor = (consolidated_factor + filtered_momentum + sma_momentum + atr) * volume_spike_indicator
+    final_alpha_factor = alpha_factor / df['open']
+    
+    return final_alpha_factor
+```

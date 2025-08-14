@@ -1,0 +1,38 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Assign weights based on recency
+    recent_weights = {'intraday_range': 0.7, 'close_to_open_return': 0.3}
+    older_weights = {'intraday_range': 0.5, 'close_to_open_return': 0.5}
+    
+    # Determine the recency cutoff (e.g., last 10 days are considered recent)
+    cutoff_date = df.index[-1] - pd.Timedelta(days=10)
+    
+    # Apply dynamic weighting
+    for date in df.index:
+        if date > cutoff_date:
+            df.loc[date, 'factor_value'] = (recent_weights['intraday_range'] * df.loc[date, 'intraday_range'] +
+                                           recent_weights['close_to_open_return'] * df.loc[date, 'close_to_open_return'])
+        else:
+            df.loc[date, 'factor_value'] = (older_weights['intraday_range'] * df.loc[date, 'intraday_range'] +
+                                           older_weights['close_to_open_return'] * df.loc[date, 'close_to_open_return'])
+    
+    # Return the factor values as a pandas Series
+    return df['factor_value']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 102, 101, 103, 104],
+#     'high': [105, 106, 107, 108, 109],
+#     'low': [98, 99, 100, 101, 102],
+#     'close': [103, 104, 105, 106, 107],
+# }, index=pd.date_range('2023-01-01', periods=5))
+# result = heuristics_v2(df)
+# print(result)

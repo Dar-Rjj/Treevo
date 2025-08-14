@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    
+    # Compute Moving Average Volume
+    df['Moving_Average_Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Generate Volume-Adjusted Price Range
+    df['Volume_Adjusted_Price_Range'] = df['Daily_Price_Range'] / df['Moving_Average_Volume']
+    
+    # Calculate Long-Term Price Momentum
+    df['Long_Term_Momentum'] = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    
+    # Calculate Short-Term Price Momentum
+    df['Short_Term_Momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Combine Momentum
+    df['Combined_Momentum'] = df['Long_Term_Momentum'] + df['Short_Term_Momentum']
+    
+    # Calculate Intraday Price Range Midpoint
+    df['Intraday_Price_Range_Midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Close to Range Midpoint Deviation
+    df['Close_to_Range_Midpoint_Deviation'] = df['close'] - df['Intraday_Price_Range_Midpoint']
+    
+    # Incorporate Volume and Amount Trends
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Amount_Change'] = df['amount'] - df['amount'].shift(1)
+    
+    # Calculate Close-to-Open Movement
+    df['Close_to_Open_Movement'] = df['close'] - df['open']
+    
+    # Weighted Average of Components
+    weighted_average = (
+        df['Combined_Momentum'] * 0.3 +
+        df['Daily_Price_Range'] * 0.2 +
+        df['Close_to_Open_Movement'] * 0.1 +
+        df['Volume_Adjusted_Price_Range'] * 0.15 +
+        df['Close_to_Range_Midpoint_Deviation'] * 0.15
+    )
+    
+    # Calculate Volume Acceleration
+    df['Volume_Acceleration'] = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    
+    # Generate Alpha Signal
+    df['Alpha_Signal'] = weighted_average * df['Volume_Acceleration']
+    
+    # Set Thresholds
+    alpha_signal_threshold = 0.01
+    volume_adjusted_price_range_threshold = 0.05
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = 0
+    df.loc[df['Alpha_Signal'] > alpha_signal_threshold, 'Final_Alpha_Factor'] = 1 * df['Alpha_Signal']
+    df.loc[df['Alpha_Signal'] < -alpha_signal_threshold, 'Final_Alpha_Factor'] = -1 * df['Alpha_Signal']
+    
+    # Refine Final Alpha Factor
+    df.loc[df['Volume_Adjusted_Price_Range'] > volume_adjusted_price_range_threshold, 'Final_Alpha_Factor'] = 1 * df['Final_Alpha_Factor']
+    df.loc[df['Volume_Adjusted_Price_Range'] < -volume_adjusted_price_range_threshold, 'Final_Alpha_Factor'] = -1 * df['Final_Alpha_Factor']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_adjusted_spread = intraday_high_low_spread * df['volume']
+    volume_adjusted_change = close_to_open_change * df['volume']
+    
+    # Analyze Volume Trends
+    daily_volume = df['volume']
+    moving_average_volume = daily_volume.rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    sum_of_volume_adjusted_spreads = volume_adjusted_spread + volume_adjusted_change
+    
+    # Identify Price-Volume Imbalances
+    price_range = df['high'] - df['low']
+    volume_adjusted_price_range = price_range / moving_average_volume
+    threshold = 1.5
+    positive_imbalance = (volume_adjusted_price_range > threshold).astype(int)
+    negative_imbalance = (volume_adjusted_price_range < -threshold).astype(int)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_alpha_signal = positive_imbalance - negative_imbalance
+    
+    # Calculate Momentum Score
+    momentum_score = sum_of_volume_adjusted_spreads.diff()
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = price_range / df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].pct_change().rolling(window=20).std()
+    
+    # Apply Volatility Filter
+    volatility_filtered_alpha = preliminary_alpha_signal.copy()
+    median_volatility = realized_volatility.median()
+    volatility_filtered_alpha[realized_volatility >= median_volatility] = 0
+    
+    # Generate Final Alpha Signal
+    final_alpha_signal = volatility_filtered_alpha.copy()
+    final_alpha_signal[positive_imbalance == 1] += momentum_score
+    final_alpha_signal[negative_imbalance == 1] -= momentum_score
+    final_alpha_signal[(positive_imbalance == 0) & (negative_imbalance == 0)] = momentum_score
+    
+    return final_alpha_signal
+```

@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Combined Price Momentum
+    df['LogRet'] = np.log(df['close'] / df['close'].shift(1))
+    df['PriceMomentum'] = df['LogRet'].rolling(window=5).sum()
+
+    # Apply Volume Shock Filter
+    df['VolumeChange'] = abs(df['volume'] - df['volume'].shift(1))
+    df['VolumeFilter'] = df['VolumeChange'] < df['VolumeChange'].rolling(window=30).quantile(0.85)
+
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = df['close'] - df['open']
+
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['VolWeightedVolatility'] = (df['IntradayVolatility'] * df['volume']).rolling(window=10).mean()
+
+    # Calculate Intraday Reversal Score
+    df['ReversalScore'] = df['CloseToOpenReturn'] / df['VolWeightedVolatility']
+
+    # Apply Exponential Decay to Reversal Score
+    half_life = 5
+    decay_factor = 0.5 ** (1 / half_life)
+    df['DecayedReversalScore'] = df['ReversalScore'].ewm(halflife=half_life, adjust=False).mean()
+
+    # Calculate Intraday Range
+    df['IntradayRange'] = (df['high'] - df['low']) / df['open']
+
+    # Calculate Volume-Weighted Moving Average of Intraday Range
+    df['VolWeightedRange'] = (df['IntradayRange'] * df['volume']).rolling(window=10).mean()
+
+    # Combine Reversal Score and Intraday Range
+    df['CombinedReversalRange'] = df['DecayedReversalScore'] + df['VolWeightedRange']
+    df['DecayedCombinedReversalRange'] = df['CombinedReversalRange'].ewm(halflife=half_life, adjust=False).mean()
+
+    # Calculate Intraday Price Movement
+    df['HighLowMovement'] = (df['high'] - df['low']) / df['open']
+    df['CloseOpenMovement'] = (df['close'] - df['open']) / df['open']
+    df['AvgPriceMovement'] = (df['HighLowMovement'] + df['CloseOpenMovement']) / 2
+
+    # Smooth the Average using a 3-day Exponential Moving Average
+    df['SmoothedPriceMovement'] = df['AvgPriceMovement'].ewm(span=3, adjust=False).mean()
+
+    # Confirm with Volume
+    df['VolumeChangePercent'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    # Weighted Final Alpha Factor
+    df['FinalAlphaFactor'] = df['SmoothedPriceMovement'] * df['VolumeChangePercent']
+
+    # Calculate Close to High and Low Ratios
+    df['CloseHighRatio'] = df['close'] / df['high']
+    df['CloseLowRatio'] = df['close'] / df['low']
+
+    # Combine Close to High and Low Ratios
+    df['CombinedRatio'] = 0.7 * df['CloseHighRatio'] + 0.3 * df['CloseLowRatio']
+
+    # Combine all factors
+    df['FinalFactor'] = df['FinalAlphaFactor'] * df['CombinedRatio']
+
+    return df['FinalFactor']
+```

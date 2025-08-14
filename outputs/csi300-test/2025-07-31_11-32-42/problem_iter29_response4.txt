@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Evaluate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Combine Intraday and Opening Gaps
+    combined_change = intraday_high_low_spread - open_to_close_movement
+    
+    # Weight by Advanced Volume (Cube Root of Volume)
+    advanced_volume = np.cbrt(df['volume'])
+    weighted_combined_change = combined_change * advanced_volume
+    
+    # Compute Volume-Adjusted Momentum
+    close_to_close_return = df['close'].pct_change()
+    volume_adjusted_momentum = close_to_close_return * advanced_volume
+    
+    # Integrate Metrics
+    integrated_metric = intraday_high_low_spread / open_to_close_movement
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range_stability = (df['high'] - df['low']) / (df['open'] + df['close'])
+    stability_adjusted_metric = integrated_metric / price_range_stability
+    
+    # Synthesize VWAPCHL into the Model
+    volume_weighted_close = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    volume_weighted_open = (df['open'] * df['volume']).sum() / df['volume'].sum()
+    vwap_chl = (volume_weighted_close - volume_weighted_open) / (df['high'] - df['low'])
+    
+    # Daily Momentum
+    daily_momentum = df['close'] - df['close'].rolling(window=20).mean()
+    
+    # Combine Momentum and Intraday Volatility
+    combined_momentum_volatility = -1 * daily_momentum + intraday_high_low_spread
+    
+    # Measure Close Location within Intraday Range
+    close_location = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Adjust for Volume Intensity
+    volume_intensity_adjusted = close_location * advanced_volume
+    
+    # Evaluate Volume-Weighted Momentum
+    volume_weighted_price = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    previous_volume_weighted_price = (df['close'].shift(1) * df['volume'].shift(1)).sum() / df['volume'].shift(1).sum()
+    volume_weighted_momentum = volume_weighted_price - previous_volume_weighted_price
+    
+    # Final Integration
+    final_metric = stability_adjusted_metric * vwap_chl * volume_weighted_momentum
+    short_term_momentum_diff = df['close'].pct_change(periods=5) - df['close'].pct_change(periods=10)
+    long_term_momentum_diff = df['close'].pct_change(periods=20) - df['close'].pct_change(periods=50)
+    final_result = final_metric * short_term_momentum_diff * long_term_momentum_diff * volume_weighted_momentum
+    
+    return final_result
+```

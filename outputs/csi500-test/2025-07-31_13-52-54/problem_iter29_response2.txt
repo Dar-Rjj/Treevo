@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20, n_days=5):
+    # Calculate Volume-Weighted High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    volume_weighted_spread = (high_low_spread * df['volume']).rolling(window=lookback_period).sum()
+    
+    # Compute Volume-Averaged Close Price
+    volume_averaged_close = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    volume_weighted_high_low_ratio = volume_weighted_spread / volume_averaged_close
+    
+    # Calculate Momentum Component
+    current_spread = (df['high'] - df['low']) * df['volume']
+    past_average_spread = (high_low_spread * df['volume']).rolling(window=n_days).mean()
+    momentum_component = current_spread - past_average_spread
+    
+    # Generate Initial Factor
+    initial_factor = volume_weighted_high_low_ratio + momentum_component
+    
+    # Incorporate Price Trend
+    moving_avg_close = df['close'].rolling(window=n_days).mean()
+    price_trend = (df['close'] - moving_avg_close) * initial_factor
+    
+    # Calculate Price Momentum
+    log_return = np.log(df['close'] / df['close'].shift(n_days))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    volatility = df[['open', 'high', 'low', 'close']].rolling(window=n_days).std().mean(axis=1)
+    enhanced_volatility = volatility * np.log(df['volume'])
+    
+    # Calculate Trade Frequency Adjusted Return
+    trade_frequency = df['volume'].rolling(window=n_days).count()
+    adjusted_return = (df['close'] / df['close'].shift(n_days) - 1) / np.sqrt(trade_frequency)
+    
+    # Calculate Volume-Average Price
+    volume_averaged_price = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Volume-Averaged High-Low Spread Ratio
+    volume_averaged_high_low_ratio = (df['high'] - df['low']) / volume_averaged_price
+    
+    # Calculate Intraday Range Growth
+    today_range = df['high'] - df['low']
+    prev_day_range = df['high'].shift(1) - df['low'].shift(1)
+    intraday_range_growth = (today_range - prev_day_range) / prev_day_range
+    
+    # Adjust for Volume Surge
+    n_day_volume_change = df['volume'] - df['volume'].shift(n_days)
+    m_day_volume_change = df['volume'] - df['volume'].shift(2 * n_days)
+    volume_surge = n_day_volume_change + m_day_volume_change
+    volume_surge[volume_surge < 0] *= 0.8
+    
+    # Leverage Price and Volume for an Intensity Factor
+    intensity_factor = (df['close'] / df['close'].shift(1) - 1) * df['volume']
+    smoothed_intensity_factor = intensity_factor.rolling(window=20).mean()
+    
+    # Combine Factors
+    combined_factor = (
+        log_return * enhanced_volatility +
+        adjusted_return +
+        volume_averaged_high_low_ratio +
+        intraday_range_growth +
+        volume_surge +
+        smoothed_intensity_factor
+    )
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_factor ** 2).fillna(0)
+    
+    return final_alpha_factor
+```

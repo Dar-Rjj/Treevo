@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA5'] = df['close'].rolling(window=5).mean()
+    df['SMA20'] = df['close'].rolling(window=20).mean()
+    df['SMA_Diff'] = df['SMA5'] - df['SMA20']
+
+    df['EMA10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['EMA_Diff'] = df['EMA10'] - df['EMA30']
+
+    df['ROC'] = (df['close'] / df['close'].shift(1) - 1) * 100
+
+    # Volatility
+    df['True_Range'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+
+    # Volume
+    df['Volume_Change_Rate'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+
+    # Price Patterns
+    def doji_pattern(row):
+        return abs(row['open'] - row['close']) <= ((row['high'] - row['low']) * 0.1)
+    
+    def hammer_pattern(row):
+        return (row['close'] - row['low']) / (row['high'] - row['low']) > 0.6 and (row['high'] - row['close']) / (row['high'] - row['low']) < 0.2
+    
+    def bullish_engulfing_pattern(row, prev_row):
+        return (prev_row['open'] > prev_row['close']) and (row['close'] > row['open']) and (row['close'] > prev_row['open']) and (row['open'] < prev_row['close'])
+
+    df['Doji'] = df.apply(doji_pattern, axis=1)
+    df['Hammer'] = df.apply(hammer_pattern, axis=1)
+    df['Bullish_Engulfing'] = df.apply(lambda x: bullish_engulfing_pattern(x, df.loc[x.name - 1]) if x.name > 0 else False, axis=1)
+
+    df['Pattern_Strength'] = df['Doji'] + df['Hammer'] + df['Bullish_Engulfing']
+
+    # Composite Alpha Factor
+    alpha_factor = (df['SMA_Diff'] + df['EMA_Diff'] + df['ROC'] - df['ATR'] + df['Volume_Change_Rate'] + df['OBV'] + df['Pattern_Strength'])
+    
+    return alpha_factor
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import median_abs_deviation
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    high_low_range = df['high'] - df['low']
+    close_open_diff = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    volume_adjusted_momentum = (close_open_diff + high_low_range) * df['volume']
+    
+    # Adaptive Smoothing via Moving Average
+    def dynamic_ema(data, span):
+        return data.ewm(span=span, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    daily_return = df['close'].pct_change()
+    abs_daily_return = daily_return.abs()
+    robust_market_volatility = median_abs_deviation(daily_return, scale='normal', axis=0)
+    
+    modified_volume_adj_momentum = volume_adjusted_momentum / robust_market_volatility
+    
+    # Incorporate Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_points = np.sign(momentum_reversal)
+    
+    # Integrate Non-Linear Transformation
+    sqrt_transformed_momentum = np.sqrt(modified_volume_adj_momentum)
+    log_transformed_momentum = np.log1p(modified_volume_adj_momentum)
+    
+    # Enhance Reversal Signal with Adaptive Smoothing
+    smoothed_reversal_signal = dynamic_ema(reversal_points, span=robust_market_volatility * 5)
+    combined_signal = sqrt_transformed_momentum + log_transformed_momentum + smoothed_reversal_signal
+    
+    # Refine Final Alpha Factor
+    final_alpha_factor = dynamic_ema(combined_signal, span=robust_market_volatility * 5)
+    
+    return final_alpha_factor
+```

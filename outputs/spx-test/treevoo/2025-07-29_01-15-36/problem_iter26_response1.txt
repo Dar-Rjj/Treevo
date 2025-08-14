@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close prices over the last 20 days
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Factor: Subtract Latest Close Price from SMA
+    df['Momentum_Factor'] = df['SMA_20'] - df['close']
+    
+    # Calculate Average Volume Over 20 Days
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average High-Low Range Over 20 Days
+    df['High_Low_Range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    
+    # Combine Volume and Price Volatility
+    df['Volume_Price_Volatility'] = df['Avg_Volume_20'] * df['High_Low_Range_20']
+    
+    # Weight Momentum Factor by Combined Volume & Price Volatility
+    df['Weighted_Momentum'] = df['Momentum_Factor'] * df['Volume_Price_Volatility']
+    
+    # Calculate Intraday Indicators
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Open_Close_Momentum'] = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    df['Intraday_Composite'] = (df['High_Low_Spread'] * df['Open_Close_Momentum']) + df['Open_Close_Momentum']
+    
+    # Calculate Close-to-Range Ratio
+    df['Close_to_Range_Ratio'] = df['close'] / (df['high'] - df['low'])
+    
+    # Volume-Weighted Close-to-Range Momentum
+    df['Volume_Weighted_Close_to_Range_Momentum'] = df['Close_to_Range_Ratio'] * df['volume']
+    
+    # Summarize Volume-Weighted Close-to-Range Momentum over 5 days
+    df['Sum_Volume_Weighted_Close_to_Range_Momentum'] = df['Volume_Weighted_Close_to_Range_Momentum'].rolling(window=5).sum()
+    
+    # Calculate N-Day RSI
+    df['Upward_Change'] = np.maximum(0, df['close'] - df['close'].shift(1))
+    df['Downward_Change'] = np.maximum(0, df['close'].shift(1) - df['close'])
+    
+    df['EMA_Up'] = df['Upward_Change'].ewm(span=14, adjust=False).mean()
+    df['EMA_Down'] = df['Downward_Change'].ewm(span=14, adjust=False).mean()
+    
+    df['RS'] = df['EMA_Up'] / df['EMA_Down']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Volume-Adjusted Momentum
+    df['Volume_Adjusted_EMA_Pricerange'] = ((df['high'] - df['low']).ewm(span=14, adjust=False).mean()) * df['volume']
+    df['Volume_Adjusted_RSI'] = df['RSI'] * df['volume']
+    df['Combined_Volume_Adjusted'] = df['Volume_Adjusted_EMA_Pricerange'] + df['Volume_Adjusted_RSI']
+    
+    # Final Combination
+    df['Final_Combination'] = (
+        df['Weighted_Momentum'] * df['Intraday_Composite'] *
+        df['Volume_Weighted_Close_to_Range_Momentum'] *
+        df['Sum_Volume_Weighted_Close_to_Range_Momentum'] *
+        df['Combined_Volume_Adjusted']
+    )
+    
+    # Adjust for Volume Impact, Price Volatility, and Volume Acceleration
+    df['Volume_Trend'] = df['volume'] - df['volume'].shift(1)
+    df['Average_High_Low_Range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['Volume_Acceleration'] = (df['volume'] - df['volume'].shift(1)) - (df['volume'].shift(1) - df['volume'].shift(2))
+    
+    # Final Adjustment
+    df['Final_Adjustment'] = (
+        df['Final_Combination'] * df['Volume_Trend'] *
+        (1 / df['Average_High_Low_Range_20']) *
+        df['Volume_Acceleration']
+    )
+    
+    return df['Final_Adjustment'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     '

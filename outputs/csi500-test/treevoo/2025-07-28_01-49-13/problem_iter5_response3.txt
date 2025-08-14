@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=10, K=1.5, period=14):
+    # Calculate Daily Price Return
+    df['N_day_return'] = df['close'].pct_change(periods=N)
+    
+    # Identify Volume Spike
+    df['vol_mavg'] = df['volume'].rolling(window=M).mean()
+    df['vol_std'] = df['volume'].rolling(window=M).std()
+    df['volume_spike'] = (df['volume'] > (df['vol_mavg'] + 2 * df['vol_std'])).astype(int)
+    
+    # Adjust Daily Price Return for Volume Spike
+    df['adjusted_return'] = df['N_day_return'] * (1 + (K - 1) * df['volume_spike'])
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Range to Open Ratio
+    df['intraday_range_open_ratio'] = df['intraday_range'] / df['open']
+    
+    # Calculate Volume-Weighted Close-to-Close Return
+    df['return'] = df['close'].pct_change()
+    df['vol_sum'] = df['volume'].rolling(window=period).sum()
+    df['vol_weighted_returns'] = (df['return'] * df['volume']).cumsum() / df['vol_sum']
+    
+    # Calculate Enhanced High-Low Envelope
+    df['max_high'] = df['high'].rolling(window=period).max()
+    df['min_low'] = df['low'].rolling(window=period).min()
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 1] + abs(df['close'].shift(1) - df['low'])
+    df['atr'] = df['true_range'].rolling(window=period).mean()
+    df['enhanced_envelope'] = (df['max_high'] - df['min_low']) / df['atr']
+    
+    # Compute Cumulative Sum of Adjusted Price Return
+    df['cumulative_adjusted_return'] = df['adjusted_return'].cumsum()
+    
+    # Combine Factors
+    df['combined_factor'] = (df['intraday_range_open_ratio'] * df['vol_weighted_returns'] * 
+                             df['enhanced_envelope'] * df['cumulative_adjusted_return'])
+    
+    return df['combined_factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

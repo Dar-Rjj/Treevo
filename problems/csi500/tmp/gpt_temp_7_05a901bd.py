@@ -1,0 +1,43 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA)
+    df['SMA_C'] = df['close'].rolling(window=20).mean()
+    df['SMA_V'] = df['volume'].rolling(window=20).mean()
+    
+    # Exponential Moving Average (EMA)
+    df['EMA_C'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_V'] = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Momentum
+    df['MOM_C'] = df['close'] - df['close'].shift(20)
+    df['MOM_V'] = df['volume'] - df['volume'].shift(20)
+    
+    # True Range (TR) and Average True Range (ATR)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Historical Volatility (HV)
+    df['returns'] = df['close'].pct_change()
+    df['HV'] = df['returns'].rolling(window=20).std()
+    
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # On-Balance Volume (OBV)
+    obv = np.where(df['close'] > df['close'].shift(1), df['volume'], 
+                   np.where(df['close'] < df['close'].shift(1), -df['volume'], 0)).cumsum()
+    df['OBV'] = obv
+    
+    # Composite Indicators
+    df['PVM'] = (df['MOM_C'] / df['MOM_V']) * (df['SMA_C'] / df['SMA_V'])
+    df['VWATR'] = df['ATR'] * (df['VWAP'] / df['close'])
+    df['PVO'] = (df['EMA_C'] / df['SMA_C']) - (df['EMA_V'] / df['SMA_V'])
+    
+    return df[['PVM', 'VWATR', 'PVO']]

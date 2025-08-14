@@ -1,0 +1,24 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the change in close price over the last 5 days
+    momentum = df['close'].pct_change(periods=5)
+    
+    # Calculate the liquidity factor using the average volume over the last 10 days
+    liquidity = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over the last 5 days
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=5).mean()
+    
+    # Calculate the volatility factor using the standard deviation of the close price over the last 20 days
+    volatility = df['close'].rolling(window=20).std()
+    
+    # Create a seasonality factor by extracting the month from the date index and using it as a proxy for seasonal trends
+    seasonality = df.index.month
+    
+    # Create a combined factor by multiplying the momentum, liquidity, market sentiment, and dividing by volatility
+    # The idea is that stocks with positive momentum, high liquidity, strong market sentiment, and low volatility may outperform
+    # Include seasonality as an additional factor to account for potential seasonal trends
+    factor = (momentum + 1) * (liquidity / liquidity.mean()) * (market_sentiment / market_sentiment.mean()) / (volatility / volatility.mean()) * (seasonality / seasonality.mean())
+    
+    return factor

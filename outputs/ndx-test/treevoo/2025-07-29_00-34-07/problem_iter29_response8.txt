@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-day, 5-day, and 20-day Price Returns
+    df['1_day_return'] = df['close'].pct_change()
+    df['5_day_return'] = df['close'].pct_change(5)
+    df['20_day_return'] = df['close'].pct_change(20)
+
+    # Average the Momentum
+    df['avg_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['20_day_return']) / 3
+
+    # Calculate Price Gap Between Open and Close
+    df['price_gap'] = abs(df['open'] - df['close'])
+
+    # Calculate Current Day Volume Growth
+    df['volume_growth'] = df['volume'] / df['volume'].shift(1)
+
+    # Weight the Price Gaps
+    df['weighted_price_gap'] = df['price_gap'] * df['volume_growth']
+
+    # Adjust for Volume
+    df['volume_pct_change'] = df['volume'].pct_change()
+    df['adjusted_weighted_price_gap'] = df['weighted_price_gap'] * df['volume_pct_change']
+
+    # High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Combine High-to-Low Range with Weighted Price Gaps
+    df['combined_value'] = (df['high_low_range'] * 100) + df['adjusted_weighted_price_gap']
+    
+    # Smoothing and Momentum Calculation
+    df['sma_combined_value'] = df['combined_value'].rolling(window=5).mean()
+    df['momentum_diff'] = df['sma_combined_value'] - df['sma_combined_value'].shift(5)
+
+    # Calculate Rolling High-Low Differential
+    df['rolling_high_20'] = df['high'].rolling(window=20).max()
+    df['rolling_low_20'] = df['low'].rolling(window=20).min()
+    df['rolling_high_low_diff'] = df['rolling_high_20'] - df['rolling_low_20']
+
+    # Calculate Volume Volatility
+    df['volume_volatility'] = df['volume'].rolling(window=10).std()
+
+    # Weight by Volume Volatility
+    df['weighted_rolling_high_low_diff'] = df['rolling_high_low_diff'] * df['volume_volatility']
+
+    # Aggregate the Signals
+    df['aggregated_signal'] = df['weighted_rolling_high_low_diff'] - (df['close'] - df['close'].shift(25))
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['adjusted_weighted_price_gap'] + df['aggregated_signal'] - df['avg_momentum']
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Ratio Momentum
+    df['HighLowRatio'] = df['high'] / df['low']
+    high_low_ratio_rolling_mean = df['HighLowRatio'].rolling(window=10).mean()
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Compute High-Low Momentum Score
+    high_low_momentum_score = (intraday_high_low_spread > high_low_ratio_rolling_mean) * 1.0
+    high_low_momentum_score[~(intraday_high_low_spread > high_low_ratio_rolling_mean)] = -1.0
+    high_low_momentum_score *= df['volume']
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'].pct_change(periods=5).sum()
+    
+    # Integrate Volume into Momentum
+    vwap = (df[['open', 'close']] * df['volume']).sum(axis=1) / df['volume'].sum()
+    sma = df['close'].rolling(window=10).mean()
+    integrated_momentum = (vwap + sma) / 2
+    
+    # Calculate Volume Trend
+    volume_trend = df['volume'].pct_change(periods=5).sum()
+    
+    # Enhance Market Sentiment Analysis
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=10).mean()
+    range_momentum = (daily_range > avg_daily_range) * 1.0
+    range_momentum[~(daily_range > avg_daily_range)] = -1.0
+    open_close_diff = df['close'] - df['open']
+    sentiment_score = open_close_diff.rolling(window=10).sum()
+    
+    # Calculate Price Reversal Indicator
+    price_reversal = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Calculate Upward and Downward Movements
+    upward_movement = df['high'] - df['close'].shift(1)
+    downward_movement = df['low'] - df['close'].shift(1)
+    
+    # Determine Net Directional Movement
+    net_directional_movement = (upward_movement > downward_movement) * 1.0
+    net_directional_movement[(upward_movement < downward_movement)] = -1.0
+    net_directional_movement[(upward_movement == downward_movement)] = 0.0
+    
+    # Calculate Cumulative Directional Movement Adjusted (CDMA)
+    cdma = net_directional_movement.rolling(window=10).sum() * df['volume']
+    
+    # Composite Factor Construction
+    composite_factor = (high_low_momentum_score + price_momentum + range_momentum + sentiment_score) * cdma
+    
+    return composite_factor
+```

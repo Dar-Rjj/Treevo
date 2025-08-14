@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Compute 5-day Rolling Sum of Price Movement Ratio
+    rolling_sum_price_movement = price_movement_ratio.rolling(window=5).sum()
+    
+    # Compute 5-day Rolling Sum of High-Low Range
+    rolling_sum_high_low_range = high_low_range.rolling(window=5).sum()
+    
+    # Compute 5-Day Rolling Momentum
+    rolling_momentum = rolling_sum_price_movement / rolling_sum_high_low_range
+    
+    # Adjust for Volume
+    adjusted_rolling_momentum = rolling_momentum * df['volume']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Volume Change Indicator
+    volume_change_indicator = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    
+    # Combine Intraday and Volume-Amount Indicators
+    combined_intraday_volume = intraday_return * volume_change_indicator
+    
+    # Apply Exponential Moving Average for Smoothing
+    smoothing_factor = 0.2
+    smoothed_combined = combined_intraday_volume.ewm(alpha=smoothing_factor).mean()
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    combined_factors = (intraday_return * df['volume']) / daily_volatility
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open'].shift(-1)) / df['open'].shift(-1)
+    
+    # Integrate Both Momentum Indicators
+    integrated_momentum = close_to_open_return + rolling_sum_price_movement
+    
+    # Incorporate Volume and Amount Momentum
+    avg_volume = df['volume'].rolling(window=10).mean().shift(1)
+    volume_change = df['volume'] - avg_volume
+    avg_amount = df['amount'].rolling(window=10).mean().shift(1)
+    amount_change = df['amount'] - avg_amount
+    combined_vol_amount_momentum = (volume_change + amount_change) * high_low_range
+    
+    # Calculate 10-Day Price Momentum
+    ten_day_price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Combine and Adjust Price and Intraday Momentum
+    combined_momentum = ten_day_price_momentum + intraday_return
+    combined_momentum_adjusted = np.where(volume_change > 0, combined_momentum, 0) * volume_change_indicator
+    
+    # Calculate Price Trend Indicator
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    price_trend_indicator = np.where(short_sma > long_sma, 1, -1)
+    
+    # Combine Final Momentum Indicators
+    final_momentum = (rolling_momentum + ten_day_price_momentum) * price_trend_indicator
+    
+    # Smooth the Result
+    smoothed_final_momentum = final_momentum.rolling(window=10).mean()
+    smoothed_final_momentum = smoothed_final_momentum.ewm(alpha=smoothing_factor).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = (adjusted_rolling_momentum + combined_momentum_adjusted + smoothed_final_momentum + combined_vol_amount_momentum) * df['volume']
+    
+    return final_alpha_factor
+```

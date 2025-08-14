@@ -1,0 +1,36 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute exponential moving averages for close price
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate rate of change
+    df['roc_5'] = df['close'].pct_change(5)
+    df['roc_20'] = df['close'].pct_change(20)
+    
+    # Calculate EMA crossover
+    df['ema_crossover'] = df['ema_10'] - df['ema_30']
+    
+    # Relative strength index
+    df['rsi_5'] = 100 - (100 / (1 + df['close'].diff().rolling(window=5).apply(lambda x: x[x > 0].mean() / -x[x < 0].mean())))
+    df['rsi_20'] = 100 - (100 / (1 + df['close'].diff().rolling(window=20).apply(lambda x: x[x > 0].mean() / -x[x < 0].mean())))
+    
+    # Historical Sharpe ratios
+    sharpe_ratios = {
+        'roc_5': (df['roc_5'] * df['daily_return'].shift(-1)).mean() / df['roc_5'].std(),
+        'roc_20': (df['roc_20'] * df['daily_return'].shift(-1)).mean() / df['roc_20'].std(),
+        'ema_crossover': (df['ema_crossover'] * df['daily_return'].shift(-1)).mean() / df['ema_crossover'].std(),
+        'rsi_5': (df['rsi_5'] * df['daily_return'].shift(-1)).mean() / df['rsi_5'].std(),
+        'rsi_20': (df['rsi_20'] * df['daily_return'].shift(-1)).mean() / df['rsi_20'].std()
+    }
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['roc_5'] * sharpe_ratios['roc_5'] +
+                         df['roc_20'] * sharpe_ratios['roc_20'] +
+                         df['ema_crossover'] * sharpe_ratios['ema_crossover'] +
+                         df['rsi_5'] * sharpe_ratios['rsi_5'] +
+                         df['rsi_20'] * sharpe_ratios['rsi_20'])
+    
+    return heuristics_matrix

@@ -1,0 +1,31 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['Range'] = df['high'] - df['low']
+    
+    # Compute Rolling Standard Deviation of Range (High-to-Low Range Momentum)
+    rolling_window = 20
+    df['Range_Rolling_Std'] = df['Range'].rolling(window=rolling_window).std()
+    
+    # Adjust Momentum by Volume
+    df['Momentum_Adjusted'] = df['Range_Rolling_Std'] * df['volume']
+    
+    # Compute Rolling Mean of Close prices
+    df['Close_Rolling_Mean'] = df['close'].rolling(window=rolling_window).mean()
+    
+    # Adjust the final factor based on the trend
+    conditions = [
+        (df['close'] > df['Close_Rolling_Mean']),
+        (df['close'] < df['Close_Rolling_Mean'])
+    ]
+    choices = [
+        df['Momentum_Adjusted'] * 1.5,  # Increase Factor if Close price is above the Rolling Mean
+        df['Momentum_Adjusted'] * 0.5   # Decrease Factor if Close price is below the Rolling Mean
+    ]
+    
+    df['Final_Factor'] = pd.np.select(conditions, choices, default=df['Momentum_Adjusted'])
+    
+    return df['Final_Factor']

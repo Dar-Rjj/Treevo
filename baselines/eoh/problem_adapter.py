@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import re
+import uuid
 
 from utils.utils import block_until_running, file_to_string, filter_traceback
 
@@ -63,7 +64,8 @@ class Problem:
         self.problem_size = self.config.problem.problem_size
         self.obj_type = self.config.problem.obj_type
         self.problem_type = self.config.problem.problem_type
-        self.output_file = f"{self.root_dir}/problems/{self.problem}/gpt.py"
+        # self.output_file = f"{self.root_dir}/problems/{self.problem}/gpt.py"
+        self.output_dir = f"{self.root_dir}/problems/{self.problem}/tmp"
 
         if self.problem_type == "tsp_constructive":
             from .original.prompts.tsp_greedy import GetPrompts
@@ -130,13 +132,16 @@ class Problem:
             try:
                 logging.debug(f"Iteration {self.iteration}: Processing Code Run {runid}")
         
-                with open(self.output_file, 'w') as file:
+                unique_filename = f"gpt_temp_{response_id}_{uuid.uuid4().hex[:8]}.py"
+                output_path = os.path.join(self.output_dir, unique_filename)
+
+                with open(output_path, 'w') as file:
                     file.writelines(individual["code"] + '\n')
 
                 # Execute the python file with flags
                 with open(individual["stdout_filepath"], 'w') as f:
                     file_path = f'{self.root_dir}/problems/{self.problem}/eval.py' if self.problem_type != "black_box" else f'{self.root_dir}/problems/{self.problem}/eval_black_box.py'
-                    inner_run = process = subprocess.Popen(['python', '-u', file_path, f'{self.problem_size}', self.root_dir, "train"], stdout=f, stderr=f)
+                    inner_run = process = subprocess.Popen(['python', '-u', file_path, f'{self.problem_size}', self.root_dir, "train", output_path], stdout=f, stderr=f)
                 
                 block_until_running(individual["stdout_filepath"], log_status=True)
                 inner_runs.append(process)

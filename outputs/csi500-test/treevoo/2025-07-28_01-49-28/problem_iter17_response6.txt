@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Price Momentum
+    n = 5  # example value, adjust as needed
+    simple_momentum = df['close'] / df['close'].shift(n) - 1
+    
+    # Average Volume (t to t-n)
+    avg_volume = df['volume'].rolling(window=n).mean()
+    
+    # Adjusted Price Momentum by Volume
+    adjusted_momentum = simple_momentum * avg_volume
+    
+    # High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Volume-Adjusted High-Low Return
+    vol_adj_high_low_return = (high_low_range / df['close'].shift(1)) * df['volume']
+    
+    # Combined Adjusted Price Momentum and High-Low Return
+    combined_momentum_and_volatility = adjusted_momentum + vol_adj_high_low_return
+    
+    # Open-High-Low Volatility with Volume Change
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    max_volatility = pd.concat([open_high_diff, open_low_diff], axis=1).max(axis=1)
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_max_volatility = max_volatility * volume_change.fillna(0)
+    
+    # Exponential Moving Average of Momentum
+    daily_vol_weighted_momentum = simple_momentum * df['volume']
+    ema_momentum = daily_vol_weighted_momentum.ewm(span=10, adjust=False).mean().fillna(0)
+    
+    # Relative Strength Index (RSI)
+    daily_returns = df['close'].pct_change()
+    positive_returns = daily_returns[daily_returns > 0].fillna(0)
+    negative_returns = -daily_returns[daily_returns < 0].fillna(0)
+    avg_gains = positive_returns.ewm(com=13, adjust=False).mean()
+    avg_losses = negative_returns.ewm(com=13, adjust=False).mean()
+    rs = avg_gains / avg_losses.replace(0, np.nan).fillna(0)
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Proximity to 10-Day Range
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = (ten_day_high - df['close']) / (ten_day_high - ten_day_low)
+    proximity_to_low = (df['close'] - ten_day_low) / (ten_day_high - ten_day_low)
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    adjusted_proximity = (1 / min_proximity) / df['close'].pct_change().rolling(window=20).std()
+    
+    # Amount per Unit Close Price Rate of Change
+    amount_per_close = df['amount'].rolling(window=n).sum() / df['close']
+    prev_amount_per_close = df['amount'].rolling(window=n*2).apply(lambda x: x[:-n].sum()) / df['close'].shift(n)
+    diff_amount_per_close = amount_per_close - prev_amount_per_close
+    
+    # Integrated Alpha Factor
+    integrated_alpha = (combined_momentum_and_volatility + adjusted_max_volatility) * ema_momentum * rsi * adjusted_proximity * diff_amount_per_close
+    integrated_alpha.name = 'Integrated Alpha from High-Frequency Volume-Price Dynamics and Momentum Adjustments'
+    
+    return integrated_alpha
+```

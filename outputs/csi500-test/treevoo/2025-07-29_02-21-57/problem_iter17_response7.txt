@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Volume Weighted Moving Averages (VWMA)
+    def vwma(data, window):
+        return (data['close'] * data['volume']).rolling(window=window).sum() / data['volume'].rolling(window=window).sum()
+
+    df['short_term_vwma'] = vwma(df, 5)
+    df['long_term_vwma'] = vwma(df, 20)
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5_day_close_return'] = df['close'].pct_change(5)
+    df['5_day_volume_ratio'] = df['volume'] / df['volume'].shift(5)
+    df['volume_adjusted_momentum'] = df['5_day_close_return'] * df['5_day_volume_ratio']
+
+    # Calculate 10-Day Price Oscillation
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['10_day_price_range'] = df['10_day_high'] - df['10_day_low']
+
+    # Calculate 10-Day Volume-Adjusted Range
+    df['10_day_volume_sum'] = df['volume'].rolling(window=10).sum()
+    df['volume_adjusted_range'] = df['10_day_price_range'] * df['10_day_volume_sum']
+
+    # Compare Short-Term VWMA and Long-Term VWMA
+    df['vwma_crossover_signal'] = (df['short_term_vwma'] > df['long_term_vwma']).astype(int) - (df['short_term_vwma'] < df['long_term_vwma']).astype(int)
+
+    # Evaluate Volume Adjusted Momentum
+    df['volume_adjusted_momentum_signal'] = (df['volume_adjusted_momentum'] > 0).astype(int) - (df['volume_adjusted_momentum'] < 0).astype(int)
+
+    # Evaluate 10-Day Price Oscillation
+    historical_avg_price_range = df['10_day_price_range'].mean()
+    df['price_oscillation_signal'] = (df['10_day_price_range'] > historical_avg_price_range).astype(int) - (df['10_day_price_range'] < historical_avg_price_range).astype(int)
+
+    # Evaluate 10-Day Volume-Adjusted Range
+    historical_avg_volume_adjusted_range = df['volume_adjusted_range'].mean()
+    df['volume_adjusted_range_signal'] = (df['volume_adjusted_range'] > historical_avg_volume_adjusted_range).astype(int) - (df['volume_adjusted_range'] < historical_avg_volume_adjusted_range).astype(int)
+
+    # Combine Signals
+    df['combined_signal'] = df['vwma_crossover_signal'] + df['volume_adjusted_momentum_signal'] + df['price_oscillation_signal'] + df['volume_adjusted_range_signal']
+    
+    # Assign Buy/Sell/Hold based on combined signals
+    df['factor'] = 0
+    df.loc[df['combined_signal'] == 4, 'factor'] = 1  # Strong Buy
+    df.loc[df['combined_signal'] == 3, 'factor'] = 0.5  # Moderate Buy
+    df.loc[df['combined_signal'] == 2, 'factor'] = 0  # Hold
+    df.loc[df['combined_signal'] == 1, 'factor'] = -0.5  # Moderate Sell
+    df.loc[df['combined_signal'] == 0, 'factor'] = 0  # Hold
+    df.loc[df['combined_signal'] == -1, 'factor'] = -0.5  # Moderate Sell
+    df.loc[df['combined_signal'] == -2, 'factor'] = -1  # Strong Sell
+
+    # Calculate Intraday Price Trend
+    df['intraday_trend'] = (df['close'] > df['open']).astype(int) - (df['close'] < df['open']).astype(int)
+
+    # Final factor value
+    df['factor'] += df['intraday_trend']
+
+    return df['factor']
+```

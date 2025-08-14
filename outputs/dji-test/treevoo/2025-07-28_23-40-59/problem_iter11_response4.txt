@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Adjusted Volume
+    adjusted_volume = df['volume'] / high_low_spread
+    
+    # Introduce Price Directional Component
+    close_open_diff = df['close'] - df['open']
+    price_direction = np.sign(close_open_diff)
+    
+    # Calculate Log Return
+    log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Combine Adjusted Volume, Log Return, and Price Direction
+    combined_vol_log_return = log_return * adjusted_volume * price_direction
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Weighted Daily Return
+    N = 5
+    volume_weighted_daily_return = (daily_price_change * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Incorporate Dynamic Volume Spike Indicator
+    std_dev_volume = df['volume'].rolling(window=20).std()
+    mean_volume = df['volume'].rolling(window=20).mean()
+    volume_spike_days = (df['volume'] > mean_volume + 2 * std_dev_volume)
+    dynamic_factor = 1 + (df['volume'] - mean_volume) / std_dev_volume
+    volume_weighted_daily_return_adjusted = volume_weighted_daily_return * np.where(volume_spike_days, dynamic_factor, 1)
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    
+    # Adjust Daily Return by Intraday Volatility
+    adjusted_return = daily_return / intraday_range
+    
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_return.rolling(window=5).mean()
+    
+    # Combine Adjusted Volume-Log Return with Intraday Volatility-Adjusted Returns and Volume-Weighted Price Momentum
+    final_alpha_factor = combined_vol_log_return + smoothed_adjusted_return + volume_weighted_daily_return_adjusted
+    
+    return final_alpha_factor
+```

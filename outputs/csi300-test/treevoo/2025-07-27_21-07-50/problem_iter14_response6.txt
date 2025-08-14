@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20, extended_lookback_period=60):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Volume into Intraday Return
+    volume_adjusted_intraday_return = intraday_return * df['volume']
+    
+    # Enhance Volatility Correction
+    close_returns = df['close'].pct_change()
+    price_volatility = close_returns.rolling(window=lookback_period).std()
+    volume_volatility = df['volume'].rolling(window=lookback_period).std()
+    corrected_intraday_momentum = volume_adjusted_intraday_return - price_volatility - volume_volatility
+    
+    # Incorporate Trend Adjustment
+    long_term_trend = df['close'].rolling(window=extended_lookback_period).mean()
+    short_term_trend = df['close'].rolling(window=lookback_period).mean()
+    trend_difference = long_term_trend - short_term_trend
+    trend_adjustment_factor = np.where(trend_difference > 0, 1.5, 0.5)
+    adjusted_corrected_intraday_momentum = corrected_intraday_momentum * trend_adjustment_factor
+    
+    # Intraday Volatility Component
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    combined_spread = high_low_spread + open_close_spread
+    weighted_combined_spread = combined_spread * np.sqrt(df['volume'])
+    
+    # Intraday Log-Return Component
+    intraday_log_return = np.log(df['close'] / df['open'])
+    high_low_range = df['high'] - df['low']
+    scaled_intraday_log_return = intraday_log_return / high_low_range
+    
+    # Volume Impact and Momentum Adjustment
+    daily_price_change = df['close'] - df['open']
+    volume_adjusted_price_change = daily_price_change * np.sqrt(df['volume']).rolling(window=lookback_period).sum()
+    moving_average_sqrt_volume = np.sqrt(df['volume']).rolling(window=lookback_period).mean()
+    vami = volume_adjusted_price_change / moving_average_sqrt_volume
+    
+    # Composite Alpha Factor
+    sma_close = df['close'].rolling(window=lookback_period).mean()
+    short_term_reversal = -df['close'].diff().shift(1)  # Short-term reversal
+    composite_alpha_factor = (df['close'] - sma_close) + short_term_reversal + adjusted_corrected_intraday_momentum + scaled_intraday_log_return + vami - (np.sqrt(df['volume']) - np.sqrt(df['volume'].shift(1)))
+    
+    return composite_alpha_factor
+```

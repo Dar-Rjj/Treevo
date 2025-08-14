@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    df['range_ratio'] = df['high_low_range'] / df['high_low_range'].shift(1)
+    
+    # Smooth High-Low Range Ratio with EMA (10-day window)
+    df['smoothed_range_ratio'] = df['range_ratio'].ewm(span=10).mean()
+    
+    # Generate Alpha Factor from Momentum
+    df['momentum_signal'] = df['smoothed_range_ratio'].apply(lambda x: 1 if x > 1.0 else -1)
+    df['volume_adjusted_momentum'] = df['momentum_signal'] * df['volume']
+    
+    # Calculate High-Low Range Volatility (n-period sum)
+    n = 10
+    df['hl_range_volatility'] = df['high_low_range'].rolling(window=n).sum() / n
+    
+    # Adjust Volatility by Volume (average volume over n-period)
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volatility_adjusted_by_volume'] = df['hl_range_volatility'] * df['avg_volume']
+    
+    # Incorporate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    weight = 0.5  # Fixed weight for the close-open difference
+    df['weighted_close_open_diff'] = weight * df['close_open_diff']
+    
+    # Add Weighted Close-Open Difference to Adjusted Volatility
+    df['final_volatility'] = df['volatility_adjusted_by_volume'] + df['weighted_close_open_diff']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['volume_adjusted_momentum'] + df['final_volatility']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Averages
+    df['10_day_close_avg'] = df['close'].rolling(window=10).mean()
+    df['30_day_close_avg'] = df['close'].rolling(window=30).mean()
+    
+    # Determine Price Momentum
+    df['price_momentum'] = df['10_day_close_avg'] - df['30_day_close_avg']
+    
+    # Calculate Intraday High-Low Range and True Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['true_range'] = df[['high_low_range', 'high' - df['close'].shift(1), (df['close'].shift(1) - df['low'])]].max(axis=1)
+    
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low_range'] = df['high_low_range'] * df['volume']
+    
+    # Detect Volume Spike
+    df['5_day_volume_avg'] = df['volume'].rolling(window=5).mean()
+    df['volume_spike'] = (df['volume'] > 2 * df['5_day_volume_avg']).astype(int)
+    
+    # Adjust Momentum Based on Spike
+    df['adjusted_momentum'] = df['price_momentum'] * (1 - 0.2 * df['volume_spike'])
+    
+    # Aggregate Price Movements and Smooth High-Low Ranges
+    df['sum_high_low_diff'] = df['high_low_range'].rolling(window=20).sum()
+    df['sum_close_open_diff'] = (df['close'] - df['open']).rolling(window=20).sum()
+    df['smoothed_high_low_range'] = df['high_low_range'].ewm(span=20, adjust=False).mean()
+    df['long_term_high_low_range'] = df['high_low_range'].rolling(window=50).sum()
+    
+    # Calculate Combined Price and High-Low Range Momentum
+    df['combined_price_momentum'] = df['sum_high_low_diff'] + df['sum_close_open_diff']
+    df['range_difference'] = df['long_term_high_low_range'] - df['smoothed_high_low_range']
+    df['price_volatility'] = df['close'].rolling(window=20).std()
+    df['weighted_combined_momentum'] = df['combined_price_momentum'] / df['price_volatility']
+    
+    # Evaluate Volume Activity
+    df['avg_volume_ema'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['high_volume'] = (df['volume'] > 1.5 * df['avg_volume_ema']).astype(int)
+    
+    # Integrate Price, High-Low Range, and Volume Activity
+    df['final_alpha_factor'] = df['weighted_combined_momentum'] * df['high_volume']
+    df['interaction_term'] = df['range_difference'] * (df['close'] - df['open'])
+    df['final_alpha_factor'] += df['interaction_term']
+    
+    # Dynamic Momentum Indicator
+    df['yesterday_alpha_factor'] = df['final_alpha_factor'].shift(1)
+    df['today_alpha_factor'] = df['final_alpha_factor']
+    df['momentum_change'] = df['today_alpha_factor'] - df['yesterday_alpha_factor']
+    df['recent_volatility'] = df['close'].rolling(window=20).std()
+    df['smoothed_momentum_change'] = df['momentum_change'] / df['recent_volatility']
+    
+    return df['final_alpha_factor']
+```

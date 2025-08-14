@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Opening Price Trend
+    df['Opening_Price_Trend'] = df['open'] - df['close'].shift(1)
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate Volume-Weighted Intraday Movement (VWIM)
+    df['VWIM'] = df['High_Low_Spread'] * df['volume']
+    df['VWIM_10D_MA'] = df['VWIM'].rolling(window=10).mean()
+
+    # Calculate Amount-Weighted Opening Trend (AWOT)
+    df['AWOT'] = df['Opening_Price_Trend'] * df['amount']
+    df['AWOT_10D_MA'] = df['AWOT'].rolling(window=10).mean()
+
+    # Combine Adjusted Movements and Trends (AMT)
+    df['AMT'] = df['VWIM'] + df['AWOT'] - df['VWIM_10D_MA'] - df['AWOT_10D_MA']
+
+    # Calculate Cumulative Volume (CV)
+    N = 10
+    df['CV'] = df['volume'].rolling(window=N).sum()
+    df['Adjusted_AMT'] = df['AMT'] / df['CV']
+
+    # Generate Factor 1
+    df['Volume_Impact_Score'] = (df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()) / df['volume'].rolling(window=10).sum()
+    df['Factor_1'] = df['Intraday_Return'] * df['Volume_Impact_Score']
+
+    # Calculate Price and Intraday Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(10)
+    df['Intraday_Momentum'] = (df['high'] - df['low']) / df['low']
+
+    # Confirm with Volume Trend
+    df['AV_20D'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['AV_20D']
+
+    # If VR > 1.4
+    M = 25
+    df['CVWM'] = (df['Intraday_Momentum'] * df['volume']).rolling(window=M).sum()
+    df['Final_Factor'] = df.apply(lambda x: x['Factor_1'] * x['CVWM'] if x['Volume_Ratio'] > 1.4 else 0.7 * (x['Intraday_Momentum'] + x['Adjusted_AMT']), axis=1)
+
+    return df['Final_Factor']
+```

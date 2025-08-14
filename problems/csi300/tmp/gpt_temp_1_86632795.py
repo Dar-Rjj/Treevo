@@ -1,0 +1,42 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 20-Day Average Close
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    
+    # Subtract 20-Day Average Close from Today's Close
+    df['daily_momentum'] = df['close'] - df['20_day_avg_close']
+    
+    # Compute 5-day and 20-day Price Return
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Intraday Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['5_day_intraday_volatility'] = df['high_low_diff'].rolling(window=5).mean()
+    
+    # Combine Momentum and Intraday Volatility
+    df['momentum_intraday_volatility'] = -df['daily_momentum'] + df['5_day_intraday_volatility']
+    
+    # Measure Close Location within Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    df['proportional_distance'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Adjust for Volume Intensity
+    df['weighted_intraday_reversal'] = df['volume'] * df['proportional_distance']
+    
+    # Calculate Volume Adjusted Momentum
+    df['close_to_close_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['volume_adjusted_momentum'] = df['close_to_close_return'] * df['volume']
+    
+    # Synthesize All Factors
+    df['factor'] = (
+        df['momentum_intraday_volatility'] +
+        df['weighted_intraday_reversal'] +
+        (df['5_day_return'] - df['10_day_return']) *
+        (df['20_day_return'] - df['50_day_return']) *
+        df['volume_adjusted_momentum']
+    )
+    
+    return df['factor'].dropna()

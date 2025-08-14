@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Price Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Evaluate Weighted Average Volume Over Period (not used directly but for 10-day volume)
+    # We need the 10-day average volume for the adjustment later
+    df['10D_Avg_Volume'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate 10-Day and 30-Day Moving Averages of High-Low Spread
+    df['10D_MA_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=10).mean()
+    df['30D_MA_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=30).mean()
+    
+    # Derive Momentum by Comparing Averages
+    df['Momentum'] = df['10D_MA_High_Low_Spread'] - df['30D_MA_High_Low_Spread']
+    
+    # Apply Volume-Weighted Adjustment to Momentum
+    df['Volume_Adjusted_Momentum'] = df['Momentum'] * (df['volume'] / df['10D_Avg_Volume'])
+    
+    # Assess Positive vs Negative Momentum Contribution
+    df['Close_Change'] = df['close'] - df['close'].shift(1)
+    df['Adjusted_Momentum'] = df['Volume_Adjusted_Momentum']
+    df.loc[df['Close_Change'] > 0, 'Adjusted_Momentum'] *= 1.5
+    
+    # Integrate Accumulated Momentum Impact
+    # For simplicity, we'll sum the adjusted momentum over the last 10 and 30 days,
+    # and assign a greater weight to the longer time horizon
+    df['Accumulated_Momentum_10D'] = df['Adjusted_Momentum'].rolling(window=10).sum()
+    df['Accumulated_Momentum_30D'] = df['Adjusted_Momentum'].rolling(window=30).sum()
+    df['Final_Factor'] = 0.4 * df['Accumulated_Momentum_10D'] + 0.6 * df['Accumulated_Momentum_30D']
+
+    return df['Final_Factor']
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+
+    # Filter by Relative Volume
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    volume_filtered = df[df['volume'] > avg_volume_20].copy()
+
+    # Calculate Adjusted Price Difference
+    volume_filtered['adjusted_price_diff'] = (volume_filtered['close'] - volume_filtered['close'].shift(10)) * \
+                                             np.log(volume_filtered['close'] / volume_filtered['close'].shift(10))
+
+    # Calculate Rolling High-Low Differential
+    volume_filtered['rolling_high_low_diff'] = volume_filtered['high'].rolling(window=20).max() - \
+                                               volume_filtered['low'].rolling(window=20).min()
+
+    # Weight by Volume Volatility
+    volume_volatility = volume_filtered['volume'].rolling(window=10).std()
+    volume_filtered['weighted_high_low_diff'] = volume_filtered['rolling_high_low_diff'] * volume_volatility
+
+    # Calculate Price Momentum
+    volume_filtered['momentum_1d'] = (volume_filtered['close'] / volume_filtered['close'].shift(1) - 1)
+    volume_filtered['momentum_5d'] = (volume_filtered['close'] / volume_filtered['close'].shift(5) - 1)
+    volume_filtered['momentum_20d'] = (volume_filtered['close'] / volume_filtered['close'].shift(20) - 1)
+
+    # Average the Momentum
+    volume_filtered['average_momentum'] = (volume_filtered['momentum_1d'] + 
+                                           volume_filtered['momentum_5d'] + 
+                                           volume_filtered['momentum_20d']) / 3
+
+    # Adjust for Volume
+    volume_filtered['volume_pct_change'] = (volume_filtered['volume'] / volume_filtered['volume'].shift(1) - 1)
+    volume_filtered['adjusted_momentum'] = volume_filtered['average_momentum'] * volume_filtered['volume_pct_change']
+
+    # Aggregate the Signals
+    volume_filtered['sum_price_ranges'] = volume_filtered['price_range'].rolling(window=20).sum()
+    volume_filtered['interim_alpha_factor'] = (volume_filtered['weighted_high_low_diff'] - 
+                                              volume_filtered['adjusted_price_diff'] + 
+                                              volume_filtered['adjusted_momentum'] + 
+                                              volume_filtered['sum_price_ranges'])
+
+    # Calculate Cumulative Open-to-Close Return
+    volume_filtered['open_close_return'] = (volume_filtered['close'] / volume_filtered['open'] - 1) * volume_filtered['volume']
+    volume_filtered['cumulative_open_close_return'] = volume_filtered['open_close_return'].rolling(window=20).sum()
+
+    # Combine Cumulative High-Low Momentum and Cumulative Open-to-Close Return
+    volume_filtered['final_alpha_factor'] = (0.5 * volume_filtered['interim_alpha_factor'] + 
+                                             0.5 * volume_filtered['cumulative_open_close_return'])
+
+    return volume_filtered['final_alpha_factor']
+```

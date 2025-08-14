@@ -1,0 +1,86 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['Daily_Return'] = df['close'].pct_change()
+    
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    n = 20
+    alpha = 0.1
+    df['Smoothed_Moving_Avg'] = df['Daily_Return'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'].diff()
+    
+    # Compute Price Momentum Factor
+    df['Price_Momentum'] = df['Daily_Return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 20
+    df['Volume_Momentum'] = df['Volume_Change'].rolling(window=m).sum()
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Breakout Ratio
+    df['Price_Breakout_Ratio'] = (df['high'] - df['open']) / df['High_Low_Range']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Cum_Volume'] = df['close'] * df['volume']
+    df['VWAP'] = df['Cum_Volume'].cumsum() / df['volume'].cumsum()
+    
+    # Calculate Volume-Weighted Breakout Indicator
+    df['Breakout_Indicator'] = (df['close'] - df['open']) * df['volume'] * df['Price_Breakout_Ratio']
+    
+    # Aggregate Indicators
+    df['Aggregate_Breakout'] = df['Breakout_Indicator'].rolling(window=n).sum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['Return_Deviation'] = df['close'] - df['VWAP']
+    
+    # Identify Trend Reversal Potential
+    df['Trend_Reversal'] = (df['Return_Deviation'] > df['Return_Deviation'].shift(1)) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.5
+    k2 = 0.5
+    df['Combined_Momentum'] = k1 * df['Price_Momentum'] + k2 * df['Volume_Momentum']
+    
+    # Calculate Volume Weight
+    df['Avg_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Weight'] = df['volume'] / df['Avg_Volume']
+    
+    # Adjust Exponentially Smoothed Moving Average with Volume Weight
+    df['Adjusted_Smoothed_Moving_Avg'] = df['Smoothed_Moving_Avg'] * df['Volume_Weight'] + df['Combined_Momentum']
+    
+    # Generate Alpha Factor
+    alpha_factor_window = 10
+    df['Alpha_Factor'] = (df['VWAP'] + df['Aggregate_Breakout'] + df['Adjusted_Smoothed_Moving_Avg']).rolling(window=alpha_factor_window).mean()
+    
+    # Enhance Alpha Factor
+    df['Alpha_Factor'] *= df['Daily_Return']
+    
+    # Adjust for Volatility
+    df['Volatility'] = df['high'] - df['low']
+    df['Volatility'] = df['Volatility'].rolling(window=n).std()
+    df['Alpha_Factor'] /= df['Volatility']
+    
+    # Introduce Intraday Range Indicator
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Range_EMA'] = df['Intraday_Range'].ewm(alpha=alpha, adjust=False).mean()
+    k3 = 0.5
+    df['Alpha_Factor'] += k3 * df['Intraday_Range_EMA']
+    
+    # Final Composite Factor Calculation
+    df['Composite_Score'] = df['Return_Deviation'] + (df['volume'] > df['volume'].rolling(window=14).mean()).astype(int) + df['Combined_Momentum']
+    df['Composite_Score'] += df['Aggregate_Breakout'].ewm(alpha=alpha, adjust=False).mean()
+    
+    return df['Composite_Score'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# composite_score = heuristics_v2(df)
+# print(composite_score)
+```

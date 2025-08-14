@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=21, long_lookback_period=60, short_lookback_period=5, trend_adjustment_factor=1.5):
+    # Compute Enhanced Intraday Components
+    intraday_return = (df['close'] - df['open']) / df['open']
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    volume_integrated_spreads = (high_low_spread + open_close_spread) * np.sqrt(df['volume'])
+
+    # Incorporate Log-Return Scaled by Volatility
+    log_return = np.log(df['close'] / df['open'])
+    scaled_log_return = log_return / high_low_spread
+
+    # Adjust for Price and Volume Volatility
+    price_volatility = df['close'].pct_change().rolling(window=lookback_period).std()
+    volume_volatility = df['volume'].pct_change().rolling(window=lookback_period).std()
+    corrected_intraday_momentum = volume_integrated_spreads - price_volatility - volume_volatility
+
+    # Apply Trend Adjustment
+    long_term_trend = df['close'].rolling(window=long_lookback_period).mean()
+    short_term_trend = df['close'].ewm(span=short_lookback_period, adjust=False).mean()
+    trend_difference = long_term_trend - short_term_trend
+    trend_adjusted_factor = corrected_intraday_momentum * np.where(trend_difference > 0, trend_adjustment_factor, -trend_adjustment_factor)
+
+    # Volume-Adjusted Momentum (VAMI)
+    daily_price_change = df['close'] - df['open']
+    volume_weighted_price_change = daily_price_change * np.sqrt(df['volume'])
+    ma_sqrt_volume = df['volume'].apply(np.sqrt).rolling(window=lookback_period).mean()
+    vami = (scaled_log_return) + (volume_weighted_price_change / ma_sqrt_volume).rolling(window=lookback_period).sum()
+
+    # Composite Alpha Factor
+    volume_weighted_close = df['close'] * np.sqrt(df['volume'])
+    sma_close = df['close'].rolling(window=lookback_period).mean()
+    composite_alpha = (volume_weighted_close - sma_close) + vami + (df['close'] - df['open']).shift(1) + volume_integrated_spreads
+
+    # Final Alpha Combination
+    final_alpha = (corrected_intraday_momentum + scaled_log_return + trend_adjusted_factor + vami + composite_alpha)
+
+    return final_alpha
+```

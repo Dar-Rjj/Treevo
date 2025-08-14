@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Average Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    df['avg_intraday_range_5d'] = df['intraday_range'].rolling(window=5).mean()
+    
+    # Calculate Adjusted Intraday Price Movement
+    df['open_diff'] = df['open'].diff(1)
+    df['adjusted_intraday_price_movement'] = (df['high'] - df['low']) / df['open_diff']
+    
+    # Weight by Volume and Close Difference
+    df['close_diff'] = df['close'].diff(1)
+    df['weighted_adj_intraday_price_movement'] = df['adjusted_intraday_price_movement'] * df['volume'] * df['close_diff']
+    
+    # Integrate Intraday Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['daily_range'].rolling(window=20).mean()
+    
+    # Incorporate 5-Day Return
+    df['5d_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Determine Intraday Volatility Adjusted Momentum
+    df['intraday_volatility_adjusted_momentum'] = df['5d_return'] * df['avg_intraday_range_5d']
+    
+    # Compute Intraday Reversal Signal
+    df['intraday_reversal_signal'] = (df['close'] - df['open']) / df['avg_intraday_range_5d']
+    
+    # Incorporate Volume Impact
+    df['cumulative_volume_5d'] = df['volume'].rolling(window=5).sum()
+    df['volume_weight'] = df['volume'] / df['cumulative_volume_5d']
+    
+    # Calculate Volume-Weighted Return
+    df['volume_weighted_return'] = df['volume'] * df['intraday_reversal_signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['weighted_intraday_return'] = df['amount'] * df['5d_return']
+    df['reversal_weight'] = df['volume_weight'] * df['intraday_reversal_signal']
+    df['combined_weighted_signal'] = (df['weighted_intraday_return'] * df['5d_return']) + (df['reversal_weight'] * df['intraday_reversal_signal'])
+    
+    # Combine Enhanced Factors
+    df['combined_enhanced_factors'] = (df['weighted_adj_intraday_price_movement'] * df['intraday_volatility']) * df['volume_weighted_return']
+    
+    # Adjust by Average Volume
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_combined_factors'] = df['combined_enhanced_factors'] / df['avg_volume_20d']
+    
+    # Incorporate Close Price Momentum
+    df['close_momentum_10d'] = df['close'].rolling(window=10).mean()
+    
+    # Adjust Momentum by Intraday Volatility
+    df['adjusted_momentum'] = df['close_momentum_10d'] * df['intraday_volatility']
+    
+    # Final Factor Calculation
+    df['final_factor'] = (
+        0.3 * df['adjusted_intraday_price_movement'] +
+        0.3 * df['intraday_volatility'] +
+        0.4 * df['adjusted_momentum']
+    )
+    
+    df['combined_intraday_reversal_momentum'] = (df['intraday_reversal_signal'] + df['intraday_volatility_adjusted_momentum']) * df['volume_weight']
+    
+    df['alpha_factor'] = (
+        0.5 * df['final_factor'] +
+        0.5 * df['combined_intraday_reversal_momentum']
+    )
+    
+    return df['alpha_factor']
+```

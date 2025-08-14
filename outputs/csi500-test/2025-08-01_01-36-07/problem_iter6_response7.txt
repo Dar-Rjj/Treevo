@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=10):
+    # Calculate Daily Price Movement
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['price_range'].rolling(window=n_days).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).rolling(window=n_days).sum() / df['volume'].rolling(window=n_days).sum()
+    
+    # Incorporate Market Depth
+    df['market_depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    df['adjusted_momentum'] = df['raw_momentum'] * (df['vwap'] + df['market_depth']) / df['intraday_volatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=n_days).mean()
+    total_avg_volume = df['volume'].mean()
+    df['final_volume_adjusted_momentum'] = df['adjusted_momentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5_day_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10_day_return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['multi_day_return'] = (df['5_day_return'] + df['10_day_return']) / 2
+    
+    # Add to Final Volume-Adjusted Momentum
+    df['final_volume_adjusted_momentum'] += df['multi_day_return']
+    
+    # Incorporate Liquidity
+    df['average_volume'] = df['volume'].rolling(window=n_days).mean()
+    df['total_average_volume'] = df['volume'].mean()
+    df['liquidity_adjusted_momentum'] = df['final_volume_adjusted_momentum'] * (df['average_volume'] / df['total_average_volume'])
+    
+    return df['liquidity_adjusted_momentum'].dropna()
+```

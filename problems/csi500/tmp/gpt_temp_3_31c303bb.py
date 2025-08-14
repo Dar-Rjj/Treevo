@@ -1,0 +1,76 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation from Close
+    df['daily_return_deviation'] = df['close'].diff()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compare Daily Return Deviation with VWAP
+    df['deviation_comparison'] = df['close'] - df['vwap']
+    
+    # Check for Volume Increase
+    df['volume_14_day_ma'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = df['volume'] > df['volume_14_day_ma']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['open']) / df['open']
+    
+    # Adjust Intraday Return for Volume
+    df['volume_7_day_ma'] = df['volume'].rolling(window=7).mean()
+    df['volume_diff'] = df['volume'] - df['volume_7_day_ma']
+    df['adjusted_intraday_return'] = df['intraday_return'] * df['volume_diff']
+    
+    # Incorporate Price Volatility
+    df['close_std_7_day'] = df['close'].rolling(window=7).std()
+    df['volatility_adjustment'] = np.where(df['close_std_7_day'] > df['close_std_7_day'].mean(), 2.5, 0.7)
+    df['adjusted_intraday_return'] *= df['volatility_adjustment']
+    
+    # Compute Price Momentum Factor
+    n = 10
+    df['price_momentum'] = df['close'].pct_change().rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 10
+    df['volume_momentum'] = df['volume'].pct_change().rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 1.0
+    k2 = 1.0
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_20_day_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_20_day_ma']
+    df['volume_adjustment_factor'] = df['volume_deviation'] + 0.001  # Small constant to avoid division by zero
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Incorporate Momentum Shift
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['momentum_shift'] = np.where(df['sma_5'] > df['sma_20'], 1.5, -1.5)
+    df['adjusted_combined_momentum'] += df['momentum_shift']
+    
+    # Introduce Price and Volume Correlation
+    corr_window = 10
+    df['corr_coeff'] = df[['close', 'volume']].rolling(window=corr_window).corr().unstack().iloc[::2, :]['close']
+    df['correlation_adjustment'] = np.where(df['corr_coeff'] > 0, 1.2, 0.8)
+    df['adjusted_combined_momentum'] *= df['correlation_adjustment']
+    
+    # Combine Indicators
+    df['trend_reversal_score'] = np.where((df['deviation_comparison'] > df['deviation_comparison'].shift()) & df['volume_increase'], 1, 0)
+    df['final_factor'] = df['trend_reversal_score'] * 2 + df['adjusted_intraday_return'] + df['adjusted_combined_momentum']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv')
+# df.set_index('date', inplace=True)
+# factor = heuristics_v2(df)

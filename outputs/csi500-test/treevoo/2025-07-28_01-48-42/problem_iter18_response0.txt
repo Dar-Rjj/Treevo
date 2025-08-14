@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Return Volatility
+    intraday_returns_high = df['high'] - df['open']
+    intraday_returns_low = df['low'] - df['open']
+    intraday_return_volatility = (intraday_returns_high + intraday_returns_low).rolling(window=10).std()
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['open'] - df['close']
+    
+    # Compute Price Change
+    price_change = df['close'].diff()
+    
+    # Adjust for Volume
+    volume_adjusted_high_low_range = df['volume'] * high_low_range
+    
+    # Compute Momentum
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Adjust Momentum by Open-Close Spread
+    adjusted_momentum = momentum * open_close_spread.abs()
+    
+    # Combine Volume-Adjusted Momentum and Spread
+    combined_signal = adjusted_momentum / volume_adjusted_high_low_range
+    
+    # Enhance Combined Signal with Smoothing
+    enhanced_combined_signal = combined_signal.ewm(span=5).mean()
+    
+    # Generate Factor Value
+    factor_value = (df['high'] - df['low']).rolling(window=10).sum() * df['volume'].rolling(window=10).mean() / df['close']
+    
+    # Combine All Factors
+    combined_factors = (0.3 * intraday_return_volatility + 0.4 * factor_value + 0.2 * enhanced_combined_signal + 0.1 * factor_value)
+    
+    # Multiply Combined Factors by Smoothened Momentum
+    final_alpha_factor = combined_factors * momentum.ewm(span=5).mean()
+    
+    # Introduce New Factor: Price-Volatility Ratio
+    price_volatility_ratio = price_change / intraday_return_volatility
+    
+    # Adjust Final Alpha Factor
+    final_alpha_factor = (0.8 * final_alpha_factor + 0.2 * price_volatility_ratio)
+    
+    # Volume Spike Factor
+    volume_change = df['volume'].diff()
+    volume_spike_factor = (volume_change > 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Final Alpha Factor
+    final_alpha_factor = final_alpha_factor * volume_spike_factor
+    
+    return final_alpha_factor
+```

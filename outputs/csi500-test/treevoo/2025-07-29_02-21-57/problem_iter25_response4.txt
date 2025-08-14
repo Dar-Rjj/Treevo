@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term VWMA
+    def calculate_vwma(data, window):
+        return (data['close'] * data['volume']).rolling(window=window).sum() / data['volume'].rolling(window=window).sum()
+
+    short_vwma = calculate_vwma(df, 5)
+    long_vwma = calculate_vwma(df, 20)
+
+    # Combined Crossover Signal
+    crossover_signal = (short_vwma > long_vwma) - (short_vwma < long_vwma)
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    def volume_adjusted_momentum(data):
+        close_return = data['close'].pct_change(5)
+        volume_sum = data['volume'].rolling(window=5).sum()
+        return close_return * volume_sum
+
+    mom_signal = volume_adjusted_momentum(df)
+    mom_signal = (mom_signal > 0) - (mom_signal < 0)
+
+    # Combine Crossover and Momentum Signals
+    combined_signal = (crossover_signal + mom_signal).apply(lambda x: 'strong_buy' if x == 2 else ('strong_sell' if x == -2 else ('moderate_buy' if x == 1 else ('moderate_sell' if x == -1 else 'hold'))))
+
+    # Calculate True Range and ATR
+    df['prev_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['prev_close']).abs()
+    df['tr3'] = (df['low'] - df['prev_close']).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    atr = df['true_range'].rolling(window=14).mean()
+
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    weighted_momentum = price_momentum * df['volume']
+
+    # Adjust Momentum by ATR
+    atr_adjusted_momentum = weighted_momentum / atr
+
+    # Generate Alpha Factor
+    alpha_factor = atr_adjusted_momentum + df['open'].pct_change()
+
+    # Combine with Crossover and Momentum Signal
+    final_signal = pd.Series('hold', index=df.index)
+    final_signal[(alpha_factor > 0) & (combined_signal == 'strong_buy')] = 'strong_buy'
+    final_signal[(alpha_factor < 0) & (combined_signal == 'strong_sell')] = 'strong_sell'
+    final_signal[(alpha_factor > 0) & (combined_signal != 'strong_buy') & (combined_signal != 'sell')] = 'moderate_buy'
+    final_signal[(alpha_factor < 0) & (combined_signal != 'strong_sell') & (combined_signal != 'buy')] = 'moderate_sell'
+
+    return final_signal
+```

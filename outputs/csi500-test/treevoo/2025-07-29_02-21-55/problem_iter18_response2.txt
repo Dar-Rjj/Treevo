@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor based on the given DataFrame.
+    
+    Parameters:
+    df (pd.DataFrame): A DataFrame with (date) as index, and columns ['open', 'high', 'low', 'close', 'amount', 'volume'].
+    
+    Returns:
+    pd.Series: A Series indexed by (date) representing the factor values.
+    """
+    # Calculate the daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate the signed volume: positive if close is higher than open, negative otherwise
+    df['signed_volume'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else -row['volume'], axis=1)
+    
+    # Calculate the money flow using the signed volume and the average of high and low prices
+    df['money_flow'] = df['signed_volume'] * ((df['high'] + df['low']) / 2)
+    
+    # Calculate the 14-day Money Flow Index (MFI) to measure buying and selling pressure
+    window = 14
+    df['positive_money_flow'] = df[df['daily_return'] > 0]['money_flow'].rolling(window).sum()
+    df['negative_money_flow'] = df[df['daily_return'] < 0]['money_flow'].rolling(window).sum()
+    df['money_ratio'] = df['positive_money_flow'] / df['negative_money_flow']
+    df['mfi'] = 100 - (100 / (1 + df['money_ratio']))
+    
+    # Alpha factor: combination of MFI and the rate of change (ROC) of the closing price
+    df['roc'] = df['close'].pct_change(periods=window) * 100
+    df['alpha_factor'] = (df['mfi'] - 50) * df['roc']
+    
+    return df['alpha_factor']
+```

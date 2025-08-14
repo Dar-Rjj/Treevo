@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts with adaptive window
+    pos_sum = df['positive_amount_vol'].rolling(window=int(len(df)*0.1)).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=int(len(df)*0.1)).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor_pos_neg_ratio = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the VWAP
+    df['VWAP'] = (df['amount'] / df['volume']).rolling(window=int(len(df)*0.1)).mean()
+
+    # Volatility factor
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    volatility = df['log_returns'].rolling(window=int(len(df)*0.1)).std()
+
+    # Momentum factor
+    momentum = df['close'] / df['close'].shift(int(len(df)*0.1)) - 1
+
+    # Mean reversion factor
+    mean_reversion = df['close'] / df['close'].rolling(window=int(len(df)*0.1)).mean() - 1
+
+    # Combine factors using exponential smoothing
+    alpha_factor = (
+        0.4 * factor_pos_neg_ratio +
+        0.3 * (df['VWAP'] / df['close']) +
+        0.2 * (-volatility) +
+        0.1 * (momentum) -
+        0.1 * (mean_reversion)
+    ).ewm(span=int(len(df)*0.1)).mean()
+
+    return alpha_factor
+```

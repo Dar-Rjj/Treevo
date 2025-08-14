@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Volume-Weighted Moving Average (VWMA) of High-Low Spread
+    vwma_high_low_spread = (high_low_spread * df['volume']).rolling(window=10).mean()
+    
+    # Incorporate Price Momentum
+    close_to_close_return = df['close'].pct_change()
+    vwma_momentum = vwma_high_low_spread * close_to_close_return
+    
+    # Compute Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Intraday Volatility with Price Momentum
+    adjusted_intraday_volatility = intraday_volatility * close_to_close_return
+    
+    # Synthesize Volume-Weighted, Intraday Volatility, and Price Momentum Factors
+    synthesized_factor = (vwma_momentum + adjusted_intraday_volatility) / df['volume']
+    
+    # Enhance with Additional Price Dynamics
+    open_to_close_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    enhanced_synthesized_factor = synthesized_factor * open_to_close_return
+    
+    # Incorporate Short-Term and Long-Term Price Momentum
+    short_term_return = (df['close'].shift(1) - df['close'].shift(5)) / df['close'].shift(5)
+    long_term_return = (df['close'].shift(1) - df['close'].shift(20)) / df['close'].shift(20)
+    volume_weighted_short_term_return = df['volume'] * short_term_return
+    volume_weighted_long_term_return = df['volume'] * long_term_return
+    
+    # Final Adjustment
+    short_term_volatility = (df['close'].shift(1) - df['close'].shift(5)).abs().rolling(window=5).std()
+    final_factor = (enhanced_synthesized_factor / (short_term_volatility + 1) + 
+                    volume_weighted_short_term_return - volume_weighted_long_term_return) / df['volume']
+    
+    # Introduce New Factor: Intraday Range Ratio
+    intraday_range = df['high'] - df['low']
+    prev_day_intraday_range = df['high'].shift(1) - df['low'].shift(1)
+    intraday_range_ratio = intraday_range / prev_day_intraday_range
+    
+    # Enhance Final Factor with Intraday Range Ratio
+    final_factor_enhanced = final_factor * intraday_range_ratio
+    
+    return final_factor_enhanced
+```

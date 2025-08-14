@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the change in closing prices
+    close_change = df['close'].pct_change()
+    
+    # Calculate the true range (high - low, high - previous close, or previous close - low)
+    true_range = (df['high'] - df['low']).abs().fillna(0)
+    prev_close = df['close'].shift(1)
+    true_range = true_range.where(true_range > (df['high'] - prev_close).abs(), (df['high'] - prev_close).abs())
+    true_range = true_range.where(true_range > (prev_close - df['low']).abs(), (prev_close - df['low']).abs())
+    
+    # Calculate the average true range over the last 10 days
+    avg_true_range = true_range.rolling(window=10).mean()
+    
+    # Calculate a weighted momentum factor, giving more weight to recent changes
+    weighted_momentum = (close_change.rolling(window=5).mean() * 2.0 + close_change.rolling(window=10).mean()) / 3.0
+    
+    # Incorporate volume by calculating the percentage change in volume and identifying volume shocks
+    volume_change = df['volume'].pct_change()
+    volume_shock = (volume_change > 2.0 * volume_change.std()).astype(int)
+    
+    # Generate a multi-period momentum factor
+    long_term_momentum = close_change.rolling(window=20).mean()
+    combined_momentum = (weighted_momentum * 0.7 + long_term_momentum * 0.3)
+    
+    # Adaptive volatility adjustment
+    adaptive_volatility = (avg_true_range.mean() / avg_true_range) * (1 + volume_shock * 0.5)
+    
+    # Introduce a price movement factor relative to the daily range
+    price_movement_ratio = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Generate the alpha factor, with an interaction between price momentum, adaptive volatility, volume, and price movement ratio
+    alpha_factor = combined_momentum * adaptive_volatility * volume_change * price_movement_ratio
+    
+    return alpha_factor
+```

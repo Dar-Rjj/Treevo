@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range * df['volume']) + open_to_close_movement
+    
+    # Calculate Volume-Adjusted Momentum
+    volume_adjusted_momentum = (df['close'].diff() * df['volume']).fillna(0)
+    
+    # Calculate Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_ten_day_high = ten_day_high - df['close']
+    proximity_to_ten_day_low = df['close'] - ten_day_low
+    minimum_proximity = pd.concat([proximity_to_ten_day_high, proximity_to_ten_day_low], axis=1).min(axis=1)
+    inverted_proximity = 1 / minimum_proximity.replace(0, float('inf'))
+    daily_returns = df['close'].pct_change().fillna(0)
+    adjusted_reversion = inverted_proximity / daily_returns.rolling(window=20).std().fillna(1)  # Avoid division by zero
+    
+    # Integrate Open-High-Low Volatility
+    open_high_difference = df['high'] - df['open']
+    open_low_difference = df['open'] - df['low']
+    weighted_average_by_volume = ((open_high_difference + open_low_difference) / 2) * df['volume']
+    
+    # Introduce Trend Following Component
+    fifty_day_ma = df['close'].rolling(window=50).mean()
+    two_hundred_day_ma = df['close'].rolling(window=200).mean()
+    trend_score = (fifty_day_ma - two_hundred_day_ma) / two_hundred_day_ma
+    
+    # Final Alpha Factor
+    final_alpha_factor = (volume_adjusted_breakout_strength * volume_adjusted_momentum * 
+                          adjusted_reversion * weighted_average_by_volume * trend_score)
+    
+    return final_alpha_factor
+```

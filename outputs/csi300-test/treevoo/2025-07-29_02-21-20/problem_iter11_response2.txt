@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Intraday Momentum Indicators
+    df['high_price_indicator'] = df['high'] - df['open']
+    df['low_price_indicator'] = df['open'] - df['low']
+    df['intraday_momentum'] = df['high_price_indicator'] * df['low_price_indicator']
+    
+    # Volume Adjusted Intraday Factors
+    df['volume_adjusted_intraday_return'] = df['intraday_return'] * df['volume']
+    df['volume_adjusted_high_low_range'] = df['high_low_range'] * df['volume']
+    
+    # Smoothed Intraday Momentum
+    df['ema_volume_adjusted_intraday_return'] = df['volume_adjusted_intraday_return'].ewm(span=10).mean()
+    recent_vol_avg_5 = df['volume'].rolling(window=5).mean()
+    df['smoothed_intraday_momentum'] = df['ema_volume_adjusted_intraday_return'] * (recent_vol_avg_5 / df['volume'])
+    
+    # High-Low Breakout Potential
+    df['ema_volume_adjusted_high_low_range'] = df['volume_adjusted_high_low_range'].ewm(span=20).mean()
+    recent_vol_avg_10 = df['volume'].rolling(window=10).mean()
+    df['high_low_breakout_potential'] = df['ema_volume_adjusted_high_low_range'] * (recent_vol_avg_10 / df['volume'])
+    
+    # Momentum Reversal Indicator
+    df['momentum_reversal'] = (df['intraday_return'] - df['smoothed_intraday_momentum']) / df['high_low_breakout_potential']
+    
+    # Trading Activity Intensity
+    vol_avg_5 = df['volume'].rolling(window=5).mean()
+    df['trading_activity_intensity'] = vol_avg_5 / df['volume']
+    
+    # Daily Price Return
+    df['daily_price_return'] = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01  # Define a positive threshold
+    df['significant_increase'] = (df['daily_price_return'] > positive_threshold).astype(int)
+    
+    # Volume Spike Indicator
+    df['vol_spike'] = (df['volume'] > df['volume'].rolling(window=5).mean()).astype(int)
+    
+    # Compute Weighted Price Momentum
+    df['weighted_momentum'] = df['daily_price_return'] * df['significant_increase']
+    df['accumulated_momentum'] = df['weighted_momentum'].cumsum()
+    
+    # Apply Volume Spike Filter
+    df['filtered_momentum'] = df['accumulated_momentum'] * df['vol_spike']
+    
+    # Consolidate Initial Factors
+    df['initial_factors'] = (df['adjusted_close'] + df['smoothed_intraday_momentum']) / df['open']
+    
+    # Final Alpha Factor Synthesis
+    df['final_alpha_factor'] = (df['initial_factors'] + df['filtered_momentum'] + df['trading_activity_intensity']) * df['vol_spike']
+    df['final_alpha_factor'] /= df['open']
+    
+    # Volume Adjusted Momentum Indicator
+    df['momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_adjusted_momentum'] = df['momentum'] * df['volume_ratio']
+    
+    # Incorporate Volume Adjusted Momentum Indicator
+    df['final_combined_alpha_factor'] = df['final_alpha_factor'] + df['volume_adjusted_momentum']
+    df['final_combined_alpha_factor'] /= df['open']
+    
+    return df['final_combined_alpha_factor']
+```

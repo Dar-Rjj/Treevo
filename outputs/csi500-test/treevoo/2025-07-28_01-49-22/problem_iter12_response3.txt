@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    high_low_range_ratio = high_low_range / high_low_range.shift(1)
+    
+    # Smooth High-Low Range Ratio
+    ema_window = 10
+    smoothed_high_low_range_ratio = high_low_range_ratio.ewm(span=ema_window, min_periods=ema_window).mean()
+    
+    # Generate Alpha Factor from Momentum
+    baseline_ema_window = 20
+    dynamic_threshold = smoothed_high_low_range_ratio.rolling(window=baseline_ema_window, min_periods=baseline_ema_window).mean()
+    momentum_signal = (smoothed_high_low_range_ratio > dynamic_threshold).astype(int) - (smoothed_high_low_range_ratio < dynamic_threshold).astype(int)
+    alpha_factor_momentum = momentum_signal * df['volume']
+    
+    # Calculate High-Low Range Volatility
+    n_period = 10
+    high_low_range_volatility = high_low_range.rolling(window=n_period, min_periods=n_period).sum() / n_period
+    
+    # Adjust Volatility by Volume
+    vol_ema_window = 10
+    ema_volume = df['volume'].ewm(span=vol_ema_window, min_periods=vol_ema_window).mean()
+    adjusted_volatility = high_low_range_volatility * ema_volume
+    
+    # Incorporate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    fixed_weight = 0.5  # Example of a fixed weight
+    weighted_close_open_diff = fixed_weight * close_open_diff
+    final_alpha_factor = adjusted_volatility + weighted_close_open_diff
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,29 @@
+import pandas as pd
+    
+    # Calculate MACD with dynamic parameters based on volatility
+    fast = 12
+    slow = 26
+    signal = 9
+    std_dev = df['close'].pct_change().rolling(window=14).std()
+    macd_factor = (std_dev + std_dev.min()) / (std_dev.max() - std_dev.min())
+    ema_fast = df['close'].ewm(span=fast * macd_factor, adjust=False).mean()
+    ema_slow = df['close'].ewm(span=slow * macd_factor, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    macd_signal_diff = macd - signal_line
+
+    # Calculate DMI components
+    up_move = df['high'] - df['high'].shift(1)
+    down_move = df['low'].shift(1) - df['low']
+    positive_dm = up_move.where(up_move > down_move, other=0)
+    negative_dm = down_move.where(down_move > up_move, other=0)
+    
+    atr_14 = df[['high', 'low', 'close']].apply(lambda x: x.diff().abs().max(), axis=1).rolling(window=14).mean()
+    pos_di = 100 * (positive_dm.rolling(window=14).sum() / atr_14)
+    neg_di = 100 * (negative_dm.rolling(window=14).sum() / atr_14)
+    
+    # Combine MACD and DMI signals
+    dmi_signal = pos_di - neg_di
+    heuristics_matrix = (macd_signal_diff + dmi_signal) / 2
+
+    return heuristics_matrix

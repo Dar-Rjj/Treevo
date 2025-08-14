@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10, alpha=0.5, beta=0.3, gamma=0.2):
+    """
+    Calculate a novel alpha factor using Volume Adjusted Momentum with Price Change Volatility.
+    
+    Parameters:
+    - df: pandas DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume'] and index as (date).
+    - N: Number of days to compute the log return.
+    - M: Number of days to compute the volatility measures.
+    - alpha, beta, gamma: Weights for momentum, volume, and volatility components respectively.
+    
+    Returns:
+    - A pandas Series representing the factor values indexed by (date).
+    """
+    # Obtain close prices
+    close_prices = df['close']
+    
+    # Compute log returns over N days
+    log_returns = np.log(close_prices).diff(N)
+    
+    # Compute momentum
+    cum_log_returns = log_returns.cumsum()
+    upper_threshold = cum_log_returns.quantile(0.9)
+    lower_threshold = cum_log_returns.quantile(0.1)
+    clipped_log_returns = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for volume
+    volumes = df['volume']
+    mean_volume = volumes.mean()
+    volume_adjusted_momentum = (volumes / mean_volume) * clipped_log_returns
+    
+    # Determine absolute price changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate advanced volatility measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    
+    # Final factor calculation
+    combined_factor = (alpha * volume_adjusted_momentum +
+                       beta * std_abs_price_changes +
+                       gamma * ema_abs_price_changes)
+    
+    # Ensure weights sum to 1
+    if not np.isclose(alpha + beta + gamma, 1.0):
+        raise ValueError("The sum of the weights must be 1.")
+    
+    return combined_factor
+```

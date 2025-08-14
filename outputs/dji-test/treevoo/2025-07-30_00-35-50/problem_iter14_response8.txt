@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_daily_return'] = df['daily_return'] + df['price_gap']
+    df['adjusted_daily_return'] = df['adjusted_daily_return'] * np.exp(-1/1)
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price Range Momentum
+    df['price_range_momentum'] = df['high_low_range'].pct_change()
+
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+
+    # Combine High-Low Spread with Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['hl_spread_volume'] = df['high_low_spread'] * (df['volume_change'] > 0) * df['volume_change']
+
+    # Apply Simple Moving Average (SMA) to Combined High-Low Spread with Volume Change
+    df['sma_hl_spread_volume'] = df['hl_spread_volume'].rolling(window=5).mean()
+
+    # Adjust by Volume Change
+    df['volume_adjustment'] = df['volume'] / df['volume'].shift(1)
+    df['volume_adjusted_price_range_momentum'] = df['price_range_momentum'] * df['volume_adjustment']
+
+    # Calculate Accumulated Volume Impact
+    df['accumulated_volume'] = df['volume'].rolling(window=5).sum()
+    df['volume_weighted_adjusted_daily_return'] = df['adjusted_daily_return'] * (df['accumulated_volume'] / df['volume'])
+
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['volume_weighted_adjusted_daily_return'] +
+        df['volume_adjusted_price_range_momentum'] +
+        df['sma_hl_spread_volume'] +
+        df['accumulated_volume']
+    )
+
+    return df['final_alpha_factor']
+```

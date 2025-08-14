@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['IntradayRange'] = df['high'] - df['low']
+
+    # Adjust by Volume Change and Price Level
+    lookback_period = 20
+    df['VolumeMA'] = df['volume'].rolling(window=lookback_period).mean()
+    df['VolumeChange'] = df['volume'] / df['volume'].shift(1)
+    df['PriceLevelRatio'] = df['close'] / df['open']
+    df['AdjustedRange'] = (df['IntradayRange'] * df['VolumeChange']) * df['PriceLevelRatio']
+
+    # Close Price Momentum
+    momentum_lookback = 10
+    df['Momentum'] = (df['close'] / df['close'].shift(momentum_lookback)) - 1
+
+    # Integrate Intraday Price Movement and Volume
+    df['IntradayMomentumScore'] = df['IntradayRange'] * df['VolumeChange']
+
+    # Calculate 5-Day Average High-Low Spread
+    spread_lookback = 5
+    df['HighLowSpread'] = (df['high'] - df['low']).rolling(window=spread_lookback).mean()
+
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['5DayMomentum'] = (df['close'] / df['close'].shift(spread_lookback)) - 1
+    df['HighLowSpreadMomentum'] = df['HighLowSpread'] * df['5DayMomentum']
+    df['IntegratedMomentumFactor'] = df['IntradayMomentumScore'] + df['HighLowSpreadMomentum']
+
+    # Calculate Volume Weighted Average Price
+    df['VWAP'] = ((df['open'] + df['high'] + df['low'] + df['close']) / 4) * df['volume'] / df['volume']
+
+    # Combine Factors with Volume-Adjusted Price Trend
+    df['CloseReturn'] = df['close'] / df['close'].shift(1) - 1
+    df['CombinedFactor'] = (df['CloseReturn'] * df['IntradayRange']) / df['VWAP']
+
+    # Filter for Recent Price Trend
+    df['5DayCloseMA'] = df['close'].rolling(window=spread_lookback).mean()
+    df['RecentTrend'] = df['close'] - df['5DayCloseMA']
+
+    # Introduce Volume Trend
+    df['5DayVolumeSum'] = df['volume'].rolling(window=spread_lookback).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DayVolumeSum']
+    df['VolumeTrendAdjustedFactor'] = df['CombinedFactor'] * df['VolumeRatio']
+
+    # Final Factor Calculation
+    adjusted_range_weight = 0.2
+    momentum_weight = 0.3
+    integrated_momentum_weight = 0.3
+    volume_trend_weight = 0.2
+    df['FinalFactor'] = (adjusted_range_weight * df['AdjustedRange'] +
+                         momentum_weight * df['Momentum'] +
+                         integrated_momentum_weight * df['IntegratedMomentumFactor'] +
+                         volume_trend_weight * df['VolumeTrendAdjustedFactor'])
+
+    # Introduce Relative Strength Index (RSI)
+    rsi_lookback = 14
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_lookback).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_lookback).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Include RSI in Final Factor Calculation
+    rsi_weight = 0.1
+    df['FinalFactorWithRSI'] = (adjusted_range_weight * df['AdjustedRange'] +
+                                momentum_weight * df['Momentum'] +
+                                integrated_momentum_weight * df['IntegratedMomentumFactor'] +
+                                volume_trend_weight * df['VolumeTrendAdjustedFactor'] +
+                                rsi_weight * df['RSI'])
+
+    return df['FinalFactorWithRSI'].dropna()
+```

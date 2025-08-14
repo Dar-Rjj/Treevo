@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=10, spike_threshold=3, cap_threshold=5):
+    # Calculate Daily Log Returns
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Compute Weighted Average Log Return
+    df['weighted_log_return'] = (df['volume'].rolling(window=n).apply(lambda x: (x * df.loc[x.index, 'log_return']).sum() / x.sum(), raw=False))
+    
+    # Incorporate Short-Term Price Reversal
+    df['high_low_range'] = df['high'] - df['low']
+    df['reversal_adjusted'] = df['weighted_log_return'] - df['high_low_range']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday Features
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=n).mean()
+    df['combined_feature'] = df['avg_intraday_range'] * (df['close_to_open_return'] - df['high_low_range'] + df['weighted_log_return'])
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=m).mean()
+    df['enhanced_feature'] = df['combined_feature'] * df['avg_abs_price_change']
+    
+    # Adjust by Volume Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1) * spike_threshold).astype(int)
+    df['adjusted_factor'] = df['enhanced_feature'] / (df['volume_spike'] + 1)  # Avoid division by zero
+    df['capped_factor'] = df['adjusted_factor'].clip(lower=-cap_threshold, upper=cap_threshold)
+    
+    return df['capped_factor'].dropna()
+
+# Example usage:
+# data = pd.DataFrame({
+#     'open': [100, 101, 102, 103, 104, 105],
+#     'high': [105, 106, 107, 108, 109, 110],
+#     'low': [95, 96, 97, 98, 99, 100],
+#     'close': [102, 103, 104, 105, 106, 107],
+#     'amount': [1000, 1100, 1200, 1300, 1400, 1500],
+#     'volume': [10000, 11000, 12000, 13000, 14000, 15000]
+# }, index=pd.date_range('2023-01-01', periods=6))
+
+# factor_values = heuristics_v2(data)
+# print(factor_values)
+```

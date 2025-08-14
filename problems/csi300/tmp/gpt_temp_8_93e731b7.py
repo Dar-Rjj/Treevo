@@ -1,0 +1,69 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    df['high_indicator'] = df['high'] - df['open']
+    df['low_indicator'] = df['open'] - df['low']
+    df['intraday_momentum'] = (df['high_indicator'] + df['low_indicator']) / 2
+    
+    # Volume Impact on Intraday Momentum
+    alpha = 0.1  # Smoothing factor
+    df['smoothed_volume'] = df['volume'].ewm(alpha=alpha).mean()
+    df['volume_impacted_intraday_momentum'] = df['intraday_momentum'] * df['smoothed_volume']
+    
+    # Long-Term Momentum Adjusted for Volume
+    lookback_period = 20
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(lookback_period)
+    df['volume_adjusted_long_term_momentum'] = df['long_term_momentum'] * df['volume_ratio']
+    
+    # Trend Indicators
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['trend_indicator'] = df['ema_5'] - df['ema_20']
+    
+    # VWAP and Liquidity Signals
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    df['vwap'] = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_ema_10'] = df['vwap'].ewm(span=10, adjust=False).mean()
+    df['liquidity_signal'] = df['vwap'] - df['vwap_ema_10']
+    
+    # Volatility Indicators
+    df['tr'] = df['high'] - df['low']
+    df['tr'] = df[['tr', (df['close'].shift(1) - df['high']).abs(), (df['close'].shift(1) - df['low']).abs()]].max(axis=1)
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    df['relative_volatility_spike'] = df['tr'] / df['atr_14']
+    
+    # Accumulation/Distribution Line (A/D Line)
+    df['money_flow_multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['money_flow_volume'] = df['money_flow_multiplier'] * df['volume']
+    df['ad_line'] = df['money_flow_volume'].cumsum()
+    df['ad_line_slope'] = df['ad_line'] - df['ad_line'].shift(30)
+    df['ad_line_signal'] = df['ad_line'] - df['ad_line'].ewm(span=30, adjust=False).mean()
+    
+    # Consolidate All Factors
+    df['total_factor'] = (
+        df['adjusted_close'] +
+        df['volume_impacted_intraday_momentum'] +
+        df['volume_adjusted_long_term_momentum'] +
+        df['trend_indicator'] +
+        df['liquidity_signal'] +
+        df['relative_volatility_spike'] +
+        df['ad_line_signal']
+    )
+    df['factor'] = df['total_factor'] / df['open']
+    
+    return df['factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# df['date'] = pd.to_datetime(df['date'])
+# df.set_index('date', inplace=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)

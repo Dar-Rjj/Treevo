@@ -1,0 +1,37 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 30-day Exponential Moving Averages of the close price
+    df['close_ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['close_ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the 50-day and 200-day Exponential Moving Averages for longer-term context
+    df['close_ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['close_ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 14-day Average True Range (ATR) for volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the volume relative to its 5-period moving average
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_relative'] = df['volume'] / (df['volume_ma_5'] + 1e-7)
+    
+    # Factor combining the momentum, ATR-normalized volatility, and volume surge
+    factor = (df['close'] - df['close_ema_10']) / df['atr_14'] * df['rsi_14'] * df['volume_relative']
+    
+    # Incorporate dynamic trends and relative indicators
+    df['dynamic_trend'] = (df['close_ema_10'] - df['close_ema_30']) / df['close_ema_30']
+    df['relative_indicator'] = (df['close_ema_50'] - df['close_ema_200']) / df['close_ema_200']
+    
+    # Combine all factors
+    factor = factor * df['dynamic_trend'] * df['relative_indicator']
+    
+    return factor
+```

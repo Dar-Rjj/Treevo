@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate moving averages
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Compute the difference between 20-day EMA and 50-day EMA
+    df['EMA_Diff'] = df['EMA_20'] - df['EMA_50']
+    
+    # Calculate the rate of change (ROC) of the 50-day EMA
+    df['EMA_50_ROC'] = df['EMA_50'].pct_change()
+    
+    # Calculate the slope of the 50-day EMA
+    df['EMA_50_Slope'] = df['EMA_50'].diff() / df.index.to_series().diff().dt.days
+    
+    # Calculate the relative strength index (RSI) over the past 14 days
+    df['Price_Change'] = df['close'].diff()
+    df['Gain'] = df['Price_Change'].apply(lambda x: x if x > 0 else 0)
+    df['Loss'] = df['Price_Change'].apply(lambda x: -x if x < 0 else 0)
+    df['Avg_Gain'] = df['Gain'].rolling(window=14).mean()
+    df['Avg_Loss'] = df['Loss'].rolling(window=14).mean()
+    df['RS'] = df['Avg_Gain'] / df['Avg_Loss']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Compute the moving average convergence divergence (MACD)
+    df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
+    df['Signal_Line'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+    
+    # Calculate the ratio of the current close to the 20-day EMA
+    df['Close_to_EMA_20_Ratio'] = df['close'] / df['EMA_20']
+    
+    # Measure volume spikes
+    df['Volume_20_MA'] = df['volume'].rolling(window=20).mean()
+    df['Volume_20_Std'] = df['volume'].rolling(window=20).std()
+    df['Volume_Spike'] = (df['volume'] > df['Volume_20_MA'] + 2 * df['Volume_20_Std']).astype(int)
+    
+    # Calculate the correlation between daily volume and price changes over the past 30 days
+    df['Volume_Price_Correlation'] = df['Price_Change'].rolling(window=30).corr(df['volume'])
+    
+    # Calculate the sum of the product of daily price change and volume
+    df['Volume_Price_Product'] = df['Price_Change'] * df['volume']
+    df['Volume_Price_Relationship'] = df['Volume_Price_Product'].rolling(window=30).sum()
+    
+    # Calculate the volume-weighted average price (VWAP)
+    df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    df['Close_to_VWAP_Percent'] = (df['close'] - df['VWAP']) / df['VWAP'] * 100
+    
+    # Determine daily price range
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Average_Range_20'] = df['Daily_Range'].rolling(window=20).mean()
+    df['Range_to_Avg_Range_Ratio'] = df['Daily_Range'] / df['Average_Range_20']
+    
+    # Measure the difference between the opening price of the current day and the closing price of the previous day
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Opening_Price_Gap'] = df['open'] - df['Prev_Close']
+    df['Gap_Size_Percent'] = (df['open'] - df['Prev_Close']) / df['Prev_Close'] * 100
+    
+    # Calculate true range
+    df['True_Range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['Prev_Close

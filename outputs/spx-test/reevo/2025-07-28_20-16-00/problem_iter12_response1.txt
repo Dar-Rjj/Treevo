@@ -1,0 +1,53 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Determine if today's close is above the 5-day SMA, indicating an upward momentum
+    sma_5 = df['close'].rolling(window=5).mean()
+    momentum = (df['close'] > sma_5).astype(int)
+    
+    # Calculate the volume-weighted return of the last 3 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=3).sum() / df['volume'].rolling(window=3).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the ATR (Average True Range) for the last 14 days
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Calculate the dynamic weighting based on the ratio of the current day's volume to the 14-day average volume
+    avg_volume_14 = df['volume'].rolling(window=14).mean()
+    volume_ratio = df['volume'] / avg_volume_14
+    
+    # Adaptive momentum: Combine short-term and long-term momentum
+    sma_20 = df['close'].rolling(window=20).mean()
+    long_momentum = (df['close'] > sma_20).astype(int)
+    adaptive_momentum = (momentum * 0.6 + long_momentum * 0.4)
+    
+    # Adaptive volatility: Normalize the volatility over a longer period
+    avg_daily_volatility_20 = daily_volatility.rolling(window=20).mean()
+    adaptive_volatility = (daily_volatility / avg_daily_volatility_20)
+    
+    # Adaptive RSI: Normalize the RSI over a longer period
+    avg_rsi_20 = rsi.rolling(window=20).mean()
+    adaptive_rsi = (rsi / avg_rsi_20)
+    
+    # Adaptive ATR: Normalize the ATR over a longer period
+    avg_atr_20 = atr.rolling(window=20).mean()
+    adaptive_atr = (atr / avg_atr_20)
+    
+    # Adaptive volume ratio: Normalize the volume ratio over a longer period
+    avg_volume_ratio_20 = volume_ratio.rolling(window=20).mean()
+    adaptive_volume_ratio = (volume_ratio / avg_volume_ratio_20)
+    
+    # Combine the factors with a focus on key indicators and balance between trend and mean reversion
+    factor = (adaptive_momentum * (adaptive_rsi / 100) * (1 / (adaptive_atr + 1e-7)) * weighted_return * adaptive_volume_ratio) / (adaptive_volatility + 1e-7)
+    
+    return factor
+```

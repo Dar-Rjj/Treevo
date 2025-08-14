@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Raw Momentum
+    n = 10
+    df['raw_momentum'] = df['close'].diff()
+    
+    # Identify Volume Spikes
+    m = 5
+    df['volume_ma'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = df['volume'] > 1.5 * df['volume_ma']
+    
+    # Adjust Raw Momentum
+    dampening_factor = 0.7
+    df['adjusted_momentum'] = np.where(df['volume_spike'], df['raw_momentum'] * dampening_factor, df['raw_momentum'])
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday Factors
+    df['intraday_factors'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['average_volume'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['average_volume']
+    
+    # Integrate Volume Impact
+    df['volume_impact'] = df['volume'] / df['average_volume']
+    df['intraday_momentum'] = df['intraday_factors'] * df['volume_impact']
+    
+    # Combine for Initial Alpha Signal
+    df['initial_alpha_signal'] = df['adjusted_momentum'] * df['volume'] + df['intraday_momentum']
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Compute Smoothed Price Momentum
+    df['smoothed_price_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Weighted Volume Indicator
+    df['weighted_volume_indicator'] = (df['volume_change'] * np.sign(df['volume_change'])).rolling(window=5).mean()
+    
+    # Incorporate Close Price Trend
+    df['close_price_trend'] = df['close'].diff().ewm(span=5, adjust=False).mean().shift(1)
+    df['close_price_trend_diff'] = df['close'].diff() - df['close_price_trend']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['adjusted_momentum'] *
+        df['intraday_factors'] *
+        df['weighted_price_movement_normalized'] *
+        df['initial_alpha_signal'] *
+        df['smoothed_price_momentum'] *
+        df['weighted_volume_indicator'] *
+        df['close_price_trend_diff']
+    )
+    
+    # Adjust for Volatility
+    df['close_std'] = df['close'].rolling(window=10).std()
+    df['final_alpha_factor'] = df['final_alpha_factor'] / (1 + df['close_std'])
+    
+    return df['final_alpha_factor']
+```

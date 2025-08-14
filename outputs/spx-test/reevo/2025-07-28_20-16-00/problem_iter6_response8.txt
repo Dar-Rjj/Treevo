@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low, to gauge the day's volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Calculate a simple moving average for the close price over 5 days as a basic trend indicator
+    sma_5 = df['close'].rolling(window=5).mean()
+    
+    # Determine if today's close is above the 5-day SMA, indicating an upward momentum
+    momentum = (df['close'] > sma_5).astype(int)
+    
+    # Calculate the volume-weighted return of the last 3 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=3).sum() / df['volume'].rolling(window=3).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the ATR (Average True Range) for the last 14 days
+    true_range = df[['high', 'low']].apply(lambda x: max(x[0], x[1]) - min(x[0], x[1]), axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Calculate the directional movement index (DMI) for the last 14 days
+    up_move = df['high'].diff()
+    down_move = df['low'].diff(-1)
+    plus_dm = (up_move > down_move) & (up_move > 0) * up_move
+    minus_dm = (down_move > up_move) & (down_move > 0) * down_move
+    tr_sum = true_range.rolling(window=14).sum()
+    plus_di = 100 * (plus_dm.rolling(window=14).sum() / tr_sum)
+    minus_di = 100 * (minus_dm.rolling(window=14).sum() / tr_sum)
+    dmi = abs(plus_di - minus_di)
+    
+    # Calculate the 50-day and 200-day simple moving averages for long-term trend indication
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    # Determine if the 50-day SMA is above the 200-day SMA, indicating a long-term uptrend
+    long_term_trend = (sma_50 > sma_200).astype(int)
+    
+    # Calculate the money flow index (MFI) for the last 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Adaptive window for volatility based on the 20-day standard deviation
+    adaptive_volatility_window = 20
+    adaptive_volatility = daily_volatility.rolling(window=adaptive_volatility_window).std()
+    
+    # Adaptive window for momentum based on the 10-day standard deviation
+    adaptive_momentum_window = 10
+    adaptive_momentum = (df['close'].pct_change().rolling(window=adaptive_momentum_window).mean()).fillna(0)
+    
+    # Market regime: Bullish (1) or Bearish (0) based on the 200-day SMA
+    market_regime = (df['close'] > sma_200).astype(int)
+    
+    # Create a factor combining volatility (as inverse, higher volatility might lead to reversion), momentum, RSI, ATR, DMI, and MFI
+    # Incorporate long-term trend for a more nuanced view of market direction
+    factor = (1 / (adaptive_volatility + 1e-7)) * adaptive_momentum * (rsi / 100) * (1 / (atr + 1e-7

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Dynamics
+    intraday_range = df['high'] - df['low']
+    intraday_midpoint_to_open_ratio = ((df['high'] + df['low']) / 2) / df['open']
+    close_to_open_return_by_intraday_range = (df['close'] - df['open']) / intraday_range
+    
+    # Momentum
+    rate_of_change_10d = (df['close'].pct_change(10)).fillna(0)
+    rate_of_change_30d = (df['close'].pct_change(30)).fillna(0)
+    
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_30 = df['close'].rolling(window=30).mean()
+    sma_60 = df['close'].rolling(window=60).mean()
+    
+    sma_crossover_10_30 = sma_10 - sma_30
+    sma_crossover_30_60 = sma_30 - sma_60
+    
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+    
+    vwap = (df['amount'] / df['volume']).shift(1)  # VWAP of the previous day
+    next_day_open = df['open'].shift(-1)
+    close_to_next_day_open_return = (vwap - next_day_open) / next_day_open
+    
+    weighted_close_to_next_day_open_return = (close_to_next_day_open_return * df['volume'])
+    
+    # Volatility
+    daily_volatility = (df['high'] - df['low']).fillna(0)
+    smooth_volatility = daily_volatility.ewm(span=30, adjust=False).mean()
+    std_dev_30d = df['close'].rolling(window=30).std().fillna(0)
+    
+    # Combine Metrics
+    daily_price_change = df['close'].diff().fillna(0)
+    cumulative_price_change = daily_price_change.cumsum()
+    
+    adjusted_close = df['close'].shift(1)  # Adjusted Close of the previous day
+    max_adjusted_close = adjusted_close.rolling(window=30).max()
+    min_open = df['open'].rolling(window=30).min()
+    
+    vwap = (df['amount'] / df['volume'])
+    intraday_midpoint_to_open_ratio_by_vwap = intraday_midpoint_to_open_ratio * vwap
+    
+    # Final Factor Adjustment
+    intraday_range_with_volume_weighted_momentum = intraday_range * weighted_close_to_next_day_open_return
+    adjusted_close_to_open_return = (df['close'] - df['open']).shift(1)  # Adjusted to the previous day
+    weighted_intraday_range = close_to_open_return_by_intraday_range * intraday_range
+    adjusted_close_to_open_factor = adjusted_close_to_open_return + weighted_intraday_range
+    cumulative_momentum = rate_of_change_10d + rate_of_change_30d
+    adjusted_intraday_factor_with_cumulative_momentum = adjusted_close_to_open_factor + cumulative_momentum
+    volatility_factor = daily_volatility + smooth_volatility
+    
+    final_factor = (intraday_range_with_volume_weighted_momentum + 
+                    adjusted_intraday_factor_with_cumulative_momentum + 
+                    volatility_factor)
+    
+    return final_factor
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    period = 5
+    
+    # Calculate Price Momentum and Directional Movement
+    df['high_minus_prior_high'] = df['high'].diff()
+    df['low_minus_prior_low'] = df['low'].diff()
+    
+    df['upward_movement'] = df['high'] - df['high'].shift(1)
+    df['downward_movement'] = df['low'].shift(1) - df['low']
+    
+    conditions = [
+        (df['high_minus_prior_high'] > df['low_minus_prior_low']),
+        (df['high_minus_prior_high'] <= df['low_minus_prior_low'])
+    ]
+    choices = [df['high_minus_prior_high'], df['low_minus_prior_low']]
+    df['net_movement'] = pd.np.select(conditions, choices, default=0)
+    
+    df['cumulative_directional_movement'] = df['net_movement'].rolling(window=period).sum()
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(period)
+    df['cumulative_volume_trend'] = df['volume_change'].rolling(window=period).sum()
+    
+    # Combine Price Momentum, Directional Movement, and Volume Trend
+    coefficient_directional = 1.0
+    coefficient_volume = 0.5
+    
+    df['weighted_sum'] = (coefficient_directional * df['cumulative_directional_movement']) + \
+                         (coefficient_volume * df['cumulative_volume_trend'])
+    
+    # Adjust for Market Sentiment
+    df['high_low_range'] = df['high'] - df['low']
+    df['final_factor'] = df['weighted_sum'] / df['high_low_range']
+    
+    return df['final_factor']
+```

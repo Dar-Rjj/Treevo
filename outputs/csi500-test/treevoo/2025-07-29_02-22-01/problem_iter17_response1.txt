@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted High-Low Spread
+    df['volume_adjusted_high_low'] = (df['high'] - df['low']) * df['volume']
+    df['volume_adjusted_high_low_10dma'] = df['volume_adjusted_high_low'].rolling(window=10).mean()
+
+    # Calculate Short-Term and Long-Term EMAs
+    df['short_term_ema'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['long_term_ema'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_diff'] = df['short_term_ema'] - df['long_term_ema']
+
+    # Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+
+    # Momentum Calculation
+    N = 10
+    df['price_momentum'] = df['daily_price_change'].rolling(window=N).sum()
+
+    # Volume Confirmation
+    M = 10
+    df['daily_volume_change'] = df['volume'].diff()
+    positive_volume_changes = df['daily_volume_change'].where(df['daily_volume_change'] > 0, 0)
+    df['average_volume_increase'] = positive_volume_changes.rolling(window=M).sum() / (df['daily_volume_change'] > 0).rolling(window=M).sum()
+
+    # Calculate Volume Reversal Indicator
+    df['volume_roc'] = df['volume'].pct_change(periods=5)
+    df['smoothed_volume_roc'] = df['volume_roc'].rolling(window=3).mean()
+    df['inverted_smoothed_volume_roc'] = 1 / (1 + df['smoothed_volume_roc'])
+    df['volume_reversal_indicator'] = df['price_momentum'] * df['inverted_smoothed_volume_roc']
+
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+
+    # Volume Weighted Adjusted Return
+    df['volume_weighted_adjusted_return'] = df['volume'] * df['intraday_return']
+
+    # Proportional Movement Index
+    df['proportional_movement_index'] = (df['high'] - df['low']) / df['close'] * df['intraday_return']
+
+    # Combine Factors
+    df['combined_factors'] = (
+        df['volume_adjusted_high_low_10dma'] +
+        df['ema_diff'] +
+        df['price_momentum'] +
+        df['volume_reversal_indicator'] +
+        df['proportional_movement_index'] +
+        df['volume_weighted_adjusted_return'] +
+        df['average_volume_increase'] * df['price_momentum']
+    )
+
+    return df['combined_factors']
+```

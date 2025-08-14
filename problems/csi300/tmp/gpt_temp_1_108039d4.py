@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Weight by Volume
+    weighted_volatility = intraday_volatility * df['volume']
+    
+    # Calculate Intraday Momentum
+    daily_momentum = df['close'] - df['open']
+    
+    # Integrate Momentum and Volatility
+    integrated_value = weighted_volatility + daily_momentum
+    
+    # Apply Adaptive Exponential Smoothing
+    alpha = 0.5  # Initial alpha
+    smoothed_values = [integrated_value.iloc[0]]
+    for i in range(1, len(integrated_value)):
+        recent_volatility = np.std(intraday_volatility.iloc[max(0, i-10):i])
+        if recent_volatility > 0:
+            alpha = 1 / (1 + np.exp(-recent_volatility))
+        else:
+            alpha = 0.5
+        smoothed_value = alpha * integrated_value.iloc[i] + (1 - alpha) * smoothed_values[-1]
+        smoothed_values.append(smoothed_value)
+    
+    # Incorporate Previous Day's Integrated Value
+    final_factors = []
+    for i in range(len(smoothed_values)):
+        if i == 0:
+            final_factor = smoothed_values[i]
+        else:
+            final_factor = 0.5 * smoothed_values[i] + 0.5 * final_factors[-1]
+        final_factors.append(final_factor)
+    
+    return pd.Series(final_factors, index=df.index)

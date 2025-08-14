@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = 0
+    df['loss'] = 0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'gain'] = df.loc[df.index[i], 'close'] - df.loc[df.index[i-1], 'close']
+        else:
+            df.loc[df.index[i], 'loss'] = df.loc[df.index[i-1], 'close'] - df.loc[df.index[i], 'close']
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    df['avg_gain'] = df['gain'].rolling(window=14).sum()
+    df['avg_loss'] = df['loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    
+    # Convert to ARSI
+    df['arsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Adjust for Advanced Features
+    df['volume_avg'] = df['volume'].rolling(window=14).mean()
+    df['momentum'] = df['close'] / df['open']
+    df['vwarsi'] = df['arsi'] * df['volume_avg'] * df['momentum']
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = df['close'].pct_change(periods=5)
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = df['close'].pct_change(periods=20)
+    
+    # Calculate Volume-Weighted Short-Term Return
+    df['vwt_short_return'] = df['volume'] * df['short_term_return']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    df['vwt_long_return'] = df['volume'] * df['long_term_return']
+    
+    # Calculate Short-Term Volatility
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 1].abs()
+    df['avg_true_range_5'] = df['true_range'].rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    df['adjusted_factor'] = (df['vwt_short_return'] / df['avg_true_range_5']) - df['vwt_long_return']
+    
+    return df['adjusted_factor'].dropna()
+```

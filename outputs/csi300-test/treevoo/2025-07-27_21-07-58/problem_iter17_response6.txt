@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate True Range
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], 
+                                              abs(x['high'] - df['close'].shift(1).loc[x.name]), 
+                                              abs(x['low'] - df['close'].shift(1).loc[x.name])), axis=1)
+    
+    # Determine Short-Term Momentum
+    short_term_momentum = df['daily_return'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    
+    # Determine Long-Term Momentum
+    long_term_momentum = df['daily_return'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Combine Momentum Indicators
+    combined_momentum = (short_term_momentum * 0.6) + (long_term_momentum * 0.4)
+    
+    # Calculate Average True Range
+    atr = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate 50-day Exponential Moving Average of Close Price
+    ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Adjust Combined Momentum by Volatility and Trend
+    adjusted_momentum = combined_momentum / atr
+    adjusted_momentum[df['close'] > ema_50] *= 1.5
+    
+    # Calculate 1-Period Price Momentum
+    price_momentum = df['close'] - df['close'].shift(1)
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    change_high_low_range = high_low_range - high_low_range.shift(1)
+    
+    # Calculate Price Momentum Component
+    daily_price_change_percentage = df['close'].pct_change()
+    avg_price_momentum = daily_price_change_percentage.rolling(window=5).mean()
+    
+    # Calculate Volume Surge Component
+    daily_volume_change_percentage = df['volume'].pct_change()
+    avg_volume_surge = daily_volume_change_percentage.rolling(window=10).mean()
+    
+    # Combine High-Low Range and Volume
+    combined_high_low_volume = (change_high_low_range * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    n = 30
+    avg_volume = df['volume'].rolling(window=n).mean()
+    volume_ratio = df['volume'] / avg_volume
+    
+    # Adjust by Average Amount
+    m = 30
+    avg_amount = df['amount'].rolling(window=m).mean()
+    amount_ratio = df['amount'] / avg_amount
+    
+    # Introduce Weighting Factors
+    w1, w2, w3, w4, w5 = 0.2, 0.3, 0.2, 0.1, 0.2
+    
+    # Combine Weighted Components
+    alpha_factor = (combined_high_low_volume * w1) + \
+                   (avg_price_momentum * w2) + \
+                   (avg_volume_surge * w3) + \
+                   (volume_ratio * w4) + \
+                   (amount_ratio * w5)
+    
+    return alpha_factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

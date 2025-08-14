@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1) * df['volume']
+    
+    # Adaptive Lookback Periods
+    short_term_lookback = 5
+    mid_term_lookback = 10
+    long_term_lookback = 20
+    
+    # Short-Term Lookback
+    df['5_day_sma'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).mean()
+    df['5_day_std'] = df['Close_to_Open_Return'].rolling(window=short_term_lookback).std()
+    
+    # Mid-Term Lookback
+    df['10_day_sma'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).mean()
+    df['10_day_std'] = df['Close_to_Open_Return'].rolling(window=mid_term_lookback).std()
+    
+    # Long-Term Lookback
+    df['20_day_sma'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).mean()
+    df['20_day_std'] = df['Close_to_Open_Return'].rolling(window=long_term_lookback).std()
+    
+    # Combine Multi-Period Volatilities
+    short_term_weight = 0.4
+    mid_term_weight = 0.3
+    long_term_weight = 0.3
+    
+    df['Combined_Volatility'] = (df['5_day_std'] * short_term_weight +
+                                 df['10_day_std'] * mid_term_weight +
+                                 df['20_day_std'] * long_term_weight)
+    
+    # Incorporate Dynamic Market Trend Adjustments
+    df['5_day_ma_close'] = df['close'].rolling(window=short_term_lookback).mean()
+    df['20_day_ma_close'] = df['close'].rolling(window=long_term_lookback).mean()
+    
+    df['Price_Trend_Indicator'] = (df['5_day_ma_close'] > df['20_day_ma_close']).astype(int)
+    
+    # Adjust Combined Factor by Price Trend Indicator
+    df['Adjusted_Factor'] = df['Combined_Volatility']
+    df.loc[df['Price_Trend_Indicator'] == 1, 'Adjusted_Factor'] *= 1.2
+    df.loc[df['Price_Trend_Indicator'] == 0, 'Adjusted_Factor'] *= 0.8
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Close_to_Open_Return'] / df['Adjusted_Factor']
+    
+    return df['Alpha_Factor'].dropna()
+```

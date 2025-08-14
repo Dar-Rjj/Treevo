@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+
+    # Identify Price Reversal Patterns
+    df['bullish_engulfing'] = ((df['close'] > df['open'].shift(1)) & 
+                               (df['open'] < df['close'].shift(1)))
+    df['bearish_engulfing'] = ((df['close'] < df['open'].shift(1)) & 
+                               (df['open'] > df['close'].shift(1)))
+    
+    # Compute Changes in Trading Volume
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Examine Volume Spike Events
+    k = 2.0  # Threshold for volume spike
+    df['volume_spike'] = (df['volume'] > k * df['volume'].shift(1)).astype(int)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).cumsum() / (df['volume']).cumsum()
+    
+    # Composite Alpha Factors
+    df['factor_1'] = df['intraday_volatility'] * df['volume_change']
+    df['reversal'] = df['bullish_engulfing'] - df['bearish_engulfing']
+    df['factor_2'] = df['reversal'] * df['volume_change']
+    
+    # Calculate Short-Term and Long-Term Returns
+    df['short_term_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_return'] = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Short-Term and Long-Term Returns
+    df['vol_weighted_short_term_return'] = df['short_term_return'] * df['volume']
+    df['vol_weighted_long_term_return'] = df['long_term_return'] * df['volume']
+    
+    # Adjusted Volume-Weighted Short-Term and Long-Term Returns
+    df['adj_vol_weighted_short_term_return'] = df['vol_weighted_short_term_return'] / df['intraday_volatility']
+    df['adj_vol_weighted_long_term_return'] = df['vol_weighted_long_term_return'] / df['intraday_volatility']
+    
+    # Combined Adjusted Momentum Factor
+    short_term_weight = 0.5
+    long_term_weight = 0.5
+    df['combined_momentum'] = (short_term_weight * df['adj_vol_weighted_short_term_return'] + 
+                               long_term_weight * df['adj_vol_weighted_long_term_return'])
+    
+    # Reversal Indicator
+    df['reversal_indicator'] = -df['combined_momentum']
+    
+    # Smoothed Reversal Indicator
+    df['smoothed_reversal_indicator'] = df['reversal_indicator'].rolling(window=3).mean()
+    
+    # Calculate 5-Day and 60-Day Moving Averages of Close Price
+    df['5_day_ma'] = df['close'].rolling(window=5).mean()
+    df['60_day_ma'] = df['close'].rolling(window=60).mean()
+    
+    # Trend Indicator
+    df['trend_indicator'] = df['5_day_ma'] - df['60_day_ma']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_reversal_indicator'] + df['trend_indicator']
+    
+    # Daily Price Momentum
+    df['daily_price_momentum'] = df['close'] - df['close'].shift(1)
+    
+    # Composite Price-Volume Momentum
+    avg_volume = df['volume'].rolling(window=5).mean()
+    df['composite_price_volume_momentum'] = df['daily_price_momentum'] * (df['volume'] / avg_volume)
+    
+    return df['final_alpha_factor']
+```

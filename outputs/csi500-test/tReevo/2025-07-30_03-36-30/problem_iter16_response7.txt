@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 3-Day and 5-Day Rolling Returns
+    df['3D_Return'] = (df['close'].shift(-2) / df['close']) - 1
+    df['5D_Return'] = (df['close'].shift(-4) / df['close']) - 1
+    
+    # Compute 3-Day and 5-Day Return Variances
+    df['3D_Variance'] = df['close'].rolling(window=3).var()
+    df['5D_Variance'] = df['close'].rolling(window=5).var()
+    
+    # Weighted 3-Day and 5-Day Returns
+    df['Weighted_3D_Return'] = df['3D_Return'] * (1 / df['3D_Variance'])
+    df['Weighted_5D_Return'] = df['5D_Return'] * (1 / df['5D_Variance'])
+    
+    # Normalize Weights
+    total_weight = df['Weighted_3D_Return'] + df['Weighted_5D_Return']
+    df['Weighted_3D_Return'] = df['Weighted_3D_Return'] / total_weight
+    df['Weighted_5D_Return'] = df['Weighted_5D_Return'] / total_weight
+    
+    # Multiply by Volume Trend
+    df['5D_Vol_Mov_Avg'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Trend'] = df['volume'] / df['5D_Vol_Mov_Avg']
+    df['Volume_Adjusted_Return'] = (df['Weighted_3D_Return'] + df['Weighted_5D_Return']) * df['Volume_Trend']
+    
+    # Calculate Open-High-Low Volatility Index
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Open_Close_Spread'] = abs(df['open'] - df['close'])
+    df['Average_Spreads'] = (df['High_Low_Spread'] + df['Open_Close_Spread']) / 2
+    df['Mean_Price'] = (df['open'] + df['close']) / 2
+    df['OHL_Volatility_Index'] = df['Average_Spreads'] / df['Mean_Price']
+    
+    # Integrate Market Sentiment
+    df['Daily_Change_Amount'] = df['amount'].diff()
+    df['Volume_Adjusted_Return_with_Sentiment'] = df['Volume_Adjusted_Return'] + df['Daily_Change_Amount']
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = df['Volume_Adjusted_Return_with_Sentiment'] - df['OHL_Volatility_Index']
+
+    return df['Final_Factor']
+```

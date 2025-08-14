@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Opening Price Trend
+    df['Opening_Price_Trend'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Proportion
+    df['Overnight_Volume'] = df['volume'].shift(1) + df['volume']
+    df['Intraday_Volume_Proportion'] = df['volume'] - df['Overnight_Volume'].shift(1)
+    
+    # Calculate Intraday Volume Intensity
+    df['Intraday_Volume_Intensity'] = df['Intraday_Volume_Proportion'] / (df['high'] - df['low'])
+    
+    # Calculate Volume-Weighted Intraday Movement (VWIM)
+    df['VWIM'] = df['Intraday_High_Low_Spread'] * df['volume']
+    df['VWIM_5D_MA'] = df['VWIM'].rolling(window=5).mean()
+    
+    # Calculate Amount-Weighted Opening Trend (AWOT)
+    df['AWOT'] = df['Opening_Price_Trend'] * df['amount']
+    df['AWOT_5D_MA'] = df['AWOT'].rolling(window=5).mean()
+    
+    # Combine Adjusted Movements and Trends (AMT)
+    df['AMT'] = df['VWIM'] + df['AWOT'] - df['VWIM_5D_MA'] - df['AWOT_5D_MA']
+    
+    # Calculate Cumulative Volume (CV) over 5 days
+    df['Cumulative_Volume'] = df['volume'].rolling(window=5).sum()
+    
+    # Adjust by Cumulative Volume (CV)
+    df['Adjusted_AMT'] = df['AMT'] / df['Cumulative_Volume']
+    
+    # Calculate Intraday and Breakout Momentum
+    df['Momentum'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Volume
+    df['Adjusted_Momentum'] = df['Momentum'] / df['Cumulative_Volume']
+    
+    # Calculate Cumulative Volume-Weighted Momentum (CVWM)
+    df['CVWM'] = df['Adjusted_Momentum'] * df['volume']
+    df['CVWM_15D_Sum'] = df['CVWM'].rolling(window=15).sum()
+    
+    # Confirm with Volume Trend
+    df['Average_Volume_15D'] = df['volume'].rolling(window=15).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume_15D']
+    
+    # Final Factor Calculation
+    def final_factor(row):
+        if row['Volume_Ratio'] > 1.3:
+            return row['Adjusted_Momentum'] * row['Adjusted_AMT']
+        else:
+            return 0.6 * (row['Adjusted_Momentum'] + row['Adjusted_AMT'])
+    
+    df['Final_Factor'] = df.apply(final_factor, axis=1)
+    
+    return df['Final_Factor']
+```

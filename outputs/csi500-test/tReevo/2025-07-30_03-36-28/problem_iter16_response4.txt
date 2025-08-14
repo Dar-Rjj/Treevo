@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_lookback=20, momentum_n=10, pct_change_lookback=5, long_sma_lookback=100, turnover_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High-Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High-Low_Diff'] * df['volume']).rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['N_Avg_Close'] = df['close'].rolling(window=momentum_n).mean()
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['N_Avg_Close']
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_lookback)
+    
+    # Consider Market Trend and Liquidity
+    df['Long_Term_SMA'] = df['close'].rolling(window=long_sma_lookback).mean()
+    df['Trend_Indicator'] = (df['SMA'] > df['Long_Term_SMA']).astype(int)
+    
+    # Calculate Daily Turnover
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Avg_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Adjust Weights Based on Market Trend and Liquidity
+    df['Trend_Adjusted_Weight'] = df['Trend_Indicator'] + 0.5 * (df['Rolling_Avg_Turnover'] / df['Rolling_Avg_Turnover'].max())
+    df['Trend_Adjusted_Weight'] = df['Trend_Adjusted_Weight'] / df['Trend_Adjusted_Weight'].max()
+    
+    # Final Alpha Factor
+    weights = [0.4, 0.3, 0.2, 0.1]  # Weights for Price Momentum, Volume-Adjusted Volatility, Pct_Change, and Trend_Adjusted_Weight
+    df['Alpha_Factor'] = (weights[0] * df['Price_Momentum'] 
+                          + weights[1] * df['Volume_Adjusted_Volatility'] 
+                          + weights[2] * df['Pct_Change'] 
+                          + weights[3] * df['Trend_Adjusted_Weight'])
+    
+    return df['Alpha_Factor']
+```

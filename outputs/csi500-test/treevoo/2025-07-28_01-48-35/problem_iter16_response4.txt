@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate momentum indicators
+    df['momentum_short_term'] = (df['close'] - df['close'].shift(7)) / df['close'].shift(7)
+    df['momentum_medium_term'] = (df['close'] - df['close'].shift(21)) / df['close'].shift(21)
+    df['momentum_long_term'] = (df['close'] - df['close'].shift(63)) / df['close'].shift(63)
+
+    # Evaluate volatility
+    df['true_range'] = np.maximum(
+        np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), 
+        abs(df['low'] - df['close'].shift(1))
+    )
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+
+    # Assess relative strength
+    df['rs'] = df['close'] / df['close'].shift(21)
+
+    # Measure money flow
+    df['money_flow_multiplier'] = (df['close'] - (df['high'] + df['low']) / 2) / (df['high'] - df['low'])
+    df['money_flow_volume'] = df['money_flow_multiplier'] * df['volume']
+    df['mfi'] = df['money_flow_volume'].rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+
+    # Determine trend direction
+    df['positive_dm'] = np.where((df['high'] > df['high'].shift(1)) & (df['high'] - df['high'].shift(1) > df['low'].shift(1) - df['low']), df['high'] - df['high'].shift(1), 0)
+    df['negative_dm'] = np.where((df['low'].shift(1) > df['low']) & (df['low'].shift(1) - df['low'] > df['high'] - df['high'].shift(1)), df['low'].shift(1) - df['low'], 0)
+    df['di_pos'] = df['positive_dm'].rolling(window=14).mean() / df['atr']
+    df['di_neg'] = df['negative_dm'].rolling(window=14).mean() / df['atr']
+
+    # Combine indicators
+    df['composite_alpha_factor'] = (df['momentum_short_term'] + df['momentum_medium_term'] + df['momentum_long_term'] + df['rs'] + df['mfi'] + df['di_pos'] - df['di_neg']) / 6
+
+    # Evaluate trading volume
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=21).mean()
+
+    # Integrate price and volume analysis
+    df['integrated_alpha_factor'] = df['composite_alpha_factor'] * df['volume_ratio']
+
+    # Generate final alpha factor
+    df['final_alpha_factor'] = df['integrated_alpha_factor']
+
+    return df['final_alpha_factor']
+```

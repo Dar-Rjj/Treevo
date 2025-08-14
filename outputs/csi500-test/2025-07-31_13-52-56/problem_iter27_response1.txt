@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return and Adjusted Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    adjusted_intraday_return = intraday_return / (df['high'] - df['low'])
+    
+    # Compute 20-day Price Momentum
+    price_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Analyze Volume and Amount Shocks
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    avg_amount_30 = df['amount'].rolling(window=30).mean()
+    volume_shock = (df['volume'] > 1.5 * avg_volume_30).astype(int)
+    amount_shock = (df['amount'] > 1.5 * avg_amount_30).astype(int)
+    
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    high_low_range = df['high'] - df['low']
+    volume_adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    cumulative_high_low_range = volume_adjusted_high_low_range.rolling(window=20).sum()
+    high_low_price_ratio = df['high'] / df['low']
+    
+    # Analyze Volume Trends and Momentum
+    volume_moving_avg = df['volume'].rolling(window=7).mean()
+    volume_trend = np.where(df['volume'] > volume_moving_avg, 1, -1)
+    volume_momentum = df['volume'].rolling(window=7).sum() - df['volume'].shift(7).rolling(window=7).sum()
+    
+    # Integrate Open-Close Momentum with Volatility Indicators
+    open_close_change = df['close'] - df['open']
+    ema_close = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Synthesize Components into Alpha Factor
+    combined_high_low_ratio_volume_trend = high_low_price_ratio * volume_trend
+    integrated_high_low_range_volume_momentum = volume_adjusted_high_low_range * volume_momentum
+    open_close_momentum_high_low_range = open_close_change * high_low_range * np.sqrt(df['volume'])
+    adjusted_volume_momentum = volume_momentum * high_low_price_ratio
+    inverted_volume_momentum = -1 * volume_momentum
+    composite_alpha = (inverted_volume_momentum + adjusted_volume_momentum + high_low_range * df['volume'] * volume_momentum)
+    
+    # Weighted and Integrated Alpha Factor
+    weighted_intraday_return = 0.25 * adjusted_intraday_return
+    weighted_price_momentum = 0.4 * price_momentum
+    weighted_volume_amount_shocks = 0.1 * volume_shock * amount_shock
+    weighted_adjusted_volume_momentum = 0.15 * adjusted_volume_momentum
+    weighted_inverted_volume_momentum = 0.05 * inverted_volume_momentum
+    weighted_composite_alpha = 0.05 * composite_alpha
+    
+    final_alpha = (
+        weighted_intraday_return +
+        weighted_price_momentum +
+        weighted_volume_amount_shocks +
+        weighted_adjusted_volume_momentum +
+        weighted_inverted_volume_momentum +
+        weighted_composite_alpha
+    )
+    
+    return final_alpha
+```

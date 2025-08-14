@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, w1=0.3, w2=0.2, w3=0.15, w4=0.15, w5=0.1, w6=0.1):
+    # Price Momentum
+    intraday_momentum = df['close'] - df['open']
+    
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    combined_momentum = (sma_50 - sma_100) + (sma_100 - sma_200) + intraday_momentum
+
+    # Volume-Adjusted Factors
+    avg_volume_n_days = df['volume'].rolling(window=20).mean()
+    volume_adjusted_return = (df['close'] - df['open']) * (df['volume'] / avg_volume_n_days)
+    volume_weighted_price_movement = (df['high'] - df['low']) * df['volume']
+    volume_adjusted_intraday_range = (df['high'] - df['low']) * (df['volume'] / avg_volume_n_days)
+
+    # High-Low Range Momentum
+    high_low_range = df['high'] - df['low']
+    adjusted_high_low_range = high_low_range - high_low_range.shift(1)
+    high_low_range_momentum = adjusted_high_low_range / avg_volume_n_days
+
+    # Volume-Adjusted High-Low Range Momentum
+    volume_adjusted_high_low_range_momentum = (high_low_range_momentum * df['volume']) / avg_volume_n_days
+
+    # Calculate 20-Day Weighted Moving Average of Returns
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    weighted_daily_return = (daily_return * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Adjust for Price Volatility
+    avg_daily_price_range = (df['high'] - df['low']).rolling(window=20).mean()
+    adjusted_weighted_return = weighted_daily_return - avg_daily_price_range
+
+    # Calculate Intraday Return Ratio
+    intraday_return_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Calculate Weighted Open-to-Close Return
+    weighted_open_to_close_return = (df['close'] - df['open']) * df['volume']
+
+    # Final Alpha Factor Combination
+    alpha_factor = (combined_momentum + volume_adjusted_return) * w1 + \
+                   (high_low_range_momentum / avg_volume_n_days) * w2 + \
+                   (volume_adjusted_high_low_range_momentum / avg_volume_n_days) * w3 + \
+                   (adjusted_weighted_return) * w4 + \
+                   (intraday_return_ratio) * w5 + \
+                   (weighted_open_to_close_return) * w6
+
+    return alpha_factor
+```

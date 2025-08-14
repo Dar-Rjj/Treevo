@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['range'] = df['high'] - df['low']
+    
+    # Compute High-Low Ratio
+    df['high_low_ratio'] = (df['high'] - df['low']) / df['low']
+    
+    # Multiply by Intraday Trading Activity
+    df['intraday_activity'] = df['volume'] / (df['high'] + df['low'])
+    df['intraday_momentum'] = df['high_low_ratio'] * df['intraday_activity']
+    
+    # Measure Sustained 5-Day Momentum
+    df['sequential_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_day_avg_momentum'] = df['sequential_momentum'].rolling(window=5).mean()
+    
+    # Combine Intraday and 5-Day Momentum
+    df['intraday_5day_combined'] = (df['intraday_momentum'] * df['amount'].rolling(window=5).mean() +
+                                    df['5_day_avg_momentum'] * df['volume'])
+    
+    # Determine Reversal Signal
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['reversal_signal'] = np.where(df['ema_5'] > df['ema_10'], 1, -1)
+    
+    # Consider High-to-Low Range
+    df['14_day_median_range'] = df['range'].rolling(window=14).median()
+    df['reversal_signal'] = df['reversal_signal'] * (1 + (df['14_day_median_range'] / df['range'].median()))
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)
+    df['filtered_reversal_signal'] = np.where(df['volume'] > volume_threshold, df['reversal_signal'], 0)
+    
+    # Incorporate Volatility into Alpha Factor
+    df['21_day_volatility'] = df['close'].rolling(window=21).std()
+    df['volatility_adjusted_factor'] = df['intraday_5day_combined'] * (1 / df['21_day_volatility'])
+    
+    # Enhance Momentum with Volume-Weighted Moving Averages
+    df['5_day_vwma'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['10_day_vwma'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    df['5_day_sma'] = df['close'].rolling(window=5).mean()
+    df['10_day_sma'] = df['close'].rolling(window=10).mean()
+    df['vwma_momentum'] = np.where(df['5_day_vwma'] > df['5_day_sma'], 1, 0) - np.where(df['10_day_vwma'] < df['10_day_sma'], 1, 0)
+    
+    # Incorporate Trend Strength Indicator
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    df['trend_strength_indicator'] = np.where(df['rsi'] > 70, -1, np.where(df['rsi'] < 30, 1, 0))
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['intraday_5day_combined'] + 
+                                df['filtered_reversal_signal'] + 
+                                df['volatility_adjusted_factor'] + 
+                                df['vwma_momentum'] + 
+                                df['trend_strength_indicator'])
+    
+    return df['final_alpha_factor']
+```

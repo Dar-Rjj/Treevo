@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['5_day_SMA'] = df['close'].rolling(window=5).mean()
+    df['10_day_SMA'] = df['close'].rolling(window=10).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Rate of Change (ROC)
+    df['1_day_ROC'] = df['close'].pct_change(periods=1)
+    df['5_day_ROC'] = df['close'].pct_change(periods=5)
+    df['10_day_ROC'] = df['close'].pct_change(periods=10)
+
+    # Combine different SMAs and ROCs to create a momentum factor
+    df['momentum_factor'] = (df['5_day_SMA'] - df['10_day_SMA']) + (df['1_day_ROC'] + df['5_day_ROC'])
+
+    # Calculate True Range (TR)
+    df['previous_close'] = df['close'].shift(1)
+    df['high_low'] = df['high'] - df['low']
+    df['high_prev_close'] = (df['high'] - df['previous_close']).abs()
+    df['low_prev_close'] = (df['low'] - df['previous_close']).abs()
+    df['true_range'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
+
+    # Compute Average True Range (ATR)
+    df['14_day_ATR'] = df['true_range'].rolling(window=14).mean()
+
+    # Create a volatility factor
+    df['volatility_factor'] = df['14_day_ATR'] / df['true_range']
+
+    # Compute 14-day RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Use RSI to identify overbought and oversold conditions
+    df['overbought'] = df['RSI'] > 70
+    df['oversold'] = df['RSI'] < 30
+
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Develop a volume-based factor
+    df['20_day_VWAP_SMA'] = df['VWAP'].rolling(window=20).mean()
+    df['volume_factor'] = df['VWAP'] / df['20_day_VWAP_SMA']
+
+    # Final alpha factor
+    df['alpha_factor'] = df['momentum_factor'] + df['volatility_factor'] + df['volume_factor']
+
+    return df['alpha_factor']
+```

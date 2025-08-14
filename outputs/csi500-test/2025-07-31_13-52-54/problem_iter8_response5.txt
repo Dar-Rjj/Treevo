@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5):
+    # Calculate Volume-Weighted High-Low Spread
+    df['Volume_Weighted_High_Low'] = (df['high'] - df['low']) * df['volume']
+    
+    # Compute Cumulative Volume-Weighted High-Low Spread
+    df['Cumulative_Volume_Weighted_HL'] = df['Volume_Weighted_High_Low'].rolling(window=n).sum()
+    df['Total_Volume'] = df['volume'].rolling(window=n).sum()
+    df['Cumulative_VWHL_Spread'] = df['Cumulative_Volume_Weighted_HL'] / df['Total_Volume']
+    
+    # Calculate Momentum Indicator
+    df['Momentum'] = df['Volume_Weighted_High_Low'] - df['Cumulative_Volume_Weighted_HL'].shift(1)
+    
+    # Calculate Price Momentum
+    df['Close_Price_Momentum'] = (df['close'] / df['close'].shift(n) - 1)
+    df['Open_Price_Momentum'] = (df['open'] / df['open'].shift(n) - 1)
+    
+    # Calculate Volume-Weighted Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Volatility'] = df['Daily_Range'].rolling(window=n).std()
+    df['Volume_Weighted_Volatility'] = df['Volatility'] * df['volume']
+    
+    # Calculate Intraday Range Growth
+    df['Today_HL_Range'] = df['high'] - df['low']
+    df['Prev_Day_HL_Range'] = df['Today_HL_Range'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_HL_Range'] - df['Prev_Day_HL_Range']) / df['Prev_Day_HL_Range']
+    
+    # Volume Weighted Moving Average
+    df['Volume_Weighted_Close'] = df['close'] * df['volume']
+    df['Volume_Weighted_MA'] = df['Volume_Weighted_Close'].rolling(window=n).sum() / df['Total_Volume']
+    
+    # Calculate Amount Adjusted Return
+    df['Amount_Adjusted_Return'] = df['amount'].pct_change(n)
+    
+    # Combine Factors
+    df['Combined_Factor'] = (df['Close_Price_Momentum'] * df['Volume_Weighted_Volatility'] +
+                              df['Amount_Adjusted_Return'] + df['Momentum'] +
+                              df['Intraday_Range_Growth'] + df['Volume_Weighted_MA'])
+    
+    # Calculate Price Momentum (Alternative)
+    df['N_Day_Close_Diff'] = df['close'] - df['close'].shift(n)
+    df['M_Day_Close_Diff'] = df['close'] - df['close'].shift(m)
+    df['Price_Momentum_Alternative'] = df['N_Day_Close_Diff'] + df['M_Day_Close_Diff']
+    
+    # Calculate Volume Surge
+    df['N_Day_Volume_Change'] = df['volume'] - df['volume'].shift(n)
+    df['M_Day_Volume_Change'] = df['volume'] - df['volume'].shift(m)
+    df['Volume_Surge'] = df['N_Day_Volume_Change'] + df['M_Day_Volume_Change']
+    
+    # Final Alpha Factor
+    df['Final_Factor'] = df['Combined_Factor'] * df['Price_Momentum_Alternative']
+    df['Final_Factor'] = df['Final_Factor'].where(df['Volume_Surge'] >= 0, df['Final_Factor'] * 0.8)
+    
+    return df['Final_Factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Load your data
+# alpha_factor = heuristics_v2(df)
+```

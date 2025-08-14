@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Close-to-Open Return
+    close_to_open_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Volume and Amount Combined
+    combined_volume_amount = (df['volume'] + df['amount']) / 2
+    
+    # Volume and Amount Adjusted Close-to-Open Return
+    volume_amount_adjusted_return = close_to_open_return * combined_volume_amount
+    
+    # Intraday High-Low Movement
+    intraday_high_low_movement = df['high'] - df['low']
+    
+    # Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Adjust Intraday High-Low Movement by Volume Change
+    adjusted_intraday_high_low = intraday_high_low_movement * (1 + volume_change / df['volume'])
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Add to Volume and Amount Adjusted Close-to-Open Return
+    adjusted_intraday_return = adjusted_intraday_high_low * intraday_return + volume_amount_adjusted_return
+    
+    # Volume Volatility
+    volume_moving_average = df['volume'].rolling(window=20).mean()
+    volume_volatility = ((df['volume'] - volume_moving_average) ** 2).rolling(window=20).sum() ** 0.5
+    
+    # Previous Day's Close-to-Open Return
+    prev_close_to_open_return = (df['open'].shift(1) - df['close'].shift(2)) / df['close'].shift(2)
+    
+    # Adjust Current Day's Factor
+    current_day_factor = adjusted_intraday_return + prev_close_to_open_return.shift(1)
+    
+    # Previous Day's Intraday High-Low Movement
+    prev_intraday_high_low = (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Adjust Current Day's Factor
+    current_day_factor += prev_intraday_high_low.shift(1)
+    
+    # Daily Close-to-Close Return
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Sum of Recent Returns
+    recent_returns_sum = close_to_close_return.rolling(window=5).sum()
+    
+    # Average Volume over Period
+    average_volume = df['volume'].rolling(window=5).mean()
+    
+    # Ratio of Current Day's Volume to Average Volume
+    volume_ratio = df['volume'] / average_volume
+    
+    # Weighted Relative Momentum
+    weighted_relative_momentum = recent_returns_sum * volume_ratio
+    
+    # Final Alpha Factor
+    daily_log_returns = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+    cumulative_sum_log_returns = daily_log_returns.rolling(window=20).sum()
+    final_alpha_factor = (weighted_relative_momentum * cumulative_sum_log_returns + 
+                          adjusted_intraday_return + volume_amount_adjusted_return) / volume_volatility
+    
+    return final_alpha_factor.dropna()
+```

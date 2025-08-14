@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+
+    # Adjust by Volume Change and Price Level
+    lookback_period = 20
+    moving_avg_volume = df['volume'].rolling(window=lookback_period).mean()
+    volume_change = df['volume'] / df['volume'].shift(1) - 1
+    price_level_ratio = df['close'] / df['open']
+    adjusted_intraday_range = intraday_range * volume_change * price_level_ratio
+
+    # Incorporate Close Price Momentum
+    momentum_lookback = 10
+    close_momentum = df['close'] / df['close'].shift(momentum_lookback) - 1
+
+    # Calculate Close to Close Return
+    close_to_close_return = df['close'] / df['close'].shift(1) - 1
+
+    # Integrate Intraday Price Movement and Volume
+    intraday_momentum_score = adjusted_intraday_range * volume_change
+
+    # Calculate 5-Day Average High-Low Spread
+    high_low_spread_5d = (df['high'] - df['low']).rolling(window=5).mean()
+
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    close_5d_ago = df['close'].shift(5)
+    five_day_momentum = (df['close'] - close_5d_ago) / close_5d_ago
+    high_low_spread_momentum = high_low_spread_5d * five_day_momentum
+    integrated_momentum_factor = intraday_momentum_score + high_low_spread_momentum
+
+    # Calculate Volume Weighted Average Price
+    vwap = (df['open'] + df['high'] + df['low'] + df['close']) / 4 * df['volume']
+    vwap = vwap.rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+
+    # Combine Factors with Volume-Adjusted Price Trend
+    combined_factor = close_to_close_return * intraday_range / vwap
+
+    # Filter for Recent Price Trend
+    ma_5d_close = df['close'].rolling(window=5).mean()
+    recent_price_trend = df['close'] - ma_5d_close
+
+    # Introduce Volume Trend
+    sum_volume_5d = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / sum_volume_5d
+    volume_trend_adjusted_factor = combined_factor * volume_ratio
+
+    return volume_trend_adjusted_factor
+```

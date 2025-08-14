@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['dollar_value'] = df['volume'] * df['close']
+    df['vwap'] = df['dollar_value'].rolling(window=1, min_periods=1).sum() / df['total_volume'].rolling(window=1, min_periods=1).sum()
+    
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Calculate Cumulative VWAP Deviation
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].cumsum()
+    
+    # Calculate Short-Term Price Momentum
+    df['5_day_moving_avg'] = df['close'].rolling(window=5, min_periods=1).mean()
+    df['short_term_momentum'] = df['close'] - df['5_day_moving_avg']
+    
+    # Calculate Medium-Term Price Momentum
+    df['20_day_moving_avg'] = df['close'].rolling(window=20, min_periods=1).mean()
+    df['medium_term_momentum'] = df['close'] - df['20_day_moving_avg']
+    
+    # Integrate VWAP Deviation with Momentum
+    df['integrated_short_term'] = df['short_term_momentum'] * df['vwap_deviation']
+    df['integrated_medium_term'] = df['medium_term_momentum'] * df['vwap_deviation']
+    df['integrated_momentum'] = 0.6 * df['integrated_short_term'] + 0.4 * df['integrated_medium_term']
+    
+    # Evaluate Volume-Price Correlation
+    df['price_volume_corr'] = df['close'].rolling(window=20, min_periods=1).corr(df['volume'])
+    
+    # Adjust for Volume-Price Correlation
+    df['adjusted_integrated_momentum'] = np.where(
+        df['price_volume_corr'] > 0,
+        df['integrated_momentum'] * 1.2,  # Amplify if positive correlation
+        df['integrated_momentum'] * 0.8   # Dampen if negative correlation
+    )
+    
+    # Filter for Strong Signals
+    df['strong_signal'] = np.where(
+        (df['adjusted_integrated_momentum'] > 0.5) | (df['adjusted_integrated_momentum'] < -0.5),
+        df['adjusted_integrated_momentum'],
+        0
+    )
+    
+    # Incorporate Cumulative VWAP Deviation
+    df['alpha_signal'] = 0.7 * df['strong_signal'] + 0.3 * df['cumulative_vwap_deviation']
+    
+    # Dynamic Weighting
+    df['signal_strength'] = np.abs(df['strong_signal'])
+    df['final_alpha_signal'] = df['alpha_signal'] * df['signal_strength']
+    
+    return df['final_alpha_signal']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 101, 99, 102, 103],
+#     'high': [105, 106, 104, 107, 108],
+#     'low': [98, 99, 97, 100, 101],
+#     'close': [102, 103, 101, 104, 105],
+#     'amount': [10000, 10500, 9800, 10300, 10600],
+#     'volume': [100, 105, 98, 103, 106]
+# })
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

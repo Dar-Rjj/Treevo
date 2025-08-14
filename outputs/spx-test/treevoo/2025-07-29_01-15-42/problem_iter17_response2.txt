@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) - df['open']
+
+    # Smooth with EMA (e.g., 10 days)
+    ema_window = 10
+    df['ema_smoothed_return'] = df['close_to_open_return'].ewm(span=ema_window, adjust=False).mean()
+
+    # Adjust for Volume and Amount
+    df['total_volume'] = df['volume'].rolling(window=ema_window).sum()
+    df['total_amount'] = df['amount'].rolling(window=ema_window).sum()
+    df['adjusted_ema_return'] = df['ema_smoothed_return'] / (df['total_volume'] + df['total_amount'])
+
+    # Calculate Long-Term Price Momentum
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(28)) / df['close'].shift(28)
+
+    # Calculate Short-Term Price Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+
+    # Combine Long-Term and Short-Term Momentum
+    df['combined_momentum'] = df['long_term_momentum'] + df['short_term_momentum']
+
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = df['price_range'] / df['close']
+
+    # Compute RTSI
+    gains = (df['close'] - df['close'].shift(1)).apply(lambda x: max(x, 0))
+    losses = (df['close'].shift(1) - df['close']).apply(lambda x: max(x, 0))
+    ema_gains = gains.ewm(span=14, adjust=False).mean()
+    ema_losses = losses.ewm(span=14, adjust=False).mean()
+    rsi = 100 - (100 / (1 + (ema_gains / ema_losses)))
+    df['rsi'] = rsi
+
+    # Calculate Realized Volatility
+    df['realized_volatility'] = df['close'].pct_change().rolling(window=20).std()
+
+    # Calculate Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Movement
+    df['close_to_open_movement'] = df['close'] - df['open'].shift(1)
+
+    # Weighted Average of Combined Components
+    weights = {
+        'combined_momentum': 0.3,
+        'high_low_spread': 0.2,
+        'close_to_open_movement': 0.1,
+        'price_range_ratio': 0.2,
+        'rsi': 0.1,
+        'realized_volatility': 0.1
+    }
+    df['weighted_factor'] = sum([df[col] * weights[col] for col in weights])
+
+    # Adjust by Volume and Amount
+    df['volume_adjustment'] = df['volume'] / df['volume'].shift(1)
+    df['amount_adjustment'] = df['amount'] / df['amount'].shift(1)
+    df['adjusted_factor'] = df['weighted_factor'] * (df['volume_adjustment'] + df['amount_adjustment'])
+
+    # Final Factor
+    return df['adjusted_factor']
+```

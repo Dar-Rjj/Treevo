@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Ensure the DataFrame is sorted by date
+    df = df.sort_index()
+    
+    # Calculate Intraday Range (High - Low)
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Dynamic Weighting based on Recency
+    df['weighted_intraday_range'] = 0.0
+    df['weighted_close_to_open_return'] = 0.0
+    
+    for i in range(len(df)):
+        if i < 5:
+            df.loc[df.index[i], 'weighted_intraday_range'] = df.loc[df.index[i], 'intraday_range'] * 0.7
+            df.loc[df.index[i], 'weighted_close_to_open_return'] = df.loc[df.index[i], 'close_to_open_return'] * 0.3
+        elif i < 25:
+            df.loc[df.index[i], 'weighted_intraday_range'] = df.loc[df.index[i], 'intraday_range'] * 0.5
+            df.loc[df.index[i], 'weighted_close_to_open_return'] = df.loc[df.index[i], 'close_to_open_return'] * 0.5
+    
+    # Sum the weighted values to get the adjusted return
+    df['adjusted_return'] = df['weighted_intraday_range'] + df['weighted_close_to_open_return']
+    
+    # Incorporate Enhanced Market Sentiment
+    df['market_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    def adjust_for_market_trend(market_return, adjusted_return):
+        if market_return > 0.01:
+            return adjusted_return * 1.10
+        elif market_return < -0.01:
+            return adjusted_return * 0.90
+        else:
+            return adjusted_return
+    
+    df['final_adjusted_return'] = df.apply(lambda row: adjust_for_market_trend(row['market_return'], row['adjusted_return']), axis=1)
+    
+    return df['final_adjusted_return']
+```

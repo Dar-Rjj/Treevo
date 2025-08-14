@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute 5-Day Average Price Momentum
+    df['5_Day_Avg_Price_Momentum'] = df['Daily_Price_Change'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    
+    # Compute 10-Day Average Volume Change
+    df['10_Day_Avg_Volume_Change'] = df['Daily_Volume_Change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['Price_Momentum_Volume_Surge'] = df['5_Day_Avg_Price_Momentum'] * df['10_Day_Avg_Volume_Change']
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] - df['open']
+    
+    # Compute 21-Day Moving Sum of Positive Returns
+    df['Positive_Returns'] = df['Daily_Return'].apply(lambda x: x if x > 0 else 0)
+    df['21_Day_Sum_Positive_Returns'] = df['Positive_Returns'].rolling(window=21).sum()
+    
+    # Volume Adjusted Momentum
+    df['21_Day_Cum_Volume'] = df['volume'].rolling(window=21).sum()
+    df['Volume_Adjusted_Momentum'] = (df['21_Day_Sum_Positive_Returns'] * df['21_Day_Cum_Volume']) / 21
+    
+    # Compute High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Daily Change in High-Low Range
+    df['Daily_Change_High_Low_Range'] = df['High_Low_Range'].diff()
+    
+    # Combine High-Low Range and Volume
+    df['High_Low_Range_Volume'] = (df['Daily_Change_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Introduce Weighting Factors
+    w1 = 0.4
+    w2 = 0.3
+    w3 = 0.3
+    
+    # Combine Weighted Components
+    df['Weighted_Components'] = (w1 * df['High_Low_Range_Volume'] +
+                                 w2 * df['5_Day_Avg_Price_Momentum'] +
+                                 w3 * df['10_Day_Avg_Volume_Change'])
+    
+    # Final Combined Alpha Factor
+    df['Final_Combined_Alpha'] = df['Volume_Adjusted_Momentum'] + df['Weighted_Components']
+    
+    # Calculate 1-Period Price Momentum
+    df['1_Period_Price_Momentum'] = df['close'] - df['close'].shift(1)
+    
+    # Adjust by 21-Day Average Volume
+    df['21_Day_Avg_Volume'] = df['volume'].rolling(window=21).mean()
+    df['Recent_Volume_Adjustment'] = df['volume'] / df['21_Day_Avg_Volume']
+    
+    # Final Interpretable Alpha Factor
+    df['Interpretable_Alpha'] = df['Final_Combined_Alpha'] * df['Recent_Volume_Adjustment']
+    
+    return df['Interpretable_Alpha']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,32 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=30).std().mean(axis=1)
+    
+    # Adaptive Window Calculation
+    volatility_threshold = df['volatility'].median()
+    df['window_size'] = np.where(df['volatility'] > volatility_threshold, 20, 60)
+    
+    # Rolling Statistics
+    def rolling_stats(group, column, window_size_col):
+        rolling_mean = group[column].rolling(window=group[window_size_col].iloc[0], min_periods=1).mean()
+        rolling_std = group[column].rolling(window=group[window_size_col].iloc[0], min_periods=1).std()
+        return pd.DataFrame({'rolling_mean': rolling_mean, 'rolling_std': rolling_std})
+    
+    stats = df.groupby('window_size').apply(rolling_stats, 'volume_weighted_return', 'window_size')
+    df = df.merge(stats, left_index=True, right_index=True)
+    
+    # Generate Alpha Factor
+    df['alpha_factor'] = (df['rolling_mean'] / df['rolling_std']).fillna(0)
+    
+    return df['alpha_factor']

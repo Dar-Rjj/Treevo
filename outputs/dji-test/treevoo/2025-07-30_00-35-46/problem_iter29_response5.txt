@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Base Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # High-Low Momentum Component
+    high_low_momentum = (df['high'] - df['low']) / df['open']
+    
+    # Compute Daily Volatility (High, Low, Close)
+    daily_volatility = (df[['high', 'low', 'close']].std(axis=1) / df['open']).rolling(window=5).mean()
+    
+    # Assign Higher Weight to More Volatile Days
+    weight = daily_volatility / daily_volatility.rolling(window=5).max()
+    
+    # Combine High-Low and Intraday Returns
+    combined_momentum = (intraday_return * weight + high_low_momentum * (1 - weight)) ** 2
+    
+    # Apply Volume and Price Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    price_shock = np.abs(df['close'] - df['close'].shift(1))
+    historical_price_range = df['close'].rolling(window=5).max() - df['close'].rolling(window=5).min()
+    price_shock_ratio = price_shock / historical_price_range
+    
+    # Threshold Filter
+    shock_filter = (volume_ratio > 1.5) & (amount_ratio > 1.5) & (price_shock_ratio > 0.05)
+    combined_momentum = combined_momentum * shock_filter
+    
+    # Adjust for Volume
+    combined_momentum = combined_momentum / df['volume']
+    
+    # Measure Volume Synchronization
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    sync_factor = np.sign(volume_change * price_change)
+    combined_momentum = combined_momentum * sync_factor
+    
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    macd_line = short_ema - long_ema
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    momentum_signal = np.where(macd_line > signal_line, 1, -1)
+    
+    # Weight OBV by the Difference between MACD Line and Signal Line
+    obv_weight = np.abs(macd_line - signal_line)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Multiply OBV by Weight
+    final_obv = obv * obv_weight
+    
+    # Apply Volume-Weighted Adjustments
+    volume_impact = df['volume'] / df['volume'].shift(1)
+    amount_impact = df['amount'] / df['amount'].shift(1)
+    combined_momentum = combined_momentum * volume_impact * amount_impact
+    
+    # Smoothing
+    smoothed_momentum = combined_momentum.ewm(span=5, adjust=False).mean()
+    
+    # Integrate Volume-Weighted Intraday Momentum with OBV Factor
+    final_alpha_factor = smoothed_momentum * final_obv
+    
+    return final_alpha_factor
+```

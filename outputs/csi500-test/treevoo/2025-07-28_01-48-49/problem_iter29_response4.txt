@@ -1,0 +1,84 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Determine Price Trend
+    df['Upward_Trend'] = (df['close'] > df['open']) & (df['high'] > df['low'])
+    df['Downward_Trend'] = (df['close'] < df['open']) & (df['high'] > df['low'])
+    df['Price_Trend'] = df['Upward_Trend'].astype(int) - df['Downward_Trend'].astype(int)
+    
+    # Volume Patterns
+    df['Volume_Change'] = df['volume'].diff()
+    df['Volume_Spike'] = (df['volume'] > 2 * df['volume'].rolling(window=5).mean()).astype(int)
+    
+    # Intraday Range and Volume Adjustments
+    df['Intraday_Price_Movement'] = df['high'] - df['low']
+    df['Avg_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Adjusted_Intraday_Range'] = (df['Intraday_Price_Movement'] * df['Volume_Change']) / df['Avg_Volume_20']
+    
+    # Combine Price and Volume Indicators
+    df['Price_Volume_Indicator'] = df['Daily_Price_Change'] * df['Adjusted_Intraday_Range']
+    
+    # Evaluate Amount Traded
+    df['AmountTraded'] = df['close'] * df['volume']
+    df['Abnormal_Trading_Amount'] = (df['AmountTraded'] > 2 * df['AmountTraded'].rolling(window=5).mean()).astype(int)
+    
+    # Momentum and Reversal Signals
+    df['Short_Term_Momentum'] = df['close'] - df['close'].shift(5)
+    df['Long_Term_Reversal'] = df['close'].shift(20) - df['close']
+    
+    # Incorporate Price Level Adjustment
+    df['Price_Level_Ratio'] = df['close'] / df['open']
+    df['Adjusted_Intraday_Range_Price_Level'] = df['Adjusted_Intraday_Range'] * df['Price_Level_Ratio']
+    
+    # Apply Close Price Momentum
+    df['Momentum'] = df['close'] - df['close'].shift(10)
+    
+    # 5-Day Average High-Low Spread
+    df['5_Day_Avg_High_Low_Spread'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].rolling(window=5).mean()
+    
+    # Combine 5-Day Average High-Low Spread and Momentum
+    df['Combined_Factor'] = df['5_Day_Avg_High_Low_Spread'] * df['Momentum']
+    
+    # Integrate Intraday Volatility
+    df['Avg_Daily_Ranges'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].rolling(window=20).mean()
+    
+    # Volume Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Aggregate Enhanced Alpha Factors
+    df['Enhanced_Alpha_Factor'] = (
+        df['Price_Trend'] + 
+        df['Volume_Spike'] + 
+        df['Abnormal_Trading_Amount'] + 
+        df['Short_Term_Momentum'] + 
+        df['Long_Term_Reversal'] + 
+        df['Adjusted_Intraday_Range_Price_Level'] + 
+        df['Combined_Factor'] + 
+        df['Volume_Weighted_Return']
+    )
+    
+    # Filter for Recent Price Trend
+    df['Recent_Price_Trend'] = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Introduce Volume Trend
+    df['Volume_Trend'] = df['volume'] / df['volume'].rolling(window=5).sum()
+    
+    # Adjust Momentum by Intraday Volatility
+    df['Adjusted_Momentum'] = df['Momentum'] * df['Avg_Daily_Ranges']
+    
+    # Calculate Dynamic Adjustment Factor
+    df['Dynamic_Adjustment_Factor'] = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Apply Dynamic Adjustment
+    df['Dynamically_Adjusted_Momentum'] = df['Adjusted_Momentum'] * df['Dynamic_Adjustment_Factor']
+    
+    # Open Price Impact
+    df['Open_Price_Impact'] = (df['open'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Final Alpha Factor
+   

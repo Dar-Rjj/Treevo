@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Momentum
+    df['Momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Impact Adjustment
+    df['VolumeImpact'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Daily Enhanced Dynamic Price Range
+    df['DailyEnhancedRange'] = (df['high'] - df['low']) * (df['close'] / df['open'])
+    
+    # Average Trading Price
+    df['AverageTradingPrice'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    
+    # Volume Adjusted Enhanced Range
+    df['VolumeAdjustedEnhancedRange'] = (df['DailyEnhancedRange'] / df['AverageTradingPrice']).replace([np.inf, -np.inf], np.nan) * df['volume']
+    
+    # Short-Term Rolling Avg of Volume Adjusted Enhanced Range
+    df['ShortTermAvgEnhancedRange'] = df['VolumeAdjustedEnhancedRange'].rolling(window=15).mean()
+    
+    # Long-Term Rolling Avg of Volume Adjusted Enhanced Range
+    df['LongTermAvgEnhancedRange'] = df['VolumeAdjustedEnhancedRange'].rolling(window=25).mean()
+    
+    # Price Volatility
+    df['PriceVolatility'] = df['close'].rolling(window=30).std()
+    
+    # Trade Activity Influence
+    df['TradeActivityInfluence'] = df['amount'] / df['amount'].rolling(window=30).mean()
+    
+    # Combine Momentum and Volume Impact
+    df['CombinedMomentumVolume'] = df['Momentum'] * df['VolumeImpact']
+    
+    # Adjust for Price Volatility
+    df['AdjustedMomentumVolatility'] = df['CombinedMomentumVolume'] / df['PriceVolatility']
+    
+    # High-Low Range Momentum
+    N = 7
+    alpha = 2 / (N + 1)
+    df['HighLowRange'] = df['high'] - df['low']
+    df['HighLowEMA'] = df['HighLowRange'].ewm(alpha=alpha, adjust=False).mean()
+    df['HighLowEMADailyChange'] = df['HighLowEMA'] - df['HighLowEMA'].shift(1)
+    
+    # Volume Shock
+    df['VolumePercentageChange'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['VolumeShock'] = df['VolumePercentageChange'].apply(lambda x: 1 if abs(x) > 0.6 else 0)
+    
+    # High-Frequency Price Momentum
+    N = 5
+    alpha = 2 / (N + 1)
+    df['CloseEMA'] = df['close'].ewm(alpha=alpha, adjust=False).mean()
+    df['CloseEMADailyChange'] = df['CloseEMA'] - df['CloseEMA'].shift(1)
+    
+    # Combine Indicators
+    df['HighLowRangeMomentum'] = df['HighLowEMADailyChange'] * df['VolumeShock'].diff()
+    df['HighFrequencyPriceMomentum'] = df['CloseEMADailyChange'] * df['HighLowRangeMomentum']
+    
+    # Finalize Alpha Factor
+    df['AlphaFactor'] = (df['ShortTermAvgEnhancedRange'] - df['LongTermAvgEnhancedRange']) * df['AdjustedMomentumVolatility'] * df['TradeActivityInfluence'] * df['HighFrequencyPriceMomentum']
+    
+    # Integrate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    df['AlphaFactor'] = df['AlphaFactor'] * rsi
+    
+    return df['AlphaFactor']
+```

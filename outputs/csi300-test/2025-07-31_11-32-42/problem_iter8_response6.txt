@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(df):
+    # Calculate Short-Term and Long-Term Price Momentum
+    df['5_day_return'] = df['close'].pct_change(5)
+    df['10_day_return'] = df['close'].pct_change(10)
+    df['20_day_return'] = df['close'].pct_change(20)
+    df['50_day_return'] = df['close'].pct_change(50)
+    
+    # Calculate Volume Surge and Average Volume
+    df['1_day_volume_diff'] = df['volume'].diff()
+    df['5_day_ema_volume'] = df['volume'].ewm(span=5).mean()
+    df['10_day_ema_volume'] = df['volume'].ewm(span=10).mean()
+    df['20_day_ema_volume'] = df['volume'].ewm(span=20).mean()
+    
+    # Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Exponential Weighted Squared Returns Over N Days (N=10 for example)
+    df['squared_returns'] = df['daily_return'] ** 2
+    df['exp_weighted_squared_returns'] = df['squared_returns'].ewm(span=10).mean()
+    
+    # Volume Adjusted Close Price (M=10 for example)
+    df['volume_adjusted_close'] = (df['close'].rolling(window=10).mean()) * np.log(df['volume'])
+    
+    # High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Combine Factors
+    df['short_term_momentum_diff'] = df['5_day_return'] - df['10_day_return']
+    df['long_term_momentum_diff'] = df['20_day_return'] - df['50_day_return']
+    df['volume_diff'] = df['5_day_ema_volume'] - df['10_day_ema_volume']
+    
+    df['factor'] = (
+        df['short_term_momentum_diff'] * df['long_term_momentum_diff'] *
+        df['daily_return'] * df['1_day_volume_diff'] *
+        df['5_day_return'] * df['5_day_ema_volume'] *
+        df['20_day_return'] * df['20_day_ema_volume'] *
+        df['exp_weighted_squared_returns'] * df['volume_adjusted_close']
+    ) / df['high_low_diff']
+    
+    # Drop NaN values
+    df.dropna(inplace=True)
+    
+    return df['factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics(df)
+# print(factor_values)
+```

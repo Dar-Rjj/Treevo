@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Calculate Rolling Average of High-Low Ratios
+    rolling_window = 10
+    df['rolling_high_low_ratio'] = df['high_low_ratio'].rolling(window=rolling_window).mean()
+    
+    # Calculate 5-Day Momentum
+    df['5_day_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Range
+    n_days = 20
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=n_days).mean()
+    
+    # Compute Intraday High-Low Range Score
+    df['range_score'] = (df['intraday_range'] > df['avg_intraday_range']).astype(int) * 2 - 1
+    
+    # Adjust Intraday High-Low Range Score by 5-Day Momentum
+    df['adjusted_range_score'] = df['range_score'] * df['5_day_momentum']
+    
+    # Calculate 20-Day Volume Moving Average
+    df['20_day_vol_ma'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Deviation from MA
+    df['vol_deviation'] = df['volume'] - df['20_day_vol_ma']
+    
+    # Adjust by Volume
+    df['vol_adjusted_score'] = df['adjusted_range_score'] * df['vol_deviation']
+    
+    # Calculate 5-Day Close Price Standard Deviation
+    df['5_day_std'] = df['close'].rolling(window=5).std()
+    
+    # Adjust by Price Volatility
+    df['volatility_adjusted_score'] = df['vol_adjusted_score'] / df['5_day_std']
+    
+    # Apply Weighted Moving Average Smoothing
+    weights = [0.1, 0.2, 0.3, 0.2, 0.1]
+    df['smoothed_score'] = df['volatility_adjusted_score'].rolling(window=len(weights)).apply(lambda x: (x * weights).sum(), raw=True)
+    
+    # Combine Momentum and Volume Synchronicity
+    df['synchronicity'] = df['5_day_momentum'] * df['vol_deviation']
+    
+    # Apply Exponential Smoothing to Combined Synchronicity
+    alpha = 0.2
+    df['smoothed_synchronicity'] = df['synchronicity'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Calculate Final Factor
+    df['final_factor'] = df['smoothed_score'] + df['rolling_high_low_ratio']
+    
+    # Adjust for Market Sentiment
+    df['high_low_sentiment'] = (df['high'] - df['low']) / df['low']
+    df['10_day_std_high_low_ratio'] = df['high_low_ratio'].rolling(window=rolling_window).std()
+    df['final_factor'] = df['final_factor'] * df['high_low_sentiment'] / df['10_day_std_high_low_ratio']
+    
+    return df['final_factor']
+```

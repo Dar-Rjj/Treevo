@@ -1,0 +1,86 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the true range (high - low)
+    true_range = df['high'] - df['low']
+    
+    # Calculate the price difference (close - open)
+    price_diff = df['close'] - df['open']
+    
+    # Create a factor based on the normalized price movement
+    price_movement_factor = price_diff / (true_range + 1e-7)
+    
+    # Calculate the average true range over the last 5 days
+    avg_true_range = true_range.rolling(window=5).mean()
+    
+    # Volume-weighted moving average of the price movement factor
+    volume_weighted_factor = (price_movement_factor * df['volume']).rolling(window=5).mean() / df['volume'].rolling(window=5).mean()
+    
+    # Calculate the 5-day exponential moving average of the close price
+    ema_close = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the 5-day standard deviation of the close price
+    std_close = df['close'].rolling(window=5).std()
+    
+    # Calculate the volatility factor
+    volatility_factor = std_close / (ema_close + 1e-7)
+    
+    # Calculate the momentum factor as the 5-day percentage change in close price
+    momentum_factor = df['close'].pct_change(periods=5)
+    
+    # Exponentially smooth the factors
+    smoothed_volume_weighted_factor = volume_weighted_factor.ewm(span=3, adjust=False).mean()
+    smoothed_avg_true_range = avg_true_range.ewm(span=3, adjust=False).mean()
+    smoothed_volatility_factor = volatility_factor.ewm(span=3, adjust=False).mean()
+    smoothed_momentum_factor = momentum_factor.ewm(span=3, adjust=False).mean()
+    
+    # Calculate the trend persistence: 5-day and 20-day moving average crossover
+    ma_5d = df['close'].rolling(window=5).mean()
+    ma_20d = df['close'].rolling(window=20).mean()
+    trend_persistence = (ma_5d - ma_20d) / (ma_20d + 1e-7)
+    
+    # Exponentially smooth the trend persistence
+    smoothed_trend_persistence = trend_persistence.ewm(span=3, adjust=False).mean()
+    
+    # Relative strength: Ratio of the current close to the 50-day moving average
+    ma_50d = df['close'].rolling(window=50).mean()
+    relative_strength = df['close'] / ma_50d
+    
+    # Exponentially smooth the relative strength
+    smoothed_relative_strength = relative_strength.ewm(span=3, adjust=False).mean()
+    
+    # Market depth: Average volume compared to the 50-day average volume
+    avg_volume_50d = df['volume'].rolling(window=50).mean()
+    market_depth = df['volume'] / (avg_volume_50d + 1e-7)
+    
+    # Exponentially smooth the market depth
+    smoothed_market_depth = market_depth.ewm(span=3, adjust=False).mean()
+    
+    # Dynamic Volatility Measure: Calculate the 14-day average true range
+    dynamic_volatility = true_range.rolling(window=14).mean()
+    
+    # Sentiment Analysis: If 'sentiment_score' is available in the DataFrame
+    if 'sentiment_score' in df:
+        sentiment_factor = df['sentiment_score'].ewm(span=3, adjust=False).mean()
+    else:
+        sentiment_factor = 1.0  # Default to 1.0 if no sentiment data is available
+    
+    # Macroeconomic Indicator: If 'inflation_rate' is available in the DataFrame
+    if 'inflation_rate' in df:
+        inflation_adjusted_factor = df['inflation_rate'].ewm(span=3, adjust=False).mean()
+    else:
+        inflation_adjusted_factor = 1.0  # Default to 1.0 if no macroeconomic data is available
+    
+    # Combine the factors with weighted averages
+    combined_factor = (smoothed_volume_weighted_factor * 0.2 + 
+                       smoothed_avg_true_range * 0.1 + 
+                       smoothed_volatility_factor * 0.15 + 
+                       smoothed_momentum_factor * 0.15 + 
+                       smoothed_trend_persistence * 0.2 + 
+                       smoothed_relative_strength * 0.1 + 
+                       smoothed_market_depth * 0.1 + 
+                       dynamic_volatility * 0.05 + 
+                       sentiment_factor * 0.05 + 
+                       inflation_adjusted_factor * 0.05)
+    
+    return combined_factor
+```

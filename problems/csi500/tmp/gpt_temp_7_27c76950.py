@@ -1,0 +1,33 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['EMA_10'] = df['close'].ewm(span=10).mean()
+    df['Price_Momentum'] = df['close'] - df['EMA_10']
+    
+    # Integrate Volatility
+    df['Historical_Volatility'] = df['close'].pct_change().rolling(window=20).std() * np.sqrt(252)
+    df['Adjusted_Price_Momentum'] = df['Price_Momentum'] / df['Historical_Volatility']
+    
+    # Calculate Volume Synchronization
+    df['Volume_Difference'] = df['volume'].diff()
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+    df['Volume_Synchronization'] = df['Volume_Difference'] * df['Volume_Ratio']
+    
+    # Incorporate Market Breadth
+    df['Positive_Returns'] = (df['close'].pct_change() > 0).astype(int)
+    df['Negative_Returns'] = (df['close'].pct_change() < 0).astype(int)
+    df['Advancing_Issues'] = df.groupby(df.index.date)['Positive_Returns'].transform('sum')
+    df['Declining_Issues'] = df.groupby(df.index.date)['Negative_Returns'].transform('sum')
+    df['Market_Breadth'] = df['Advancing_Issues'] - df['Declining_Issues']
+    
+    # Combine Momentum, Volume, and Market Breadth
+    df['Combined_Factor'] = df['Adjusted_Price_Momentum'] * df['Volume_Synchronization'] / df['Market_Breadth']
+    
+    # Generate Alpha Factor
+    alpha_factor = df['Combined_Factor'].dropna()
+    
+    return alpha_factor

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 7-day simple moving average (SMA) of close prices
+    df['7_day_SMA'] = df['close'].rolling(window=7).mean()
+    
+    # Compare the current close price with the 7-day SMA
+    df['close_above_7_SMA'] = (df['close'] > df['7_day_SMA']).astype(int)
+    
+    # Calculate the 21-day SMA of close prices
+    df['21_day_SMA'] = df['close'].rolling(window=21).mean()
+    
+    # Determine if the 7-day SMA is rising or falling compared to the 21-day SMA
+    df['7_SMA_rising'] = (df['7_day_SMA'] > df['21_day_SMA']).astype(int)
+    
+    # Calculate the percentage change in volume from the previous day
+    df['volume_change_pct'] = df['volume'].pct_change()
+    
+    # Calculate the percentage change in close price from the previous day
+    df['close_change_pct'] = df['close'].pct_change()
+    
+    # Determine if high volume accompanies significant price changes
+    df['high_volume_with_large_price_change'] = ((df['volume_change_pct'] > 0.1) & 
+                                                 (df['close_change_pct'].abs() > 0.05)).astype(int)
+    
+    # Calculate the difference between the current day's open price and the previous day's close price
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Categorize the gap as up, down, or no gap
+    df['gap_up'] = (df['price_gap'] > 0.05 * df['close'].shift(1)).astype(int)
+    df['gap_down'] = (df['price_gap'] < -0.05 * df['close'].shift(1)).astype(int)
+    
+    # Compute the true range (max(high-low, abs(high-close[t-1]), abs(low-close[t-1])))
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], 
+                                                              abs(x[0] - df['close'].shift(1)), 
+                                                              abs(x[1] - df['close'].shift(1))), axis=1)
+    
+    # Calculate the number of times the close is higher than the open over the past n days
+    df['close_above_open_last_7_days'] = (df['close'] > df['open']).rolling(window=7).sum()
+    
+    # Check if the position of the close relative to the high and low hints at market sentiment
+    df['close_near_high'] = (df['close'] > 0.95 * df['high']).astype(int)
+    df['close_near_low'] = (df['close'] < 1.05 * df['low']).astype(int)
+    
+    # Integrate information from multiple alpha factors
+    df['alpha_factor'] = (df['close_above_7_SMA'] + 
+                          df['7_SMA_rising'] + 
+                          df['high_volume_with_large_price_change'] + 
+                          df['gap_up'] - df['gap_down'] + 
+                          df['close_above_open_last_7_days'] + 
+                          df['close_near_high'] - df['close_near_low'])
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, vol_threshold=1.5, amount_threshold=1.5):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate N-Day Moving Average of Price Range
+    df['avg_price_range'] = df['price_range'].rolling(window=n).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    df['up_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['down_change'] = -df['close'].diff().apply(lambda x: x if x < 0 else 0)
+    avg_gain = df['up_change'].rolling(window=n).mean()
+    avg_loss = df['down_change'].rolling(window=n).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate Intraday Momentum
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Detect Volume and Amount Shock
+    df['vol_change'] = df['volume'] / df['volume'].shift(1)
+    df['amount_change'] = df['amount'] / df['amount'].shift(1)
+    df['vol_shock'] = (df['vol_change'] > vol_threshold).astype(int) * df['vol_change']
+    df['amount_shock'] = (df['amount_change'] > amount_threshold).astype(int) * df['amount_change']
+    
+    # Calculate N-Day Moving Average of Volume
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    
+    # Calculate Volume Trend
+    df['vol_trend'] = (df['volume'] > df['avg_volume']).astype(int) * 2 - 1
+    
+    # Adjust Momentum Factors with Volume and Amount Shock
+    df['vol_adj_avg_price_range'] = df['avg_price_range'] * df['vol_shock']
+    df['vol_adj_rsi'] = df['rsi'] * df['vol_shock']
+    df['vol_adj_intraday_range'] = df['intraday_range'] * df['vol_shock']
+    df['amount_adj_intraday_range'] = df['intraday_range'] * df['amount_shock']
+    
+    # Combine All Adjusted Momentum Factors
+    df['combined_momentum'] = (
+        df['vol_adj_avg_price_range'] +
+        df['vol_adj_rsi'] +
+        df['vol_adj_intraday_range'] +
+        df['amount_adj_intraday_range']
+    ) * df['vol_trend']
+    
+    # Calculate N-Day Moving Average of Close
+    df['avg_close'] = df['close'].rolling(window=n).mean()
+    
+    # Calculate N-Day Moving Standard Deviation of Close
+    df['std_close'] = df['close'].rolling(window=n).std()
+    
+    # Adjust Momentum Factors with Volatility
+    df['vol_adj_avg_price_range_vol'] = df['avg_price_range'] * df['std_close']
+    df['vol_adj_rsi_vol'] = df['rsi'] * df['std_close']
+    df['vol_adj_intraday_range_vol'] = df['intraday_range'] * df['std_close']
+    
+    # Combine All Adjusted Momentum Factors with Volatility
+    df['final_factor'] = (
+        df['vol_adj_avg_price_range_vol'] +
+        df['vol_adj_rsi_vol'] +
+        df['vol_adj_intraday_range_vol'] +
+        df['amount_adj_intraday_range']
+    ) * df['vol_trend']
+    
+    return df['final_factor']
+```

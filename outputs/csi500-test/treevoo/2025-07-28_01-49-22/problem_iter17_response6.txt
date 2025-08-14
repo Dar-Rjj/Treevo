@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range Ratio
+    df['intraday_range_ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Compute Volume Adjusted Intraday Range Ratio
+    df['volume_adjusted_intraday_range_ratio'] = df['intraday_range_ratio'] * df['volume']
+    
+    # Calculate Previous Day's Close-to-Open Change
+    df['prev_close_to_open_change'] = df['open'].shift(-1) - df['close']
+    
+    # Calculate Daily High-Low Range
+    df['daily_high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Ratio
+    df['high_low_range_ratio'] = df['daily_high_low_range'] / df['daily_high_low_range'].shift(-1)
+    
+    # Smooth High-Low Range Ratio using EMA with a 10-day window
+    df['smoothed_high_low_range_ratio'] = df['high_low_range_ratio'].ewm(span=10).mean()
+    
+    # Generate Alpha Factor from Momentum
+    avg_ema_threshold = df['smoothed_high_low_range_ratio'].mean()
+    df['momentum_alpha_factor'] = np.where(df['smoothed_high_low_range_ratio'] > avg_ema_threshold, 1, -1) * df['volume']
+    
+    # Combine Volume Adjusted Intraday Range Ratio and Previous Day's Close-to-Open Change
+    df['combined_alpha_factor'] = df['volume_adjusted_intraday_range_ratio'] - df['prev_close_to_open_change']
+    
+    # Calculate High-Low Range Volatility
+    n = 5  # n-period
+    df['high_low_range_volatility'] = df['daily_high_low_range'].rolling(window=n).sum() / n
+    
+    # Smooth High-Low Range Volatility using EMA with a 15-day window
+    df['smoothed_high_low_range_volatility'] = df['high_low_range_volatility'].ewm(span=15).mean()
+    
+    # Adjust Volatility by Volume
+    average_volume = df['volume'].rolling(window=n).mean()
+    df['adjusted_volatility'] = df['smoothed_high_low_range_volatility'] * average_volume
+    
+    # Incorporate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    fixed_weight = 0.2  # Fixed Weight for the Close-Open Difference
+    df['incorporated_volatility'] = df['adjusted_volatility'] + fixed_weight * df['close_open_diff']
+    
+    # Compare with Baseline (Fixed Threshold, e.g., 0.8)
+    fixed_threshold = 0.8
+    df['signal'] = np.where(df['smoothed_high_low_range_volatility'] > fixed_threshold, 1, -1)
+    
+    # Adjust Combined Alpha Factor
+    df['adjusted_combined_alpha_factor'] = np.where(df['signal'] == 1, 1.6 * df['combined_alpha_factor'], 0.4 * df['combined_alpha_factor'])
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['adjusted_combined_alpha_factor'] * df['volume']
+    
+    return df['final_alpha_factor']
+```

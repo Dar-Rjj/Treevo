@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    movement = (df['close'] - df['open']) * df['volume']
+    
+    # High-Low Spread Analysis
+    high_low_spread = df['high'] - df['low']
+    moving_sum_20_high_low = high_low_spread.rolling(window=20).sum()
+    previous_day_moving_sum = moving_sum_20_high_low.shift(1)
+    
+    # Dynamic High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    close_to_high = df['close'] / ten_day_high
+    close_to_low = df['close'] / ten_day_low
+    min_proximity_inv = 1 / pd.DataFrame([close_to_high, close_to_low]).min().values
+    
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff + open_low_diff) * df['volume']
+    
+    # Amount per Unit Close Price Change
+    recent_amount_rate = df['amount'].rolling(window=5).sum() / df['close']
+    prior_period_amount_rate = df['amount'].shift(5).rolling(window=5).sum() / df['close'].shift(5)
+    amount_differential = recent_amount_rate - prior_period_amount_rate
+    
+    # Volume-Weighted Moving Averages
+    short_term_vwma = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    long_term_vwma = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Synthesized Alpha Factor
+    combined_indicator = (daily_range + movement) * (moving_sum_20_high_low - previous_day_moving_sum) * min_proximity_inv * weighted_avg_volatility
+    strong_move_indicator = (daily_range > 0.01 * df['open']) * 1
+    vwma_crossover = (short_term_vwma > long_term_vwma) * 1
+    alpha_factor = combined_indicator * strong_move_indicator * amount_differential * vwma_crossover
+    
+    return alpha_factor
+```

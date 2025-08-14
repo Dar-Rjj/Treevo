@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low and Close-Open Momentum
+    high_low_range = df['high'] - df['low']
+    price_movement_ratio = (df['close'] - df['open']) / (df['high'] - df['low'])
+    rolling_momentum = price_movement_ratio.rolling(window=5).sum() / high_low_range.rolling(window=5).sum()
+    adjusted_rolling_momentum = rolling_momentum * df['volume']
+
+    # Calculate 10-Day Price and Intraday Momentum
+    ten_day_price_momentum = df['close'] - df['close'].shift(10)
+    intraday_return = (df['high'] - df['low']) / df['low']
+    combined_momentum = ten_day_price_momentum + intraday_return
+
+    # Adjust by Volume
+    volume_change_indicator = (df['volume'] > df['volume'].shift(1)).astype(int)
+    combined_momentum_adjusted = combined_momentum * volume_change_indicator
+
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+
+    # Calculate Price Trend Indicator
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    price_trend = (short_sma > long_sma).astype(int) * 2 - 1
+
+    # Combine Factors
+    close_to_open_return = (df['close'] - df['open']) * df['volume'] / daily_volatility
+    combined_momentum_with_trend = (combined_momentum_adjusted * volume_change_indicator) * price_trend
+
+    # Final Alpha Factor
+    alpha_factor = adjusted_rolling_momentum + combined_momentum_with_trend
+    alpha_factor_smoothed = alpha_factor.rolling(window=10).mean()
+    alpha_factor_ema = alpha_factor_smoothed.ewm(span=10, adjust=False).mean()
+
+    return alpha_factor_ema
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Momentum
+    df['5DayMomentum'] = df['close'].diff(5)
+    
+    # Calculate Intraday High-Low Range
+    df['IntradayHLRange'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Range over past N days (e.g., N=10)
+    df['AvgIntradayHLRange'] = df['IntradayHLRange'].rolling(window=10).mean()
+    
+    # Compute Intraday High-Low Range Score
+    df['IntradayHLRangeScore'] = df.apply(lambda row: 1 if row['IntradayHLRange'] > row['AvgIntradayHLRange'] else -1, axis=1)
+    
+    # Adjust Intraday High-Low Range Score by 5-Day Momentum
+    df['AdjustedHLRangeScore'] = df['IntradayHLRangeScore'] * df['5DayMomentum']
+    
+    # Calculate 20-Day Volume Moving Average
+    df['20DayVolumeMA'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Deviation from MA
+    df['VolumeDeviation'] = df['volume'] - df['20DayVolumeMA']
+    
+    # Adjust by Volume
+    df['VolAdjustedHLRangeScore'] = df['AdjustedHLRangeScore'] * df['VolumeDeviation']
+    
+    # Calculate 5-Day Close Price Standard Deviation
+    df['5DayCloseStdDev'] = df['close'].rolling(window=5).std()
+    
+    # Adjust by Price Volatility
+    df['PriceVolAdjustedHLRangeScore'] = df['VolAdjustedHLRangeScore'] / df['5DayCloseStdDev']
+    
+    # Apply Weighted Moving Average Smoothing
+    weights = [0.1, 0.2, 0.3, 0.4]
+    df['SmoothedScore'] = df['PriceVolAdjustedHLRangeScore'].rolling(window=len(weights)).apply(lambda x: (x * weights).sum(), raw=True)
+    
+    # Calculate Log Return
+    df['LogReturn'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    
+    # EWMA of Log Return
+    df['EWMA_LogReturn'] = df['LogReturn'].ewm(span=21, adjust=False).mean()
+    
+    # Integrate Price and Volume
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['CombinedMomentum'] = df['EWMA_LogReturn'] * df['VolumeChange']
+    
+    # Calculate Intraday Price Movements and Directional Changes
+    df['Range'] = df['high'] - df['low']
+    df['Spread'] = df['close'] - df['open']
+    df['HighMinusPriorHigh'] = df['high'] - df['high'].shift(1)
+    df['LowMinusPriorLow'] = df['low'] - df['low'].shift(1)
+    
+    # Determine Net Intraday and Directional Movements
+    df['NetMovement'] = df.apply(lambda row: max(row['HighMinusPriorHigh'], abs(row['LowMinusPriorLow'])), axis=1)
+    df['NetDirectionalMovement'] = df.apply(lambda row: 1 if row['HighMinusPriorHigh'] > abs(row['LowMinusPriorLow']) else -1, axis=1)
+    
+    # Adjust for Volume Activity
+    df['AdjustedNetMovement'] = df['NetMovement'] * (df['volume'] / df['volume'].shift(1))
+    
+    # Calculate Upward and Downward Movements
+    df['UpwardMovement'] = df['high'] - df['close'].shift(1)
+    df['DownwardMovement'] = df['low'] - df['close'].shift(1)
+    
+    # Determine Net Directional Movement
+    df['NetDirectionalMovement'] = df.apply(lambda row: 1 if row['UpwardMovement'] > abs(row['DownwardMovement']) else -1 if row['UpwardMovement'] < abs(row['DownwardMovement']) else 0, axis=1)
+    
+    # Calculate Adjusted Cumulative Directional Movement
+    df['CumulativeDM'] = (df['NetDirectionalMovement'] * df['volume']).cumsum()
+    
+    # Integrated Factor
+    df['CIMVDMI'] = df['CombinedMomentum'] + df['CumulativeDM']
+    
+    # Use Cumulative Sum as Factor
+    df['CIMVDMI_Factor'] = df['CIMVDMI'].cumsum()
+    
+    return df['CIMVDMI_Factor']
+```

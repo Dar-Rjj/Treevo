@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Volume Weighted Intraday Return
+    avg_volume_5 = df['volume'].rolling(window=5).mean().shift(1)
+    df['vol_weighted_intraday_return'] = ((df['close'] - df['open']) / df['open']) * (df['volume'] / avg_volume_5)
+    
+    # Volume Spike Detection
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    spike_threshold = df['volume_change'].rolling(window=21).quantile(0.8) * 1.6
+    df['volume_spike'] = df['volume_change'] > spike_threshold
+    
+    # Volume Increase Ratio
+    df['volume_increase_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=5).std() / df['close'].shift(1)
+    
+    # Intermediate Factor
+    df['intermediate_factor'] = (df['volume_increase_ratio'] * 
+                                 (df['close'] - df['close'].rolling(window=5).mean().shift(1)) * 
+                                 df['price_volatility'])
+    
+    # Adjust for Volatility
+    rolling_volatility = (df['high'] - df['low']).rolling(window=5).std()
+    df['adjusted_intermediate_factor'] = df['intermediate_factor'] / rolling_volatility
+    
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    combined_metrics = df['intraday_return'] + df['close_to_prev_close_return'] + df['breakout_intensity']
+    df['combined_metrics'] = combined_metrics * df['volume']
+    
+    # Calculate Daily High-Low Difference
+    df['daily_high_low_diff'] = df['high'] - df['low']
+    
+    # Calculate Moving Sum of High-Low Differences
+    df['moving_sum_high_low_diff'] = df['daily_high_low_diff'].rolling(window=14).sum()
+    
+    # Compute Intraday Momentum
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['prev_day_high_low_spread'] = (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_shifted'] = df['vwap'].shift(1)
+    
+    # Combine Intraday Momentum and VWAP
+    df['momentum_difference'] = df['intraday_high_low_spread'] - df['prev_day_high_low_spread']
+    df['vwap_difference'] = df['vwap'] - df['vwap_shifted']
+    df['final_combined_indicator'] = df['momentum_difference'] * df['vwap_difference']
+    
+    # Adjust for Momentum
+    rolling_momentum = (df['close'] - df['close'].shift(1)).rolling(window=5).sum()
+    df['adjusted_combined_metrics'] = df['combined_metrics'] / rolling_momentum
+    
+    # Generate Crossover Alpha Factor
+    df['crossover_alpha_factor'] = (df['combined_metrics'] + 
+                                    df['final_combined_indicator'] + 
+                                    df['adjusted_intermediate_factor'])
+    
+    # Final Composite Factor
+    df['final_composite_factor'] = (df['vol_weighted_intraday_return'] + 
+                                     df['adjusted_intermediate_factor'] + 
+                                     df['adjusted_combined_metrics'])
+    
+    return df['final_composite_factor']
+```

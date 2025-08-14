@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = df['close'] * df['volume']
+    df['sum_volume'] = df['volume'].rolling(window=20).sum()
+    df['volume_weighted_price'] = df['volume_weighted_price'].rolling(window=20).sum() / df['sum_volume']
+
+    # Calculate Simple Moving Average (SMA) of Volume-Weighted Prices
+    df['sma_volume_weighted_price'] = df['volume_weighted_price'].rolling(window=20).mean()
+
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+
+    # Scale by Volume
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_20']
+
+    # Calculate Previous Day's Return
+    df['prev_day_return'] = df['close'] / df['open'].shift(1) - 1
+
+    # Calculate Open-to-Close Momentum
+    df['open_to_close_return'] = df['close'] / df['open'] - 1
+    df['open_to_close_momentum'] = df['open_to_close_return'].rolling(window=5).sum()
+
+    # Volatility Adjustment Factor
+    df['log_returns'] = np.log(df['high']) - np.log(df['low'])
+    df['realized_volatility'] = df['log_returns'].rolling(window=20).std()
+    df['smoothed_volatility'] = df['realized_volatility'].ewm(span=20, adjust=False).mean()
+    df['adjusted_sma'] = df['sma_volume_weighted_price'] - df['smoothed_volatility']
+
+    # Volume Surge Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    volume_surge_threshold = df['volume'].quantile(0.9)
+    df['volume_surge'] = (df['volume_change'] > 0) & (df['volume'] > volume_surge_threshold)
+    df['adjusted_sma_with_surge'] = df['adjusted_sma'] + df['volume_surge'].astype(int)
+
+    # Final Alpha Factor
+    alpha_factor = df['adjusted_sma_with_surge']
+
+    return alpha_factor
+```

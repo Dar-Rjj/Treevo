@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Adjusted Close Price
+    df['adj_close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    df['enhanced_intraday_momentum'] = high_price_indicator * low_price_indicator
+    
+    # Volume-Adjusted Intraday Momentum
+    df['vol_adj_intraday_momentum'] = df['volume'] * df['enhanced_intraday_momentum']
+    
+    # Volume-Adjusted Long-Term Momentum
+    n = 10  # Assuming a 10-day lookback for long-term momentum
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    volume_ratio = df['volume'] / df['volume'].shift(n)
+    df['vol_adj_long_term_momentum'] = (df['long_term_momentum'] * volume_ratio) + df['long_term_momentum']
+
+    # Daily Price Volatility
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=20).mean()
+    df['price_volatility'] = daily_range / avg_daily_range
+    
+    # Volume-Based Adjustment Factor
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['volume_based_adjustment'] = (daily_range / avg_daily_range) * (df['volume'] / avg_volume)
+    
+    # High-Low Price Range Momentum
+    df['high_low_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # VWATR
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift()).abs()
+    tr3 = (df['low'] - df['close'].shift()).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    vwatr = true_range * df['volume']
+    df['vwaptr'] = vwatr
+    df['high_low_adj_vwaptr'] = df['high_low_momentum'] / df['vwaptr']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['adj_close'] + df['vol_adj_intraday_momentum'] + 
+                                df['vol_adj_long_term_momentum']) * df['high_low_adj_vwaptr']
+    
+    return df['final_alpha_factor']
+```

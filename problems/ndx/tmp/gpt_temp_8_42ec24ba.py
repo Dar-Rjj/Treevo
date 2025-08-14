@@ -1,0 +1,51 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average Crossover
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    sma_crossover = (df['SMA_5'] - df['SMA_20']) / df['SMA_20']
+    
+    # Rate of Change (ROC)
+    roc_10 = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv_cumulative = df['OBV'].cumsum()
+    
+    # Volume Momentum
+    avg_vol_5 = df['volume'].rolling(window=5).mean()
+    vol_momentum = (df['volume'] - avg_vol_5) / avg_vol_5
+    
+    # True Range
+    df['TR'] = df[['high' - 'low', 'high' - 'close'].shift(1), 'close'.shift(1) - 'low']].max(axis=1)
+    atr_14 = df['TR'].rolling(window=14).mean()
+    
+    # Price-Volume Trend (PVT)
+    pvt = ((df['close'] - df['close'].shift(1)) / df['close'].shift(1)) * df['volume']
+    pvt_cumulative = pvt.cumsum()
+    
+    # Gap Analysis
+    gap = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # High-Low Range
+    high_low_range = (df['high'] - df['low']) / df['low']
+    
+    # High-Close Ratio
+    high_close_ratio = df['high'] / df['close']
+    
+    # Combine all factors
+    alpha_factor = (
+        sma_crossover + 
+        roc_10 + 
+        obv_cumulative + 
+        vol_momentum + 
+        atr_14 + 
+        pvt_cumulative + 
+        gap + 
+        high_low_range + 
+        high_close_ratio
+    )
+    
+    return alpha_factor

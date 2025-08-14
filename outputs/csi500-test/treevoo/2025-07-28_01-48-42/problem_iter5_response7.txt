@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate High-Low Range Momentum
+    df['hl_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    df['hl_momentum_sum_5'] = df['hl_momentum'].rolling(window=5).sum()
+
+    # Adjust for Volume
+    df['vol_5_avg'] = df['volume'].rolling(window=5).mean()
+    df['hl_momentum_adj'] = df['hl_momentum_sum_5'] / df['vol_5_avg']
+
+    # Apply Moving Average Smoothing
+    df['smoothed_adj_momentum'] = df['hl_momentum_adj'].rolling(window=10).mean()
+
+    # Calculate Logarithmic Daily Returns
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(lambda x: math.log(x))
+
+    # Momentum Component
+    df['mom_21'] = df['log_returns'].rolling(window=21).mean()
+    df['mom_60'] = df['log_returns'].rolling(window=60).mean()
+    df['final_mom'] = df['mom_21'] - df['mom_60']
+
+    # Volatility Component
+    df['abs_log_returns'] = df['log_returns'].abs()
+    df['vol_21'] = df['abs_log_returns'].rolling(window=21).sum()
+    df['vol_60'] = df['abs_log_returns'].rolling(window=60).sum()
+    df['final_vol'] = df['vol_21'] - df['vol_60']
+
+    # Volume Component
+    df['log_vol_change'] = (df['volume'] / df['volume'].shift(1)).apply(lambda x: math.log(x))
+    df['vol_mom_21'] = df['log_vol_change'].rolling(window=21).mean()
+    df['vol_mom_60'] = df['log_vol_change'].rolling(window=60).mean()
+    df['final_vol_mom'] = df['vol_mom_21'] - df['vol_mom_60']
+
+    # Combine Components
+    df['final_alpha_factor_2'] = df['final_mom'] + df['final_vol'] + df['final_vol_mom']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_adj_momentum'] + df['final_alpha_factor_2']
+
+    return df['final_alpha_factor']
+```

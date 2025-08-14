@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA) of Close Prices
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    
+    # Measure Price Changes to Capture Short-Term Momentum
+    df['price_change'] = df['close'].diff()
+    
+    # Analyze Trading Volume for Liquidity and Activity Signals
+    df['volume_change_pct'] = df['volume'].pct_change().fillna(0)
+    
+    # Evaluate Volatility Using True Range
+    df['true_range'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['ATR_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Combine Price and Volume for a More Comprehensive Factor
+    df['SMA_10_volume'] = df['SMA_10'] * df['volume']
+    df['SMA_30_volume'] = df['SMA_30'] * df['volume']
+    
+    # Incorporate High and Low Prices for Additional Volatility Insights
+    df['high_low_diff'] = df['high'] - df['low']
+    df['avg_high_low_10'] = df['high_low_diff'].rolling(window=10).mean()
+    df['avg_high_low_30'] = df['high_low_diff'].rolling(window=30).mean()
+    
+    # Compute Exponential Moving Averages (EMA) of Daily Price Changes and Returns
+    df['EMA_10_price_change'] = df['price_change'].ewm(span=10, adjust=False).mean()
+    df['intraday_return'] = df['close'] - df['open']
+    df['intraday_return_mean_5'] = df['intraday_return'].rolling(window=5).mean()
+    df['intraday_return_adj'] = df['intraday_return'] - df['intraday_return_mean_5']
+    df['volume_weighted_return'] = df['intraday_return'] * df['volume']
+    df['EMA_20_volume_weighted_return'] = df['volume_weighted_return'].ewm(span=20, adjust=False).mean()
+    
+    # Weigh by Intraday Volume Activity
+    df['volume_20_MA'] = df['volume'].rolling(window=20).mean()
+    df['intraday_vol_activity'] = (df['high_low_diff'] * df['volume']) / df['volume_20_MA']
+    
+    # Calculate Directional Movements
+    df['+DM'] = (df['high'] - df['high'].shift(1)).apply(lambda x: max(x, 0))
+    df['-DM'] = (df['low'].shift(1) - df['low']).apply(lambda x: max(x, 0))
+    df['+DM_smoothed'] = df['+DM'].rolling(window=14).mean()
+    df['-DM_smoothed'] = df['-DM'].rolling(window=14).mean()
+    
+    # Calculate Directional Indicators
+    df['+DI'] = (df['+DM_smoothed'] / df['ATR_14']) * 100
+    df['-DI'] = (df['-DM_smoothed'] / df['ATR_14']) * 100
+    
+    # Compute Average Directional Movement Index (ADMI)
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+    
+    # Combine Intraday and Interday Momentum
+    df['combined_momentum'] = df['EMA_10_price_change'] + df['intraday_return_adj'] - df['EMA_20_volume_weighted_return']
+    
+    # Adjust for Price Volatility
+    df['daily_price_range'] = df['high'] - df['low']
+    df['MA_30_daily_price_range'] = df['daily_price_range'].rolling(window=30).mean()
+    df['adjusted_momentum'] = df['combined_momentum'] / df['MA_30_daily_price_range']
+    
+    # Smooth the Result
+    df['smoothed_factor'] = df['adjusted_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['final_factor'] = df['smoothed_factor'] * df['ADMI'] + df['volume'].ewm(span=5, adjust=False).mean()
+    
+    return df['final_factor']
+```

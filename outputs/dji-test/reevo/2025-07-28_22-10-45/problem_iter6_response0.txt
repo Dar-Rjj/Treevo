@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change (close - open)
+    price_change = df['close'] - df['open']
+    
+    # Calculate the average of high and low
+    avg_high_low = (df['high'] + df['low']) / 2
+    
+    # Calculate the exponentially weighted moving standard deviation of the price change to measure volatility
+    volatility = price_change.ewm(span=5, adjust=False).std()
+    
+    # Calculate the exponentially weighted moving average of the close price to measure trend strength
+    trend_strength = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Detect volume spikes by comparing the current volume to the exponentially weighted moving mean
+    volume_spike = (df['volume'] - df['volume'].ewm(span=5, adjust=False).mean()) / df['volume'].ewm(span=5, adjust=False).std()
+    
+    # Calculate the weighted price movement relative to the average high and low
+    weighted_price_movement = (price_change * df['volume']) / (avg_high_low * df['volume'].ewm(span=5, adjust=False).mean())
+    
+    # Calculate momentum as the 10-day return
+    momentum = (df['close'] / df['close'].shift(10)) - 1
+    
+    # Calculate relative strength as the ratio of the current close to the 10-day moving average
+    relative_strength = df['close'] / df['close'].rolling(window=10).mean()
+    
+    # Calculate the Adaptive Moving Average (AMA) for a more responsive trend indicator
+    er = abs(price_change).ewm(span=10, adjust=False).mean() / abs(price_change).rolling(window=10).sum()
+    smoothing_constant = 2 / (1 + 2 * er)
+    ama = df['close'].ewm(alpha=smoothing_constant, adjust=False).mean()
+    
+    # Calculate the Stochastic Oscillator to capture overbought/oversold conditions
+    k_period = 14
+    d_period = 3
+    lowest_low = df['low'].rolling(window=k_period).min()
+    highest_high = df['high'].rolling(window=k_period).max()
+    k_percent = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low)
+    d_percent = k_percent.rolling(window=d_period).mean()
+    
+    # Combine the factors into a single alpha factor
+    alpha_factor = (weighted_price_movement + trend_strength - volatility + volume_spike + momentum + relative_strength + ama + d_percent) / 8
+    
+    return alpha_factor.fillna(0)
+```

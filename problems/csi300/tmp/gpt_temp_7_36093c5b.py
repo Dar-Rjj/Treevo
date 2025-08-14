@@ -1,0 +1,72 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    df['adjusted_close'] = df['close'] - df['open']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Intraday Logarithmic Changes
+    df['log_open_close_change'] = np.log(df['close']) - np.log(df['open'])
+    df['log_high_low_change'] = np.log(df['high']) - np.log(df['low'])
+    df['aggregated_log_changes'] = df['log_open_close_change'] + df['log_high_low_change']
+    
+    # Intraday Momentum Indicators
+    df['high_price_indicator'] = df['high'] - df['open']
+    df['low_price_indicator'] = df['open'] - df['low']
+    df['intraday_momentum'] = df['high_price_indicator'] * df['low_price_indicator']
+    
+    # Volume Adjusted Intraday Factors
+    df['volume_adjusted_intraday_return'] = df['intraday_return'] * df['volume']
+    df['volume_adjusted_high_low_range'] = df['high_low_range'] * df['volume']
+    df['volume_adjusted_log_changes'] = df['aggregated_log_changes'] * df['volume']
+    
+    # Smoothed Intraday Momentum
+    smoothed_momentum = df['volume_adjusted_intraday_return'].ewm(span=10).mean()
+    recent_volume_weight = df['volume'].rolling(window=5).mean()
+    df['smoothed_intraday_momentum'] = smoothed_momentum * recent_volume_weight
+    
+    # High-Low Breakout Potential
+    breakout_potential = df['volume_adjusted_high_low_range'].ewm(span=20).mean()
+    df['high_low_breakout_potential'] = breakout_potential * recent_volume_weight.rolling(window=10).mean()
+    
+    # Momentum Reversal Indicator
+    df['momentum_reversal'] = (df['intraday_return'] - df['smoothed_intraday_momentum']) / df['high_low_breakout_potential']
+    
+    # Trading Activity Intensity
+    moving_avg_volume = df['volume'].rolling(window=5).mean()
+    df['trading_activity_intensity'] = moving_avg_volume / df['volume']
+    
+    # Daily Price Return
+    df['daily_price_return'] = df['close'].diff(1)
+    
+    # Identify Significant Price Increase
+    df['significant_increase'] = (df['daily_price_return'] > 0).astype(int)
+    
+    # Volume Spike Indicator
+    avg_past_week_volume = df['volume'].rolling(window=7).mean()
+    df['volume_spike'] = (df['volume'] > avg_past_week_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    df['weighted_momentum'] = df['daily_price_return'] * df['significant_increase']
+    
+    # Apply Volume Spike Filter
+    df['filtered_momentum'] = df['weighted_momentum'] * df['volume_spike']
+    
+    # Consolidate Initial Factors
+    initial_factors = (df['adjusted_close'] + df['volume_adjusted_intraday_momentum'] + df['aggregated_log_changes']) / df['open']
+    
+    # Final Alpha Factor Synthesis
+    final_factor = (initial_factors + df['filtered_momentum'] + df['trading_activity_intensity']) * df['volume_spike']
+    
+    # Adjust for Open Price
+    final_factor /= df['open']
+    
+    return final_factor

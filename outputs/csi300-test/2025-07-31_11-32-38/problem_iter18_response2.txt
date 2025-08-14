@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Factor 1: Momentum Indicators
+    df['short_term_momentum'] = df['close'].diff(5)
+    df['trend_following_signal'] = df['close'] - df['close'].rolling(window=20).mean()
+    
+    # Factor 2: Volume-Weighted Close Price
+    df['volume_weighted_close'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Factor 3: Volatility Measures
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['volatility'] = df['log_returns'].rolling(window=30).std()
+    
+    # Factor 4: Relative Strength Compared to Market
+    df['10_day_return'] = df['close'].pct_change(periods=10)
+    market_return = df['10_day_return'].mean()  # Assuming the market return is the average of all stock returns
+    df['relative_strength'] = df['10_day_return'] / market_return
+    
+    # Factor 5: Accumulation/Distribution Line
+    df['money_flow_multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['accumulation_distribution'] = (df['money_flow_multiplier'] * df['volume']).rolling(window=20).sum()
+    
+    # Factor 6: Money Flow Index
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    positive_money_flow = (typical_price - typical_price.shift(1)).where(typical_price > typical_price.shift(1), 0).rolling(window=14).sum()
+    negative_money_flow = (typical_price.shift(1) - typical_price).where(typical_price < typical_price.shift(1), 0).rolling(window=14).sum()
+    money_flow_ratio = 100 * (positive_money_flow / (positive_money_flow + negative_money_flow))
+    df['money_flow_index'] = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Factor 7: Trading Range Expansion
+    df['range'] = df['high'] - df['low']
+    df['average_range'] = df['range'].rolling(window=20).mean()
+    df['range_expansion'] = df['range'] / df['average_range'] - 1
+    
+    # Factor 8: Daily Return Reversal Indicator
+    daily_return = df['close'].pct_change()
+    threshold = 0.05  # Example threshold, can be adjusted
+    df['reversal_indicator'] = (np.abs(daily_return) > threshold).astype(int)
+    
+    # Factor 9: High Minus Low Over Close
+    df['high_low_over_close'] = (df['high'] - df['low']) / df['close']
+    df['avg_high_low_over_close'] = df['high_low_over_close'].rolling(window=10).mean()
+    
+    # Factor 10: Gap Up/Down Open
+    df['gap_up'] = (df['open'] > df['high'].shift(1)).astype(int)
+    df['gap_down'] = (df['open'] < df['low'].shift(1)).astype(int)
+    
+    # Factor 11: Volume Shock
+    df['average_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_shock'] = (df['volume'] - df['average_volume_20']) / df['average_volume_20']
+    
+    # Factor 12: Price Impact of Volume
+    df['volume_change'] = df['volume'].pct_change()
+    df['price_impact_of_volume'] = df[['log_returns', 'volume_change']].rolling(window=30).corr().unstack().iloc[::2, :]['log_returns']
+    
+    # Combine all factors into a single DataFrame
+    factors = df[['short_term_momentum', 'trend_following_signal', 'volume_weighted_close', 'volatility',
+                  'relative_strength', 'accumulation_distribution', 'money_flow_index', 'range_expansion',
+                  'reversal_indicator', 'avg_high_low_over_close', 'gap_up', 'gap_down', 'volume_shock',
+                  'price_impact_of_volume']]
+    
+    return factors
+```

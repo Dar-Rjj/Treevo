@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data):
+    # Calculate Intraday Return
+    intraday_return = (data['close'] - data['open']) / data['open']
+    
+    # Calculate Intraday Volatility
+    high_low_diff = data['high'] - data['low']
+    recent_mean_high_low_diff = high_low_diff.rolling(window=20).mean()
+    recent_std_high_low_diff = high_low_diff.rolling(window=20).std()
+    intraday_volatility = recent_mean_high_low_diff + recent_std_high_low_diff
+    
+    # Adjust Intraday Return by Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Determine Range-to-Range Ratio
+    range_to_range_ratio = high_low_diff / high_low_diff.shift(1)
+    
+    # Integrate Volume Sensitivity
+    volume_ratio = data['volume'] / data['volume'].shift(1)
+    adjusted_range_to_range_ratio = range_to_range_ratio * volume_ratio
+    
+    # Combine Adjusted Intraday Return and Adjusted Range-to-Range Ratio
+    combined_intraday_factors = adjusted_intraday_return * adjusted_range_to_range_ratio
+    
+    # Detect Volume Shock
+    volume_change = data['volume'] - data['volume'].shift(1)
+    sudden_volume_increase = volume_change > 1.5 * data['volume'].rolling(window=20).std()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    price_changes = data['close'].diff()
+    up_prices, down_prices = price_changes.copy(), price_changes.copy()
+    up_prices[up_prices < 0] = 0
+    down_prices[down_prices > 0] = 0
+    down_prices = abs(down_prices)
+    
+    n = 14  # RSI window
+    avg_up = up_prices.rolling(window=n).mean()
+    avg_down = down_prices.rolling(window=n).mean()
+    
+    rs = avg_up / avg_down
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate Simple Moving Average (SMA) of Close prices
+    sma_20 = data['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Factor
+    momentum_factor = sma_20 - data['close']
+    
+    # Combine Volume and Price Volatility
+    avg_volume_20 = data['volume'].rolling(window=20).mean()
+    avg_high_low_range_20 = (data['high'] - data['low']).rolling(window=20).mean()
+    combined_volatility = avg_volume_20 * avg_high_low_range_20
+    
+    # Combined Weighted Momentum
+    weighted_momentum = (rsi * data['volume'] + 
+                         adjusted_intraday_return * volume_ratio + 
+                         momentum_factor * combined_volatility)
+    
+    # Final Factor Calculation
+    final_factor = weighted_momentum * combined_intraday_factors
+    
+    return final_factor
+```

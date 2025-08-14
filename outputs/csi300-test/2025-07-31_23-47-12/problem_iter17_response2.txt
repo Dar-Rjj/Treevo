@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=20):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff(N)
+    
+    # Compute Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    upper_threshold = 1.5 * log_returns.std()
+    lower_threshold = -1.5 * log_returns.std()
+    clipped_log_returns = np.clip(log_returns, a_min=lower_threshold, a_max=upper_threshold)
+    momentum = clipped_log_returns.rolling(window=N).sum()
+    
+    # Adjust for Volume
+    volume = df['volume']
+    volume_relative_to_mean = (volume / volume.mean())
+    volume_adjusted_momentum = momentum * volume_relative_to_mean
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Integrate Market Breadth Indicators
+    advances = df['close'] > df['close'].shift(1)
+    declines = df['close'] < df['close'].shift(1)
+    advance_decline_line = (advances.astype(int) - declines.astype(int)).cumsum()
+    
+    new_highs = (df['close'] == df['close'].rolling(window=252).max()).astype(int)
+    new_lows = (df['close'] == df['close'].rolling(window=252).min()).astype(int)
+    net_new_highs_lows = new_highs - new_lows
+    
+    # Final Factor Calculation
+    weights = [0.4, 0.3, 0.2, 0.1]  # Weights for momentum, volume, volatility, and market breadth
+    factor = (weights[0] * volume_adjusted_momentum +
+              weights[1] * std_abs_price_changes +
+              weights[2] * ema_abs_price_changes +
+              weights[3] * (advance_decline_line + net_new_highs_lows))
+    
+    return factor
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor based on the given price and volume data.
+    
+    Parameters:
+    df (pd.DataFrame): A DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume'] indexed by date.
+    
+    Returns:
+    pd.Series: A Series representing the factor values, indexed by date.
+    """
+    
+    # Calculate the percentage change in close price
+    df['pct_change_close'] = df['close'].pct_change()
+    
+    # Calculate the average true range over a 14-day window
+    df['h_l'] = df['high'] - df['low']
+    df['h_pc'] = abs(df['high'] - df['close'].shift(1))
+    df['l_pc'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['h_l', 'h_pc', 'l_pc']].max(axis=1)
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the money flow multiplier
+    df['mf_multiplier'] = (df['close'] - df['low']) - (df['high'] - df['close']) / (df['high'] - df['low'])
+    
+    # Calculate the money flow volume
+    df['mf_volume'] = df['mf_multiplier'] * df['volume']
+    
+    # Calculate the money flow ratio over a 14-day window
+    df['positive_mf'] = df['mf_volume'].where(df['mf_multiplier'] > 0, 0)
+    df['negative_mf'] = df['mf_volume'].where(df['mf_multiplier'] < 0, 0)
+    df['positive_mf_14'] = df['positive_mf'].rolling(window=14).sum()
+    df['negative_mf_14'] = df['negative_mf'].rolling(window=14).sum()
+    df['mf_ratio_14'] = df['positive_mf_14'] / df['negative_mf_14']
+    
+    # Calculate the final factor value
+    df['factor'] = (df['pct_change_close'] + df['atr_14'] + df['mf_ratio_14']) / 3
+    
+    return df['factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factors = heuristics_v2(df)
+# print(factors)
+```

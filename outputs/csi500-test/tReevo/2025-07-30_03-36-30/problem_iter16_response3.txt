@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 3-Day and 5-Day Rolling Returns
+    df['3_Day_Return'] = (df['close'] / df['close'].shift(2)) - 1
+    df['5_Day_Return'] = (df['close'] / df['close'].shift(4)) - 1
+    
+    # Smooth Returns with EMA
+    df['EMA_3D_Return'] = df['3_Day_Return'].ewm(span=2, min_periods=2).mean()
+    df['EMA_5D_Return'] = df['5_Day_Return'].ewm(span=4, min_periods=4).mean()
+    
+    # Combine 3-Day and 5-Day Smoothed Returns
+    df['Weighted_Avg_Return'] = df['EMA_3D_Return'] * 0.6 + df['EMA_5D_Return'] * 0.4
+    
+    # Multiply by Volume of day t
+    df['Volume_Adjusted_Momentum'] = df['Weighted_Avg_Return'] * df['volume']
+    
+    # Calculate 10-Day High-Low and Open-Close Ranges
+    df['10D_High_Low_Range'] = df['high'].rolling(window=10, min_periods=10).max() - df['low'].rolling(window=10, min_periods=10).min()
+    df['10D_Open_Close_Range'] = df['open'].rolling(window=10, min_periods=10).sum() - df['close'].rolling(window=10, min_periods=10).sum()
+    
+    # Combine 10-Day Ranges
+    df['10D_Mean_Price'] = (df['open'].rolling(window=10, min_periods=10).sum() + df['close'].rolling(window=10, min_periods=10).sum()) / 20
+    df['OHLC_Volatility_Index'] = (df['10D_High_Low_Range'] + df['10D_Open_Close_Range']) / df['10D_Mean_Price']
+    
+    # Incorporate Volume Trend
+    df['20D_Volume_EMA'] = df['volume'].ewm(span=20, min_periods=20).mean()
+    df['Normalized_Volume'] = df['volume'] / df['20D_Volume_EMA']
+    
+    # Integrate Market Sentiment
+    df['Daily_Change_Amount'] = df['amount'] - df['amount'].shift(1)
+    df['5D_MA_Amount'] = df['amount'].rolling(window=5, min_periods=5).mean()
+    df['Refined_Daily_Change_Amount'] = df['Daily_Change_Amount'] / df['5D_MA_Amount']
+    
+    # Add Refined Daily Change in Amount to Volume-Adjusted Multi-Day Price Momentum
+    df['Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'] + df['Refined_Daily_Change_Amount']
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = df['Adjusted_Momentum'] - df['OHLC_Volatility_Index']
+    
+    return df['Final_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor_values = heuristics_v2(df)
+```

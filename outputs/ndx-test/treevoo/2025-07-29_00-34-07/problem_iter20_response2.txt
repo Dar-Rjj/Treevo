@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Gap Between Open and Close
+    price_gap = df['open'] - df['close']
+    
+    # Calculate Current Day Volume Growth
+    volume_growth = df['volume'] / df['volume'].shift(1)
+    
+    # Weight the Price Gaps
+    weighted_price_gaps = (price_gap * volume_growth).sum()
+    
+    # Calculate 20-day Rolling High-Low Differential
+    rolling_high = df['high'].rolling(window=20).max()
+    rolling_low = df['low'].rolling(window=20).min()
+    high_low_diff = rolling_high - rolling_low
+    
+    # Adjust for Volume Volatility
+    volume_volatility = df['volume'].rolling(window=15).std()
+    adjusted_high_low_diff = high_low_diff * volume_volatility
+    
+    # Aggregate the Signals
+    price_diff = df['close'] - df['close'].shift(15)
+    aggregated_signal = adjusted_high_low_diff + weighted_price_gaps - price_diff
+    
+    # Calculate Adjusted High-to-Low Range
+    adjusted_range = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Multi-Day Price Momentum
+    momentum_3_day = (df['close'] - df['close'].shift(3)) / df['close'].shift(3)
+    momentum_10_day = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    momentum_30_day = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    average_momentum = (momentum_3_day + momentum_10_day + momentum_30_day) / 3
+    
+    # Adjust for Volume Changes
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_adjusted_momentum = average_momentum * (1 + 2 * daily_volume_change)
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) * df['volume']
+    
+    # Calculate Cumulative High-Low Momentum
+    cumulative_high_low_momentum = ((df['high'] - df['low']).sum())
+    
+    # Combine Cumulative High-Low Momentum and Volume-Weighted Close-to-Open Return
+    combined_factor = cumulative_high_low_momentum + close_to_open_return.sum()
+    
+    # Calculate Weighted Price Momentum
+    log_return = (df['close'] / df['close'].shift(1)).apply(np.log)
+    weighted_price_momentum = (df['close'] - df['close'].rolling(window=15).mean()) * log_return
+    
+    # Adjust for Volume
+    aggregated_signal *= daily_volume_change
+    
+    # Final Alpha Factor Construction
+    alpha_factor = (weighted_price_gaps 
+                    + aggregated_signal 
+                    - average_momentum 
+                    + volume_adjusted_momentum 
+                    + weighted_price_momentum 
+                    + combined_factor)
+    
+    return alpha_factor
+```

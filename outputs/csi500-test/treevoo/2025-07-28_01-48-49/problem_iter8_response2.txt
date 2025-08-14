@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    intraday_range = intraday_range.clip(lower=0)  # Ensure non-negative
+    
+    # Calculate Volume Change
+    prev_volume = df['volume'].shift(1)
+    volume_change = df['volume'] - prev_volume
+    volume_change = volume_change.clip(lower=0)  # Ensure non-negative
+    
+    # Generate Intraday Momentum Score
+    intraday_momentum_score = intraday_range * volume_change
+    
+    # Calculate 5-Day Average High-Low Spread
+    high_low_spread_5d_avg = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-Day Momentum
+    close_5d_ago = df['close'].shift(5)
+    momentum_5d = (df['close'] - close_5d_ago) / close_5d_ago
+    
+    # Multiply 5-Day Average High-Low Spread by 5-Day Momentum
+    high_low_spread_momentum = high_low_spread_5d_avg * momentum_5d
+    
+    # Combine Intraday and High-Low Spread Momentum
+    combined_intraday_momentum = intraday_momentum_score + intraday_return
+    integrated_momentum_factor = combined_intraday_momentum * high_low_spread_momentum
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_range / df['volume']
+    
+    # Adjust Momentum by Intraday Volatility
+    adjusted_momentum = integrated_momentum_factor * intraday_volatility
+    
+    # Calculate Dynamic Adjustment Factor
+    ema_volume = df['volume'].ewm(span=5).mean()
+    
+    # Apply Dynamic Adjustment
+    dynamically_adjusted_momentum = adjusted_momentum * (df['volume'] / ema_volume)
+    
+    # Final Alpha Factor
+    final_alpha_factor = dynamically_adjusted_momentum - dynamically_adjusted_momentum.ewm(span=5).mean()
+    
+    return final_alpha_factor
+```

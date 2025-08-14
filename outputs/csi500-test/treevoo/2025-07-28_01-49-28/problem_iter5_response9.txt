@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10):
+    # Simple Momentum for Close Prices
+    close_momentum = df['close'].pct_change(periods=n)
+    
+    # Average Volume (t to t-n) and Adjust Momentum by Average Volume
+    average_volume = df['volume'].rolling(window=n).mean()
+    volume_factor = average_volume / df['volume']
+    adjusted_close_momentum = close_momentum * volume_factor
+    
+    # High-to-Low Range and High-to-Low Return
+    high_low_range = df['high'] - df['low']
+    prev_close = df['close'].shift(1)
+    high_low_return = high_low_range / prev_close
+    
+    # Combine Close Price Momentum and High-to-Low Return
+    combined_momentum = adjusted_close_momentum + high_low_return
+    
+    # Open-High and Open-Low Price Differences
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    
+    # Weighted Average by Volume
+    total_diff = (open_high_diff + open_low_diff) * df['volume']
+    weighted_volatility = total_diff.rolling(window=n).sum() / average_volume
+    
+    # Volume Percentage Change and Adjust Volatility
+    volume_pct_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_volatility = weighted_volatility * (1 + volume_pct_change)
+    
+    # Amount per Unit Close Price Rate of Change
+    amount_n_days = df['amount'].rolling(window=n).sum()
+    amount_ratio_t = amount_n_days / df['close']
+    amount_n_days_prev = df['amount'].shift(n).rolling(window=n).sum()
+    amount_ratio_t_n = amount_n_days_prev / df['close'].shift(n)
+    amount_roc = amount_ratio_t - amount_ratio_t_n
+    
+    # Integrated Alpha
+    integrated_alpha = 0.5 * combined_momentum + 0.3 * adjusted_volatility + 0.2 * amount_roc
+    
+    return integrated_alpha
+```

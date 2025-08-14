@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Factors
+    df['SMA_10_Close'] = df['close'].rolling(window=10).mean()
+    df['ROC_SMA_10_Close'] = df['SMA_10_Close'].pct_change(20)
+    
+    df['SMA_10_Volume'] = df['volume'].rolling(window=10).mean()
+    df['ROC_SMA_10_Volume'] = df['SMA_10_Volume'].pct_change(20)
+    
+    # Volatility Factors
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR'] = df[['high', 'low', 'Prev_Close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['Prev_Close']), abs(x['low'] - x['Prev_Close'])), axis=1
+    )
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Vol_Std_14'] = df['Volume_Change'].rolling(window=14).std()
+    
+    # Trend Strength Factors
+    df['High_Diff'] = df['high'] - df['high'].shift(1)
+    df['Low_Diff'] = df['low'] - df['low'].shift(1)
+    df['+DM'] = df['High_Diff'].where((df['High_Diff'] > 0) & (df['High_Diff'] > df['Low_Diff']), 0)
+    df['-DM'] = df['Low_Diff'].where((df['Low_Diff'] > 0) & (df['Low_Diff'] > df['High_Diff']), 0)
+    
+    df['+DM_Smoothed'] = df['+DM'].rolling(window=14).sum() / 14
+    df['-DM_Smoothed'] = df['-DM'].rolling(window=14).sum() / 14
+    
+    df['+DI'] = (df['+DM_Smoothed'] / df['ATR_14']) * 100
+    df['-DI'] = (df['-DM_Smoothed'] / df['ATR_14']) * 100
+    df['DX'] = (abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])) * 100
+    df['ADX'] = df['DX'].ewm(span=14, adjust=False).mean()
+    
+    df['TP'] = (df['high'] + df['low'] + df['close']) / 3
+    df['SMA_20_TP'] = df['TP'].rolling(window=20).mean()
+    df['MAD_TP_20'] = df['TP'].rolling(window=20).apply(lambda x: (x - x.mean()).abs().mean(), raw=False)
+    df['CCI'] = (df['TP'] - df['SMA_20_TP']) / (0.015 * df['MAD_TP_20'])
+    
+    # Market Sentiment Factors
+    df['RSL'] = df['close'] / df['close'].rolling(window=252).mean()
+    
+    df['MF'] = df['TP'] * df['volume']
+    df['Positive_MF'] = df['MF'].where(df['MF'] > df['MF'].shift(1), 0).rolling(window=14).sum()
+    df['Negative_MF'] = df['MF'].where(df['MF'] < df['MF'].shift(1), 0).abs().rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + (df['Positive_MF'] / df['Negative_MF'])))
+    
+    # Liquidity Factors
+    df['Average_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Turnover_Ratio'] = df['volume'] / df['Average_Volume_20']
+    
+    df['Dollar_Volume'] = df['close'] * df['volume']
+    
+    # Combine factors into a single alpha factor
+    alpha_factor = (
+        df['ROC_SMA_10_Close'] + 
+        df['ROC_SMA_10_Volume'] + 
+        df['ADX'] + 
+        df['CCI'] + 
+        df['RSL'] + 
+        df

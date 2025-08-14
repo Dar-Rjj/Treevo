@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_sma_period=20, long_sma_period=200, volatility_lookback=20, momentum_lookback=10, price_change_lookback=5, turnover_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=short_sma_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=long_sma_period).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['High_Low_Diff'] * df['volume']
+    df['Volatility_Rolling_Avg'] = df['Volume_Adjusted_Volatility'].rolling(window=volatility_lookback).mean()
+
+    # Compute Price Momentum
+    df['Close_N_Avg'] = df['close'].rolling(window=momentum_lookback).mean()
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['Close_N_Avg']
+
+    # Incorporate Additional Price Change Metrics
+    df['Close_Percentage_Change'] = df['close'].pct_change(periods=price_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['Market_Trend'] = 0
+    df.loc[df['SMA_Short'] > df['SMA_Long'], 'Market_Trend'] = 1  # Bullish
+    df.loc[df['SMA_Short'] < df['SMA_Long'], 'Market_Trend'] = -1  # Bearish
+
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Turnover_Rolling_Avg'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Adjust Weights Based on Liquidity
+    liquidity_weight = df['Turnover_Rolling_Avg'] / df['Turnover_Rolling_Avg'].max()
+    df['Liquidity_Adjusted_Price_Momentum'] = df['Price_Momentum'] * liquidity_weight
+
+    # Final Alpha Factor
+    weights = {
+        'Price_Momentum': 0.4,
+        'Volatility_Rolling_Avg': -0.2,
+        'Close_Percentage_Change': 0.3,
+        'High_Low_Range': 0.1
+    }
+    
+    df['Alpha_Factor'] = (
+        weights['Price_Momentum'] * df['Liquidity_Adjusted_Price_Momentum'] +
+        weights['Volatility_Rolling_Avg'] * df['Volatility_Rolling_Avg'] +
+        weights['Close_Percentage_Change'] * df['Close_Percentage_Change'] +
+        weights['High_Low_Range'] * df['High_Low_Range']
+    )
+
+    # Adjust Weights Dynamically Based on Market Trend
+    df['Alpha_Factor'] = df['Alpha_Factor'] * (1 + 0.1 * df['Market_Trend'])
+
+    return df['Alpha_Factor']
+```

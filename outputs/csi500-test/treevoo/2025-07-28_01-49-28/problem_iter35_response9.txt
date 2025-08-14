@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between high and low prices as a measure of volatility
+    df['volatility'] = df['high'] - df['low']
+    
+    # Calculate (close - open) / (high - low) as a raw price movement factor
+    df['price_movement'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Compute today's volume - yesterday's volume as a raw volume change factor
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate (volume * (close - open)) as a raw volume-price interaction factor
+    df['volume_price_interaction'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Summarize the (close - open) * volume over the last 5 days as a raw price-volume composite factor
+    df['price_volume_composite'] = (df['close'] - df['open']) * df['volume']
+    df['price_volume_composite_5d'] = df['price_volume_composite'].rolling(window=5).sum()
+    
+    # Calculate the (open - previous close) as a raw gap factor
+    df['gap_factor'] = df['open'] - df['close'].shift(1)
+    
+    # Define positive money flow as (close - open) * volume when close > open, otherwise 0
+    df['positive_money_flow'] = df.apply(lambda row: (row['close'] - row['open']) * row['volume'] if row['close'] > row['open'] else 0, axis=1)
+    
+    # Define total money flow as (close - open) * volume, regardless of price direction
+    df['total_money_flow'] = (df['close'] - df['open']) * df['volume']
+    
+    # Use the ratio of positive to total money flow as a raw money flow index
+    df['money_flow_index'] = df['positive_money_flow'] / df['total_money_flow']
+    
+    # Calculate the (amount / volume) to find the average transaction size
+    df['transaction_size'] = df['amount'] / df['volume']
+    
+    # Calculate the (close - open) * (volume / average volume) as a raw momentum factor
+    df['average_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['momentum_factor'] = (df['close'] - df['open']) * (df['volume'] / df['average_volume_20d'])
+    
+    # Calculate 10-Day High and Low Prices
+    df['10d_high'] = df['high'].rolling(window=10).max()
+    df['10d_low'] = df['low'].rolling(window=10).min()
+    
+    # Proximity to 10-Day Range
+    df['proximity_to_10d_high'] = df['close'] / df['10d_high']
+    df['proximity_to_10d_low'] = df['close'] / df['10d_low']
+    
+    # Invert Minimum Proximity
+    df['inverted_min_proximity'] = 1 / df[['proximity_to_10d_high', 'proximity_to_10d_low']].min(axis=1)
+    
+    # Adjust for 20-Day Volatility
+    df['20d_volatility'] = df['volatility'].rolling(window=20).mean()
+    df['adjusted_inverted_min_proximity'] = df['inverted_min_proximity'] / df['20d_volatility']
+    
+    # Integrate Open-High-Low Volatility
+    df['open_high_diff'] = df['high'] - df['open']
+    df['open_low_diff'] = df['open'] - df['low']
+    df['weighted_open_volatility'] = (df['open_high_diff'] + df['open_low_diff']) * df['volume']
+    
+    # Short-Term Mean Reversion
+    df['ma_5d'] = df['close'].rolling(window=5).mean()
+    df['deviation_5d'] = df['close'] - df['ma_5d']
+    
+    # Long-Term Mean Reversion
+    df['ma_20d'] = df['close'].rolling(window=20).mean()
+    df['deviation_20d'] = df['close'] - df['ma_20d']
+    
+    # Combined Reversion Score
+    df['reversion_score'] = df['deviation_5d'] + df['deviation_20d']
+    df['volume_adjusted_reversion_score'] = df['reversion_score'] *

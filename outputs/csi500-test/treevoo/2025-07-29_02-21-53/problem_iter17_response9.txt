@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['previous_close'] = df['close'].shift(1)
+    df['high_low_diff'] = df['high'] - df['low']
+    df['high_prev_close_diff'] = (df['high'] - df['previous_close']).abs()
+    df['prev_close_low_diff'] = (df['previous_close'] - df['low']).abs()
+    df['true_range'] = df[['high_low_diff', 'high_prev_close_diff', 'prev_close_low_diff']].max(axis=1)
+
+    # Calculate Intraday Price Movement
+    df['intraday_price_movement'] = (df['high'] - df['low']) * ((df['high'] - df['low']) > 0).astype(int)
+
+    # Aggregate Price Movements and Accumulated Buy-Sell Imbalance
+    window = 14  # Example window size
+    df['sum_high_low'] = df['high_low_diff'].rolling(window=window).sum()
+    df['sum_close_open'] = (df['close'] - df['open']).rolling(window=window).sum()
+    df['positive_volume'] = df['volume'] * (df['close'] > df['open']).astype(int)
+    df['negative_volume'] = df['volume'] * (df['close'] < df['open']).astype(int)
+    df['sum_positive_volume'] = df['positive_volume'].rolling(window=window).sum()
+    df['sum_negative_volume'] = df['negative_volume'].rolling(window=window).sum()
+
+    # Calculate Integrated Momentum Score
+    df['price_volatility'] = df['close'].rolling(window=window).std()
+    df['momentum_score'] = (df['sum_high_low'] + df['sum_close_open']) / df['price_volatility']
+    total_volume = df['sum_positive_volume'] + df['sum_negative_volume']
+    df['momentum_score'] += (df['sum_positive_volume'] / total_volume) - (df['sum_negative_volume'] / total_volume)
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low'] = (df['high'] - df['low']) * df['volume']
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['combined_measure'] = (df['volume_adjusted_high_low'] + (df['close'] - df['open'])) / 2
+
+    # Dynamic Momentum Indicator
+    df['yesterday_indicator'] = df['momentum_score'].shift(1)
+    df['today_indicator'] = df['momentum_score']
+    df['dynamic_momentum'] = (df['yesterday_indicator'] + df['today_indicator']) / 2
+    df['momentum_change'] = df['momentum_score'].diff()
+    df['dynamic_momentum'] = df['dynamic_momentum'] * (1 + df['price_volatility'])
+
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = (df['true_range'] + df['momentum_score'] + df['combined_measure'] + df['dynamic_momentum'])
+
+    return df['final_alpha_factor'].dropna()
+```

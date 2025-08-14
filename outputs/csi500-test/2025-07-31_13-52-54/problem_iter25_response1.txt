@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 50-day Simple Moving Average (SMA) of closing prices
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Generate a binary trend signal; 1 if the current close is above the SMA, 0 otherwise
+    df['trend_signal'] = (df['close'] > df['SMA_50']).astype(int)
+    
+    # Calculate the difference between today’s high and the previous day’s high
+    df['high_diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day’s low
+    df['low_diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    df['momentum_score'] = df['high_diff'] + df['low_diff']
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    df['momentum_signal'] = (df['momentum_score'] > 0).astype(int)
+    
+    # Calculate the daily volume percentage change from the previous day
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Assign a value indicating strong buying (positive change) or selling (negative change) pressure
+    df['volume_signal'] = df['volume_change'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Calculate Volume-Weighted High-Low Spread
+    df['vw_high_low_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Momentum Component
+    df['current_vw_high_low_spread'] = df['vw_high_low_spread']
+    df['avg_past_vw_high_low_spread'] = df['vw_high_low_spread'].rolling(window=50).mean()
+    df['momentum_component'] = df['current_vw_high_low_spread'] - df['avg_past_vw_high_low_spread']
+    
+    # Generate Final Factor
+    df['final_factor'] = (df['momentum_component'] + df['vw_high_low_spread']) / df['close']
+    
+    # Incorporate Price Trend
+    df['price_trend'] = df['close'] - df['SMA_50']
+    df['final_factor'] *= df['price_trend']
+    
+    # Combine all factors into a composite alpha factor
+    df['composite_alpha_factor'] = (
+        0.5 * df['trend_signal'] + 
+        0.3 * df['momentum_signal'] + 
+        0.2 * df['volume_signal'] * df['final_factor']
+    )
+    
+    return df['composite_alpha_factor']
+```

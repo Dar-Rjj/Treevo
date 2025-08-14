@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.signal import savgol_filter
+
+def heuristics_v2(df):
+    # Sub-Thought: Calculate Intraday Volatility
+    df['intraday_vol'] = (df['high'] - df['low']) / df['close']
+    
+    # Sub-Thought: Simple Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Sub-Thought: High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Sub-Thought: Open-Close Spread
+    df['open_close_spread'] = df['close'] - df['open']
+    
+    # Sub-Thought: Daily Volume Changes
+    df['volume_change'] = df['volume'].diff()
+    
+    # Sub-Thought: Moving Averages Crossover
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    df['ma_200'] = df['close'].rolling(window=200).mean()
+    df['ma_crossover'] = df['ma_50'] - df['ma_200']
+    
+    # Sub-Thought: Short-Term Price Momentum
+    df['short_momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Sub-Thought: Long-Term Price Momentum
+    df['long_momentum'] = df['close'] - df['close'].shift(25)
+    
+    # Sub-Thought: Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_momentum'] / df['long_momentum'].replace(0, np.nan)
+    
+    # Sub-Thought: Aggregate Returns
+    # Sub-Thought: Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Sub-Thought: Previous Day Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Sub-Thought: Combine Intraday and Overnight Returns
+    df['combined_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Sub-Thought: Adjust for Volume
+    df['adjusted_returns'] = df['combined_returns'] * df['volume']
+    
+    # Sub-Thought: Weight by Intraday Volatility
+    df['weighted_adjusted_returns'] = df['intraday_vol'] * df['adjusted_returns']
+    
+    # Sub-Thought: Smoothed Moving Average
+    # Sub-Thought: Simple Moving Average
+    df['sma_weighted_returns'] = df['weighted_adjusted_returns'].rolling(window=5).mean()
+    
+    # Sub-Thought: Exponential Smoothing
+    df['smoothed_returns'] = df['sma_weighted_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Sub-Thought: Conditionally Adjust by Volume Surge
+    # Sub-Thought: 7-Day Average Volume
+    df['avg_volume_7d'] = df['volume'].rolling(window=7).mean()
+    
+    # Sub-Thought: Compare Today's Volume with 7-Day Average
+    df['volume_surge_adj'] = df.apply(lambda row: row['smoothed_returns'] * 1.8 if row['volume'] > row['avg_volume_7d'] else row['smoothed_returns'] * 0.7, axis=1)
+    
+    # Sub-Thought: Integrate High-Low Volatility
+    df['high_low_vol'] = df['intraday_vol'] * df['high_low_range']
+    
+    # Sub-Thought: Generate Final Alpha Factor
+    df['final_alpha_factor'] = (df['volume_surge_adj'] * df['price_momentum_ratio']) + df['high_low_vol']
+    
+    # Sub-Thought: Adjust by Daily Dollar Volume
+    # Sub-Thought: Daily Dollar Volume
+    df['daily_dollar_volume'] = df['volume'] * df['close']
+    
+    # Sub-Thought: Adjust Final Alpha Factor
+    df['alpha_factor'] = df['final_alpha_factor'] / df['daily_dollar_volume']
+    
+    return df['alpha_factor']
+```

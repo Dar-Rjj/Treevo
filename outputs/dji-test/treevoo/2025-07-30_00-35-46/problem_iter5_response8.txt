@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_mean_5d = df['volume'].rolling(window=5).mean()
+    volume_adjustment = (df['volume'] / volume_mean_5d).fillna(1)  # Add 1 to avoid division by zero
+    
+    # Combine Intraday Range and Volume Adjustment
+    adjusted_intraday_range = intraday_range * volume_adjustment
+    
+    # Smoothing
+    ema_5d = adjusted_intraday_range.ewm(span=5).mean()
+    
+    # Calculate Exponential Moving Average (EMA) Cross Signal
+    short_ema = df['close'].ewm(span=5).mean()
+    long_ema = df['close'].ewm(span=20).mean()
+    
+    # Determine Momentum
+    momentum = (short_ema > long_ema).astype(int)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = pd.Series(0, index=df.index)
+    close_diff = df['close'].diff()
+    obv[(close_diff > 0)] += df['volume'][(close_diff > 0)]
+    obv[(close_diff < 0)] -= df['volume'][(close_diff < 0)]
+    
+    # Weight OBV by the Difference between Short and Long EMA
+    weight = (short_ema - long_ema).abs()
+    weighted_obv = obv * weight
+    
+    # Calculate Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = df['close'] - df['open']
+    intraday_momentum = (high_low_diff + open_close_return) / 2
+    
+    # Apply Volume Shock Filter
+    volume_change = df['volume'] / df['volume'].shift(1)
+    volume_shock = (volume_change > 1.5)
+    
+    # Combine Smoothed Intraday Momentum with OBV Factor and Intraday Momentum
+    final_factor = ema_5d * weighted_obv
+    final_factor[volume_shock] *= intraday_momentum[volume_shock]
+    
+    return final_factor
+```

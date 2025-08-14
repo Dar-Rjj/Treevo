@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['High_Low_Range'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Calculate 1-day Price Return
+    df['1_day_Price_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine High-to-Low Range with 1-day Price Return
+    df['Combined_Value'] = df['High_Low_Range'] * 100 + df['1_day_Price_Return']
+    
+    # Apply Exponential Moving Average on Combined Value over 5 days
+    df['EMA_Combined_5d'] = df['Combined_Value'].ewm(span=5).mean()
+    
+    # Momentum Difference
+    df['Momentum_Difference'] = df['EMA_Combined_5d'] - df['EMA_Combined_5d'].shift(5)
+    
+    # Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Multi-Day Price Momentum
+    df['2_day_Price_Return'] = (df['close'] - df['close'].shift(2)) / df['close'].shift(2)
+    df['7_day_Price_Return'] = (df['close'] - df['close'].shift(7)) / df['close'].shift(7)
+    df['14_day_Price_Return'] = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    
+    # Weighted Average Momentum
+    short_term_weight = 0.4
+    medium_term_weight = 0.3
+    long_term_weight = 0.3
+    df['Weighted_Average_Momentum'] = (short_term_weight * df['1_day_Price_Return'] +
+                                       medium_term_weight * df['7_day_Price_Return'] +
+                                       long_term_weight * df['14_day_Price_Return'])
+    
+    # Adjust for Volume Changes
+    df['Daily_Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Final_Volume_Adjustment'] = df['Weighted_Average_Momentum'] * (1 + df['Daily_Volume_Change'] / df['volume'].shift(1))
+    
+    # Integrate Transaction Amount
+    df['Daily_Amount_Change'] = df['amount'] - df['amount'].shift(1)
+    df['Intermediate_Volume_Adjustment'] = df['Final_Volume_Adjustment'] * (1 + df['Daily_Amount_Change'] / df['volume'].shift(1))
+    
+    # Intermediate Factor Combination
+    df['Sum_Smoothing_and_Initial_Momentum'] = df['Momentum_Difference'] + df['Daily_Log_Return']
+    df['Sum_Weighted_and_Volume_Adjusted_Price_Momentum'] = df['Intermediate_Volume_Adjustment'] + df['Daily_Log_Return']
+    
+    # Calculate Volume-Weighted Price Momentum
+    df['Volume_Weighted_Price_Momentum'] = (df['close'] - df['close'].ewm(span=10).mean()) * df['Daily_Log_Return']
+    
+    # Final Factor Construction
+    df['Final_Factor'] = df['Sum_Smoothing_and_Initial_Momentum'] + df['Sum_Weighted_and_Volume_Adjusted_Price_Momentum'] + df['Volume_Weighted_Price_Momentum']
+    
+    return df['Final_Factor']
+```

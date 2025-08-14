@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 7-day and 21-day simple moving averages (SMA) of close prices
+    df['SMA_7'] = df['close'].rolling(window=7).mean()
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+
+    # Compare the current close price with the 7-day SMA
+    df['trend_signal'] = (df['close'] > df['SMA_7']).astype(int) - (df['close'] < df['SMA_7']).astype(int)
+
+    # Determine if the 7-day SMA is rising or falling compared to the 21-day SMA
+    df['sma_trend'] = (df['SMA_7'] > df['SMA_21']).astype(int) - (df['SMA_7'] < df['SMA_21']).astype(int)
+
+    # Calculate the percentage change in volume and close price from the previous day
+    df['volume_change'] = df['volume'].pct_change()
+    df['price_change'] = df['close'].pct_change()
+
+    # Determine if high volume accompanies significant price changes
+    df['vol_price_signal'] = ((df['volume_change'] > 0.5) & (df['price_change'] > 0.05)).astype(int) - \
+                             ((df['volume_change'] > 0.5) & (df['price_change'] < -0.05)).astype(int)
+
+    # Calculate the difference between the current day's open price and the previous day's close price
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['gap_signal'] = (df['gap'] > 0.05 * df['close'].shift(1)).astype(int) - \
+                       (df['gap'] < -0.05 * df['close'].shift(1)).astype(int)
+
+    # Calculate the range between the high and low prices for the day
+    df['range'] = df['high'] - df['low']
+    df['range_signal'] = (df['range'] > df['range'].shift(1)).astype(int) - \
+                         (df['range'] < df['range'].shift(1)).astype(int)
+
+    # Analyze the position of the close price within the range
+    df['close_position'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    df['close_position_signal'] = ((df['close_position'] > 0.8) | (df['close_position'] < 0.2)).astype(int) * \
+                                 (2 * (df['close_position'] > 0.8) - 1)
+
+    # Calculate the ratio of the current day's volume to the average volume over the past 7 days
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=7).mean()
+    df['abnormal_volume'] = ((df['volume_ratio'] > 2) | (df['volume_ratio'] < 0.5)).astype(int) * \
+                            (2 * (df['volume_ratio'] > 2) - 1)
+
+    # Combine volume and intraday price patterns
+    df['combined_signal'] = df['abnormal_volume'] * df['close_position_signal']
+
+    # Generate the final factor value
+    df['alpha_factor'] = (df['trend_signal'] + df['sma_trend'] + df['vol_price_signal'] + 
+                          df['gap_signal'] + df['range_signal'] + df['combined_signal'])
+
+    return df['alpha_factor']
+```

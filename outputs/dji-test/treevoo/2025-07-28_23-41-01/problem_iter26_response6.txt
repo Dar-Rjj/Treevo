@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    close_position_in_range = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Weighted by Volume
+    weighted_daily_return = daily_return * df['volume']
+    
+    # Combine Initial Factors
+    combined_initial_factors = close_position_in_range + weighted_daily_return
+    
+    # Calculate Breakout Strength
+    recent_avg_high_low_range = (df['high'] - df['low']).rolling(window=21).sum()
+    recent_avg_volume = df['volume'].rolling(window=21).sum()
+    breakout_strength = (df['high'] - df['low']) / (recent_avg_high_low_range / recent_avg_volume)
+    
+    # Calculate Intraday Reversal Score
+    intraday_close_to_open_delta = df['close'] - df['open']
+    intraday_reversal_score = (intraday_close_to_open_delta / intraday_range) * df['volume']
+    
+    # Combine Breakout and Intraday Factors
+    combined_breakout_intraday_factors = combined_initial_factors + breakout_strength + intraday_reversal_score
+    
+    # Calculate Price Momentum
+    seven_day_return = (df['close'] / df['close'].shift(7)) - 1
+    twenty_one_day_return = (df['close'] / df['close'].shift(21)) - 1
+    price_momentum = seven_day_return + twenty_one_day_return
+    
+    # Determine Volume Impact
+    volume_ratio = df['volume'] / df['volume'].rolling(window=20).mean()
+    adjusted_factor = combined_breakout_intraday_factors * volume_ratio
+    
+    # Incorporate Momentum
+    factor_with_momentum = adjusted_factor + price_momentum
+    
+    # Integrate Volume Momentum
+    rolling_sum_volume = df['volume'].rolling(window=10).sum()
+    rolling_sum_price_changes = (df['close'] - df['close'].shift(1)).rolling(window=10).sum()
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) * df['volume']
+    
+    # Combine Weighted Return and Price Momentum
+    weighted_close_to_open_return = 0.5 * close_to_open_return
+    weighted_price_momentum = 0.5 * price_momentum
+    combined_value = weighted_close_to_open_return + weighted_price_momentum
+    
+    # Incorporate High-Low Range Signal
+    n_day_average_range = (df['high'] - df['low']).rolling(window=20).mean()
+    high_low_range_signal = (df['high'] - df['low']).gt(n_day_average_range).astype(int)
+    
+    # Final Alpha Factor
+    final_combined_factors = combined_breakout_intraday_factors + factor_with_momentum + combined_value
+    final_factor = 0.9 * final_combined_factors + 0.1 * high_low_range_signal
+    
+    return final_factor
+```

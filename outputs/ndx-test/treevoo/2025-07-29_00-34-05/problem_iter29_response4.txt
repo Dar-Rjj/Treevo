@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Momentum-Volume Integration
+    df['Momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Impact Adjustment
+    df['VolumeImpact'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Daily Dynamic Price Range
+    df['DailyDynamicRange'] = (df['high'] - df['low']) * (df['close'] / df['low'])
+    
+    # Average Trading Price
+    df['AverageTradingPrice'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    
+    # Volume Adjusted Dynamic Range
+    df['VolumeAdjustedDynamicRange'] = df['DailyDynamicRange'] / df['AverageTradingPrice'].replace(0, np.nan) * df['volume']
+    
+    # Short-Term Rolling Avg of Volume Adjusted Dynamic Range
+    df['ShortTermVAvg'] = df['VolumeAdjustedDynamicRange'].rolling(window=15).mean()
+    
+    # Long-Term Rolling Avg of Volume Adjusted Dynamic Range
+    df['LongTermVAvg'] = df['VolumeAdjustedDynamicRange'].rolling(window=25).mean()
+    
+    # Price Volatility
+    df['PriceVolatility'] = df['close'].rolling(window=30).std()
+    
+    # Trade Activity Influence
+    df['TradeActivityInfluence'] = df['amount'] / df['amount'].rolling(window=30).mean()
+    
+    # Combine Momentum and Volume Impact
+    df['CombinedMomentumVolume'] = df['Momentum'] * df['VolumeImpact']
+    
+    # Adjust for Price Volatility
+    df['AdjustedMomentumVolatility'] = df['CombinedMomentumVolume'] / df['PriceVolatility']
+    
+    # Calculate Short-Term and Long-Term Price Momentum
+    df['ShortTermEMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['LongTermEMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['MomentumDifference'] = df['LongTermEMA'] - df['ShortTermEMA']
+    
+    # Assess Volatility Adjustment
+    df['DailyRange'] = df['high'] - df['low']
+    df['AverageRangeVolatility'] = df['DailyRange'].rolling(window=30).mean()
+    
+    # Incorporate Volume Influence
+    df['PositiveVolumeDays'] = (df['volume'] > df['volume'].shift(1)).rolling(window=20).sum()
+    df['NegativeVolumeDays'] = (df['volume'] < df['volume'].shift(1)).rolling(window=20).sum()
+    df['VolumeDeviationScore'] = df['volume'] - df['volume'].rolling(window=30).mean()
+    df['VolumeAcceleration'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Combine Momentum and Volume Indicators
+    df['ShortTermMomentumVolume'] = df['ShortTermEMA'] * df['PositiveVolumeDays']
+    df['LongTermMomentumVolume'] = df['LongTermEMA'] * df['NegativeVolumeDays']
+    df['AdjustedMomentumDifference'] = df['MomentumDifference'] / df['AverageRangeVolatility']
+    df['FinalMomentumVolume'] = df['AdjustedMomentumDifference'] * df['VolumeAcceleration']
+    
+    # Volume Adjusted Range
+    df['VolumeAdjustedRange'] = ((df['high'] - df['low']) / ((df['high'] + df['low'] + df['close']) / 3)) * df['volume']
+    
+    # Short-Term Rolling Average of Volume Adjusted Range
+    df['ShortTermVARAvg'] = df['VolumeAdjustedRange'].rolling(window=10).mean()
+    
+    # Long-Term Rolling Average of Volume Adjusted Range
+    df['LongTermVARAvg'] = df['VolumeAdjustedRange'].rolling(window=20).mean()
+    
+    # Final Alpha Factor
+    df['AlphaFactor'] = (df['ShortTermVAvg'] - df['LongTermVAvg'] + 
+                         df['ShortTermVARAvg'] - df['LongTermVARAvg'] + 
+                         df['VolumeDeviationScore'])
+    df['AlphaFactor'] = df['AlphaFactor'] / df['PriceVolatility']
+    df['AlphaFactor'] = df['AlphaFactor'] * df['TradeActivityInfluence']
+    
+    return df['AlphaFactor']
+```

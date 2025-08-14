@@ -1,0 +1,67 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['Daily_Range'] = df['High'] - df['Low']
+    
+    # Calculate Rolling Median of High-to-Low Range
+    df['14_Day_Median_Range'] = df['Daily_Range'].rolling(window=14).median()
+    
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['Close'] - df['Open']
+    
+    # Compute 5-Day and 10-Day Exponential Moving Average of Price Change
+    df['5_Day_EMA_Price_Change'] = df['Daily_Price_Change'].ewm(span=5, adjust=False).mean()
+    df['10_Day_EMA_Price_Change'] = df['Daily_Price_Change'].ewm(span=10, adjust=False).mean()
+    
+    # Determine Reversal Signal
+    df['Reversal_Signal'] = np.where(
+        (df['5_Day_EMA_Price_Change'] > df['10_Day_EMA_Price_Change']) & 
+        (df['5_Day_EMA_Price_Change'].shift(1) < df['10_Day_EMA_Price_Change'].shift(1)), 1,
+        np.where(
+            (df['5_Day_EMA_Price_Change'] < df['10_Day_EMA_Price_Change']) & 
+            (df['5_Day_EMA_Price_Change'].shift(1) > df['10_Day_EMA_Price_Change'].shift(1)), -1, 0
+        )
+    )
+    
+    # Amplify or Dampen Reversal Signal based on 14-day Rolling Median of High-to-Low Range
+    df['Adjusted_Reversal_Signal'] = df['Reversal_Signal'] * (df['14_Day_Median_Range'] / df['14_Day_Median_Range'].std())
+    
+    # Filter by Volume
+    volume_threshold = df['Volume'].quantile(0.75)  # Consider signal if volume is above the 75th percentile
+    df['Filtered_Reversal_Signal'] = df['Adjusted_Reversal_Signal'] * (df['Volume'] > volume_threshold)
+    
+    # Calculate Volume Adjusted Price (VAP)
+    df['Typical_Price'] = (df['High'] + df['Low'] + df['Close']) / 3
+    df['VAP'] = df['Typical_Price'] * df['Volume']
+    
+    # Calculate Volume Adjusted Momentum
+    df['20_Day_EMA_VAP'] = df['VAP'].ewm(span=20, adjust=False).mean()
+    df['Volume_Adjusted_Momentum'] = df['VAP'] - df['20_Day_EMA_VAP']
+    
+    # Incorporate Recent Volatility
+    df['Daily_Returns'] = df['Close'].pct_change()
+    df['10_Day_Volatility'] = df['Daily_Returns'].rolling(window=10).std()
+    df['Inverse_Volatility'] = 1 / df['10_Day_Volatility']
+    df['Volatility_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'] * df['Inverse_Volatility']
+    
+    # Calculate High-Low Range Volatility
+    df['20_Day_HL_Volatility'] = df['Daily_Range'].rolling(window=20).std()
+    
+    # Calculate Open-Close Range Volatility
+    df['Daily_OC_Range'] = df['Close'] - df['Open']
+    df['20_Day_OC_Volatility'] = df['Daily_OC_Range'].rolling(window=20).std()
+    
+    # Combine Crossover Momentum and Composite Volatility
+    df['Composite_Volatility'] = (df['20_Day_HL_Volatility'] + df['20_Day_OC_Volatility']) / 2
+    df['Final_Factor'] = df['Volatility_Adjusted_Momentum'] - df['Composite_Volatility']
+    
+    return df['Final_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)

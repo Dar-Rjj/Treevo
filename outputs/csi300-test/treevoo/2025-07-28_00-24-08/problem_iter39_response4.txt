@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day's Overnight Return
+    overnight_return = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Weight High-Low Range by Volume
+    high_low_range = (df['high'] - df['low']) * df['volume']
+    
+    # Adjust for Combined Volatility
+    adjusted_returns = aggregate_returns * high_low_range
+    
+    # Smoothed Moving Average
+    sma = adjusted_returns.rolling(window=5).mean()
+    exp_sma = sma.ewm(span=5, adjust=False).mean()
+    
+    # Short-Term Price Momentum
+    short_momentum = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    long_momentum = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    momentum_ratio = short_momentum / long_momentum
+    
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    integrated_factor = intraday_return * overnight_return * momentum_ratio
+    avg_volume = df['volume'].mean()
+    volume_adjustment = 1.7 if df['volume'] > avg_volume else 0.3
+    integrated_factor *= volume_adjustment
+    
+    # Compute Price Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    price_momentum = log_returns.rolling(window=20).sum()
+    
+    # Apply Volume Confirmation
+    volume_confirmation = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Generate Final Momentum Factor
+    final_momentum = price_momentum * volume_confirmation
+    
+    # Incorporate High-Low Volatility into Final Factor
+    high_low_volatility = (df['high'] - df['low']) * (intraday_return.rolling(window=5).std())
+    
+    # Integrate All Components
+    combined_factor = exp_sma + final_momentum + high_low_volatility
+    
+    # Incorporate Historical Volatility
+    historical_volatility = df['close'].pct_change().rolling(window=20).std() * df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_return.rolling(window=5).std()
+    
+    # Combine Intraday and Historical Volatility
+    combined_volatility = (intraday_volatility + historical_volatility) / 2
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor + combined_volatility
+    
+    return final_alpha_factor
+```

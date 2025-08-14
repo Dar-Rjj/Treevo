@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    df['intraday_reversal_score'] = 1 / (1 + df['intraday_return'])
+    
+    # Adjust for Volume and Amount
+    df['avg_vol_5d'] = df['volume'].rolling(window=5).mean()
+    df['avg_amt_5d'] = df['amount'].rolling(window=5).mean()
+    df['scaled_high_low_range'] = df['high_low_range'] * (df['avg_vol_5d'] / df['avg_amt_5d'])
+    
+    # Integrate Momentum, Reversal, and Volume-Amount Adjustment
+    df['hl_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    df['hl_momentum_5d'] = df['hl_momentum'].rolling(window=5).sum()
+    df['combined_momentum'] = df['hl_momentum_5d'] * df['intraday_reversal_score']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Price Change Momentum
+    df['price_change_momentum'] = df['close'] - df['open'].shift(1)
+    
+    # Calculate Volume Delta
+    df['volume_delta'] = df['volume'] - df['volume'].shift(1)
+    
+    # Confirm with Volume, Amount, and Close-to-Open Movement
+    df['vol_rank'] = df['volume'].rank(pct=True)
+    df['amt_rank'] = df['amount'].rank(pct=True)
+    df['c_o_diff'] = df['close'] - df['open']
+    
+    # Multiply by Combined High-Low and Reversal
+    df['combined_signal'] = (df['combined_momentum'] * df['c_o_diff'] * df['vol_rank'] * df['amt_rank'])
+    
+    # Apply a Smoothing Filter to the Combined Signal
+    df['final_factor'] = df['combined_signal'].ewm(span=5, adjust=False).mean()
+    
+    return df['final_factor']
+```

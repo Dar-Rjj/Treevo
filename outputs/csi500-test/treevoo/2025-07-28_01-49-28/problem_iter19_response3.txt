@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20):
+    # Simple Momentum for Close Prices
+    simple_momentum = df['close'] - df['close'].shift(n)
+    
+    # Average Volume (t to t-n)
+    avg_volume = df['volume'].rolling(window=n).mean()
+    
+    # Adjusted Momentum by Volume
+    adjusted_momentum = simple_momentum * (df['volume'] / avg_volume)
+    
+    # Open-to-Close Movement
+    open_to_close = df['close'] - df['open']
+    
+    # Combine Indicators: Weighted Sum of Adjusted Momentum and Open-to-Close Movement
+    combined_indicator = 0.5 * adjusted_momentum + 0.5 * open_to_close
+    
+    # Filter for Strong Moves
+    strong_move = (combined_indicator > 0.1).astype(int)
+    
+    # High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # High-to-Low Return
+    high_low_return = high_low_range / df['close'].shift(1)
+    
+    # Moving Sum of High-Low Price Spread (Last 20 Days)
+    moving_sum_high_low = high_low_range.rolling(window=n).sum()
+    
+    # Spread Momentum
+    spread_momentum = moving_sum_high_low - moving_sum_high_low.shift(1)
+    
+    # Combined Momentum, High-Low Return, and Strong Move Indicator
+    combined_momentum = adjusted_momentum + high_low_return + strong_move
+    
+    # Open-High Price Difference
+    open_high_diff = df['high'] - df['open']
+    
+    # Open-Low Price Difference
+    open_low_diff = df['open'] - df['low']
+    
+    # Weighted Average by Volume
+    weighted_avg_diff = (open_high_diff + open_low_diff) * df['volume'] / df['volume'].rolling(window=n).mean()
+    
+    # Adjust Volatility by Volume Change
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volatility_adjusted = weighted_avg_diff * volume_change
+    
+    # Calculate Volume-Weighted Close Price
+    volume_weighted_close = df['close'] * df['volume']
+    
+    # Moving Average of Volume-Weighted Close Price (Last 20 Days)
+    ma_volume_weighted_close = volume_weighted_close.rolling(window=n).mean()
+    
+    # Volume-Weighted Momentum
+    volume_weighted_momentum = volume_weighted_close - ma_volume_weighted_close
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    sum_amounts = df['amount'].rolling(window=n).sum()
+    ratio_amounts = sum_amounts / df['close']
+    prev_ratio_amounts = df['amount'].rolling(window=n*2).sum() / df['close'].shift(n)
+    differential_ratios = ratio_amounts - prev_ratio_amounts
+    
+    # Final Alpha Factor
+    alpha_factor = combined_momentum + volume_weighted_momentum + differential_ratios
+    return alpha_factor
+```

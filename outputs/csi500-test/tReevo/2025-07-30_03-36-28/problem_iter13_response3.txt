@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, short_sma_period=20, long_sma_period=200, vol_lookback=20, pct_change_lookback=10, turnover_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['short_sma'] = df['close'].rolling(window=short_sma_period).mean()
+    df['long_sma'] = df['close'].rolling(window=long_sma_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_hl_diff'] = df['high_low_diff'] * df['volume']
+    df['vol_adjusted_volatility'] = df['vol_weighted_hl_diff'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['short_sma']) / df['close'].rolling(window=short_sma_period).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['pct_change_close'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['market_trend'] = np.where(df['short_sma'] > df['long_sma'], 1, -1)  # 1 for Bullish, -1 for Bearish
+    
+    # Incorporate Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['rolling_turnover'] = df['daily_turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Define Weights for Each Component
+    base_weights = {
+        'price_momentum': 0.3,
+        'vol_adjusted_volatility': 0.2,
+        'pct_change_close': 0.1,
+        'high_low_range': 0.1,
+        'rolling_turnover': 0.3
+    }
+    
+    # Adjust Weights Based on Market Trend
+    df['adjusted_weight_price_momentum'] = df['market_trend'].apply(lambda x: base_weights['price_momentum'] * (1 + 0.1 * x))
+    df['adjusted_weight_vol_adjusted_volatility'] = base_weights['vol_adjusted_volatility']
+    df['adjusted_weight_pct_change_close'] = base_weights['pct_change_close']
+    df['adjusted_weight_high_low_range'] = base_weights['high_low_range']
+    df['adjusted_weight_rolling_turnover'] = df['rolling_turnover'].apply(lambda x: base_weights['rolling_turnover'] * (1 + 0.1 * (x - df['rolling_turnover'].mean()) / df['rolling_turnover'].std()))
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['price_momentum'] * df['adjusted_weight_price_momentum'] +
+        df['vol_adjusted_volatility'] * df['adjusted_weight_vol_adjusted_volatility'] +
+        df['pct_change_close'] * df['adjusted_weight_pct_change_close'] +
+        df['high_low_range'] * df['adjusted_weight_high_low_range'] +
+        df['rolling_turnover'] * df['adjusted_weight_rolling_turnover']
+    )
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor_series = heuristics_v2(df)
+```

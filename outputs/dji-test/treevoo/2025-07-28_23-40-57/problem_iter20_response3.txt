@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread and Intraday Movement
+    df['High-Low_Spread'] = df['high'] - df['low']
+    df['Breakout_Momentum'] = df['High-Low_Spread'] / df['close'].shift(1)
+
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(20)
+
+    # Calculate Intraday Returns
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Intraday Volume Proportion
+    df['Intraday_Volume'] = df['volume'] - (df['volume'].shift(1) + df['volume'].diff())
+
+    # Calculate Intraday Volume Intensity
+    df['Intraday_Volume_Intensity'] = df['Intraday_Volume'] / (df['high'] - df['low'])
+
+    # Adjust by Cumulative Volume
+    df['Cumulative_Volume'] = df['volume'].rolling(window=20).sum()
+    df['Adjusted_Momentum'] = (df['Breakout_Momentum'] + df['Price_Momentum']) / df['Cumulative_Volume']
+
+    # Calculate Volume-Weighted and Amount-Weighted Movements
+    df['Volume_Weighted_Intraday'] = df['Intraday_Return'] * df['volume']
+    df['Amount_Weighted_Intraday'] = df['Intraday_Return'] * df['amount']
+    df['Volume_Adjusted_Breakout'] = df['Breakout_Momentum'] / df['Cumulative_Volume']
+    df['Amount_Adjusted_Breakout'] = df['Breakout_Momentum'] / df['amount'].rolling(window=20).sum()
+
+    # Incorporate Opening Trend and Amount Impact
+    df['Opening_Trend'] = df['open'] - df['close'].shift(1)
+    df['Amount_Weighted_Opening_Trend'] = df['Opening_Trend'] * df['amount']
+
+    # Combine Weighted Movements
+    df['Combined_Movements'] = (
+        df['Volume_Weighted_Intraday'] +
+        df['Volume_Adjusted_Breakout'] +
+        df['Amount_Weighted_Intraday'] +
+        df['Amount_Adjusted_Breakout'] +
+        df['Amount_Weighted_Opening_Trend']
+    )
+
+    # Calculate Weighted Intraday Volume Intensity
+    df['Weighted_Intraday_Volume_Intensity'] = df['Intraday_Volume_Intensity'] * df['Intraday_Return']
+
+    # Incorporate Trend Strength
+    df['Short_EMA'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['Long_EMA'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = df['Short_EMA'] - df['Long_EMA']
+    df['Trend_Adjusted_Combined'] = df['Combined_Movements'] * df['MACD']
+
+    # Calculate Moving Averages
+    df['5_day_MA_Volume_Weighted'] = df['Volume_Weighted_Intraday'].rolling(window=5).mean()
+    df['5_day_MA_Amount_Weighted'] = df['Amount_Weighted_Intraday'].rolling(window=5).mean()
+    df['5_day_MA_Amount_Weighted_Opening_Trend'] = df['Amount_Weighted_Opening_Trend'].rolling(window=5).mean()
+
+    # Aggregate and Adjust Momentum
+    df['Final_Factor'] = (
+        df['Trend_Adjusted_Combined'] -
+        df['5_day_MA_Volume_Weighted'] -
+        df['5_day_MA_Amount_Weighted'] -
+        df['5_day_MA_Amount_Weighted_Opening_Trend']
+    )
+
+    return df['Final_Factor']
+```

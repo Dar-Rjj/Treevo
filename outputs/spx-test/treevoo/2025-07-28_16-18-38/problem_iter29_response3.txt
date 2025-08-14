@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, amount_col='amount', lookback_period=14, ema_short_span=7, ema_long_span=21, ema_price_short_span=5, ema_price_long_span=14, sma_amount_return_span=5, smoothing_factor=0.2):
+    # Calculate Hybrid High-to-Low Range
+    high = df['high']
+    low = df['low']
+    
+    # Compute Volume-Weighted High and Low
+    vol_weighted_high = (high * df['volume']).rolling(window=lookback_period).sum()
+    vol_weighted_low = (low * df['volume']).rolling(window=lookback_period).sum()
+    total_volume = df['volume'].rolling(window=lookback_period).sum()
+    vol_weighted_diff = (vol_weighted_high - vol_weighted_low) / total_volume
+    
+    # Compute Dynamic Momentum
+    high_low_diff = high - low
+    sma_high_low = high_low_diff.rolling(window=lookback_period).mean()
+    raw_momentum = high_low_diff - sma_high_low
+    dynamic_momentum = raw_momentum.ewm(alpha=smoothing_factor).mean()
+    
+    # Combine Volume-Weighted High-Low Range and Dynamic Momentum
+    combined_value = 0.5 * (vol_weighted_diff + dynamic_momentum)
+    
+    # Transform to Bounded Range Without Normalization
+    min_value = 0
+    max_value = combined_value.max() - combined_value.min()
+    offset = -combined_value.min() + min_value
+    scaled_value = (combined_value + offset) * (100 / max_value)
+    
+    # Compute EMA Components
+    ema_short = scaled_value.ewm(span=ema_short_span).mean()
+    ema_long = scaled_value.ewm(span=ema_long_span).mean()
+    
+    # Compute Ratio of EMAs
+    ema_ratio = ema_short / ema_long
+    
+    # Compute Price Oscillator
+    close_ema_short = df['close'].ewm(span=ema_price_short_span).mean()
+    close_ema_long = df['close'].ewm(span=ema_price_long_span).mean()
+    price_oscillator = close_ema_short - close_ema_long
+    
+    # Compute Amount-Adjusted Return
+    daily_return = df['close'].pct_change()
+    amount_adjusted_return = daily_return * df[amount_col]
+    amount_adjusted_return_sma = amount_adjusted_return.rolling(window=sma_amount_return_span).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = ema_ratio * amount_adjusted_return_sma + price_oscillator
+    
+    return alpha_factor
+```

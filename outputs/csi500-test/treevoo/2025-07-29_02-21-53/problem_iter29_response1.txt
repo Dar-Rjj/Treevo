@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute True Range using High, Low, and Previous Close
+    df['PrevClose'] = df['close'].shift(1)
+    df['TrueRange'] = df[['high', 'low']].sub(df['PrevClose'], axis=0).abs().max(axis=1)
+    
+    # Multiply True Range by Volume
+    df['VolumeAdjustedTrueRange'] = df['TrueRange'] * df['volume']
+    
+    # Apply Exponential Moving Average (20-day) to Daily High-Low Differences
+    df['SmoothedHighLowRange'] = df['high'] - df['low']
+    df['SmoothedHighLowRange'] = df['SmoothedHighLowRange'].ewm(span=20, adjust=False).mean()
+    
+    # Combine Volume-Adjusted True Range and Smoothed High-Low Ranges
+    df['CombinedFactor'] = df['VolumeAdjustedTrueRange'] + df['SmoothedHighLowRange']
+    
+    # Add Interaction Term (Smoothed High-Low Range * High-Low Difference)
+    df['InteractionTerm'] = df['SmoothedHighLowRange'] * (df['high'] - df['low'])
+    df['CombinedFactor'] += df['InteractionTerm']
+    
+    # Calculate 5-day and 20-day Simple Moving Averages of Close Prices
+    df['SMA5'] = df['close'].rolling(window=5).mean()
+    df['SMA20'] = df['close'].rolling(window=20).mean()
+    
+    # Compute the Difference between 5-day and 20-day Moving Averages
+    df['PriceMomentum'] = df['SMA5'] - df['SMA20']
+    
+    # Integrate into Final Alpha Factor
+    df['FinalAlphaFactor'] = df['CombinedFactor'] + df['PriceMomentum']
+    
+    return df['FinalAlphaFactor']
+```

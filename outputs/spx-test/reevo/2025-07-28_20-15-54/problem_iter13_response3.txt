@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the adaptive EMA (Exponential Moving Average) for close prices
+    ema_close = df['close'].ewm(span=14, adjust=False).mean()
+    
+    # Calculate the RSI (Relative Strength Index)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rsi = 100 - (100 / (1 + (gain / (loss + 1e-7))))
+    
+    # Calculate the MFI (Money Flow Index)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_money_flow_sum = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_sum = negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + (positive_money_flow_sum / (negative_money_flow_sum + 1e-7))))
+    
+    # Calculate the MACD (Moving Average Convergence Divergence)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal_line = macd.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd - signal_line
+    
+    # Calculate the On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Integrate interaction terms for more comprehensive signals
+    interaction_term_1 = (rsi - 50) * (macd_histogram / (ema_close + 1e-7))
+    interaction_term_2 = (mfi - 50) * (obv / (df['volume'].rolling(window=5).mean() + 1e-7))
+    interaction_term_3 = (rsi - 50) * (mfi - 50) * (macd_histogram / (ema_close + 1e-7))
+    
+    # Combine the factors in a heuristic way
+    alpha_factor = interaction_term_1 * interaction_term_2 * interaction_term_3
+    
+    return alpha_factor.dropna()
+```

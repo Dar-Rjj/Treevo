@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday Price Indicators
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum'] = df['volume'] * (df['High_Low_Range'] + df['Close_Open_Diff'])
+
+    # Apply Adaptive Smoothing (10-day EMA)
+    df['Volume_Adjusted_Momentum_EMA'] = df['Volume_Adjusted_Momentum'].ewm(span=10).mean()
+
+    # Adjust for Dynamic Market Volatility
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Absolute_Daily_Returns'] = df['Daily_Returns'].abs()
+    df['Dynamic_Market_Volatility'] = df['Daily_Returns'].rolling(window=5).std()
+
+    # Modify Volume-Adjusted Momentum with Dynamic Market Volatility
+    df['Modified_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum_EMA'] / df['Dynamic_Market_Volatility']
+
+    # Integrate Non-Linear Transformations
+    df['Sqrt_Modified_VAM'] = np.sqrt(np.abs(df['Modified_Volume_Adjusted_Momentum']))
+    df['Log_Modified_VAM'] = np.log1p(np.abs(df['Modified_Volume_Adjusted_Momentum']))
+
+    # Incorporate Early Reversal Signals
+    df['Short_Term_Momentum'] = df['close'].ewm(span=5).mean()
+    df['Long_Term_Momentum'] = df['close'].ewm(span=20).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    df['Reversal_Signal_5day_EMA'] = df['Momentum_Reversal'].ewm(span=5).mean()
+    df['Reversal_Signal_10day_EMA'] = df['Momentum_Reversal'].ewm(span=10).mean()
+    df['Smoothed_Reversal_Signal'] = (df['Reversal_Signal_5day_EMA'] + df['Reversal_Signal_10day_EMA']) / 2
+
+    # Refine Final Alpha Factor
+    df['Interim_Alpha_Factor'] = df['Smoothed_Reversal_Signal'] + df['Sqrt_Modified_VAM'] + df['Log_Modified_VAM']
+
+    # Apply Final Advanced Adaptive Smoothing
+    df['Final_Alpha_Factor_5day_EMA'] = df['Interim_Alpha_Factor'].ewm(span=5).mean()
+    df['Final_Alpha_Factor_10day_EMA'] = df['Interim_Alpha_Factor'].ewm(span=10).mean()
+    df['Final_Alpha_Factor'] = (df['Final_Alpha_Factor_5day_EMA'] + df['Final_Alpha_Factor_10day_EMA']) / 2
+
+    return df['Final_Alpha_Factor']
+```

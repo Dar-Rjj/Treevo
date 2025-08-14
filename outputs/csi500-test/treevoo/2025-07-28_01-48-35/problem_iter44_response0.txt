@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_intraday_ratio = df['close'] / intraday_range
+    
+    # Short-Term Price Change
+    short_term_change = df['close'] - df['close'].shift(5)
+    
+    # Adjust for Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    high_low_open_close = (df['high'] - df['low']) + (df['open'] - df['close'].shift(1))
+    
+    # Measure Closing Behavior
+    closing_behavior = df['close'] / df['close'].shift(1)
+    
+    # Final Combined Factor
+    final_combined_factor = (high_low_open_close * closing_behavior).apply(lambda x: max(x, 0))
+    
+    # Calculate Momentum Component
+    momentum_component = close_to_intraday_ratio * df['close'].pct_change().rolling(window=5).sum()
+    
+    # Adjust for Volume Activity
+    volume_change = df['volume'] - df['volume'].shift(5)
+    avg_volume_10d = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change / avg_volume_10d
+    dynamic_coefficient = volume_change_rate.apply(lambda x: 2.0 if x > 2 else (-1.5 if x < -1 else 0.8))
+    
+    # Integrate Price Trend
+    ema_20d = df['close'].ewm(span=20).mean()
+    price_trend = df['close'] - ema_20d
+    
+    # Volume-Weighted Intraday Return
+    scaled_volume = df['volume'] / df['volume'].rolling(window=15).mean()
+    intraday_return = (df['close'] - df['open']) * scaled_volume
+    
+    # Volume-Adjusted High-Low Spread
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    vol_adjusted_high_low_spread = (df['high'] - df['low']) * (df['volume'] / avg_volume_5d)
+    
+    # Composite Factor
+    composite_factor = (final_combined_factor * momentum_component) + intraday_return + vol_adjusted_high_low_spread
+    
+    # Smooth the Composite Factor
+    smoothed_composite_factor = composite_factor.rolling(window=7).mean()
+    
+    return smoothed_composite_factor
+```

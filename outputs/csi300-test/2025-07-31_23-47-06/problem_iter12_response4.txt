@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    high_low_range = df['high'] - df['low']
+    close_open_diff = df['close'] - df['open']
+    intraday_price_movement = (high_low_range + close_open_diff) / 2  # Average of the two measures
+
+    # Incorporate Volume Influence
+    volume_adjusted_momentum = intraday_price_movement * df['volume']
+    volume_adjusted_momentum_ema = volume_adjusted_momentum.ewm(span=10, adjust=False).mean()
+
+    # Adjust for Market Volatility
+    daily_return = df['close'].pct_change()
+    abs_daily_return = daily_return.abs()
+    market_volatility = daily_return.rolling(window=30).std()
+    modified_volume_adjusted_momentum = volume_adjusted_momentum_ema - market_volatility
+
+    # Incorporate Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_signal = np.sign(momentum_reversal)
+
+    # Integrate Non-Linear Transformation
+    sqrt_transformed_momentum = np.sqrt(modified_volume_adjusted_momentum)
+    log_transformed_momentum = np.log(modified_volume_adjusted_momentum + 1e-6)  # Adding a small constant to avoid log(0)
+    non_linear_transformed_momentum = (sqrt_transformed_momentum + log_transformed_momentum) / 2  # Average of the two measures
+
+    # Integrate Reversal Signal into Final Factor
+    interim_alpha_factor = non_linear_transformed_momentum + reversal_signal
+    final_alpha_factor = interim_alpha_factor.ewm(span=5, adjust=False).mean()
+
+    return final_alpha_factor
+```

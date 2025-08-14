@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'].pct_change()
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    df['combined_factor'] = (df['close_to_open_return'] * df['volume']) / df['daily_volatility']
+    
+    # Adjust for Opening Gap
+    df['open_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_range'] = (df['high'] - df['low']) - df['open_gap']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    df['price_movement_ratio'] = df['close'] / df['open']
+    
+    # Combine Momentum Indicators
+    df['momentum_indicator'] = (df['price_movement_ratio'].rolling(window=5).sum() + df['close_to_open_return'])
+    
+    # Incorporate Volume and Amount Momentum
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean().shift(1)
+    df['volume_change'] = df['volume'] - df['avg_volume_10d']
+    df['avg_amount_10d'] = df['amount'].rolling(window=10).mean().shift(1)
+    df['amount_change'] = df['amount'] - df['avg_amount_10d']
+    
+    df['combined_momentum'] = df['momentum_indicator'] * (df['volume_change'] + df['amount_change'])
+    
+    # Apply Time Series Momentum
+    df['alpha_factor_ma'] = df['combined_momentum'].rolling(window=10).mean()
+    df['ts_momentum'] = df['combined_momentum'] - df['alpha_factor_ma']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] / df['low'] - 1
+    
+    # Compute 10-Day Price Momentum
+    df['10d_price_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    df['volume_change_indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Calculate Price Trend Indicator
+    df['short_sma'] = df['close'].rolling(window=5).mean()
+    df['long_sma'] = df['close'].rolling(window=20).mean()
+    df['price_trend_indicator'] = (df['short_sma'] > df['long_sma']).astype(int) * 2 - 1
+    
+    # Combine Intraday and 10-Day Momentum
+    df['combined_momentum'] = df['intraday_return'] + df['10d_price_momentum']
+    
+    # Apply Volume Confirmation
+    df['confirmed_momentum'] = df['combined_momentum'] * df['volume_change_indicator']
+    df['confirmed_momentum'] = df['confirmed_momentum'].where(df['volume_change'] > 0, 0)
+    
+    # Integrate Both Metrics
+    df['integrated_metrics'] = 0.5 * df['adjusted_range'] + 0.5 * df['confirmed_momentum']
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = 0.5 * df['ts_momentum'] + 0.5 * df['integrated_metrics']
+    
+    # Smooth the Result
+    df['smoothed_alpha_factor'] = df['final_alpha_factor'].ewm(span=10, adjust=False).mean()
+    
+    return df['smoothed_alpha_factor']
+```

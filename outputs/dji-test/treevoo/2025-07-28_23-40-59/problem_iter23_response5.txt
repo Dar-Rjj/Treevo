@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['IntradaySpread'] = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    df['IRWAP'] = (df['close'] * df['volume']).rolling(window=1).sum() / df['volume'].rolling(window=1).sum()
+    
+    # Evaluate IRWAP Difference
+    df['IRWAPDiff'] = df['close'] - df['IRWAP']
+    
+    # Calculate Adjusted Volume
+    df['AdjustedVolume'] = df['volume'] / df['IntradaySpread']
+    
+    # Integrate Volume-Adjusted Log Return
+    df['LogReturn'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['VolAdjLogReturn'] = df['AdjustedVolume'] * df['LogReturn']
+    
+    # Compare Latest Volume to M-day Average
+    M = 30
+    df['AvgVolumeM'] = df['volume'].rolling(window=M).mean()
+    df['VolumeScore'] = np.where(df['volume'] > df['AvgVolumeM'], 1, -1)
+    
+    # Compare Latest Amount to K-day Average
+    K = 30
+    df['AvgAmountK'] = df['amount'].rolling(window=K).mean()
+    df['AmountScore'] = np.where(df['amount'] > df['AvgAmountK'], 1, -1)
+    
+    # Calculate Long-Term Moving Average (LMA) and Short-Term Moving Average (SMA)
+    df['LMA'] = df['close'].rolling(window=200).mean()
+    df['SMA'] = df['close'].rolling(window=50).mean()
+    df['LMA_SMA_Diff'] = df['LMA'] - df['SMA']
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['DailyReturn'] = (df['close'] / df['close'].shift(1)) - 1
+    df['AdjDailyReturn'] = df['DailyReturn'] / df['IntradaySpread']
+    
+    # Smooth the Adjusted Return
+    df['SmoothAdjReturn'] = df['AdjDailyReturn'].rolling(window=5).mean()
+    
+    # Calculate Short-Term Momentum
+    df['ShortTermMomentum'] = df['LogReturn'].rolling(window=7).sum()
+    
+    # Calculate Long-Term Momentum
+    df['LongTermMomentum'] = df['LogReturn'].rolling(window=25).sum()
+    
+    # Combine Short and Long-Term Momentum
+    df['CombinedMomentum'] = df['ShortTermMomentum'] - df['LongTermMomentum']
+    
+    # Introduce Price Volatility Component
+    df['PriceVolatility'] = (df['high'] - df['low']).rolling(window=10).std()
+    df['AdjCombinedMomentum'] = df['CombinedMomentum'] / df['PriceVolatility']
+    
+    # Confirm with Volume Trends
+    df['AvgVolume20'] = df['volume'].rolling(window=20).mean()
+    df['VolumeTrendConfirmation'] = np.where(df['volume'] > df['AvgVolume20'], 1, -1)
+    
+    # Introduce Open-Price Based Momentum
+    df['OpenLogReturn'] = np.log(df['open']) - np.log(df['open'].shift(1))
+    df['OpenPriceMomentum'] = df['OpenLogReturn'].rolling(window=7).sum()
+    
+    # Combine Open-Price Based Momentum
+    df['CombOpenPriceMom'] = df['OpenPriceMomentum'] - df['LongTermMomentum']
+    
+    # Final Factor Calculation
+    df['FinalAlphaFactor'] = (
+        df['IRWAPDiff'] +
+        df['SmoothAdjReturn'] +
+        df['AdjCombinedMomentum'] +
+        df['VolumeTrendConfirmation'] +
+        df['CombOpenPriceMom']
+    )
+    
+    return df['FinalAlphaFactor']
+```

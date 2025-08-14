@@ -1,0 +1,101 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    daily_returns = df['close'].pct_change()
+    
+    # Identify Trend Strength
+    # Compute Moving Averages
+    short_mavg = df['close'].rolling(window=10).mean()
+    long_mavg = df['close'].rolling(window=50).mean()
+    trend_strength = (short_mavg - long_mavg) / df['close']
+    
+    # Determine Trend Direction
+    trend_direction = (df['close'] - df['close'].shift(1)) > 0
+    
+    # Analyze Price Volatility
+    # Calculate High-Low Range
+    high_low_range = (df['high'] - df['low']) / df['close']
+    
+    # Measure Average True Range
+    true_range = df[['high' - 'low', (df['high'] - df['close'].shift(1)).abs(), (df['low'] - df['close'].shift(1)).abs()]].max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Evaluate Volume and Amount
+    # Calculate Volume Changes
+    volume_change = df['volume'].pct_change()
+    
+    # Measure Volume Relative to Price Movements
+    volume_price_ratio = df['volume'] / df['close'].pct_change().abs()
+    
+    # Analyze Amount Traded
+    # Compute Daily Dollar Volume
+    daily_dollar_volume = df['close'] * df['volume']
+    
+    # Investigate Price and Volume Interaction
+    # Detect Volume Clusters at Key Price Levels
+    price_bands = pd.cut(df['close'], bins=10, labels=False)
+    volume_clusters = df.groupby(price_bands)['volume'].sum()
+    volume_clusters = volume_clusters.loc[price_bands].values
+    
+    # Analyze Volume and Price Reversals
+    volume_reversal = (df['volume'] > df['volume'].shift(1)) & ((df['close'] - df['open']) < 0)
+    
+    # Assess Market Sentiment
+    # Calculate Open-Close Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Measure Open-High and Low-Close Gaps
+    open_high_gap = (df['high'] - df['open']) / df['close']
+    low_close_gap = (df['close'] - df['low']) / df['close']
+    
+    # Identify Breakout Patterns
+    breakout_pattern = (df['high'] > df['high'].rolling(window=20).max()) | (df['low'] < df['low'].rolling(window=20).min())
+    
+    # Examine Momentum and Reversal Signals
+    # Calculate RSI
+    gain = daily_returns.where(daily_returns > 0, 0)
+    loss = -daily_returns.where(daily_returns < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Measure MACD
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd - signal
+    
+    # Identify Overbought and Oversold Conditions
+    overbought = rsi > 70
+    oversold = rsi < 30
+    
+    # Detect Divergences between Price and Indicators
+    price_rsi_divergence = (df['close'] > df['close'].shift(1)) & (rsi < rsi.shift(1))
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        trend_strength + 
+        high_low_range + 
+        atr + 
+        volume_change + 
+        volume_price_ratio + 
+        daily_dollar_volume + 
+        volume_clusters + 
+        volume_reversal.astype(int) + 
+        open_close_spread + 
+        open_high_gap + 
+        low_close_gap + 
+        breakout_pattern.astype(int) + 
+        rsi + 
+        macd_histogram + 
+        overbought.astype(int) + 
+        oversold.astype(int) + 
+        price_rsi_divergence.astype(int)
+    )
+    
+    return alpha_factor
+```

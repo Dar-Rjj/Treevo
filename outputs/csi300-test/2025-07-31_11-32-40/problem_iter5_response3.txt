@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    momentum_lookback = 20
+    df['price_diff'] = df['close'].diff()
+    df['momentum_ema'] = df['price_diff'].ewm(span=momentum_lookback, adjust=False).mean()
+
+    # Adjust by Volume Change
+    volume_lookback = 20
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_sma'] = df['volume_ratio'].rolling(window=volume_lookback, min_periods=1).mean()
+    df['combined_momentum'] = df['momentum_ema'] * df['volume_sma']
+
+    # Calculate High-Low Price Difference
+    df['high_low_diff'] = df['high'] - df['low']
+
+    # Compute Volume Influence Ratio
+    df['upward_volume'] = df.apply(lambda x: x['volume'] if x['close'] > x['open'] else 0, axis=1)
+    df['downward_volume'] = df.apply(lambda x: x['volume'] if x['close'] < x['open'] else 0, axis=1)
+    df['upward_volume_sum'] = df['upward_volume'].rolling(window=volume_lookback, min_periods=1).sum()
+    df['downward_volume_sum'] = df['downward_volume'].rolling(window=volume_lookback, min_periods=1).sum()
+    df['volume_influence_ratio'] = df['upward_volume_sum'] / df['downward_volume_sum'].replace({0: 1})
+
+    # Integrate Combined Momentum, Volume Ratio, and Directional Volume Impact
+    df['integrated_factor'] = df['combined_momentum'] * df['high_low_diff'] * df['volume_influence_ratio']
+
+    # Calculate Intraday Reversal
+    df['intraday_reversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+
+    # Calculate Close-to-Open Change
+    df['close_open_change'] = df['close'] - df['open']
+    df['volume_weighted_close_open_change'] = df['close_open_change'] * df['volume']
+
+    # Consider Day-to-Day Open Price Change
+    df['day_to_day_open_price_change'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Adjust for Open Interest
+    df['open_interest_adjustment'] = 1 + (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['adjusted_intraday_reversal'] = df['intraday_reversal'] * df['open_interest_adjustment'] + df['day_to_day_open_price_change']
+
+    # Combine Intraday Factors
+    df['intraday_factors'] = df['intraday_reversal'] + df['adjusted_intraday_reversal'] + df['volume_weighted_close_open_change']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['integrated_factor'] + df['intraday_factors']
+
+    return df['alpha_factor']
+```

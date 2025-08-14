@@ -1,0 +1,33 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the true range (high - low)
+    true_range = df['high'] - df['low']
+    
+    # Calculate the price difference (close - open)
+    price_diff = df['close'] - df['open']
+    
+    # Create a factor based on the normalized price movement
+    price_movement_factor = price_diff / (true_range + 1e-7)
+    
+    # Calculate the volatility as the standard deviation of the price movement factor over the last 10 days
+    volatility = price_movement_factor.rolling(window=10).std()
+    
+    # Volume-weighted moving average of the price movement factor
+    volume_weighted_factor = (price_movement_factor * df['volume']).rolling(window=5).mean() / df['volume'].rolling(window=5).mean()
+    
+    # Leverage the weighted factor by the inverse of the volatility
+    leverage_weighted_factor = volume_weighted_factor / (volatility + 1e-7)
+    
+    # Calculate the order flow imbalance (buying pressure minus selling pressure)
+    buying_pressure = df['close'] > df['open']
+    selling_pressure = df['close'] < df['open']
+    order_flow_imbalance = (buying_pressure - selling_pressure) * df['volume']
+    
+    # Smooth the order flow imbalance using an exponential moving average
+    smoothed_order_flow_imbalance = order_flow_imbalance.ewm(span=5, adjust=False).mean()
+    
+    # Combine the leverage weighted factor with the smoothed order flow imbalance
+    combined_factor = leverage_weighted_factor * smoothed_order_flow_imbalance
+    
+    return combined_factor
+```

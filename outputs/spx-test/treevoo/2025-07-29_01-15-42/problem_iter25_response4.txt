@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Compute daily indicators
+    df['daily_price_range'] = df['high'] - df['low']
+    df['daily_return'] = df['close'].diff()
+    
+    # Calculate 20-day moving average volume
+    df['20_day_MA_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Summarize volume over the SMA period (e.g., 5 days)
+    df['summarized_volume_5d'] = df['volume'].rolling(window=5).sum()
+    
+    # Generate alpha signal
+    df['volume_adjusted_price_range'] = df['daily_price_range'] / df['20_day_MA_volume']
+    
+    # Volume-Adjusted Momentum
+    df['smoothed_daily_return'] = df['daily_return'].rolling(window=5).mean()
+    df['volume_adjusted_momentum'] = df['smoothed_daily_return'] / df['summarized_volume_5d']
+    
+    # Intraday and Open-to-Close Returns
+    df['intraday_return'] = (df['high'] - df['low']) / df['close'].shift(1)
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine returns
+    df['combined_returns'] = 0.5 * df['intraday_return'] + 0.5 * df['open_to_close_return']
+    
+    # Dynamic Threshold
+    df['std_vol_adj_price_range'] = df['volume_adjusted_price_range'].rolling(window=20).std()
+    df['dynamic_threshold'] = 2 * df['std_vol_adj_price_range']
+    
+    # Synthesize Final Alpha Factor
+    def synthesize_alpha_factor(row):
+        if row['volume_adjusted_price_range'] > row['dynamic_threshold']:
+            return 1
+        elif row['volume_adjusted_price_range'] < -row['dynamic_threshold']:
+            return -1
+        else:
+            return row['volume_adjusted_momentum'] + row['combined_returns']
+    
+    df['final_alpha_factor'] = df.apply(synthesize_alpha_factor, axis=1)
+    
+    return df['final_alpha_factor']
+```

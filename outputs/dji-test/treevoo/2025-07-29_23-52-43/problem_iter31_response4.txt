@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    df['combined_metrics'] = df['intraday_return'] + df['close_to_prev_close_return'] + df['breakout_intensity']
+    
+    # Adjust for Volatility
+    df['rolling_volatility'] = df['high'] - df['low']
+    df['rolling_volatility'] = df['rolling_volatility'].rolling(window=20).std()
+    df['adjusted_combined_metrics'] = df['combined_metrics'] / df['rolling_volatility']
+    
+    # Incorporate Volume-Adjusted Volatility
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['volume_weighted_volatility'] = (df['volume'] * (df['high'] - df['low'])) / avg_volume
+    df['adjusted_combined_metrics'] = (df['adjusted_combined_metrics'] * (1 + df['volume_weighted_volatility']))
+    
+    # Incorporate Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Combine Momentum with Adjusted Metrics
+    df['crossover_alpha_factor'] = (df['adjusted_combined_metrics'] + 
+                                    df['short_term_momentum'] + 
+                                    df['long_term_momentum'])
+    
+    # Generate Crossover Alpha Factor
+    return df['crossover_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

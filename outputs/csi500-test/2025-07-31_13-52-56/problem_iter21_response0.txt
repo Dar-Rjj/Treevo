@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate price changes over different time frames
+    df['daily_price_change'] = df['close'].diff()
+    df['weekly_price_change'] = df['close'] - df['close'].shift(5)
+    df['monthly_price_change'] = df['close'] - df['close'].shift(20)
+    
+    # Calculate moving averages
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    
+    # Calculate differences between moving averages
+    df['SMA_5_10_diff'] = df['SMA_5'] - df['SMA_10']
+    df['SMA_10_30_diff'] = df['SMA_10'] - df['SMA_30']
+    
+    # Calculate volume trends
+    df['daily_volume_change'] = df['volume'].diff()
+    df['VMA_5'] = df['volume'].rolling(window=5).mean()
+    df['VMA_10'] = df['volume'].rolling(window=10).mean()
+    df['VMA_5_10_diff'] = df['VMA_5'] - df['VMA_10']
+    
+    # Analyze price and volume relationship
+    df['price_to_volume_ratio'] = df['daily_price_change'] / (df['daily_volume_change'] + 1e-6)  # Adding a small constant to avoid division by zero
+    df['MA_5_price_to_volume_ratio'] = df['price_to_volume_ratio'].rolling(window=5).mean()
+    
+    # Study volatility
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['ATR_10'] = df['true_range'].rolling(window=10).mean()
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['std_log_returns_10'] = df['log_returns'].rolling(window=10).std()
+    
+    # Examine relative strength
+    def rsi(data, window=14):
+        delta = data.diff(1)
+        up_days = delta.copy()
+        up_days[delta <= 0] = 0.0
+        down_days = -delta.copy()
+        down_days[delta > 0] = 0.0
+        roll_up = up_days.ewm(com=window-1, adjust=False).mean()
+        roll_down = down_days.ewm(com=window-1, adjust=False).mean().abs()
+        rs = roll_up / roll_down
+        return 100.0 - (100.0 / (1.0 + rs))
+    
+    df['RSI_10'] = rsi(df['close'], window=10)
+    
+    # Evaluate market sentiment
+    df['up_day'] = (df['close'] > df['open']).astype(int)
+    df['down_day'] = (df['close'] < df['open']).astype(int)
+    df['up_down_ratio_7'] = df['up_day'].rolling(window=7).sum() / (df['down_day'].rolling(window=7).sum() + 1e-6)
+    
+    # Consider intraday patterns
+    df['intraday_range'] = df['high'] - df['low']
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Analyze gap patterns
+    df['gap_up'] = df['open'] - df['close'].shift(1)
+    df['gap_down'] = df['close'].shift(1) - df['open']
+    
+    # Investigate breakout patterns
+    df['breakout_above_recent_high'] = (df['close'] > df['high'].rolling(window=10).max()).astype(int)
+    df['breakdown_below_recent_low'] = (df['close'] < df['low'].rolling(window=10).min()).astype(int)
+    
+    # Evaluate trading volume in relation to price levels
+    df['volume_spike'] = (df['volume'] > df['volume'].rolling(window=10).mean() * 2).astype(int)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['SMA_5_10_diff'] +
+        df['SMA_10_30_diff'] +
+        df['VMA_5_10

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Factors
+    df['price_momentum'] = df['close'].pct_change(20)
+    df['volume_momentum'] = df['volume'].pct_change(20)
+    
+    # Volatility Factors
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2]), abs(x[1] - x[2])), axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    df['volume_volatility'] = df['volume'].diff().rolling(window=14).std()
+    
+    # Trend Strength Factors
+    df['+dm'] = (df['high'] - df['high'].shift(1)).apply(lambda x: x if x > 0 else 0)
+    df['-dm'] = (df['low'].shift(1) - df['low']).apply(lambda x: x if x > 0 else 0)
+    df['+di'] = df['+dm'].rolling(window=14).sum() / df['true_range'].rolling(window=14).sum()
+    df['-di'] = df['-dm'].rolling(window=14).sum() / df['true_range'].rolling(window=14).sum()
+    df['dx'] = (abs(df['+di'] - df['-di']) / (df['+di'] + df['-di'])) * 100
+    df['adx'] = df['dx'].ewm(span=14, adjust=False).mean()
+    
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['tp_sma_20'] = df['typical_price'].rolling(window=20).mean()
+    df['mad_20'] = df['typical_price'].rolling(window=20).apply(lambda x: (x - x.mean()).abs().mean())
+    df['cci'] = (df['typical_price'] - df['tp_sma_20']) / (0.015 * df['mad_20'])
+    
+    # Market Sentiment Factors
+    df['avg_close_252'] = df['close'].rolling(window=252).mean()
+    df['rsl'] = df['close'] / df['avg_close_252']
+    
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df[df['typical_price'] > df['typical_price'].shift(1)]['money_flow'].rolling(window=14).sum()
+    df['negative_money_flow'] = df[df['typical_price'] < df['typical_price'].shift(1)]['money_flow'].rolling(window=14).sum()
+    df['mfi'] = 100 - (100 / (1 + (df['positive_money_flow'] / df['negative_money_flow'])))
+    
+    # Liquidity Factors
+    df['dollar_volume'] = df['close'] * df['volume']
+    
+    # Alpha Factor
+    alpha_factor = (
+        0.2 * df['price_momentum'] +
+        0.1 * df['volume_momentum'] +
+        0.1 * df['atr_14'] +
+        0.1 * df['volume_volatility'] +
+        0.1 * df['adx'] +
+        0.1 * df['cci'] +
+        0.1 * df['rsl'] +
+        0.1 * df['mfi'] +
+        0.1 * df['dollar_volume']
+    )
+    
+    return alpha_factor
+```

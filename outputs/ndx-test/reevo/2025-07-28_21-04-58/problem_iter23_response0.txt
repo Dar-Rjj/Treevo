@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day return as momentum indicators
+    momentum_5 = df['close'] / df['close'].shift(5) - 1
+    momentum_20 = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate the volume-weighted average price over the last 10 days and 30 days
+    vwap_10 = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    vwap_30 = (df['close'] * df['volume']).rolling(window=30).sum() / df['volume'].rolling(window=30).sum()
+    
+    # Calculate the 10-day and 30-day price volatility using exponential smoothing
+    volatility_10 = df['close'].pct_change().ewm(span=10, adjust=False).std()
+    volatility_30 = df['close'].pct_change().ewm(span=30, adjust=False).std()
+    
+    # Calculate the 10-day and 30-day exponentially weighted moving averages of the close price
+    ewma_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ewma_30 = df['close'].ewm(span=30, adjust=False).mean()
+    ewma_60 = df['close'].ewm(span=60, adjust=False).mean()
+    
+    # Calculate the trend strength as the relative position of the 10-day EWMA to the 30-day EWMA and 60-day EWMA
+    trend_strength_10_30 = (ewma_10 - ewma_30) / df['close']
+    trend_strength_10_60 = (ewma_10 - ewma_60) / df['close']
+    
+    # Calculate the 20-day and 50-day high-low ranges to capture short-term and long-term price movements
+    range_20 = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    range_50 = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Calculate the 20-day and 50-day relative strength index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain_20 = gain.rolling(window=20).mean()
+    avg_loss_20 = loss.rolling(window=20).mean()
+    rs_20 = avg_gain_20 / avg_loss_20
+    rsi_20 = 100 - (100 / (1 + rs_20))
+    
+    avg_gain_50 = gain.rolling(window=50).mean()
+    avg_loss_50 = loss.rolling(window=50).mean()
+    rs_50 = avg_gain_50 / avg_loss_50
+    rsi_50 = 100 - (100 / (1 + rs_50))
+    
+    # Calculate the volume ratio (current volume / 10-day average volume)
+    volume_ratio_10 = df['volume'] / df['volume'].rolling(window=10).mean()
+    volume_ratio_30 = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Combine the momentum, volume-weighted average prices, volatility, trend strength, ranges, RSI, and volume ratio into a single factor
+    factor = (momentum_5 + momentum_20 + vwap_10 + vwap_30 + 
+              (volatility_10 + 1e-7)**(-1) + (volatility_30 + 1e-7)**(-1) + 
+              trend_strength_10_30 + trend_strength_10_60 + 
+              (range_20 + 1e-7)**(-1) + (range_50 + 1e-7)**(-1) + 
+              (rsi_20 / 100) + (rsi_50 / 100) + 
+              (volume_ratio_10 + 1e-7) + (volume_ratio_30 + 1e-7)).rank(pct=True)
+    
+    # Apply non-linear combination: square root of the sum of

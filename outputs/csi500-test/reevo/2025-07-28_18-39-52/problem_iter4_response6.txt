@@ -1,0 +1,30 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the long-term momentum as the difference between today's close and the close 20 days ago
+    df['momentum_20'] = df['close'] - df['close'].shift(20)
+    
+    # Calculate the more robust volatility using the Exponential Moving Average of daily returns
+    df['return'] = df['close'].pct_change()
+    df['volatility_ema_5'] = df['return'].ewm(span=5, adjust=False).std()
+    
+    # Calculate the volume trend as the difference between today's volume and the average volume over the last 20 days
+    df['volume_trend_20'] = df['volume'] - df['volume'].rolling(window=20).mean()
+    
+    # Calculate the weighted typical price, which is a mix of high, low, and close prices
+    df['weighted_typical_price'] = (df['high'] + df['low'] + 2 * df['close']) / 4
+    
+    # Calculate the money flow ratio to capture market sentiment
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['money_flow'].where(df['typical_price'] > df['typical_price'].shift(), 0)
+    df['negative_money_flow'] = df['money_flow'].where(df['typical_price'] < df['typical_price'].shift(), 0)
+    df['positive_money_flow_14'] = df['positive_money_flow'].rolling(window=14).sum()
+    df['negative_money_flow_14'] = df['negative_money_flow'].rolling(window=14).sum()
+    df['money_flow_ratio'] = df['positive_money_flow_14'] / (df['negative_money_flow_14'] + 1e-7)
+    
+    # Calculate the alpha factor as the product of the long-term momentum, inverse of volatility, and volume trend, 
+    # multiplied by the weighted typical price and the money flow ratio
+    df['alpha_factor'] = df['momentum_20'] * (1 / (df['volatility_ema_5'] + 1e-7)) * df['volume_trend_20'] * df['weighted_typical_price'] * df['money_flow_ratio']
+    
+    return df['alpha_factor']
+```

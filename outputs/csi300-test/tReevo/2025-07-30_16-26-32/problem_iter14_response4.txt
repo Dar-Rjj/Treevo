@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['sma_open_to_close_5'] = df['open_to_close_return'].rolling(window=5).mean()
+    
+    # Volume Adjusted Intraday Movement
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    df['intraday_movement'] = (df['close'] - df['open']) / avg_volume_20
+    
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['pvt'] = df['price_change'] * df['volume']
+    df['pvt_10'] = df['pvt'].rolling(window=10).sum()
+    df['pvt_20'] = df['pvt'].rolling(window=20).sum()
+    df['pvt_30'] = df['pvt'].rolling(window=30).sum()
+    
+    # Combined Momentum and Volatility Factor
+    combined_mom_vol = 0.5 * df['daily_range'] + 0.5 * df['sma_open_to_close_5']
+    vol_alpha = 0.2  # Example alpha for exponential smoothing based on volatility
+    df['combined_mom_vol'] = combined_mom_vol.ewm(alpha=vol_alpha).mean()
+    
+    # Volume-Sensitive Momentum Factor
+    combined_pvt_intraday = 0.5 * df['intraday_movement'] + 0.5 * df['pvt_10']
+    vol_sens_alpha = 0.2  # Example alpha for exponential smoothing based on volume
+    df['volume_sensitive_momentum'] = combined_pvt_intraday.ewm(alpha=vol_sens_alpha).mean()
+    
+    # Short-Term Trend Following Factor
+    df['sma_close_20'] = df['close'].rolling(window=20).mean()
+    df['sma_close_50'] = df['close'].rolling(window=50).mean()
+    df['short_term_trend'] = df['sma_close_20'] - df['sma_close_50']
+    
+    # Medium-Term Trend Following Factor
+    df['sma_close_100'] = df['close'].rolling(window=100).mean()
+    df['medium_term_trend'] = df['sma_close_50'] - df['sma_close_100']
+    
+    # Final Alpha Factor
+    final_factor = 0.25 * df['combined_mom_vol'] + 0.25 * df['volume_sensitive_momentum'] + 0.25 * df['short_term_trend'] + 0.25 * df['medium_term_trend']
+    market_alpha = 0.2  # Example alpha for exponential smoothing based on market conditions
+    df['final_alpha'] = final_factor.ewm(alpha=market_alpha).mean()
+    
+    return df['final_alpha']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha = heuristics_v2(df)
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Intraday Returns
+    intraday_high = df['high'] - df['open']
+    intraday_low = df['low'] - df['open']
+    
+    # Intraday Return Volatility
+    intraday_returns = (intraday_high + intraday_low) / 2
+    intraday_volatility = intraday_returns.rolling(window=10).std()
+    
+    # Calculate Average Volume Spike
+    volume_diff = df['volume'].diff()
+    avg_volume_spike = volume_diff.rolling(window=5).sum()
+    
+    # Calculate Close Price Momentum
+    price_change = df['close'].pct_change(periods=20)
+    ema_14 = df['close'].ewm(span=14, adjust=False).mean()
+    close_price_momentum = price_change / ema_14
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Change
+    price_change_daily = df['close'].diff()
+    
+    # Compute Momentum
+    momentum = price_change_daily.rolling(window=10).sum()
+    
+    # Adjust for Volume
+    volume_adjusted_range = df['volume'] * high_low_range
+    
+    # Combine Momentum and Volume-Adjusted Range
+    combined_momentum = (momentum.rolling(window=10).sum()) / volume_adjusted_range
+    
+    # Calculate Daily Close Price Return
+    daily_close_return = df['close'].pct_change()
+    
+    # Smoothed Momentum
+    smoothed_momentum = daily_close_return.ewm(span=12, adjust=False).mean()
+    
+    # Calculate Volume Spike Factor
+    volume_change = df['volume'].diff()
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_spike_factor = (volume_change > 2 * volume_std).astype(int)
+    
+    # Weighted Factors
+    weighted_factors = (0.5 * intraday_volatility + 
+                        0.3 * avg_volume_spike + 
+                        0.2 * close_price_momentum)
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_momentum * smoothed_momentum * 
+                          volume_spike_factor * weighted_factors)
+    
+    return final_alpha_factor
+```

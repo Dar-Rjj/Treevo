@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=14):
+    # Calculate daily return
+    df['DailyReturn'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Create a moving average of daily returns
+    df['SumOfReturns'] = df['DailyReturn'].rolling(window=n).sum()
+    df['MovingAverage'] = df['SumOfReturns'] / n
+    
+    # Calculate the standard deviation of daily returns
+    df['SquaredDifference'] = (df['DailyReturn'] - df['MovingAverage']) ** 2
+    df['SumOfSquaredDifferences'] = df['SquaredDifference'].rolling(window=n).sum()
+    df['Variance'] = df['SumOfSquaredDifferences'] / n
+    df['StandardDeviation'] = np.sqrt(df['Variance'])
+    
+    # Calculate the Sharpe Ratio
+    df['SharpeRatio'] = df['MovingAverage'] / df['StandardDeviation']
+    
+    # Identify significant price levels
+    df['RecentHigh'] = df['high'].rolling(window=n).max()
+    df['RecentLow'] = df['low'].rolling(window=n).min()
+    df['PercentageRange'] = (df['RecentHigh'] - df['RecentLow']) / df['RecentLow']
+    
+    # Calculate the relative strength index (RSI)
+    df['PositiveReturns'] = np.where(df['DailyReturn'] > 0, df['DailyReturn'], 0)
+    df['NegativeReturns'] = np.where(df['DailyReturn'] < 0, -df['DailyReturn'], 0)
+    df['AveragePositive'] = df['PositiveReturns'].rolling(window=n).mean()
+    df['AverageNegative'] = df['NegativeReturns'].rolling(window=n).mean()
+    df['RSI'] = 100 - (100 / (1 + (df['AveragePositive'] / df['AverageNegative'])))
+    
+    # Combine factors into a composite alpha factor
+    df['CompositeAlphaFactor'] = df['SharpeRatio'] * df['RSI']
+    df['FinalAlphaFactor'] = df['CompositeAlphaFactor'] * df['PercentageRange']
+    
+    # Return the final alpha factor
+    return df['FinalAlphaFactor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

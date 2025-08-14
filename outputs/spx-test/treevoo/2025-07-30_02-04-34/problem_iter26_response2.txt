@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-Based Factor
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    df['momentum_difference'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Volume and Price Change Analysis
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['avg_volume_30'] = df['volume'].rolling(window=30).mean()
+    df['unusual_volume'] = df['volume'] - df['avg_volume_30']
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['enhanced_volume_change'] = df['volume_change'] * df['volume_ratio']
+    df['signed_power_sum'] = ((df['close'] - df['open']).iloc[-5:]).apply(lambda x: x**2).sum()
+    
+    # Enhanced Price Action Factor
+    df['daily_range'] = df['high'] - df['low']
+    df['daily_spread'] = df['close'] - df['open']
+    df['high_close_spread'] = df['high'] - df['close']
+    df['price_action_factor'] = (df['daily_spread'] / df['daily_range']) - df['high_close_spread']
+    df['combined_indicator'] = df['daily_range'] + abs(df['daily_spread'])
+    
+    # Intraday Analysis
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['close_open_spread'] = df['close'] - df['open']
+    df['smoothed_intraday_return'] = (df['high'] - df['low']) / df['close']
+    df['smoothed_intraday_return'] = df['smoothed_intraday_return'].ewm(span=5, adjust=False).mean().shift(1)
+    df['avg_volume_5'] = df['volume'].rolling(window=5).mean()
+    df['intraday_momentum_difference'] = df['short_term_momentum'] - df['long_term_momentum']
+    df['inverse_avg_volume'] = 1 / df['avg_volume_5']
+    df['intraday_momentum_diff_vol_adj'] = df['intraday_momentum_difference'] * df['inverse_avg_volume']
+    df['volume_change_prev'] = df['volume'] - df['volume'].shift(1)
+    df['avg_volume_change_25'] = df['volume_change_prev'].rolling(window=25).mean()
+    df['volume_spike'] = (df['volume_change_prev'] > 1.75 * df['avg_volume_change_25']).astype(int)
+    df['intraday_momentum_diff_vol_spike'] = df['intraday_momentum_difference'] * df['volume_spike']
+    df['smoothed_combined_factor'] = df['intraday_momentum_diff_vol_spike'].rolling(window=4).mean().shift(1)
+    
+    # Composite Factor
+    df['composite_factor'] = 0.4 * df['momentum_difference'] + 0.3 * df['enhanced_volume_change'] + 0.3 * df['price_action_factor']
+    
+    # Final Alpha Signal
+    df['final_alpha_factor'] = (df['short_term_momentum'] * df['long_term_momentum']) * df['composite_factor'] + df['smoothed_combined_factor']
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

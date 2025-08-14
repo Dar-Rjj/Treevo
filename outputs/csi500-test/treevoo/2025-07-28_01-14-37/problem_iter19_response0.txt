@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    close_price_change = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    weighted_momentum = (df['high'] + df['low'] + 2 * df['close']) / 4 * df['volume']
+    weighted_momentum = close_price_change / weighted_momentum
+    
+    # Adjust for Volatility
+    volatility_adjusted_momentum = weighted_momentum / high_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume and Range
+    volume_change = df['volume'].diff()
+    average_daily_range = high_low_range.rolling(window=5).mean()
+    confirmed_factor = (volatility_adjusted_momentum * volume_change * trend_direction * average_daily_range)
+    
+    # Calculate Daily Momentum
+    daily_momentum = df['close'] - df['open']
+    daily_momentum_10d = daily_momentum.rolling(window=10).mean()
+    daily_momentum_50d = daily_momentum.rolling(window=50).mean()
+    momentum_difference = daily_momentum_10d - daily_momentum_50d
+    momentum_shift = momentum_difference.apply(lambda x: 1 if x > 0 else -1) * abs(daily_momentum_10d)
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] / df['low']
+    intraday_volatility_20d = intraday_volatility.rolling(window=20).mean()
+    high_volatility_days = (intraday_volatility > intraday_volatility_20d).astype(int)
+    high_volatility_count_10d = high_volatility_days.rolling(window=10).sum()
+    
+    # Calculate Volume Change
+    volume_change_pct = df['volume'].pct_change()
+    volume_change_10d = volume_change_pct.rolling(window=10).mean()
+    high_volume_change_days = (volume_change_pct > volume_change_10d).astype(int)
+    high_volume_change_count_5d = high_volume_change_days.rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    alpha_factor = (confirmed_factor * momentum_shift * high_volatility_count_10d * high_volume_change_count_5d)
+    
+    return alpha_factor
+```

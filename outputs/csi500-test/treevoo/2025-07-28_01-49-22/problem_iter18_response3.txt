@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    abs_close_return = (df['close'] - df['close'].shift(1)).abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_value = high_low_range - abs_close_return
+    
+    # Calculate Volume Adjusted Intraday Range
+    volume_adjusted_intraday_range = high_low_range * df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_low_range.rolling(window=10).mean()
+    
+    # Calculate Combined Value Momentum
+    combined_value_momentum = combined_value - combined_value.shift(1)
+    
+    # Calculate Close Price Momentum
+    close_price_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = high_low_range / (df['high'] + df['low'])
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = (
+        volume_adjusted_intraday_range +
+        combined_value_momentum +
+        intraday_range_ratio -
+        (df['open'] - df['close'].shift(1))
+    )
+    
+    # Introduce Dynamic Threshold Adjustment
+    intraday_range_ratio_10_day_ma = intraday_range_ratio.rolling(window=10).mean()
+    positive_signal = intraday_range_ratio > intraday_range_ratio_10_day_ma
+    negative_signal = intraday_range_ratio < intraday_range_ratio_10_day_ma
+    
+    # Adjust Intermediate Alpha Factor
+    adjusted_intermediate_alpha_factor = intermediate_alpha_factor.where(
+        positive_signal, intermediate_alpha_factor * 1.5
+    ).where(
+        negative_signal, intermediate_alpha_factor * 0.5
+    )
+    
+    # Introduce Volume Momentum
+    avg_volume_10_day = df['volume'].rolling(window=10).mean()
+    current_volume_ratio = df['volume'] / avg_volume_10_day
+    volume_momentum_adjustment = current_volume_ratio.apply(lambda x: 0.1 if x > 1 else -0.1)
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = (
+        intraday_volatility *
+        (adjusted_intermediate_alpha_factor + close_price_momentum) *
+        (1 + volume_momentum_adjustment)
+    )
+    
+    return final_alpha_factor
+```

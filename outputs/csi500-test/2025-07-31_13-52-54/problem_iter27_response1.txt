@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Daily VWAP Change
+    df['vwap_change'] = df['vwap'].diff()
+    
+    # Separate Positive and Negative Changes
+    df['pos_change'] = df['vwap_change'].apply(lambda x: x if x > 0 else 0)
+    df['neg_change'] = df['vwap_change'].apply(lambda x: abs(x) if x < 0 else 0)
+    
+    # 14-Day Averages for RSI
+    df['avg_pos_change_14'] = df['pos_change'].rolling(window=14).mean()
+    df['avg_neg_change_14'] = df['neg_change'].rolling(window=14).mean()
+    
+    # Calculate RSI
+    relative_strength = df['avg_pos_change_14'] / df['avg_neg_change_14']
+    df['rsi'] = 100 - (100 / (1 + relative_strength))
+    
+    # Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Volume-Adjusted High-Low Spread
+    df['vol_adj_high_low_spread'] = df['high_low_spread'] * df['volume']
+    
+    # High-Close to Open-High Ratio
+    df['high_close_diff'] = df['high'] - df['close']
+    df['open_high_diff'] = df['high'] - df['open']
+    df['high_close_to_open_high_ratio'] = df['high_close_diff'] / df['open_high_diff']
+    
+    # Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Long-Term VW-Return (Momentum Component)
+    df['daily_return_vol_weighted'] = df['daily_return'] * df['volume']
+    df['long_term_vw_return'] = df['daily_return_vol_weighted'].rolling(window=90).sum() / df['volume'].rolling(window=90).sum()
+    
+    # Short-Term VW-Return (Reversal Component)
+    df['short_term_vw_return'] = df['daily_return_vol_weighted'].rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Adjusted VW-Return
+    df['adjusted_vw_return'] = df['long_term_vw_return'] - df['short_term_vw_return']
+    
+    # Enhanced Momentum Component
+    avg_high_low_vol = df['vol_adj_high_low_spread'].rolling(window=90).sum() / df['volume'].rolling(window=90).sum()
+    df['enhanced_momentum'] = df['vol_adj_high_low_spread'] - avg_high_low_vol
+    
+    # Price-Volume Imbalance Factor
+    df['price_vol_imbalance'] = (df['close'] - df['open']) * df['volume']
+    df['price_vol_imbalance_sum'] = df['price_vol_imbalance'].rolling(window=90).sum()
+    
+    # Volume-Averaged High-Low Spread Ratio
+    df['vol_avg_price'] = (df['close'] * df['volume']).rolling(window=90).sum() / df['volume'].rolling(window=90).sum()
+    df['vol_avg_high_low_ratio'] = df['high_low_spread'] / df['vol_avg_price']
+    
+    # Combined Volume-Adjusted High-Low Spread and High-Close to Open-High Ratio
+    df['combined_spread'] = df['vol_adj_high_low_spread'] + df['high_close_to_open_high_ratio']
+    
+    # Synthesize Final Alpha Factor
+    df['alpha_factor'] = (
+        df['rsi'] +
+        df['high_low_spread'] +
+        df['adjusted_vw_return'] +
+        df['enhanced_momentum'] +
+        df['combined_spread'] +
+        df['price_vol_imbalance_sum'] +
+        df['vol_avg_high_low_ratio']
+    )
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Daily Returns
+    df['Volume-Weighted Return'] = (df['close'] / df['close'].shift(1)) * (df['volume'].shift(1) / df['volume'].mean())
+
+    # Compute Intraday Return
+    df['Intraday Return'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['Close-to-Open Return'] = df['close'] - df['open']
+
+    # Calculate Logarithmic Volume Difference and apply exponential smoothing
+    df['Log Volume'] = np.log(df['volume'])
+    df['Log Volume Diff'] = df['Log Volume'] - df['Log Volume'].shift(1)
+    df['Smoothed Log Volume Diff'] = df['Log Volume Diff'].ewm(alpha=0.3).mean()
+
+    # Calculate Intraday High-Low Spread
+    df['Intraday High-Low Spread'] = df['high'] - df['low']
+
+    # Weigh by Intraday Volume Activity
+    df['20-Day Avg Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume Ratio'] = df['volume'] / df['20-Day Avg Volume']
+    df['Weighted Intraday High-Low Spread'] = df['Intraday High-Low Spread'] * df['Volume Ratio']
+
+    # Combine Intraday and Close-to-Open Returns
+    df['Combined Return'] = (abs(df['Intraday Return']) * df['Intraday Return']) + (abs(df['Close-to-Open Return']) * df['Close-to-Open Return'])
+
+    # Integrate Volume Change and Intraday Volatility
+    df['Adjusted Weighted Intraday High-Low Spread'] = df['Weighted Intraday High-Low Spread'] * df['Smoothed Log Volume Diff']
+
+    # Calculate Raw Returns
+    df['Raw Return'] = df['close'].pct_change()
+
+    # Momentum Component
+    df['5-Day EMA'] = df['Raw Return'].ewm(span=5, adjust=False).mean()
+    df['10-Day EMA'] = df['Raw Return'].ewm(span=10, adjust=False).mean()
+    df['Momentum'] = df['5-Day EMA'] - df['10-Day EMA']
+
+    # Reversal Component
+    df['21-Day WMA'] = df['Raw Return'].rolling(window=21).apply(lambda x: np.sum(x * np.arange(1, 22)) / np.sum(np.arange(1, 22)), raw=True)
+    df['Reversal'] = -df['21-Day WMA']
+
+    # Combine Components
+    df['Combined Momentum'] = df['Momentum'] + df['Reversal']
+    df['Volume-Weighted Combined Momentum'] = df['Combined Momentum'] * np.sqrt(df['volume'])
+
+    # Combine Volume-Weighted Momentum with Price Range
+    n = 10
+    df['Raw Momentum'] = df['close'] / df['close'].shift(n) - 1
+    df['Cumulative Volume'] = df['volume'].rolling(window=n).sum().shift(1)
+    df['Volume-Weighted Momentum'] = df['Raw Momentum'] / df['Cumulative Volume']
+    df['Price Range'] = df['high'] - df['low']
+    df['Combined Volume-Weighted Momentum'] = df['Volume-Weighted Momentum'] + df['Price Range']
+
+    # Weigh Combined Momentum by Intraday Volume Activity
+    df['Volume-Weighted Momentum by Volume Activity'] = df['Combined Volume-Weighted Momentum'] * df['Volume Ratio']
+
+    # Apply 5-Day Exponential Moving Average
+    df['Factor'] = df['Volume-Weighted Momentum by Volume Activity'].ewm(span=5, adjust=False).mean()
+
+    return df['Factor'].dropna()
+```

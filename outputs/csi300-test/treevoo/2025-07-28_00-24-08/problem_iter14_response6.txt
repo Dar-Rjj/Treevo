@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+
+    # Calculate Previous Day's Close-to-Open Return
+    prev_close_to_open_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Aggregate Returns
+    aggregate_returns = intraday_return + prev_close_to_open_return
+
+    # Volume Surge Indicator
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    volume_above_avg = df['volume'] > avg_volume_5d
+
+    # Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+
+    # Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(20)
+
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(5)
+
+    # Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+
+    # Calculate Average Volume Over a Period
+    avg_volume = df['volume'].rolling(window=5).mean()
+
+    # Volume-Weighted High-Low Volatility
+    vol_weighted_high_low = high_low_range * df['volume']
+    vol_weighted_high_low_volatility = vol_weighted_high_low / avg_volume
+
+    # Intraday Trend Strength
+    daily_range = df['high'] - df['low']
+    intraday_pct_change = (df['close'] - df['open']) / df['open']
+
+    # Volume Adjusted Reversal Signal
+    prev_day_vol_momentum = df['volume'] / df['volume'].shift(1)
+    pct_change_vol = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    close_to_next_open_return = (df['open'].shift(-1) - df['close']) / df['close']
+    inverse_close_to_next_open = 0 - close_to_next_open_return
+
+    # Smoothed Moving Average of Composite Factor
+    composite_factor = (aggregate_returns + intraday_pct_change + vol_weighted_high_low_volatility + inverse_close_to_next_open)
+    sma_composite = composite_factor.rolling(window=5).mean()
+    exp_smoothed_sma = sma_composite.ewm(span=5, adjust=False).mean()
+
+    # Adjust for Combined Volatility
+    adjusted_volatility = aggregate_returns * (vol_weighted_high_low / avg_volume)
+
+    # Integrate Factors
+    final_factor = (intraday_return * prev_close_to_open_return * price_momentum_ratio)
+    final_factor = final_factor.where(volume_above_avg, final_factor * 0.5).where(~volume_above_avg, final_factor * 1.5)
+    final_factor = final_factor * (short_term_momentum / long_term_momentum) * (vol_weighted_high_low_volatility / avg_volume)
+
+    return final_factor
+```

@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10, K=5, L=10):
+    # Calculate Log Returns
+    log_returns = np.log(df['close']).diff(N)
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    
+    # Apply Dynamic Thresholds
+    rolling_mean = log_returns.rolling(window=N).mean()
+    rolling_std = log_returns.rolling(window=N).std()
+    upper_threshold = rolling_mean + 2 * rolling_std
+    lower_threshold = rolling_mean - 2 * rolling_std
+    clipped_momentum = np.clip(momentum, lower_threshold, upper_threshold)
+    
+    # Adjust for Volume
+    volume = df['volume']
+    volume_mean = volume.rolling(window=N).mean()
+    relative_volume = volume / volume_mean
+    volume_adjusted_momentum = clipped_momentum * relative_volume
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = df['close'].diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_volatility = abs_price_changes.rolling(window=M).std()
+    ema_volatility = abs_price_changes.ewm(span=K).mean()
+    iqr_volatility = abs_price_changes.rolling(window=L).quantile(0.75) - abs_price_changes.rolling(window=L).quantile(0.25)
+    
+    # Integrate Market Breadth Indicators
+    advance_decline = (df['close'] > df['close'].shift(1)).astype(int) - (df['close'] < df['close'].shift(1)).astype(int)
+    ad_line = advance_decline.cumsum()
+    
+    new_highs = (df['high'] == df['high'].rolling(window=N).max()).astype(int)
+    new_lows = (df['low'] == df['low'].rolling(window=N).min()).astype(int)
+    
+    # Incorporate Key Economic Indicators (Placeholder for actual data)
+    interest_rates = pd.Series(np.random.randn(len(df)), index=df.index)
+    gdp_growth_rate = pd.Series(np.random.randn(len(df)), index=df.index)
+    
+    # Final Factor Calculation
+    weights = {
+        'volume_adjusted_momentum': 0.4,
+        'std_volatility': 0.2,
+        'ema_volatility': 0.2,
+        'iqr_volatility': 0.1,
+        'ad_line': 0.05,
+        'new_highs': 0.025,
+        'new_lows': -0.025,
+        'interest_rates': 0.05,
+        'gdp_growth_rate': 0.05
+    }
+    
+    final_factor = (
+        weights['volume_adjusted_momentum'] * volume_adjusted_momentum +
+        weights['std_volatility'] * std_volatility +
+        weights['ema_volatility'] * ema_volatility +
+        weights['iqr_volatility'] * iqr_volatility +
+        weights['ad_line'] * ad_line +
+        weights['new_highs'] * new_highs +
+        weights['new_lows'] * new_lows +
+        weights['interest_rates'] * interest_rates +
+        weights['gdp_growth_rate'] * gdp_growth_rate
+    )
+    
+    return final_factor
+```

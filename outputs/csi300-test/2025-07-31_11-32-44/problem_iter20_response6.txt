@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    daily_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap_numerator = ((df['high'] + df['low']) / 2 * df['volume']).rolling(window=20).sum()
+    vwap_denominator = df['volume'].rolling(window=20).sum()
+    vwap = vwap_numerator / vwap_denominator
+    
+    # Calculate VWAP to Close Difference
+    vwap_close_diff = df['close'] - vwap
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    combined_momentum_vwap = daily_momentum * vwap_close_diff
+    
+    # Calculate Intraday Reversal
+    intraday_reversal = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Synthesize Enhanced Intraday and Cumulative Momentum Factor
+    enhanced_intraday_cumulative_momentum = combined_momentum_vwap + intraday_reversal
+    
+    # Calculate Raw Momentum
+    raw_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(20)
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    volume_weighted_intraday_momentum = intraday_high_low_spread * avg_volume_5d
+    
+    # Combine Intraday and Raw Momentum
+    intraday_diff = intraday_high_low_spread - intraday_high_low_spread.shift(1)
+    combined_intraday_raw_momentum = intraday_diff * raw_momentum
+    
+    # Adjust with Volume Delta
+    adjusted_momentum = combined_intraday_raw_momentum * abs(volume_delta)
+    
+    # Apply 5-day Simple Moving Average
+    sma_5d = adjusted_momentum.rolling(window=5).mean()
+    
+    # Introduce Intraday Gap Factor
+    intraday_gap_factor = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine All Components for Final Alpha Factor
+    final_alpha_factor = (
+        (df['close'] - df['open']) * intraday_high_low_spread * daily_momentum +
+        intraday_reversal +
+        vwap_close_diff +
+        intraday_gap_factor +
+        sma_5d +
+        enhanced_intraday_cumulative_momentum
+    )
+    
+    return final_alpha_factor
+```

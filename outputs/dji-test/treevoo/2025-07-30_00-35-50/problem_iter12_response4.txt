@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    price_momentum = df['close'].sub(df['close'].shift(20))
+    
+    # Adjust for Volume Trend
+    volume_20_day_ma = df['volume'].rolling(window=20).mean()
+    volume_adjustment = df['volume'].sub(volume_20_day_ma)
+    
+    # Adjust for Amount Trend
+    amount_20_day_ma = df['amount'].rolling(window=20).mean()
+    amount_adjustment = df['amount'].sub(amount_20_day_ma)
+    
+    # Combine Price Momentum, Volume Adjustment, and Amount Adjustment
+    combined_factor = price_momentum * volume_adjustment * amount_adjustment
+    combined_factor = combined_factor.apply(lambda x: max(x, 0))
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Positive and Negative Returns
+    positive_returns = daily_log_return > 0
+    negative_returns = daily_log_return <= 0
+    
+    # Calculate Sum of Upward Volume
+    upward_volume = df.loc[positive_returns, 'volume'].sum()
+    
+    # Calculate Sum of Downward Volume
+    downward_volume = df.loc[negative_returns, 'volume'].sum()
+    
+    # Compute Enhanced Trend Reversal Signal
+    total_volume = upward_volume + downward_volume
+    upward_volume_ratio = upward_volume / total_volume
+    downward_volume_ratio = downward_volume / total_volume
+    reversal_signal = (upward_volume_ratio > downward_volume_ratio) * daily_log_return
+    
+    # Introduce Trend Confirmation
+    log_return_20_day_ma = daily_log_return.rolling(window=20).mean()
+    trend_confirmation = (daily_log_return > log_return_20_day_ma) * daily_log_return
+    enhanced_trend_reversal_signal = reversal_signal * trend_confirmation
+    
+    # Calculate Volatility
+    volatility = daily_log_return.rolling(window=20).std()
+    
+    # Adjust for Volatility
+    volatility_adjustment = enhanced_trend_reversal_signal / volatility
+    volatility_adjustment = volatility_adjustment.apply(lambda x: max(x, 0))
+    
+    # Combine Price Momentum and Enhanced Trend Reversal Signal with Volatility Adjustment
+    final_factor = combined_factor + enhanced_trend_reversal_signal + volatility_adjustment
+    final_factor = final_factor.apply(lambda x: max(x, 0))
+    
+    return final_factor
+```

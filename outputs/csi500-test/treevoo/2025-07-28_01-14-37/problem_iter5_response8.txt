@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import skew, kurtosis
+
+def heuristics_v2(df, n_days=10, m_days=30, decay_factor=0.9):
+    # Calculate Intraday Volatility
+    intraday_vol = (df['high'] - df['low']).rolling(window=n_days).mean()
+    
+    # Calculate Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(m_days))
+    momentum = log_returns.sum() / intraday_vol
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open']
+    
+    # Calculate Logarithmic Return
+    log_intraday_return = np.log(intraday_return + 1e-8)  # Small constant to avoid log(0)
+    log_intraday_return = np.clip(log_intraday_return, np.percentile(log_intraday_return, 5), np.percentile(log_intraday_return, 95))  # Winsorize
+    
+    # Volume Weighted by Exponential Smoothing
+    volume_weight = df['volume'].ewm(alpha=decay_factor).mean()
+    
+    # Combine Adjusted Momentum and Intraday Return
+    weighted_momentum = momentum * volume_weight
+    weighted_log_intraday_return = log_intraday_return * volume_weight
+    
+    final_factor = weighted_momentum + weighted_log_intraday_return
+    
+    # Adjust for Skewness and Kurtosis
+    skew_adj = skew(final_factor)
+    kurt_adj = kurtosis(final_factor)
+    final_factor = (final_factor - final_factor.mean()) / final_factor.std()
+    final_factor = final_factor * (1 - skew_adj) * (1 - kurt_adj)
+    
+    return pd.Series(final_factor, index=df.index)
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

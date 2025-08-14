@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Cumulative Return over a specified window (e.g., 5 days)
+    window = 5
+    df['cumulative_return'] = df['daily_return'].rolling(window=window).sum()
+    
+    # Adjust by Volume
+    df['avg_volume'] = df['volume'].rolling(window=window).mean()
+    df['adjusted_cumulative_return'] = df['cumulative_return'] * df['avg_volume']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine Intraday Momentum and Volatility
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    df['weighted_intraday_range'] = df['intraday_range'] * df['volume']
+    df['combined_factor'] = df['weighted_intraday_return'] + df['weighted_intraday_range']
+    
+    # Adjust for Skewness and Kurtosis
+    skewness = df['combined_factor'].skew()
+    kurtosis = df['combined_factor'].kurt()
+    df['rescaled_combined_factor'] = (df['combined_factor'] - df['combined_factor'].mean()) / df['combined_factor'].std()
+    df['rescaled_combined_factor'] = (df['rescaled_combined_factor'] - skewness) / kurtosis
+    
+    # Calculate Price Momentum
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    df['trend_direction'] = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume
+    df['volume_change'] = df['volume'].pct_change()
+    df['confirmed_trend'] = df['trend_direction'] * df['volume_change']
+    
+    # Calculate Relative Strength
+    df['relative_strength'] = (short_term_ma - long_term_ma) / (df['high'] * df['volume']).rolling(window=window).sum() / df['volume'].rolling(window=window).sum()
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['integrated_factor'] = df['confirmed_trend'] + df['adjusted_cumulative_return'] + df['rescaled_combined_factor']
+    
+    # Final Rescaling
+    skewness = df['integrated_factor'].skew()
+    kurtosis = df['integrated_factor'].kurt()
+    df['final_factor'] = (df['integrated_factor'] - df['integrated_factor'].mean()) / df['integrated_factor'].std()
+    df['final_factor'] = (df['final_factor'] - skewness) / kurtosis
+    
+    # Calculate Intraday Movement
+    df['intraday_movement'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Open-to-Low Return
+    df['open_to_low_return'] = (df['open'] - df['low']) / df['open']
+    
+    # Combine Factors
+    combined_sum = df['intraday_movement'] + df['close_to_open_return'] + df['open_to_low_return']
+    df['price_range_ratio'] = df['intraday_range'] / (df['high'] - df['low'])
+    df['combined_factors'] = combined_sum * df['price_range_ratio']
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['relative_strength'] + df['combined_factors']
+    
+    return df['final_alpha_factor']
+```

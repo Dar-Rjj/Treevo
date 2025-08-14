@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Evaluate Intraday Dynamics
+    intraday_range = df['high'] - df['low']
+    adjusted_c_to_o_return = (df['close'] - df['open']) / intraday_range
+    
+    # Analyze Trend and Momentum
+    rate_of_change_5d = df['close'].pct_change(5)
+    rate_of_change_20d = df['close'].pct_change(20)
+    
+    sma_5d = df['close'].rolling(window=5).mean()
+    sma_20d = df['close'].rolling(window=20).mean()
+    
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+
+    # Introduce Volatility and Volume Factors
+    volatility = df['close'].rolling(window=20).std()
+    volume_ratio = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Combine Intraday and Cumulative Metrics
+    daily_price_change = df['close'].diff()
+    cumulative_price_change = daily_price_change.cumsum()
+    
+    # Intraday Midpoint to Open Ratio
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    intraday_midpoint_to_open_ratio = intraday_midpoint / df['open']
+    
+    # Volume Weighted Average Price (VWAP)
+    vwap = df['amount'] / df['volume']
+    
+    # Close-to-Next Day Open Return
+    next_day_open = df['open'].shift(-1)
+    close_to_next_open_return = (vwap - next_day_open) / next_day_open
+    
+    weighted_returns_by_volume = close_to_next_open_return * df['volume']
+    
+    # Close-to-Open Envelope
+    close_to_open_envelope = df['close'] - df['open']
+    adjusted_close_to_open_envelope = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Introduce Volatility Factor
+    daily_volatility = (df['high'] - df['low']) / df['close']
+    smoothed_volatility = daily_volatility.ewm(span=20).mean()
+    
+    # Integrate Market Sentiment
+    open_close_diff = df['close'] - df['open']
+    positive_negative_diff = np.where(open_close_diff > 0, 1, 0)
+    
+    # Combine Factors
+    combined_envelope = (df['close'].max() - df['open'].min()) / (df['close'].shift(1).max() - df['open'].min())
+    factor = (
+        intraday_midpoint_to_open_ratio * weighted_returns_by_volume
+        * combined_envelope
+        * (smoothed_volatility + daily_volatility)
+        + positive_negative_diff
+    )
+    
+    # Compute Cumulative Price Momentum
+    ema_daily_price_momentum = daily_price_change.ewm(span=20).mean()
+    ema_volume = df['volume'].ewm(span=20).mean()
+
+    return factor
+```

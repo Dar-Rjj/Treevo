@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_adjusted_daily_range = daily_range * df['volume']
+    
+    # Incorporate Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_10d_high = df['close'] - ten_day_high
+    proximity_to_10d_low = df['close'] - ten_day_low
+    min_proximity = proximity_to_10d_high.abs().combine(proximity_to_10d_low.abs(), min)
+    inverted_proximity = 1 / (min_proximity + 1e-6)  # Avoid division by zero
+    twenty_day_std = df['close'].rolling(window=20).std()
+    price_reversion = inverted_proximity / twenty_day_std
+    
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff + open_low_diff) * df['volume']
+    
+    # Moving Sum of 30-Day High-Low Spreads
+    high_low_spread_sum = (df['high'] - df['low']).rolling(window=30).sum()
+    
+    # Spread Momentum
+    spread_momentum = high_low_spread_sum.diff()
+    
+    # Trend Strength Indicator
+    fifty_day_ma = df['close'].rolling(window=50).mean()
+    twenty_day_ma = df['close'].rolling(window=20).mean()
+    trend_strength = (fifty_day_ma - twenty_day_ma) / twenty_day_ma
+    
+    # Momentum Factor
+    ten_day_return = (df['close'] / df['close'].shift(10)) - 1
+    thirty_day_return = (df['close'] / df['close'].shift(30)) - 1
+    combined_momentum = ten_day_return + thirty_day_return
+    
+    # Volume-Adjusted Momentum with Open-to-Close Movement
+    simple_momentum = df['close'] - df['close'].shift(1)
+    avg_volume_1 = df['volume'].rolling(window=1).mean()
+    adjusted_momentum_by_volume = simple_momentum * (df['volume'] / avg_volume_1)
+    open_to_close_movement = df['close'] - df['open']
+    strong_move_indicator = (adjusted_momentum_by_volume > 0) & (open_to_close_movement > 0)
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    sum_amounts_1 = df['amount'].rolling(window=1).sum()
+    sum_amounts_2 = df['amount'].shift(1).rolling(window=1).sum()
+    amount_per_unit_close_price_rate_change = (sum_amounts_1 / df['close']) - (sum_amounts_2 / df['close'].shift(1))
+    
+    # Relative Strength Index (RSI)
+    gains = df['close'].diff().clip(lower=0)
+    losses = -df['close'].diff().clip(upper=0)
+    avg_gain = gains.rolling(window=14).mean()
+    avg_loss = losses.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        volume_adjusted_daily_range * 
+        price_reversion * 
+        weighted_avg_volatility * 
+        spread_momentum * 
+        trend_strength * 
+        combined_momentum * 
+        adjusted_momentum_by_volume * 
+        amount_per_unit_close_price_rate_change * 
+        rsi
+    )
+    
+    return alpha_factor
+```

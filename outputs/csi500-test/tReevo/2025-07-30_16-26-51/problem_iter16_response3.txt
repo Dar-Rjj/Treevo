@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['close_to_open_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+
+    # Multi-Period Momentum Indicators
+    for period in [5, 10, 20]:
+        df[f'{period}_day_sma_volume_weighted_return'] = df['volume_weighted_return'].rolling(window=period).mean()
+        df[f'{period}_day_ema_volume_weighted_return'] = df['volume_weighted_return'].ewm(span=period, adjust=False).mean()
+
+    # Adaptive Volatility Stabilization
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['short_term_volatility'] = df['log_returns'].rolling(window=5).std()
+    df['mid_term_volatility'] = df['log_returns'].rolling(window=10).std()
+    df['long_term_volatility'] = df['log_returns'].rolling(window=20).std()
+    df['adaptive_volatility'] = 0.4 * df['short_term_volatility'] + 0.3 * df['mid_term_volatility'] + 0.3 * df['long_term_volatility']
+
+    # Combine Momentum Signals
+    df['combined_momentum_signal'] = (
+        0.5 * (df['5_day_sma_volume_weighted_return'] + df['5_day_ema_volume_weighted_return']) +
+        0.3 * (df['10_day_sma_volume_weighted_return'] + df['10_day_ema_volume_weighted_return']) +
+        0.2 * (df['20_day_sma_volume_weighted_return'] + df['20_day_ema_volume_weighted_return'])
+    )
+
+    # Market Regime Detection
+    df['5_day_ma_close'] = df['close'].rolling(window=5).mean()
+    df['20_day_ma_close'] = df['close'].rolling(window=20).mean()
+    df['price_trend_indicator'] = np.where(df['5_day_ma_close'] > df['20_day_ma_close'], 1, -1)
+
+    # Market Regime Adjustment
+    df['bullish_factor'] = 1.2 * df['combined_momentum_signal']
+    df['bearish_factor'] = 0.8 * df['combined_momentum_signal']
+    df['market_regime_adjusted_factor'] = np.where(df['price_trend_indicator'] == 1, df['bullish_factor'], df['bearish_factor'])
+
+    # Integrate High-Low Price Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        (df['5_day_sma_volume_weighted_return'] + df['10_day_ema_volume_weighted_return'] + df['20_day_ema_volume_weighted_return']) / 
+        df['adaptive_volatility'] * 
+        df['high_low_ratio'] * 
+        df['market_regime_adjusted_factor']
+    )
+
+    return df['final_alpha_factor']
+```

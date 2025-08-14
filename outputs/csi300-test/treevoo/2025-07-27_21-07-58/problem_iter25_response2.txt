@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate short-term and long-term momentum
+    df['short_momentum'] = df['daily_return'].rolling(window=5).sum()
+    df['long_momentum'] = df['daily_return'].rolling(window=20).sum()
+    
+    # Calculate the True Range
+    df['high_low'] = df['high'] - df['low']
+    df['high_close_prev'] = abs(df['high'] - df['close'].shift(1))
+    df['low_close_prev'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['high_low', 'high_close_prev', 'low_close_prev']].max(axis=1)
+    
+    # Calculate the 14-day Average True Range (ATR)
+    df['average_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Weighted sum of momentum
+    df['weighted_momentum'] = df['short_momentum'] * 0.6 + df['long_momentum'] * 0.4
+    
+    # Apply trend multiplier based on 50-day EMA
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['trend_multiplier'] = np.where(df['close'] > df['ema_50'], 1.5, 1.0)
+    df['combined_momentum'] = df['weighted_momentum'] * df['trend_multiplier']
+    
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    df['sma_obv_30'] = df['obv'].rolling(window=30).mean()
+    
+    # Enhance combined momentum with OBV
+    df['enhanced_momentum'] = np.where(df['obv'] > df['sma_obv_30'], 
+                                       df['combined_momentum'] * 1.2, 
+                                       df['combined_momentum'])
+    
+    return df['enhanced_momentum']
+```

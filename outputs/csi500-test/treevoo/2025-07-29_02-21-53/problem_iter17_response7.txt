@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute True Range
+    df['TrueRange'] = df[['High', 'Low']].apply(lambda x: x['High'] - x['Low'], axis=1)
+    df['TrueRange'] = df.apply(lambda x: max(x['TrueRange'], abs(x['High'] - x['Close'].shift(1)), abs(x['Low'] - x['Close'].shift(1))), axis=1)
+
+    # Compute Intraday Price Movement
+    df['IntradayPriceMovement'] = (df['Close'] - df['Open']) / df['Open']
+
+    # Smooth True Ranges (20-day EMA)
+    df['SmoothedTrueRange'] = df['TrueRange'].ewm(span=20).mean()
+
+    # Calculate Long-Term True Range (50-day)
+    df['LongTermTrueRange'] = df[['High', 'Low']].rolling(window=50).max() - df[['High', 'Low']].rolling(window=50).min()
+
+    # Compute Momentum of True Ranges
+    df['TrueRangeMomentum'] = df['LongTermTrueRange'] - df['SmoothedTrueRange']
+
+    # Adjust for Volume Impact on Price
+    df['VolumeAdjustedTrueRange'] = df['TrueRange'] * df['Volume']
+    df['VolumeAdjustedIntradayPriceMovement'] = df['IntradayPriceMovement'] * df['Volume']
+
+    # Aggregate and Smooth High-Low Ranges and Price Movements (20-day EMA)
+    df['DailyHighLowDiff'] = df['High'] - df['Low']
+    df['DailyCloseOpenDiff'] = df['Close'] - df['Open']
+    df['SmoothedHighLowDiff'] = df['DailyHighLowDiff'].ewm(span=20).mean()
+    df['SmoothedCloseOpenDiff'] = df['DailyCloseOpenDiff'].ewm(span=20).mean()
+
+    # Integrate Intraday Price Movements
+    df['AggregatedHighLowDiff'] = df['DailyHighLowDiff'].rolling(window=20).sum()
+    df['AggregatedCloseOpenDiff'] = df['DailyCloseOpenDiff'].rolling(window=20).sum()
+
+    # Smooth Aggregated Intraday Price Movements (20-day EMA)
+    df['SmoothedAggregatedHighLowDiff'] = df['AggregatedHighLowDiff'].ewm(span=20).mean()
+    df['SmoothedAggregatedCloseOpenDiff'] = df['AggregatedCloseOpenDiff'].ewm(span=20).mean()
+
+    # Combine True Range and Intraday Price Movements
+    df['CombinedFactor'] = df['TrueRangeMomentum'] + df['SmoothedAggregatedHighLowDiff'] + df['SmoothedAggregatedCloseOpenDiff']
+
+    # Evaluate Volume Activity
+    df['VolumeEMA'] = df['Volume'].ewm(span=20).mean()
+    df['HighVolumeDays'] = df['Volume'] > df['VolumeEMA']
+
+    # Integrate Combined Factors
+    df['CombinedFactorWithVolume'] = df['CombinedFactor'] * df['HighVolumeDays']
+    df['InteractionTerm'] = df['TrueRangeMomentum'] * df['SmoothedAggregatedCloseOpenDiff']
+    df['FinalAlphaFactor'] = df['CombinedFactorWithVolume'] + df['InteractionTerm']
+
+    # Final Alpha Factor with Smoothing (14-day EMA)
+    df['FinalAlphaFactorSmoothed'] = df['FinalAlphaFactor'].ewm(span=14).mean()
+
+    return df['FinalAlphaFactorSmoothed']
+```

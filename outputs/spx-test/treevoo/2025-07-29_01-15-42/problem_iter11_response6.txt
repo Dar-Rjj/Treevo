@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_adjusted_high_low_spread = intraday_high_low_spread * df['volume']
+    volume_adjusted_close_open_change = close_to_open_change * df['volume']
+    
+    # Analyze Volume Trends
+    daily_volume = df['volume']
+    moving_average_volume = daily_volume.rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    combined_value = (volume_adjusted_high_low_spread + volume_adjusted_close_open_change)
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    volume_adjusted_price_range = intraday_high_low_spread / moving_average_volume
+    imbalance_threshold = 1.5  # Example threshold
+    positive_imbalance = (volume_adjusted_price_range > imbalance_threshold).astype(int)
+    negative_imbalance = (volume_adjusted_price_range < -imbalance_threshold).astype(int)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_alpha = positive_imbalance - negative_imbalance
+    
+    # Calculate Momentum Score
+    momentum_score = combined_value.diff().fillna(0)
+    
+    # Compute Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = daily_price_range / df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].pct_change().rolling(window=20).std() * np.sqrt(252)
+    
+    # Apply Volatility Filter
+    volatility_filter = (realized_volatility < realized_volatility.median())
+    preliminary_alpha[~volatility_filter] = 0
+    
+    # Generate Final Alpha Signal
+    final_alpha = preliminary_alpha.copy()
+    final_alpha[positive_imbalance == 1] += momentum_score
+    final_alpha[negative_imbalance == 1] -= momentum_score
+    final_alpha[(positive_imbalance == 0) & (negative_imbalance == 0)] = momentum_score
+    
+    return final_alpha
+```

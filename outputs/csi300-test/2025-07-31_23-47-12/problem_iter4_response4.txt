@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Compute Log Return over N Days
+    log_returns = np.log(close_prices) - np.log(close_prices.shift(1))
+    log_returns_N = log_returns.rolling(window=N).sum()
+    
+    # Retrieve Volumes
+    volumes = df['volume']
+    
+    # Incorporate Volume into Momentum
+    avg_volume_N = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = log_returns_N * avg_volume_N
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices - close_prices.shift(1)
+    std_dev_M = abs_price_changes.rolling(window=M).std()
+    
+    # Dynamic Thresholds
+    volatility_threshold = 0.02  # 2%
+    if std_dev_M.iloc[-1] > volatility_threshold:
+        volume_surge_threshold = 0.15  # 15%
+    else:
+        volume_surge_threshold = 0.10  # 10%
+    
+    # Volume Surge Indicator
+    volume_pct_change = (volumes - volumes.shift(1)) / volumes.shift(1)
+    volume_surge = volume_pct_change > volume_surge_threshold
+    
+    # Final Factor Calculation
+    factor = pd.Series(index=df.index, dtype=float)
+    for i in range(N, len(df)):
+        if volume_surge.iloc[i]:
+            factor.iloc[i] = volume_adjusted_momentum.iloc[i] * (1 + 0.1 * std_dev_M.iloc[i])
+        else:
+            factor.iloc[i] = 0.0
+    
+    return factor
+```

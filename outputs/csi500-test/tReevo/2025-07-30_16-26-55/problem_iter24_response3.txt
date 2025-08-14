@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, ema_range_window=20, short_trend_window=5, vol_window=20):
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-to-Low Range Momentum
+    df['ema_high_low_range'] = df['high_low_range'].ewm(span=ema_range_window, min_periods=ema_range_window).mean()
+    df['range_momentum'] = df['ema_high_low_range'] / df['high_low_range']
+    
+    # Calculate Short-Term Trend
+    df['short_trend'] = df['close'].ewm(span=short_trend_window, min_periods=short_trend_window).mean()
+    
+    # Combine Momentum and Short-Term Trend
+    df['combined_factor'] = df['range_momentum'] * df['short_trend']
+    
+    # Calculate Inverse Volatility
+    df['log_returns'] = np.log(df['close']).diff()
+    df['volatility'] = df['log_returns'].rolling(window=vol_window, min_periods=vol_window).std()
+    df['inverse_volatility'] = 1 / df['volatility']
+    
+    # Adjust Combined Factor by Inverse Volatility
+    df['adjusted_combined_factor'] = df['combined_factor'] * df['inverse_volatility']
+    
+    # Calculate Transaction Activity (VWAP)
+    df['vwap'] = (df['volume'] * df['close']).cumsum() / df['volume'].cumsum()
+    
+    # Adjust Final Factor by VWAP
+    df['adjusted_final_factor'] = df['adjusted_combined_factor'] * df['vwap']
+    
+    # Adjust Final Factor by Volume
+    df['final_factor'] = df['adjusted_final_factor'] * df['volume']
+    
+    return df['final_factor']
+```

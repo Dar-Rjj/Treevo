@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Momentum
+    df['Momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Impact Factor
+    df['VolumeImpactFactor'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Daily Price Range
+    df['DailyPriceRange'] = df['high'] - df['low']
+    
+    # Volume Adjusted Range
+    df['VolumeAdjustedRange'] = (df['DailyPriceRange'] / df['close']).replace([np.inf, -np.inf], 0) * df['volume']
+    
+    # Short-Term Rolling Avg of Volume Adjusted Range
+    df['ShortTermVolAdjRangeAvg'] = df['VolumeAdjustedRange'].rolling(window=15).sum() / 15
+    
+    # Long-Term Rolling Avg of Volume Adjusted Range
+    df['LongTermVolAdjRangeAvg'] = df['VolumeAdjustedRange'].rolling(window=25).sum() / 25
+    
+    # Price Volatility
+    df['PriceVolatility'] = df['close'].rolling(window=30).std()
+    
+    # Trade Amount Influence
+    df['TradeAmountInfluence'] = df['amount'] / df['amount'].rolling(window=30).mean()
+    
+    # Combine Momentum and Volume Impact
+    df['CombinedMomVol'] = df['Momentum'] / df['VolumeImpactFactor']
+    
+    # Adjust for Price Volatility
+    df['CombinedMomVolAdj'] = df['CombinedMomVol'] / df['PriceVolatility']
+    
+    # High-Low Range Momentum
+    N = 7
+    alpha = 2 / (N + 1)
+    df['EMA_DailyPriceRange'] = df['DailyPriceRange'].ewm(alpha=alpha, adjust=False).mean()
+    df['DailyChangeEMA'] = df['EMA_DailyPriceRange'] - df['EMA_DailyPriceRange'].shift(1)
+    
+    # Volume Shock
+    df['VolumePctChange'] = df['volume'].pct_change()
+    threshold = 0.60
+    df['VolumeShockFlag'] = (df['VolumePctChange'] > threshold).astype(int)
+    
+    # Opening Gap Impact
+    df['OpeningGap'] = df['open'] - df['close'].shift(1)
+    df['AbsOpeningGap'] = df['OpeningGap'].abs()
+    
+    # Combine Indicators
+    df['HighLowRangeMomentumSign'] = df['DailyChangeEMA'] * df['VolumeShockFlag']
+    df['OpeningGapImpact'] = df['AbsOpeningGap'] * df['TradeAmountInfluence']
+    
+    # Finalize Alpha Factor
+    df['AlphaFactor'] = (
+        (df['ShortTermVolAdjRangeAvg'] - df['LongTermVolAdjRangeAvg']) 
+        * df['HighLowRangeMomentumSign'] 
+        * df['CombinedMomVolAdj'] 
+        * df['OpeningGapImpact']
+    )
+    
+    return df['AlphaFactor'].dropna()
+```

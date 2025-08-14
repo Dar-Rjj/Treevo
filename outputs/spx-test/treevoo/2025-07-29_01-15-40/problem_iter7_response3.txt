@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Compute High-Low Momentum Score
+    df['High_Low_Momentum_Score'] = 0
+    for i in range(N, len(df)):
+        avg_spread = df['Intraday_High_Low_Spread'].iloc[i-N:i].mean()
+        if df['Intraday_High_Low_Spread'].iloc[i] > avg_spread:
+            df.at[df.index[i], 'High_Low_Momentum_Score'] = 1
+        elif df['Intraday_High_Low_Spread'].iloc[i] < avg_spread:
+            df.at[df.index[i], 'High_Low_Momentum_Score'] = -1
+    
+    # Adjust by Volume
+    df['High_Low_Momentum_Score_Volume_Adjusted'] = df['High_Low_Momentum_Score'] * df['volume']
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'].pct_change(periods=N)
+    df['Price_Momentum'] = df['Price_Momentum'].fillna(0)
+    
+    # Calculate Volume Trend
+    df['Volume_Trend'] = df['volume'].pct_change(periods=N)
+    df['Volume_Trend'] = df['Volume_Trend'].fillna(0)
+    
+    # Combine Factors
+    df['Price_Volume_Factor'] = df['Price_Momentum'] + df['Volume_Trend']
+    
+    # Adjust for Market Sentiment
+    df['High_Low_Range'] = df['high'] - df['low']
+    sentiment_adjustment = df['High_Low_Range'].rolling(window=N).mean()
+    df['Price_Volume_Factor'] = df['Price_Volume_Factor'] * sentiment_adjustment
+    
+    # Final Alpha Factor
+    alpha_factor = df['Price_Volume_Factor'] + df['High_Low_Momentum_Score_Volume_Adjusted']
+    
+    return alpha_factor
+```

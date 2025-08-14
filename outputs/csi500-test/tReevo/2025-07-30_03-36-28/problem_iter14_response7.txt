@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define the lookback periods
+    sma_short_period = 20
+    sma_long_period = 50
+    vol_lookback = 30
+    momentum_lookback = 10
+    pct_change_lookback = 5
+    turnover_lookback = 30
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+    
+    # Compute Simplified Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Simplified_Volatility'] = df['High_Low_Diff'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(pct_change_lookback)
+    
+    # Consider Market Trend Alignment
+    df['Market_Trend'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Define weights for each component
+    base_weights = {
+        'Price_Momentum': 0.4,
+        'Simplified_Volatility': -0.2,
+        'Pct_Change': 0.3,
+        'Market_Trend': 0.1
+    }
+    
+    # Adjust weights based on market trend and liquidity
+    def adjust_weights(row):
+        weights = base_weights.copy()
+        if row['Market_Trend'] == 1:
+            weights['Price_Momentum'] += 0.1
+            weights['Pct_Change'] -= 0.1
+        else:
+            weights['Price_Momentum'] -= 0.1
+            weights['Pct_Change'] += 0.1
+        
+        if row['Avg_Daily_Turnover'] > df['Avg_Daily_Turnover'].median():
+            weights['Price_Momentum'] += 0.1
+            weights['Pct_Change'] -= 0.1
+        else:
+            weights['Price_Momentum'] -= 0.1
+            weights['Pct_Change'] += 0.1
+        
+        return weights
+    
+    # Apply the adjusted weights to compute the final alpha factor
+    df['Alpha_Factor'] = df.apply(lambda row: 
+                                  row['Price_Momentum'] * adjust_weights(row)['Price_Momentum'] +
+                                  row['Simplified_Volatility'] * adjust_weights(row)['Simplified_Volatility'] +
+                                  row['Pct_Change'] * adjust_weights(row)['Pct_Change'] +
+                                  row['Market_Trend'] * adjust_weights(row)['Market_Trend'],
+                                  axis=1)
+    
+    return df['Alpha_Factor']
+```

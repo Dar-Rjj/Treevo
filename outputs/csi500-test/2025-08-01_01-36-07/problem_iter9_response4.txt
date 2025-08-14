@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5):
+    # Calculate Daily Price Movement
+    df['Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['Price_Range'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Incorporate Market Depth
+    df['Market_Depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    df['Adjusted_Momentum'] = (df['Raw_Momentum'] * (df['VWAP'] + df['Market_Depth'])) / df['Intraday_Volatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=n).mean()
+    total_avg_volume = avg_volume.mean()
+    df['Final_Volume_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5_Day_Return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10_Day_Return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Average_Return'] = (df['5_Day_Return'] + df['10_Day_Return']) / 2
+    df['Final_Volume_Adjusted_Momentum'] += df['Average_Return']
+    
+    # Incorporate Liquidity
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Total_Average_Volume'] = df['Average_Volume'].mean()
+    df['Final_Volume_Adjusted_Momentum'] *= (df['Average_Volume'] / df['Total_Average_Volume'])
+    
+    return df['Final_Volume_Adjusted_Momentum']
+
+# Example usage:
+# df = pd.DataFrame({'date': pd.date_range(start='2023-01-01', periods=100),
+#                    'open': np.random.rand(100),
+#                    'high': np.random.rand(100),
+#                    'low': np.random.rand(100),
+#                    'close': np.random.rand(100),
+#                    'amount': np.random.rand(100) * 100,
+#                    'volume': np.random.rand(100) * 100})
+# df.set_index('date', inplace=True)
+# factor_values = heuristics_v2(df)
+```

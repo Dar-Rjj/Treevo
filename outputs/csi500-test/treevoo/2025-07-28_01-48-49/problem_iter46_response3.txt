@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['IntradayPriceMovement'] = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    df['CloseDifference'] = df['close'] - df['close'].shift(1)
+    df['WeightedIntradayPriceMovement'] = df['IntradayPriceMovement'] * df['volume'] * df['CloseDifference']
+    
+    # Integrate Intraday Volatility
+    df['DailyRange'] = df['high'] - df['low']
+    df['IntradayVolatility'] = df['DailyRange'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['ReversalSignal'] = (df['close'] - df['open']) / df['open']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['IntradayReturn'] = df['close'] - df['open']
+    df['WeightedReturnAndReversal'] = (df['volume'] * df['IntradayReturn']) + (df['amount'] * df['ReversalSignal'])
+    
+    # Combine Enhanced Factors
+    df['CombinedFactor'] = df['WeightedIntradayPriceMovement'] * df['IntradayVolatility'] * df['WeightedReturnAndReversal']
+    
+    # Adjust by Average Volume
+    df['AverageVolume'] = df['volume'].rolling(window=40).mean()
+    df['AdjustedCombinedFactor'] = df['CombinedFactor'] / df['AverageVolume']
+    
+    # Adjusted Price Momentum
+    df['10DayEMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['30DayMA'] = df['close'].rolling(window=30).mean()
+    df['Momentum'] = df['10DayEMA'] - df['30DayMA']
+    
+    # Filter for Recent Price Trend
+    df['5DayMA'] = df['close'].rolling(window=5).mean()
+    df['RecentTrend'] = df['close'] - df['5DayMA']
+    
+    # Introduce Volume Trend
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['VolumeTrendAdjustedFactor'] = df['Momentum'] * df['VolumeRatio']
+    
+    # Final Alpha Factor
+    alpha_factor = 0.6 * df['AdjustedCombinedFactor'] + 0.4 * df['VolumeTrendAdjustedFactor']
+    
+    return alpha_factor
+```

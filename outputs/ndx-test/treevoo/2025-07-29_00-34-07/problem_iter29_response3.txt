@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Short-term Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean() - df['close'].rolling(window=20).mean()
+    
+    # Long-term Momentum
+    long_term_momentum = df['close'].rolling(window=100).mean() - df['close'].rolling(window=200).mean()
+    
+    # Relative Momentum
+    relative_momentum = (df['close'] - df['close'].rolling(window=5).mean()) / df['close'].rolling(window=5).mean()
+    relative_momentum += (df['close'] - df['close'].rolling(window=20).mean()) / df['close'].rolling(window=20).mean()
+    relative_momentum += (df['close'] - df['close'].rolling(window=100).mean()) / df['close'].rolling(window=100).mean()
+    
+    # Price Volatility
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    
+    # Volume Volatility
+    volume_volatility = df['volume'].rolling(window=10).std()
+    
+    # Combined Volatility
+    combined_volatility = np.sqrt(price_volatility * volume_volatility)
+    
+    # Short-term Trend
+    def calculate_slope(series):
+        x = np.arange(len(series))
+        y = series.values
+        slope, _, _, _, _ = linregress(x, y)
+        return slope
+    short_term_trend = df['close'].rolling(window=30).apply(calculate_slope)
+    
+    # Long-term Trend
+    long_term_trend = df['close'].rolling(window=120).apply(calculate_slope)
+    
+    # Relative Strength
+    relative_strength = df['close'] / df['close'].rolling(window=252).max()
+    
+    # Earnings Strength
+    # Assuming earnings dates are provided in a column 'earnings_date'
+    earnings_strength = df['close'].groupby(df['earnings_date']).transform(lambda x: x.shift(-1).mean() - x.mean())
+    
+    # Moving Average Crossover
+    moving_average_crossover = (df['close'].rolling(window=50).mean() > df['close'].rolling(window=200).mean()).astype(int)
+    
+    # MACD Crossover
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_crossover = (macd_line > signal_line).astype(int)
+    
+    # Overbought/Oversold
+    rsi = 100 - (100 / (1 + (df['close'].diff().where(df['close'].diff() > 0, 0).rolling(window=14).mean() /
+                              df['close'].diff().where(df['close'].diff() < 0, 0).abs().rolling(window=14).mean())))
+    overbought_oversold = (rsi < 30) | (rsi > 70)
+    
+    # Bollinger Bands
+    bollinger_upper = df['close'].rolling(window=20).mean() + 2 * df['close'].rolling(window=20).std()
+    bollinger_lower = df['close'].rolling(window=20).mean() - 2 * df['close'].rolling(window=20).std()
+    bollinger_outside = (df['close'] > bollinger_upper) | (df['close'] < bollinger_lower)
+    
+    # News Sentiment
+    # Assuming news sentiment scores are provided in a column 'news_sentiment'
+    news_sentiment = df['news_sentiment'].rolling(window=7).mean()
+    
+    # Turnover Rate
+    turnover_rate = df['volume'].rolling(window=10).sum() / df['outstanding_shares'].rolling(window=10).mean()
+    
+    # Volume Price Correlation
+    volume_price_correlation = df[['close', 'volume']].rolling(window=30).corr(method='pearson')['close'].iloc[::2]
+    
+    # Monthly Seasonality
+    monthly_seasonality = df.groupby(df.index.month)['close'].pct_change().groupby(df.index.month).mean().reindex(df.index.month).reset_index(drop=True)
+    
+    # Quarterly Earnings Season
+    # Assuming earnings months are provided in a column '

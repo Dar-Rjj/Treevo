@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 10-day simple moving average of the close price
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    
+    # Define momentum factor as the difference between the current close price and the 10-day SMA
+    df['momentum_factor'] = df['close'] - df['SMA_10']
+    
+    # Identify high-activity days where the volume is above its 30-day simple moving average
+    df['SMA_30_volume'] = df['volume'].rolling(window=30).mean()
+    df['high_activity_day'] = df['volume'] > df['SMA_30_volume']
+    
+    # On high-activity days, calculate the percentage change in the closing price from the previous day
+    df['prev_close'] = df['close'].shift(1)
+    df['pct_change_high_activity'] = (df['close'] - df['prev_close']) / df['prev_close']
+    
+    # Adjust the momentum score based on the percentage change: increase if positive, decrease if negative
+    df['momentum_adjusted'] = df['momentum_factor']
+    df.loc[df['high_activity_day'], 'momentum_adjusted'] += df['pct_change_high_activity']
+    
+    # Calculate the daily price range (high - low) and midpoint
+    df['daily_range'] = df['high'] - df['low']
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Determine directional bias: bullish if close is above midpoint, bearish if below
+    df['directional_bias'] = (df['close'] > df['midpoint']).astype(int)
+    
+    # Combine the directional bias with the volume-based momentum adjustment to create a composite sentiment-adjusted momentum signal
+    df['composite_signal'] = df['momentum_adjusted'] * (1 + df['directional_bias'])
+    
+    # Output the final composite sentiment-adjusted momentum score for each day
+    return df['composite_signal']
+
+# Example usage:
+# df = pd.DataFrame({'open': [...], 'high': [...], 'low': [...], 'close': [...], 'volume': [...]})
+# composite_signal = heuristics_v2(df)
+```

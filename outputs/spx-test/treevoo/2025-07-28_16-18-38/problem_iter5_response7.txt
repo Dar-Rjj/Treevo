@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Change
+    df['close_change'] = df['close'] - df['close'].shift(1)
+    
+    # Initialize and Update EWMA of Close Price Changes
+    alpha = 0.1  # Smoothing factor
+    df['ewma_close_change'] = df['close_change'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Volume Weight the EWMA
+    total_volume = df['volume'].sum()
+    df['volume_weighted_ewma'] = df['ewma_close_change'] * (df['volume'] / total_volume)
+    
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Dynamic Momentum
+    lookback_period = 14
+    df['sma_high_low'] = df['high_low_range'].rolling(window=lookback_period).mean()
+    df['raw_momentum'] = df['high_low_range'] - df['sma_high_low']
+    smoothing_factor = 0.2
+    df['smoothed_dynamic_momentum'] = df['raw_momentum'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Compute Momentum Components
+    df['ema_7_high_low'] = df['high_low_range'].ewm(span=7, adjust=False).mean()
+    df['ema_21_high_low'] = df['high_low_range'].ewm(span=21, adjust=False).mean()
+    
+    # Combine Momentum Signals
+    df['momentum_ratio'] = df['ema_7_high_low'] / df['ema_21_high_low']
+    df['combined_momentum'] = df['volume_weighted_ewma'] * df['smoothed_dynamic_momentum'] * df['momentum_ratio']
+    
+    return df['combined_momentum']
+```

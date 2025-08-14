@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, n_days=10, m_days=5, sma_period=50):
+    # Volume-Weighted High-Low Spread
+    df['VW_High_Low_Spread'] = (df['high'] - df['low']) * df['volume']
+
+    # Cumulative Volume-Weighted High-Low Spread
+    df['Cum_VW_High_Low_Spread'] = df['VW_High_Low_Spread'].rolling(window=lookback_period).sum()
+    df['Total_Volume'] = df['volume'].rolling(window=lookback_period).sum()
+    df['Average_VW_High_Low_Spread'] = df['Cum_VW_High_Low_Spread'] / df['Total_Volume']
+
+    # Momentum Indicator
+    df['Momentum'] = df['VW_High_Low_Spread'] - df['VW_High_Low_Spread'].rolling(window=n_days).mean()
+
+    # Intraday Range Growth
+    df['Today_HL_Range'] = df['high'] - df['low']
+    df['Prev_Day_HL_Range'] = df['Today_HL_Range'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_HL_Range'] - df['Prev_Day_HL_Range']) / df['Prev_Day_HL_Range']
+
+    # Volume Weighted Moving Average
+    df['Close_Volume_Weighted'] = (df['close'] * df['volume']).rolling(window=sma_period).sum()
+    df['Volume_Sum'] = df['volume'].rolling(window=sma_period).sum()
+    df['VWMA'] = df['Close_Volume_Weighted'] / df['Volume_Sum']
+
+    # Combine Intraday Range Growth and Volume Weighted Moving Average
+    df['Combined_Intraday_VWMA'] = df['Intraday_Range_Growth'] + df['VWMA']
+
+    # Price Momentum
+    df['Close_Return'] = (df['close'] / df['close'].shift(n_days) - 1)
+    df['Open_Return'] = (df['open'] / df['open'].shift(n_days) - 1)
+
+    # Volume-Weighted Volatility
+    df['Volatility'] = (df['high'] - df['low']).rolling(window=n_days).std()
+    df['Volume_Weighted_Volatility'] = df['Volatility'] * df['volume']
+
+    # Amount Adjusted Return
+    df['Amount_Adjusted_Return'] = (df['amount'] / df['amount'].shift(n_days) - 1)
+
+    # Adjust for Volume Surge
+    df['N_Day_Volume_Change'] = df['volume'] - df['volume'].shift(n_days)
+    df['M_Day_Volume_Change'] = df['volume'] - df['volume'].shift(m_days)
+    df['Combined_Volume_Change'] = df['N_Day_Volume_Change'] + df['M_Day_Volume_Change']
+    df['Adjusted_Volume_Surge'] = df['Combined_Volume_Change'].apply(lambda x: x * 0.8 if x < 0 else x)
+
+    # Final Combined Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Close_Return'] * df['Volume_Weighted_Volatility'] +
+        df['Amount_Adjusted_Return'] +
+        df['Momentum'] +
+        df['Intraday_Range_Growth'] +
+        df['Adjusted_Volume_Surge']
+    )
+
+    # Simple Moving Average (SMA) of closing prices
+    df['SMA'] = df['close'].rolling(window=sma_period).mean()
+    
+    # Position relative to SMA
+    df['Above_SMA'] = (df['close'] > df['SMA']).astype(int)
+
+    return df['Alpha_Factor']
+```

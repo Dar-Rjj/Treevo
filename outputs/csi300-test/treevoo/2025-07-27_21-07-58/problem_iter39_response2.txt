@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute 5-Day and 20-Day Moving Average of Price Change
+    df['5D_MA_Price_Change'] = df['Daily_Price_Change'].rolling(window=5).mean()
+    df['20D_MA_Price_Change'] = df['Daily_Price_Change'].rolling(window=20).mean()
+    
+    # Determine Daily Returns
+    df['Daily_Returns'] = df['close'].pct_change()
+    
+    # Compute Short-Term Momentum (5-day sum of daily returns) and Long-Term Momentum (20-day sum of daily returns)
+    df['Short_Term_Momentum'] = df['Daily_Returns'].rolling(window=5).sum()
+    df['Long_Term_Momentum'] = df['Daily_Returns'].rolling(window=20).sum()
+    
+    # Calculate Average True Range for Volatility
+    df['True_Range'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Adjust by Volume
+    df['10D_MA_Volume'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Ratio'] = df['volume'] / df['10D_MA_Volume']
+    
+    # Adjust by Amount
+    df['7D_MA_Amount'] = df['amount'].rolling(window=7).mean()
+    df['Amount_Ratio'] = df['amount'] / df['7D_MA_Amount']
+    
+    # Introduce High-to-Low Range Momentum Adjustment
+    df['High_Low_Range_Adjustment'] = (df['high'] - df['low']) * df['10D_MA_Volume']
+    
+    # Combine Momentum, Volatility, and Volume-Amount Adjustment
+    momentum_volatility_adjusted = (df['5D_MA_Price_Change'] + df['Short_Term_Momentum'] + df['Long_Term_Momentum']) / df['ATR']
+    adjusted_by_volume_amount = momentum_volatility_adjusted * df['Volume_Ratio'] * df['Amount_Ratio']
+    
+    # Adjust Combined Factor by Price Volatility
+    df['10D_Std_Dev_Price_Change'] = df['Daily_Price_Change'].rolling(window=10).std()
+    adjusted_factor = adjusted_by_volume_amount / df['10D_Std_Dev_Price_Change']
+    
+    # Add Combined Price Momentum and Volume Surge
+    df['5D_MA_Price_Momentum'] = df['5D_MA_Price_Change']
+    df['10D_MA_Volume_Change'] = df['volume'].diff().rolling(window=10).mean()
+    combined_price_momentum_volume_surge = df['5D_MA_Price_Momentum'] * df['10D_MA_Volume_Change']
+    
+    # Add Combined High-Low Range and Volume
+    df['High_Low_Range'] = df['high'] - df['low']
+    combined_high_low_range_volume = (df['High_Low_Range'] * df['volume']) / df['close']
+    
+    # Incorporate High-Low Range Dynamics
+    df['5D_MA_High_Low_Range'] = df['High_Low_Range'].rolling(window=5).mean()
+    df['5D_MA_Change_High_Low_Range'] = df['High_Low_Range'].diff().rolling(window=5).mean()
+    high_low_dynamics = df['5D_MA_High_Low_Range'] * df['5D_MA_Change_High_Low_Range']
+    
+    # Integrate High-Low Range with Volume
+    df['5D_MA_High_Low_Range_per_Volume'] = (df['High_Low_Range'] / df['volume']).rolling(window=5).mean()
+    df['5D_MA_Volume'] = df['volume'].rolling(window=5).mean()
+    integrated_high_low_volume = df['5D_MA_High_Low_Range_per_Volume'] * df['5D_MA_Volume']
+    
+    # Introduce High-Frequency Momentum
+    df['3D_EMA_Daily_Returns'] = df['Daily_Returns'].ewm(span=3, adjust=False).mean()
+    
+    # Incorporate Open-to-Close Momentum
+    df['Open_to_Close_Momentum'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Frequency and Open-to-Close Momentum
+    combined_high_freq_open_close_momentum = (df['3D_EMA_Daily_Return

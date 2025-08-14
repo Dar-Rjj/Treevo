@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Daily Volume Delta Factor
+    df['volume_delta'] = df['volume'] - df['volume'].shift(1)
+    
+    # Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # True Range Calculation
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1).shift(1)
+    
+    # Simple Moving Average (SMA)
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    
+    # Exponential Moving Average (EMA)
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Average True Range (ATR)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # New High or Low
+    df['new_high'] = df['high'] > df['high'].rolling(window=20).max().shift(1)
+    
+    # Price Reversal
+    df['price_reversal'] = (df['close'] > df['close'].rolling(window=50).mean()).astype(int)
+    
+    # Plus Directional Indicator (+DI)
+    df['pos_dm'] = df['high'].diff().clip(lower=0)
+    df['+di'] = (df['pos_dm'].rolling(window=14).sum() / df['true_range'].rolling(window=14).sum()) * 100
+    
+    # Minus Directional Indicator (-DI)
+    df['neg_dm'] = -df['low'].diff().clip(upper=0)
+    df['-di'] = (df['neg_dm'].rolling(window=14).sum() / df['true_range'].rolling(window=14).sum()) * 100
+    
+    # Fast MA (5-day) crosses above or below the Slow MA (20-day)
+    df['fast_ma'] = df['close'].rolling(window=5).mean()
+    df['slow_ma'] = df['close'].rolling(window=20).mean()
+    df['ma_crossover'] = (df['fast_ma'] > df['slow_ma']).astype(int)
+    
+    # On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Volume Spike
+    df['vol_spike'] = df['volume'] > df['volume'].rolling(window=20).mean() * 2
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['volume_delta'] + 
+        df['vwap'] + 
+        df['true_range'] + 
+        df['sma_5'] + 
+        df['ema_10'] + 
+        df['rsi_14'] + 
+        df['atr_14'] + 
+        df['new_high'] + 
+        df['price_reversal'] + 
+        df['+di'] + 
+        df['-di'] + 
+        df['ma_crossover'] + 
+        df['obv'] + 
+        df['vol_spike']
+    )
+    
+    return alpha_factor
+```

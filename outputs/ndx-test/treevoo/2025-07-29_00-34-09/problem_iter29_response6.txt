@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_low_range = (df['high'] - df['low']) / df['low']
+
+    # Intraday Momentum: (High - Low) / Low * Volume / (High + Low)
+    intraday_momentum = (df['high'] - df['low']) / df['low'] * df['volume'] / (df['high'] + df['low'])
+
+    # 5-Day Average Sequential Momentum: Sum((Close - Previous Close) / Previous Close) / 5
+    sequential_momentum_5d = (df['close'].pct_change().rolling(window=5).sum()) / 5
+
+    # 5-Day Average Amount
+    avg_amount_5d = df['amount'].rolling(window=5).mean()
+
+    # Combined Momentum: (Intraday Momentum * 5-Day Average Amount) + (5-Day Momentum * Volume)
+    combined_momentum = (intraday_momentum * avg_amount_5d) + (sequential_momentum_5d * df['volume'])
+
+    # Daily Price Change
+    price_change = df['close'] - df['open']
+
+    # Compute 5-Day and 10-Day EMAs of Price Change
+    ema_5d = price_change.ewm(span=5, adjust=False).mean()
+    ema_10d = price_change.ewm(span=10, adjust=False).mean()
+
+    # Determine Reversal Signal
+    reversal_signal = np.where(ema_5d > ema_10d, 1, np.where(ema_5d < ema_10d, -1, 0))
+
+    # 14-day Rolling Median of High-to-Low Range
+    rolling_median_14d = high_low_range.rolling(window=14).median()
+    high_median_threshold = rolling_median_14d.mean() + rolling_median_14d.std()
+    low_median_threshold = rolling_median_14d.mean() - rolling_median_14d.std()
+
+    # Amplify or dampen the reversal signal based on 14-day Rolling Median
+    reversal_signal = np.where(rolling_median_14d > high_median_threshold, reversal_signal * 1.5,
+                              np.where(rolling_median_14d < low_median_threshold, reversal_signal * 0.5, reversal_signal))
+
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)
+    reversal_signal = np.where(df['volume'] > volume_threshold, reversal_signal, 0)
+
+    # Cumulative Weighted Momentum
+    weighted_daily_return = (df['close'].pct_change() * df['volume']).rolling(window=5).sum()
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    cumulative_weighted_momentum = weighted_daily_return / avg_volume_5d
+
+    # 21-Day Historical Volatility
+    historical_volatility_21d = df['close'].rolling(window=21).std()
+
+    # Final Alpha Factor
+    alpha_factor = (combined_momentum + cumulative_weighted_momentum + reversal_signal) / (historical_volatility_21d + 1e-6)
+
+    return alpha_factor
+```

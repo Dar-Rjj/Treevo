@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_low_range = (df['high'] - df['low']) / df['low']
+    
+    # Integrate Intraday and Multi-Day Momentum
+    intraday_momentum = (df['high'] - df['low']) / df['low'] * df['volume'] / (df['high'] + df['low'])
+    five_day_momentum = (df['close'].diff() / df['close'].shift()).rolling(window=5).sum()
+    sustained_momentum = (intraday_momentum * df['amount'].rolling(window=5).mean()) + (five_day_momentum * df['volume'])
+
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['open']
+    
+    # Compute 5-Day and 10-Day EMAs of Price Change
+    ema_5 = daily_price_change.ewm(span=5, adjust=False).mean()
+    ema_10 = daily_price_change.ewm(span=10, adjust=False).mean()
+
+    # Determine Reversal Signal
+    bullish_signal = (ema_5 > ema_10) & (ema_5.shift() < ema_10.shift())
+    bearish_signal = (ema_5 < ema_10) & (ema_5.shift() > ema_10.shift())
+    reversal_signal = (bullish_signal.astype(int) - bearish_signal.astype(int)) * high_low_range.rolling(window=14).median()
+
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.8)
+    reversal_signal_filtered = reversal_signal * (df['volume'] > volume_threshold)
+
+    # Calculate Cumulative Weighted Momentum
+    weighted_daily_return = (df['close'].pct_change() * df['volume']).rolling(window=5).sum() / df['amount'].rolling(window=5).mean()
+
+    # Incorporate Volatility into Alpha Factor
+    historical_volatility = df['close'].rolling(window=21).std()
+    
+    # Final Alpha Factor
+    alpha_factor = (sustained_momentum + weighted_daily_return + reversal_signal_filtered) / historical_volatility
+
+    return alpha_factor
+```

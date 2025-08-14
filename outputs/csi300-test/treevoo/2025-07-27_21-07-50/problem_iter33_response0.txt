@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Calculate Volume-Weighted Close-Open Difference
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    
+    # Integrate Both Factors
+    integrated_factors = high_low_spread_ratio + volume_weighted_close_open_diff
+    
+    # Composite Alpha Factor
+    close_ema = df['close'].ewm(span=21, adjust=False).mean()
+    volume_weighted_close = df['close'] * df['volume']
+    composite_alpha_factor = (volume_weighted_close - close_ema) + df['close'].pct_change().rolling(window=10).sum()
+    
+    # Generate Adjusted Return
+    intraday_log_return = np.log(df['close'] / df['open'])
+    
+    # Compute True Range
+    true_range = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    if 'close_prev' not in df.columns:
+        df['close_prev'] = df['close'].shift(1)
+    true_range = np.maximum(true_range, (df['high'] - df['close_prev']).abs())
+    true_range = np.maximum(true_range, (df['low'] - df['close_prev']).abs())
+    
+    # Scale by Log-Return
+    adjusted_return = intraday_log_return / true_range
+    
+    # Incorporate Volume Impact
+    volume_change = df['volume'].pct_change()
+    adjusted_return = adjusted_return * volume_change
+    
+    # Final Integration
+    final_factor = integrated_factors + composite_alpha_factor + adjusted_return
+    
+    return final_factor
+```

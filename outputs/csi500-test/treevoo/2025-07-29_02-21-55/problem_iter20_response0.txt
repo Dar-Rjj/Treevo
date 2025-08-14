@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    combined_indicator = intraday_pct_change * volume_ratio
+    
+    # Adjust for Market Volatility
+    daily_returns = df['close'].pct_change()
+    vol_20d = daily_returns.rolling(window=20).std()
+    threshold = 1.5 * vol_20d
+    significant_movement = combined_indicator.where(combined_indicator.abs() > threshold, 0)
+    
+    # Confirm with Price Momentum
+    lookback_period = 20
+    ema_close = df['close'].ewm(span=lookback_period, adjust=False).mean()
+    momentum_score = df['close'] - ema_close
+    
+    # Combine Momentum and Volume Indicators
+    avg_volume = df['volume'].rolling(window=lookback_period).mean()
+    volume_threshold = 1.5 * avg_volume
+    significant_volume = df['volume'].where(df['volume'] > volume_threshold, 0)
+    final_indicator = 0.7 * significant_movement + 0.3 * momentum_score
+    
+    # Calculate Daily Log Return
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    ma_log_returns_20d = log_returns.rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume_20d = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    adjusted_return = ma_log_returns_20d * ema_volume_20d / df['volume'].rolling(window=20).mean()
+    
+    # Apply Weighted Moving Averages
+    smoothed_return = adjusted_return.rolling(window=5).mean()
+    transformed_alpha_factor = np.sqrt(smoothed_return)
+    
+    # Fast and Slow Exponential Moving Averages
+    fast_ema = adjusted_return.ewm(span=12, adjust=False).mean()
+    slow_ema = adjusted_return.ewm(span=26, adjust=False).mean()
+    macd = fast_ema - slow_ema
+    
+    # Calculate Long-Term and Short-Term Momentum
+    daily_range = df['high'] - df['low']
+    long_term_momentum = (df['close'] - df['close'].shift(21)) / daily_range.rolling(window=21).mean()
+    short_term_momentum = (df['close'] - df['close'].shift(6)) / daily_range.rolling(window=7).mean()
+    
+    # Combine Momentum Indicators with MACD
+    weighted_momentum = 0.45 * long_term_momentum + 0.55 * short_term_momentum
+    final_alpha_factor = weighted_momentum + macd
+    
+    # Incorporate Volume Confirmation and Long-Term Volume Trend
+    volume_trend = df['volume'] / df['volume'].rolling(window=20).mean()
+    volume_trend = volume_trend.where(volume_trend > 1, 0).where(volume_trend < 1, 0)
+    final_alpha_factor *= volume_trend
+    
+    return final_alpha_factor
+```

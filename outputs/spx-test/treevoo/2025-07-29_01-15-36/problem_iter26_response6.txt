@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Indicators
+    df['High-Low_Spread'] = df['high'] - df['low']
+    df['Open-to-Close_Momentum'] = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    df['Intraday_Composite'] = (df['High-Low_Spread'] * df['Open-to-Close_Momentum']) + df['Open-to-Close_Momentum']
+    
+    # Calculate Close-to-Range Ratio
+    df['Close-to-Range_Ratio'] = df['close'] / df['High-Low_Spread']
+    
+    # Volume-Weighted Close-to-Range Momentum
+    df['Volume-Weighted_Close-to-Range_Momentum'] = df['Close-to-Range_Ratio'] * df['volume']
+    
+    # Summarize Volume-Weighted Close-to-Range Momentum over 5 days
+    df['Sum_Volume-Weighted_Close-to-Range_Momentum'] = df['Volume-Weighted_Close-to-Range_Momentum'].rolling(window=5).sum()
+    
+    # Calculate N-Day RSI
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Upward_Change'] = df['close'] - df['Prev_Close']
+    df['Downward_Change'] = df['Prev_Close'] - df['close']
+    df['Upward_Change'] = df['Upward_Change'].apply(lambda x: max(0, x))
+    df['Downward_Change'] = df['Downward_Change'].apply(lambda x: max(0, x))
+    df['EMA_Up'] = df['Upward_Change'].ewm(span=14).mean()
+    df['EMA_Down'] = df['Downward_Change'].ewm(span=14).mean()
+    df['RS'] = df['EMA_Up'] / df['EMA_Down']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Volume-Adjusted Momentum
+    df['Volume-Adjusted_EMA_Price_Range'] = df['High-Low_Spread'].ewm(span=14).mean() * df['volume']
+    df['Volume-Adjusted_RSI'] = df['RSI'] * df['volume']
+    df['Combined_Volume-Adjusted'] = df['Volume-Adjusted_EMA_Price_Range'] + df['Volume-Adjusted_RSI']
+    
+    # Final Combination
+    df['Initial_Factor'] = (df['Intraday_Composite'] 
+                             * df['Volume-Weighted_Close-to-Range_Momentum'] 
+                             * df['Sum_Volume-Weighted_Close-to-Range_Momentum'] 
+                             * df['Combined_Volume-Adjusted'])
+    
+    # Adjust for Volume Impact, Price Volatility, and Volume Acceleration
+    df['Prev_Volume'] = df['volume'].shift(1)
+    df['Prev_Prev_Volume'] = df['volume'].shift(2)
+    df['Volume_Trend'] = df['volume'] - df['Prev_Volume']
+    df['Average_High-Low_Range_Over_20_Days'] = df['High-Low_Spread'].rolling(window=20).mean()
+    df['Volume_Acceleration'] = (df['Volume_Trend'] - (df['Prev_Volume'] - df['Prev_Prev_Volume']))
+    
+    df['Final_Adjustment'] = (df['Initial_Factor'] 
+                              * df['Volume_Trend'] 
+                              * (1 / df['Average_High-Low_Range_Over_20_Days']) 
+                              * df['Volume_Acceleration'])
+    
+    # Integrate Breakout Momentum
+    df['Breakout_Momentum'] = (df['high'] - df['close']) / df['High-Low_Spread']
+    df['Volume-Weighted_Breakout_Momentum'] = df['Breakout_Momentum'] * df['volume']
+    
+    # Final Combination with Breakout
+    df['Final_Factor'] = (df['Intraday_Composite'] 
+                          * df['Volume-Weighted_Close-to-Range_Momentum'] 
+                          * df['Volume-Weighted_Breakout_Momentum'] 
+                          * df['Sum_Volume-Weighted_Close-to-Range_Momentum'] 
+                          * df['Combined_Volume-Adjusted'])
+    
+    # Final Adjustment
+    df['Final_Adjustment_Breakout'] = (df['Final_Factor'] 
+                                       * df['Volume_Trend'] 
+                                       * (1 / df['Average_High-Low_Range_Over_20_Days']) 
+                                       * df['Volume_Acceleration'])
+

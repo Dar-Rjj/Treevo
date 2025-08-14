@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate price change and price range
+    df['price_change'] = df['close'].diff()
+    df['price_range'] = df['high'] - df['low']
+    
+    # Examine volume trends
+    df['volume_change'] = df['volume'].diff()
+    
+    # Combine price and volume factors
+    df['price_volume_factor'] = df['price_change'] * df['volume_change']
+    df['pricerange_volume_ratio'] = df['price_range'] / df['volume']
+    
+    # Analyze momentum and reversal
+    df['n_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['short_term_reversal'] = (df['close'].shift(1) / df['close'].shift(2)) - 1
+    
+    # Evaluate market sentiment
+    positive_closes = (df['price_change'] > 0).sum()
+    negative_closes = (df['price_change'] < 0).sum()
+    sentiment_score = positive_closes - negative_closes
+    df['sentiment_score'] = sentiment_score
+    
+    # Incorporate technical indicators
+    window_size = 14
+    df['sma'] = df['close'].rolling(window=window_size).mean()
+    df['gains'] = df['price_change'].clip(lower=0).rolling(window=window_size).mean()
+    df['losses'] = df['price_change'].clip(upper=0).abs().rolling(window=window_size).mean()
+    df['rsi'] = 100 - (100 / (1 + (df['gains'] / df['losses'])))
+    
+    # Final alpha factor synthesis
+    w1, w2, w3, w4, w5, w6, w7 = 1, 1, 1, 1, 1, 1, 1
+    df['alpha_factor'] = (w1 * df['price_volume_factor'] + 
+                          w2 * df['pricerange_volume_ratio'] + 
+                          w3 * df['n_day_return'] + 
+                          w4 * df['short_term_reversal'] + 
+                          w5 * df['sentiment_score'] + 
+                          w6 * (df['sma'] - df['close']) + 
+                          w7 * df['rsi'])
+    
+    return df['alpha_factor']
+```

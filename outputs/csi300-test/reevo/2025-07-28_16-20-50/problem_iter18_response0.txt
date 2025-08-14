@@ -1,0 +1,60 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts with a longer window
+    pos_sum = df['positive_amount_vol'].rolling(window=10).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=10).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    sentiment_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the volatility using the close price with a longer window
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    volatility = df['log_returns'].rolling(window=30).std() * np.sqrt(252)
+
+    # Calculate the VWAP with a longer window
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=30).mean()
+
+    # Exponential smoothing on the VWAP with a longer span
+    df['vwap_smoothed'] = df['vwap'].ewm(span=30, adjust=False).mean()
+
+    # Momentum factor with a longer period
+    momentum = df['close'].pct_change(periods=30)
+
+    # Mean reversion factor with a longer period
+    mean_reversion = -df['close'].pct_change(periods=10)
+
+    # Long-term trend strength factor: difference between 120-day and 60-day exponential moving averages
+    df['ema_120'] = df['close'].ewm(span=120, adjust=False).mean()
+    df['ema_60'] = df['close'].ewm(span=60, adjust=False).mean()
+    long_trend_strength = df['ema_60'] - df['ema_120']
+
+    # Adaptive weighting based on recent market conditions with a longer window
+    recent_volatility = df['log_returns'].rolling(window=10).std() * np.sqrt(252)
+    adaptive_weight = 1 / (1 + np.exp(-recent_volatility))
+
+    # Additional factor: RSI (Relative Strength Index)
+    df['price_diff'] = df['close'].diff()
+    df['gain'] = df['price_diff'].apply(lambda x: x if x > 0 else 0)
+    df['loss'] = df['price_diff'].apply(lambda x: -x if x < 0 else 0)
+    avg_gain = df['gain'].rolling(window=14).mean()
+    avg_loss = df['loss'].rolling(window=14).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+
+    # Combine factors with adaptive weights
+    alpha_factor = (
+        adaptive_weight * sentiment_factor +
+        (1 - adaptive_weight) * (1 / volatility) +
+        0.2 * (df['vwap'] / df['vwap_smoothed']) +
+        0.15 * momentum +
+        0.15 * mean_reversion +
+        0.05 * long_trend_strength +
+        0.1 * (100 - rsi)  # Inverse RSI to capture overbought/oversold conditions
+    )
+
+    return alpha_factor
+```

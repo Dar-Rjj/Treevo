@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 10-Day Price Momentum
+    df['10_day_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Adjust for Volume Trend
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_adjustment'] = df['volume'] - df['10_day_avg_volume']
+    
+    # Combine Price Momentum and Volume Adjustment
+    df['combined_factor'] = df['10_day_momentum'] * df['volume_adjustment']
+    df['combined_factor'] = df['combined_factor'].apply(lambda x: max(x, 0))
+    
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    def adjust_daily_return(row):
+        if row['price_gap'] > 0:
+            return row['daily_return'] - (row['price_gap'] * np.exp(-1))
+        elif row['price_gap'] < 0:
+            return row['daily_return'] + (row['price_gap'] * np.exp(-1))
+        else:
+            return row['daily_return']
+    
+    df['adjusted_daily_return'] = df.apply(adjust_daily_return, axis=1)
+    
+    # Final Volume Weighted Momentum
+    df['final_factor'] = df['combined_factor'] * df['adjusted_daily_return'] * df['volume']
+    
+    return df['final_factor']
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Volume Weighted Intraday Return
+    df['vol_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Volume Weighted Overnight Return
+    df['vol_weighted_overnight_return'] = df['overnight_return'] * df['volume'].shift(1)
+    
+    # Calculate Intraday Average True Range
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs()
+    df['true_range'] = df[['true_range', (df['high'] - df['close'].shift(1)).abs(), (df['low'] - df['close'].shift(1)).abs()]].max(axis=1)
+    df['intraday_avg_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Intraday Relative Strength Index (RSI)
+    delta = df['intraday_return']
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['intraday_rsi'] = 100 - (100 / (1 + rs))
+    
+    # Momentum Score
+    df['momentum_score'] = df['vol_weighted_intraday_return'] * df['intraday_avg_true_range']
+    
+    # Reversal Score
+    df['reversal_score'] = df['vol_weighted_overnight_return'] * (100 - df['intraday_rsi'])
+    
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Range-Adjusted Momentum Score
+    df['range_adjusted_momentum_score'] = df['momentum_score'] / df['daily_range']
+    
+    # Combined Momentum-Reversal Score
+    df['combined_momentum_reversal_score'] = df['range_adjusted_momentum_score'] + df['reversal_score']
+    
+    return df['combined_momentum_reversal_score']
+```

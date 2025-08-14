@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate short-term momentum as the 3-day percentage change in close price
+    momentum_3 = df['close'].pct_change(periods=3)
+    
+    # Calculate the 5-day simple moving average of the close price for a smoother trend
+    sma_5 = df['close'].rolling(window=5).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices with adaptive weights based on recent volatility
+    vol = (df['high'] - df['low']).rolling(window=5).mean()
+    weight_open = 1 / (vol + 1e-7)
+    weight_high = 0.3 / (vol + 1e-7)
+    weight_low = 0.3 / (vol + 1e-7)
+    weight_close = 0.3 / (vol + 1e-7)
+    total_weight = weight_open + weight_high + weight_low + weight_close
+    weighted_prices = (weight_open * df['open'] + weight_high * df['high'] + weight_low * df['low'] + weight_close * df['close']) / total_weight
+    
+    # Calculate the ratio of (high - low) to the 5-day simple moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (sma_5 + 1e-7)
+    
+    # Calculate the 3-day exponential moving average of the close price
+    ema_3 = df['close'].ewm(span=3, adjust=False).mean()
+    
+    # Calculate the 3-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=3).std()
+    
+    # Include volume in the alpha factor by calculating the 3-day average volume
+    avg_volume_3 = df['volume'].rolling(window=3).mean()
+    
+    # Final alpha factor as a combination of the above metrics with an additional term for mean reversion
+    mean_reversion = (weighted_prices - df['close']) / (volatility_ratio + 1e-7)
+    alpha_factor = momentum_3 + mean_reversion + (ema_3 - df['close']) / (realized_volatility + 1e-7) + (avg_volume_3 - df['volume']) / (avg_volume_3 + 1e-7)
+    return alpha_factor
+```

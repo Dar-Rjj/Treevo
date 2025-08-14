@@ -1,0 +1,27 @@
+def heuristics_v2(df):
+    # Calculate MACD
+    exp1 = df['close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+
+    # Calculate CMF
+    m_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    m_flow_volume = m_multiplier * df['volume']
+    cmf = m_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Calculate Stochastic Oscillator
+    lowest_low = df['low'].rolling(window=14).min()
+    highest_high = df['high'].rolling(window=14).max()
+    k_percent = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low)
+
+    # Calculate weights based on 21-day rolling std of close price
+    std_close = df['close'].rolling(window=21).std()
+    weight_macd = 0.5 * (1 + std_close / std_close.max())
+    weight_cmf = 0.3 * (1 + std_close / std_close.max())
+    weight_k = 0.2 * (1 + std_close / std_close.max())
+
+    # Combine the three indicators
+    heuristics_matrix = (weight_macd * (macd - signal) + weight_cmf * cmf + weight_k * k_percent)
+
+    return heuristics_matrix

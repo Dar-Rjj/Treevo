@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=10, L=14, P=14, Q=25):
+    # Momentum Factors
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['ROC'] = df['close'].pct_change(periods=M)
+    df['Gain'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['Loss'] = -df['close'].diff().apply(lambda x: x if x < 0 else 0)
+    df['Avg_Gain'] = df['Gain'].rolling(window=L).mean()
+    df['Avg_Loss'] = df['Loss'].rolling(window=L).mean()
+    df['RS'] = df['Avg_Gain'] / df['Avg_Loss']
+    
+    # Volume Analysis and Interpretation
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VWAP'] = (df['Typical_Price'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['OBV'] = (df['close'].diff() > 0).astype(int) * df['volume'] - (df['close'].diff() < 0).astype(int) * df['volume']
+    df['Positive_Money_Flow'] = df[df['close'] > df['close'].shift(1)]['volume'] * df['close'].diff()
+    df['Negative_Money_Flow'] = df[df['close'] < df['close'].shift(1)]['volume'] * df['close'].diff()
+    df['Money_Ratio'] = df['Positive_Money_Flow'].rolling(window=P).sum() / df['Negative_Money_Flow'].rolling(window=P).abs().sum()
+    df['MFI'] = 100 - (100 / (1 + df['Money_Ratio']))
+    
+    # Price Action and Pattern Recognition
+    df['Aroon_Up'] = (df['close'].rolling(window=Q).apply(lambda x: (x.argmax() + 1) / Q, raw=True) * 100).fillna(0)
+    df['Aroon_Down'] = (df['close'].rolling(window=Q).apply(lambda x: (x.argmin() + 1) / Q, raw=True) * 100).fillna(0)
+    df['Aroon_Oscillator'] = df['Aroon_Up'] - df['Aroon_Down']
+    
+    # Ichimoku Cloud
+    df['Conversion_Line'] = (df['high'].rolling(window=9).max() + df['low'].rolling(window=9).min()) / 2
+    df['Base_Line'] = (df['high'].rolling(window=26).max() + df['low'].rolling(window=26).min()) / 2
+    df['Leading_Span_A'] = ((df['Conversion_Line'] + df['Base_Line']) / 2).shift(26)
+    df['Leading_Span_B'] = ((df['high'].rolling(window=52).max() + df['low'].rolling(window=52).min()) / 2).shift(26)
+    
+    # Donchian Channels
+    df['Upper_Channel'] = df['high'].rolling(window=N).max()
+    df['Lower_Channel'] = df['low'].rolling(window=N).min()
+    df['Middle_Channel'] = (df['Upper_Channel'] + df['Lower_Channel']) / 2
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        (df['close'] > df['SMA']).astype(int) * 1.0 + 
+        df['ROC'] * 0.5 + 
+        (df['OBV'].diff() > 0).astype(int) * 1.0 + 
+        (df['MFI'] < 30).astype(int) * 1.0 - 
+        (df['MFI'] > 70).astype(int) * 1.0 + 
+        (df['Aroon_Oscillator'] > 100).astype(int) * 1.0 - 
+        (df['Aroon_Oscillator'] < -100).astype(int) * 1.0 + 
+        (df['Leading_Span_A'] > df['Leading_Span_B']).astype(int) * 1.0 + 
+        (df['close'] > df['Upper_Channel']).astype(int) * 1.0 - 
+        (df['close'] < df['Lower_Channel']).astype(int) * 1

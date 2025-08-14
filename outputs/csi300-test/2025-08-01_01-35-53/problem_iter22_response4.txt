@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Compute Previous Day's Open-to-Close Return
+    df['PrevDayOpenToCloseReturn'] = df['close'] - df['open'].shift(1)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['VWAP'] = df.groupby('date')['VWAP'].transform('sum') / df.groupby('date')['volume'].transform('sum')
+    
+    # Combine Intraday Momentum and VWAP
+    df['CombinedValue'] = (df['VWAP'] - df['IntradayHighLowSpread']) * df['volume']
+    
+    # Integrate Relative Strength Measure
+    df['5DayMA'] = df['close'].rolling(window=5).mean()
+    df['20DayMA'] = df['close'].rolling(window=20).mean()
+    df['RelativeStrength'] = (df['5DayMA'] - df['20DayMA']) / df['20DayMA']
+    
+    # Smooth the Factor
+    df['SmoothedFactor'] = df['CombinedValue'].ewm(span=7, adjust=False).mean()
+    
+    # Incorporate Price and Volume Combinations
+    df['5DayVWClose'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['20DayVWClose'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['LongTermRelativeStrength'] = (df['5DayVWClose'] - df['20DayVWClose']) / df['20DayVWClose']
+    
+    # Combine All Factors
+    df['FinalFactor'] = df['SmoothedFactor'] + df['RelativeStrength'] + df['LongTermRelativeStrength']
+    
+    return df['FinalFactor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'])
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

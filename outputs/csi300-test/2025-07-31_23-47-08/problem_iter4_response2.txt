@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+    
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+    
+    # Compute Volume Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_TP'] = df['Typical_Price'] * df['volume']
+    df['Total_Volume_Weighted_TP'] = df['Volume_Weighted_TP'].rolling(window=len(df), min_periods=1).sum()
+    df['Total_Volume'] = df['volume'].rolling(window=len(df), min_periods=1).sum()
+    df['VWAP'] = df['Total_Volume_Weighted_TP'] / df['Total_Volume']
+    
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = np.where(df['VWAP'] > df['close'], 1, -1)
+    
+    # Integrate Reversal Indicator with Combined Return
+    df['Intermediate_Alpha_Factor'] = df['Combined_Return'] * df['Reversal_Indicator']
+    
+    # Calculate Short-Term Momentum
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Short_Term_Momentum'] = df['Daily_Return'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Long-Term Momentum
+    df['Long_Term_Momentum'] = df['Daily_Return'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Momentum Differential
+    df['Momentum_Differential'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    
+    # Calculate Volume Adjusted Momentum
+    df['Volume_Adjusted_Momentum'] = df['Momentum_Differential'] * df['volume']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Intermediate_Alpha_Factor'] * df['Volume_Adjusted_Momentum']
+    
+    return df['Final_Alpha_Factor']
+```

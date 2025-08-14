@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Volatility and Momentum Component
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    combined_spreads = (high_low_spread + open_close_spread) * np.sqrt(df['volume'])
+    intraday_log_return = np.log(df['close'] / df['open'])
+    scaled_intraday_log_return = intraday_log_return / high_low_spread
+    
+    # Volume-Weighted Price Movement
+    daily_price_change = df['close'] - df['open']
+    volume_weighted_price_change = daily_price_change * np.sqrt(df['volume'])
+    ma_volume_sqrt_20 = df['volume'].rolling(window=20).apply(np.sqrt).mean()
+    combined_alpha = (intraday_log_return / high_low_spread) + (volume_weighted_price_change.rolling(window=20).sum() / ma_volume_sqrt_20)
+    momentum_20 = df['close'] - df['close'].shift(20)
+    scaled_momentum_20 = momentum_20 / df['close'].rolling(window=20).std()
+    
+    # Integrate Volume into Intraday Return
+    integrated_intraday_return = (df['close'] - df['open']) / df['open'] * np.sqrt(df['volume'])
+    
+    # Enhance Volatility Correction
+    price_volatility = df['close'].pct_change().rolling(window=20).std()
+    volume_volatility = df['volume'].rolling(window=20).std()
+    corrected_intraday_momentum = (integrated_intraday_return - price_volatility - volume_volatility)
+    
+    # Incorporate High-Low Spread Ratio
+    high_low_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Combine High-Low Spread Ratio and Corrected Intraday Momentum
+    combined_factor = high_low_ratio + corrected_intraday_momentum
+    
+    # Intraday Log-Return Scaled by True Range
+    true_range = pd.concat([high_low_spread, (df['high'] - df['close'].shift(1)).abs(), (df['low'] - df['close'].shift(1)).abs()], axis=1).max(axis=1)
+    intraday_log_return_scaled_true_range = intraday_log_return / true_range
+    
+    # Composite Alpha Factor
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    ema_close_21 = df['close'].ewm(span=21, adjust=False).mean()
+    adjusted_volume_weighted_close = (df['close'] * df['volume']) - ema_close_21
+    medium_term_reversal = df['close'].pct_change().rolling(window=10).sum()
+    
+    # Generate Adjusted Return
+    average_volume = df['volume'].rolling(window=20).mean()
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_return = intraday_log_return_scaled_true_range + volume_change
+    
+    # Final Integration
+    final_integrated_factor = combined_factor + adjusted_return + adjusted_volume_weighted_close + medium_term_reversal
+    
+    # Incorporate Trend Adjustment
+    long_term_trend = df['close'].rolling(window=200).mean()
+    short_term_trend = df['close'].ewm(span=50, adjust=False).mean()
+    trend_difference = long_term_trend - short_term_trend
+    trend_adjustment = np.where(trend_difference > 0, 1.1, 0.9)
+    final_integrated_factor *= trend_adjustment
+    
+    return final_integrated_factor
+```

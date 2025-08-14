@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Returns (High - Low)
+    intraday_returns = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Returns (Close - Open)
+    open_to_close_returns = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Calculate Short-Term Price Momentum (Average of Close prices of last 5 days)
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    relative_volume = df['volume'] / df['volume'].rolling(window=5).mean()
+    volume_adjusted_momentum = short_term_momentum * relative_volume
+    
+    # Weight Combined Returns by Volume Trend
+    volume_trend = df['volume'].diff().apply(lambda x: 1 if x > 0 else -1)
+    weighted_returns = combined_returns * volume_trend
+    
+    # Integrate Volume-Adjusted Short-Term Momentum and Weighted Returns
+    integrated_momentum = volume_adjusted_momentum + weighted_returns
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_range_20 = daily_price_range.rolling(window=20).mean()
+    price_range_filter = (daily_price_range > 1.5 * avg_range_20)
+    
+    # Set factor value to 0 if price range is too high, otherwise use the integrated momentum
+    factor_values = integrated_momentum.where(~price_range_filter, 0)
+    
+    return factor_values
+```

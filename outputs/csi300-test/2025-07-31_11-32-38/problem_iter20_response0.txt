@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Daily Returns
+    df['Volume-Weighted-Daily-Return'] = (df['close'].pct_change() * df['volume']).shift(1)
+    
+    # Compute Intraday Return
+    df['Intraday-Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close-to-Open-Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Logarithmic Volume Difference
+    df['Log-Volume-Diff'] = np.log(df['volume']) - np.log(df['volume'].shift(1))
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday-High-Low-Spread'] = df['high'] - df['low']
+    
+    # Weigh by Intraday Volume Activity
+    df['20-Day-Moving-Avg-Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume-Ratio'] = df['volume'] / df['20-Day-Moving-Avg-Volume']
+    
+    # Integrate Components
+    df['Combined-Return'] = df['Intraday-Return'].abs() * df['Intraday-Return'] + df['Close-to-Open-Return'].abs() * df['Close-to-Open-Return']
+    df['Adjusted-Combined-Return'] = df['Combined-Return'] * df['Log-Volume-Diff'] * df['Intraday-High-Low-Spread']
+    
+    # Combine Volume-Weighted Momentum with Price Range
+    n = 20
+    df['Raw-Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    df['Cumulative-Volume'] = df['volume'].rolling(window=n).sum().shift(1)
+    df['Volume-Weighted-Momentum'] = df['Raw-Momentum'] / df['Cumulative-Volume']
+    df['Price-Range'] = df['high'] - df['low']
+    df['Momentum-Plus-Range'] = df['Volume-Weighted-Momentum'] + df['Price-Range']
+    
+    # Multiply Combined Momentum by Volume Ratio
+    df['Volume-Weighted-Momentum-Plus-Range'] = df['Momentum-Plus-Range'] * df['Volume-Ratio']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['EMA-5'] = df['Volume-Weighted-Momentum-Plus-Range'].ewm(span=5, adjust=False).mean()
+    
+    # Incorporate Intraday Range Breakouts
+    df['Intraday-Range-Breakout'] = (df['high'] > df['high'].shift(1)) | (df['low'] < df['low'].shift(1))
+    df['Intraday-Range-Breakout-Weighted'] = df['Intraday-Range-Breakout'].astype(int) * df['Volume-Ratio']
+    
+    # Calculate Intraday Momentum Oscillator
+    df['Intraday-Median'] = df[['high', 'low', 'open', 'close']].median(axis=1)
+    df['Intraday-Momentum'] = df['Intraday-Median'] - df['Intraday-Median'].shift(1)
+    df['Intraday-Momentum-Oscillator'] = df['Intraday-Momentum'] / df['Intraday-High-Low-Spread']
+    df['Weighted-Intraday-Momentum-Oscillator'] = df['Intraday-Momentum-Oscillator'] * df['Volume-Ratio']
+    
+    # Final Factor
+    df['Final-Factor'] = df['Volume-Weighted-Daily-Return'] * df['Adjusted-Combined-Return'] * df['Intraday-Range-Breakout-Weighted'] * df['Weighted-Intraday-Momentum-Oscillator'] * df['EMA-5']
+    
+    return df['Final-Factor']
+```

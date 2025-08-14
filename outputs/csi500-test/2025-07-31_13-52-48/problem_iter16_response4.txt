@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20):
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(n)
+    
+    # Identify Price Reversals
+    df['sma_20'] = df['close'].rolling(window=n).mean()
+    df['price_reversal'] = (df['close'] > df['sma_20']) & (df['close'].shift(1) <= df['sma_20'].shift(1))
+    df['price_reversal'] = df['price_reversal'].astype(int)
+    
+    # Measure Volume Momentum
+    df['volume_momentum'] = df['volume'] - df['volume'].shift(n)
+    
+    # Detect Volume Spikes
+    df['volume_spike'] = df['volume'] / df['volume'].shift(1) > 2
+    df['volume_spike'] = df['volume_spike'].astype(int)
+    
+    # Evaluate Range of Prices
+    df['price_range'] = df['high'] - df['low']
+    
+    # Assess Candlestick Patterns
+    # Doji pattern: Open and Close are very close
+    df['doji'] = abs(df['open'] - df['close']) / (df['high'] - df['low']) < 0.1
+    df['doji'] = df['doji'].astype(int)
+    
+    # Hammer pattern: Lower shadow is at least twice the length of the body
+    df['hammer'] = ((df['high'] - df['low']) > 3 * abs(df['close'] - df['open'])) & \
+                   (((df['close'] - df['low']) / (0.001 + df['high'] - df['low'])) > 0.6) & \
+                   (((df['open'] - df['low']) / (0.001 + df['high'] - df['low'])) > 0.6)
+    df['hammer'] = df['hammer'].astype(int)
+    
+    # Engulfing pattern: Bullish (previous close < previous open and current close > current open and current close > previous open)
+    df['bullish_engulfing'] = (df['close'].shift(1) < df['open'].shift(1)) & \
+                             (df['close'] > df['open']) & \
+                             (df['close'] > df['open'].shift(1))
+    df['bullish_engulfing'] = df['bullish_engulfing'].astype(int)
+    
+    # Bearish (previous close > previous open and current close < current open and current close < previous open)
+    df['bearish_engulfing'] = (df['close'].shift(1) > df['open'].shift(1)) & \
+                             (df['close'] < df['open']) & \
+                             (df['close'] < df['open'].shift(1))
+    df['bearish_engulfing'] = df['bearish_engulfing'].astype(int)
+    
+    # Calculate Transaction Momentum
+    df['transaction_momentum'] = df['amount'] - df['amount'].shift(n)
+    
+    # Detect Large Transactions
+    df['avg_amount'] = df['amount'].rolling(window=n).mean()
+    df['large_transaction'] = df['amount'] > 2 * df['avg_amount']
+    df['large_transaction'] = df['large_transaction'].astype(int)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (df['price_momentum'] + 
+                    df['price_reversal'] + 
+                    df['volume_momentum'] + 
+                    df['volume_spike'] + 
+                    df['price_range'] + 
+                    df['doji'] + 
+                    df['hammer'] + 
+                    df['bullish_engulfing'] + 
+                    df['bearish_engulfing'] + 
+                    df['transaction_momentum'] + 
+                    df['large_transaction'])
+    
+    return alpha_factor
+```

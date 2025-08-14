@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Combine Factors: Multiply Close-to-Open Return by Volume, then divide by Daily Volatility
+    df['combined_factors'] = (df['close_to_open_return'] * df['volume']) / df['daily_volatility']
+    
+    # Adjust for Opening Gap: Subtract Previous Day's Close from High-Low Range
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_range'] = df['high'] - df['low'] - df['opening_gap']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    df['price_movement_ratio'] = df['close'] / df['open']
+    
+    # Combine Momentum Indicators: 5-day rolling sum of Price Movement Ratio + Close-to-Open Return
+    df['momentum_indicator'] = df['price_movement_ratio'].rolling(window=5).sum() + df['close_to_open_return']
+    
+    # Incorporate Volume and Amount Momentum
+    df['volume_change'] = df['volume'] - df['volume'].rolling(window=10).mean().shift(1)
+    df['amount_change'] = df['amount'] - df['amount'].rolling(window=10).mean().shift(1)
+    df['volume_amount_momentum'] = df['volume_change'] * df['amount_change']
+    
+    # Multiply Combined Momentum by Combined Volume-Amount Momentum
+    df['adjusted_momentum'] = df['momentum_indicator'] * df['volume_amount_momentum']
+    
+    # Apply Time Series Momentum: Calculate Alpha Factor's Moving Average
+    df['alpha_factor_ma'] = df['adjusted_momentum'].rolling(window=10).mean()
+    df['ts_momentum'] = df['adjusted_momentum'] - df['alpha_factor_ma']
+    
+    # Calculate High-Low Spread Change
+    df['high_low_spread_change'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Calculate Momentum of High-Low Spread Change
+    df['high_low_spread_momentum'] = df['high_low_spread_change'].rolling(window=5).sum()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4 * df['volume'] / df['volume']
+    
+    # Introduce Price Trend Component: 20-day EMA of Close Price
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_trend'] = df['close'] - df['ema_20']
+    
+    # Combine VWAP, High-Low Spread Momentum, and Adjusted Range
+    df['combined_factor'] = df['vwap'] * df['high_low_spread_momentum'] * df['adjusted_range']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['ts_momentum'] + df['combined_factor'] + df['price_trend'])
+    
+    # Final Adjustment for Volume
+    df['final_alpha_factor'] *= df['volume']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

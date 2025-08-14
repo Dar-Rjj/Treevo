@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Open-Close Return
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Historical Volatility
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=20).std()
+    
+    # Assign Weights based on Volatility
+    weight_high_low = 1 / (volatility + 1e-6)
+    weight_open_close = 1 - weight_high_low
+    
+    # Combine High-Low and Open-Close Returns
+    intraday_momentum = (weight_high_low * high_low_diff + weight_open_close * open_close_return) / df['volume']
+    
+    # Apply Enhanced Volume and Price Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    price_shock = (df['close'] - df['close'].shift(1)).abs() / (df['high'] - df['low'])
+    
+    volume_threshold = 1.5
+    amount_threshold = 1.5
+    price_shock_threshold = 0.05
+    
+    shock_filter = (volume_ratio > volume_threshold) & (amount_ratio > amount_threshold) & (price_shock > price_shock_threshold)
+    intraday_momentum = intraday_momentum.where(shock_filter, other=np.nan)
+    
+    # Measure Volume Synchronization
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_product = volume_change * price_change
+    synchronized_sign = np.sign(synchronized_product)
+    
+    # Calculate Exponential Moving Average (EMA) Cross Signal
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    momentum = np.where(short_ema > long_ema, 1, -1)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Combine Momentum and OBV into a Factor
+    ema_diff = (short_ema - long_ema).abs()
+    obv_factor = obv * ema_diff
+    
+    # Adjust for Trading Activity
+    intraday_metrics = intraday_momentum * (high_low_diff + open_close_return) / df['volume']
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = (intraday_momentum + synchronized_sign + (obv_factor + intraday_metrics))
+    
+    return final_alpha_factor
+```

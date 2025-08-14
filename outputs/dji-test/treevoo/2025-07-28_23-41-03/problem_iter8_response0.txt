@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer SMA from Shorter SMA
+    df['SMA_100-200'] = df['SMA_100'] - df['SMA_200']
+    df['SMA_50-100'] = df['SMA_50'] - df['SMA_100']
+
+    # Calculate Intraday Price Range Percentage
+    df['Intraday_Range_Percent'] = (df['high'] - df['low']) / df['low'] * 100
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    df['TPV'] = df['Typical_Price'] * df['volume']
+    df['VWAP'] = df['TPV'].cumsum() / df['volume'].cumsum()
+
+    # Analyze Volume Direction
+    df['Volume_Flow'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else -row['volume'], axis=1)
+
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Money Flow Index (MFI)
+    df['Typical_Price_MFI'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Raw_Money_Flow'] = df['Typical_Price_MFI'] * df['volume']
+    df['Positive_MF'] = df['Raw_Money_Flow'].where(df['close'] > df['close'].shift(1), 0)
+    df['Negative_MF'] = -df['Raw_Money_Flow'].where(df['close'] < df['close'].shift(1), 0)
+    df['14_day_Positive_MF'] = df['Positive_MF'].rolling(window=14).sum()
+    df['14_day_Negative_MF'] = df['Negative_MF'].rolling(window=14).sum()
+    df['Money_Flow_Ratio'] = df['14_day_Positive_MF'] / df['14_day_Negative_MF']
+    df['MFI'] = 100 - (100 / (1 + df['Money_Flow_Ratio']))
+
+    # Analyze Intraday Momentum
+    df['Intraday_Momentum'] = (df['close'] - df['open']) / df['open'] * 100
+    df['Intraday_Momentum_Category'] = df['Intraday_Momentum'].apply(lambda x: 'Positive' if x > 0 else 'Negative')
+
+    # Calculate Price Momentum Over 5 Days
+    df['Price_Momentum_5D'] = df['close'] - df['close'].shift(5)
+
+    # Calculate Volume Surge Over 5 Days
+    df['Volume_Surge_5D'] = df['volume'] - df['volume'].shift(5)
+
+    # Integrate Volume Thrust
+    df['Volume_Thrust'] = df['volume'] / df['volume'].shift(1)
+    df['Volume_Thrust_Adjusted_Momentum'] = df['Intraday_Momentum'] * df['Volume_Thrust']
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate High-Low Range Momentum
+    df['High_Low_Range_Momentum'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+
+    # Adjust by Volume and Amount
+    avg_volume = df['volume'].rolling(window=10).mean()
+    avg_amount = df['amount'].rolling(window=10).mean()
+    df['Normalized_Volume'] = avg_volume / avg_amount
+    df['Adjusted_High_Low_Range_Momentum'] = df['High_Low_Range_Momentum'] / df['Normalized_Volume']
+
+    # Sum the Weighted Indicators with SMA Differences and Adjustments
+    df['Alpha_Factor'] = (
+        0.2 * df['Intraday_Momentum'] +
+        0.2 * df['Volume

@@ -1,0 +1,70 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for close price and volume
+    avg_close_35 = df['close'].rolling(window=35).mean()
+    std_close_35 = df['close'].rolling(window=35).std()
+    volatility = std_close_35 / avg_close_35
+
+    avg_volume_45 = df['volume'].rolling(window=45).mean()
+    std_volume_45 = df['volume'].rolling(window=45).std()
+    volume_volatility = std_volume_45 / avg_volume_45
+
+    # Momentum signal based on the exponential moving average (EMA) and adaptive volume
+    ema_close_25 = df['close'].ewm(span=25, adjust=False).mean()
+    momentum_signal = (df['close'] - ema_close_25) * (df['volume'] - avg_volume_45)
+
+    # Relative Strength Index (RSI) with an adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Money Flow Ratio as a measure of buying to selling pressure with an adaptive window
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_flow.rolling(window=35).sum() / negative_flow.rolling(window=35).sum()
+
+    # Trend following indicator: 180-day Exponential Moving Average (EMA)
+    trend_following = df['close'].ewm(span=180, adjust=False).mean()
+
+    # Market sentiment: 35-day sum of the amount traded
+    market_sentiment = df['amount'].rolling(window=35).sum()
+
+    # Liquidity measure: Volume-to-Amount ratio
+    liquidity_measure = df['volume'] / df['amount']
+
+    # Price range expansion factor
+    price_range = df['high'] - df['low']
+    price_range_expansion = price_range.rolling(window=35).mean() / avg_close_35
+
+    # Incorporate MACD
+    ema_close_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_close_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_close_12 - ema_close_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+
+    # Refine momentum signal
+    refined_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine all the signals into a final alpha factor with weighted combinations
+    alpha_factor = (
+        refined_momentum * 0.25 +
+        rsi * 0.2 +
+        money_ratio * 0.2 +
+        volatility * 0.1 +
+        volume_volatility * 0.05 +
+        (df['close'] - trend_following) * 0.05 +
+        market_sentiment * 0.05 +
+        liquidity_measure * 0.05 +
+        price_range_expansion * 0.05 +
+        macd_histogram * 0.05
+    ).fillna(0)
+
+    return alpha_factor
+```

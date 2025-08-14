@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Intraday_Price_Movement'] = (df['High_Low_Range'] + df['Close_Open_Diff']) / 2
+    
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum'] = df['Intraday_Price_Movement'] * df['volume']
+    df['EMA_10_VolAdjMom'] = df['Volume_Adjusted_Momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Abs_Daily_Return'] = df['Daily_Return'].abs()
+    df['Market_Volatility'] = df['Daily_Return'].rolling(window=30).std()
+    df['VolAdjMom_MarketVol'] = df['EMA_10_VolAdjMom'] / df['Market_Volatility']
+    
+    # Incorporate Trend Reversal Signal
+    df['Short_Term_Mom'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_Mom'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Mom'] - df['Long_Term_Mom']
+    df['Reversal_Signal'] = np.sign(df['Momentum_Reversal'])
+    
+    # Integrate Non-Linear Transformation
+    df['Sqrt_VolAdjMom_MarketVol'] = np.sqrt(np.abs(df['VolAdjMom_MarketVol']))
+    df['Log_VolAdjMom_MarketVol'] = np.log(np.abs(df['VolAdjMom_MarketVol']))
+    
+    # Enhance Reversal Signal with Adaptive Smoothing
+    df['Smoothed_Reversal_Signal'] = df['Reversal_Signal'].ewm(span=5, adjust=False).mean()
+    df['Combined_Signal'] = df['Sqrt_VolAdjMom_MarketVol'] + df['Log_VolAdjMom_MarketVol'] + df['Smoothed_Reversal_Signal']
+    
+    # Refine Final Alpha Factor
+    df['Interim_Alpha_Factor'] = df['Combined_Signal']
+    df['Final_Alpha_Factor'] = df['Interim_Alpha_Factor'].ewm(span=5, adjust=False).mean()
+
+    return df['Final_Alpha_Factor']
+```

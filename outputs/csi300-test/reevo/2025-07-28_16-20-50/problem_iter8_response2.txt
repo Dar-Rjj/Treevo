@@ -1,0 +1,37 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Calculate 5 and 10 day Simple Moving Averages (SMA) of the closing price
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+
+    # Calculate the trend component using the difference between SMAs
+    df['trend'] = df['sma_5'] - df['sma_10']
+
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the 5-day rolling standard deviation (volatility) of the close price
+    df['volatility'] = df['close'].rolling(window=5).std()
+
+    # Generate a trade signal: 1 if the 5-day SMA is above the 10-day SMA, -1 otherwise
+    df['trade_signal'] = (df['sma_5'] > df['sma_10']).astype(int) * 2 - 1
+
+    # Adjust the factor weights based on market conditions
+    df['adjusted_factor'] = factor * df['trade_signal'] * (1 + df['volatility'])
+
+    # Combine VWAP, trend, and the adjusted factor
+    combined_factor = (df['vwap'] - df['close']) + df['trend'] + df['adjusted_factor']
+
+    return combined_factor
+```

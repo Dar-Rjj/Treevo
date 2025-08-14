@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics(df, n=10, m=20, threshold=1.5):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum
+    raw_momentum = df['daily_price_change'].rolling(window=n).mean()
+    
+    # Identify Volume Spikes
+    volume_ma = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > volume_ma * threshold).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    adjustment_factor = 0.8  # Dampening factor
+    adjusted_momentum = raw_momentum * (1 - df['volume_spike'] * (1 - adjustment_factor))
+    
+    # Calculate Smoothed Price Momentum
+    smoothed_price_momentum = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Volume Weight
+    average_volume = df['volume'].rolling(window=n).mean()
+    normalized_volume = df['volume'] / average_volume
+    volume_weight = normalized_volume.rolling(window=n).mean()
+    
+    # Combine Smoothed Price Momentum and Volume Weight
+    base_momentum_signal = smoothed_price_momentum * volume_weight
+    
+    # Calculate Intraday High-Low Spread Factor
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Combine Intraday Factors
+    combined_intraday_factor = intraday_high_low_spread + close_to_open_return
+    
+    # Calculate Weighted Price Movement
+    weighted_price_movement = (df['close'] - df['open']) * df['volume']
+    average_volume_5_days = df['volume'].rolling(window=5).mean()
+    weighted_price_movement_normalized = weighted_price_movement / average_volume_5_days
+    
+    # Final Alpha Factor
+    final_alpha_factor = (adjusted_momentum * combined_intraday_factor * weighted_price_movement_normalized) + base_momentum_signal
+    
+    # Adjust for Volatility
+    std_dev_close = df['close'].rolling(window=10).std()
+    final_alpha_factor = final_alpha_factor / (1 + std_dev_close)
+    
+    # Incorporate Trend Following
+    long_term_momentum = df['daily_price_change'].rolling(window=20).mean()
+    final_alpha_factor = final_alpha_factor * long_term_momentum
+    
+    return final_alpha_factor
+```

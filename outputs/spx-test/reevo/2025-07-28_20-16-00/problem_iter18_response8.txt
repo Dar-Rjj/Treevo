@@ -1,0 +1,38 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily range to gauge the day's volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Exponential Moving Average (EMA) for the close price over 7 days as a more reactive trend indicator
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Determine if today's close is above the 7-day EMA, indicating an upward momentum
+    momentum = (df['close'] > ema_7).astype(int)
+    
+    # Calculate the volume-weighted return of the last 5 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 14 days using EMA
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the ATR (Average True Range) for the last 21 days using EMA
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)
+    atr = true_range.ewm(span=21, adjust=False).mean()
+    
+    # Calculate the dynamic weighting based on the ratio of the current day's volume to the 21-day average volume
+    avg_volume_21 = df['volume'].ewm(span=21, adjust=False).mean()
+    volume_ratio = df['volume'] / avg_volume_21
+    
+    # Incorporate market breadth measures: percentage of stocks above their 50-day moving average
+    close_50_ema = df['close'].ewm(span=50, adjust=False).mean()
+    stocks_above_50_ema = (df['close'] > close_50_ema).rolling(window=21).mean()
+    
+    # Create a factor combining inverse volatility, momentum, RSI, ATR, volume ratio, and market breadth
+    alpha_factor = (1 / (daily_volatility + 1e-7)) * momentum * (rsi / 100) * (1 / (atr + 1e-7)) * weighted_return * volume_ratio * stocks_above_50_ema
+    
+    return alpha_factor
+```

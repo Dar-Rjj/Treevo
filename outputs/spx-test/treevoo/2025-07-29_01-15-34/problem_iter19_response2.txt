@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_period=14):
+    # Intraday Range Intensity
+    df['range_intensity'] = (df['high'] - df['low']) / ((df['high'] + df['low']) / 2)
+
+    # Open-to-Close Momentum Shift
+    df['momentum_shift'] = (df['close'] - df['open']) / df['close'].shift(1)
+    
+    # Volume Activity Ratio
+    df['volume_sum'] = df['volume'].rolling(window=n_period).sum()
+    df['volume_ema'] = df['volume'].ewm(span=n_period, adjust=False).mean()
+    df['activity_ratio'] = df['volume_sum'] / df['volume_ema']
+
+    # Daily Return Volatility Adjusted
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['atr'] = df['high'] - df['low']
+    df['atr'] = df['atr'].rolling(window=n_period).mean()  # Simplified ATR
+    df['volatility_adjusted_return'] = df['log_return'] / df['atr']
+
+    # Price Volatility Factor
+    df['log_ret_std'] = df['log_return'].rolling(window=n_period).std()
+    df['daily_gain'] = df['close'].diff().apply(lambda x: max(x, 0))
+    df['daily_loss'] = df['close'].diff().apply(lambda x: abs(min(x, 0)))
+    df['avg_gain'] = df['daily_gain'].rolling(window=n_period).mean()
+    df['avg_loss'] = df['daily_loss'].rolling(window=n_period).mean()
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+
+    # Combine the factors
+    factor = (
+        df['range_intensity'] 
+        + df['momentum_shift']
+        + df['activity_ratio']
+        + df['volatility_adjusted_return']
+        + df['log_ret_std']
+        + df['rsi']
+    ) / 6  # Normalize by averaging
+
+    return factor.dropna()
+```

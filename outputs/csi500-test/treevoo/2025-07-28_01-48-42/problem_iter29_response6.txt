@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns and volume changes
+    df['daily_return'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].diff()
+    df['volume_change_ratio'] = df['volume_change'] / df['volume'].shift(1)
+    
+    # Analyze high-low range and intraday volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['range_to_close_ratio'] = df['daily_range'] / df['close']
+    df['true_range'] = df[['high' - 'low', 'high' - 'close'].shift(1).abs(), ('low' - 'close').shift(1).abs()]].max(axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Examine opening and closing gaps
+    df['open_to_prev_close_gap'] = df['open'] - df['close'].shift(1)
+    df['gap_to_prev_close_ratio'] = df['open_to_prev_close_gap'] / df['close'].shift(1)
+    df['close_to_open_gap'] = df['close'] - df['open']
+    
+    # Analyze moving averages and trend-following indicators
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_diff_5_20'] = df['sma_5'] - df['sma_20']
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd_line'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd_line'] - df['signal_line']
+    
+    # Explore momentum and rate of change
+    df['roc_5'] = df['close'].pct_change(periods=5)
+    df['roc_10'] = df['close'].pct_change(periods=10)
+    df['roc_diff_5_10'] = df['roc_5'] - df['roc_10']
+    df['cumulative_return_10'] = (df['close'] / df['close'].shift(10)) - 1
+    
+    # Investigate relative strength and outperformance
+    # Assuming 'benchmark' is a column in the dataframe with the benchmark index prices
+    df['benchmark_return'] = df['benchmark'].pct_change()
+    df['relative_strength'] = df['daily_return'] / df['benchmark_return']
+    df['outperform_benchmark'] = (df['daily_return'] > df['benchmark_return']).astype(int)
+    df['outperform_percentage'] = df['outperform_benchmark'].rolling(window=20).mean()
+    
+    # Analyze the relationship between volume and price
+    df['volume_to_range_ratio'] = df['volume'] / df['daily_range']
+    df['volume_to_abs_return_ratio'] = df['volume'] / df['daily_return'].abs()
+    
+    # Combine multiple factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['daily_return'] + 
+        df['volume_change_ratio'] + 
+        df['range_to_close_ratio'] + 
+        df['atr_14'] + 
+        df['gap_to_prev_close_ratio'] + 
+        df['sma_diff_5_20'] + 
+        df['macd_histogram'] + 
+        df['roc_diff_5_10'] + 
+        df['cumulative_return_10'] + 
+        df['relative_strength'] + 
+        df['outperform_percentage'] + 
+        df['volume_to_abs_return_ratio']
+    )
+    
+    return df['alpha_factor']
+```

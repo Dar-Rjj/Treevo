@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = df['close'] / intraday_range
+    
+    # Calculate Momentum Component
+    N = 5
+    returns = df['close'].pct_change()
+    momentum_component = (returns.rolling(window=N).sum() * close_to_range_ratio).fillna(0)
+    
+    # Adjust for Volume Activity
+    volume_change = df['volume'] - df['volume'].shift(5)
+    average_volume = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change / average_volume
+    volume_trend_score = volume_change_rate.apply(lambda x: 1.5 if x > 1 else (-1.2 if x < 1 else 0))
+    
+    # Calculate Volume-Weighted Intraday Return
+    intraday_return = df['close'] - df['open']
+    volume_weighted_intraday_return = intraday_return * df['volume']
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    average_volume_15 = df['volume'].rolling(window=15).mean()
+    scaled_volume = df['volume'] / average_volume_15
+    volume_adjusted_high_low_spread = (df['high'] - df['low']) * scaled_volume
+    
+    # Calculate Daily Market Sentiment
+    daily_price_diff = df['close'] - df['open']
+    rolling_sum_daily_price_diff = daily_price_diff.rolling(window=5).sum()
+    sma_10 = rolling_sum_daily_price_diff.rolling(window=10).mean()
+    daily_market_sentiment = rolling_sum_daily_price_diff - sma_10
+    
+    # Calculate Volatility Ratio
+    volatility_ratio = df['volume'] / (df['close'] - df['open']).abs()
+    rolling_mean_volatility_ratio = volatility_ratio.rolling(window=20).mean()
+    volatility_ratio_diff = volatility_ratio - rolling_mean_volatility_ratio
+    
+    # Calculate True Range
+    true_range = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    rolling_mean_true_range = true_range.rolling(window=30).mean()
+    true_range_diff = true_range - rolling_mean_true_range
+    true_range_final = true_range_diff * (df['close'] - df['open']).apply(lambda x: 1 if x >= 0 else -1)
+    
+    # Final Combined Factor
+    combined_factor = (
+        momentum_component * volume_trend_score + 
+        volume_weighted_intraday_return + 
+        volume_adjusted_high_low_spread + 
+        daily_market_sentiment + 
+        volatility_ratio_diff + 
+        true_range_final
+    )
+    
+    # Opening Impact Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    final_alpha_factor = combined_factor - open_to_close_return
+    
+    return final_alpha_factor
+```

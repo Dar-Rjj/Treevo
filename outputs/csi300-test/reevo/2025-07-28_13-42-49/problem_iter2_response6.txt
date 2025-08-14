@@ -1,0 +1,34 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate the 10-day and 30-day realized volatility
+    df['volatility_10d'] = df['daily_return'].rolling(window=10).std() * (252 ** 0.5)
+    df['volatility_30d'] = df['daily_return'].rolling(window=30).std() * (252 ** 0.5)
+    
+    # Adaptive window for momentum based on the volatility
+    df['momentum_window'] = (df['volatility_10d'] / df['volatility_30d']).apply(lambda x: 10 if x < 1 else 30)
+    df['adaptive_momentum'] = df.apply(lambda row: row['close'] / df.loc[df.index.get_loc(row.name) - row['momentum_window'], 'close'], axis=1)
+    
+    # Calculate the average volume over the past 5 days
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    
+    # Calculate the market cap as close price * volume
+    df['market_cap'] = df['close'] * df['volume']
+    
+    # Calculate the 10-day and 30-day moving average of market cap
+    df['market_cap_10d_ma'] = df['market_cap'].rolling(window=10).mean()
+    df['market_cap_30d_ma'] = df['market_cap'].rolling(window=30).mean()
+    
+    # Calculate the weighted moving average of the close price over the past 10 days with adaptive weights
+    df['wma_10d'] = df['close'].rolling(window=10).apply(lambda prices: sum(w * p for w, p in zip(range(1, 11), prices)) / 55, raw=True)
+    
+    # Combine the daily return, adaptive momentum, market cap ratios, and weighted moving average into a single factor
+    factor = (df['daily_return'] + 
+              df['adaptive_momentum'] + 
+              (df['market_cap_10d_ma'] / df['market_cap_30d_ma']) - 
+              (df['close'] - df['wma_10d']))
+    
+    return factor.dropna()
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Return and Adjustments
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Adjusted_Intraday_Return'] = df['Intraday_Return'] / (df['high'] - df['low'])
+
+    # 30-day Price Momentum
+    df['30_day_Price_Momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+
+    # Volume and Amount Shocks
+    avg_30d_volume = df['volume'].rolling(window=30).mean()
+    avg_30d_amount = df['amount'].rolling(window=30).mean()
+    df['Volume_Shock'] = (df['volume'] > 2 * avg_30d_volume).astype(int)
+    df['Amount_Shock'] = (df['amount'] > 2 * avg_30d_amount).astype(int)
+
+    # Enhanced Volume and Price Volatility
+    df['Volume_Adjusted_High_Low_Range'] = (df['high'] - df['low']) * df['volume']
+    df['10_day_Volume_Moving_Avg'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = (df['volume'] > df['10_day_Volume_Moving_Avg']).astype(int) * 2 - 1
+
+    # Composite Alpha Factors
+    df['Volume_Momentum'] = (df['volume'] - df['volume'].shift(30)) / df['volume'].shift(30)
+    df['Adjusted_Volume_Momentum'] = df['Volume_Momentum'] * (df['high'] / df['low'])
+    df['Inverted_Volume_Momentum'] = -1 * df['Volume_Momentum']
+    df['Composite_Alpha'] = (df['Inverted_Volume_Momentum'] + df['Adjusted_Volume_Momentum'] + 
+                             (df['high'] - df['low']) * df['volume'] * df['Volume_Momentum'])
+
+    # Combined Volume and Price Ratio
+    df['Combined_Volume_Price_Ratio'] = (df['high'] / df['low']) * df['Volume_Trend']
+
+    # Weighted and Integrated Alpha Factor
+    df['Weighted_Intraday_Return'] = 0.2 * df['Adjusted_Intraday_Return']
+    df['Weighted_30_day_Momentum'] = 0.3 * df['30_day_Price_Momentum']
+    df['Weighted_Volume_Amount_Shocks'] = 0.1 * df['Volume_Shock'] * df['Amount_Shock']
+    df['Weighted_Adjusted_Volume_Momentum'] = 0.2 * df['Adjusted_Volume_Momentum']
+    df['Weighted_Inverted_Volume_Momentum'] = 0.15 * df['Inverted_Volume_Momentum']
+    df['Weighted_Composite_Alpha'] = 0.15 * df['Composite_Alpha']
+
+    # Final Alpha
+    df['Final_Alpha'] = (df['Weighted_Intraday_Return'] + 
+                         df['Weighted_30_day_Momentum'] + 
+                         df['Weighted_Volume_Amount_Shocks'] + 
+                         df['Weighted_Adjusted_Volume_Momentum'] + 
+                         df['Weighted_Inverted_Volume_Momentum'] + 
+                         df['Weighted_Composite_Alpha'])
+
+    # Adjust by 30-day Volume Momentum
+    df['Final_Alpha'] *= df['Volume_Momentum']
+
+    return df['Final_Alpha']
+```

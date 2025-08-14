@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 20-day Price Momentum
+    df['20_day_price_momentum'] = df['close'].pct_change(20)
+    
+    # Calculate Volume Confirmation
+    df['20_day_avg_volume'] = df['volume'].rolling(window=20).mean().shift(1)
+    df['volume_ratio'] = df['volume'] / df['20_day_avg_volume']
+    df['volume_confirmation'] = df['volume_ratio'].apply(lambda x: 1 if x > 1 else (-1 if x < 1 else 0))
+    
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_high_to_low_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['combined_indicator'] = df['intraday_high_to_low_pct_change'] * df['volume_change_ratio']
+    
+    # Calculate 20-Day Moving Standard Deviation for Threshold Adjustment
+    df['20_day_volatility'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Final Alpha Factor
+    conditions = [
+        (df['volume_confirmation'] == 1),
+        (df['volume_confirmation'] == -1),
+        (df['volume_confirmation'] == 0)
+    ]
+    choices = [
+        df['20_day_price_momentum'],
+        -df['20_day_price_momentum'],
+        df['intraday_high_to_low_pct_change']
+    ]
+    df['alpha_factor'] = pd.np.select(conditions, choices, default=0)
+    
+    # Apply Threshold to Final Alpha Factor
+    fixed_threshold = 0.01
+    df['final_alpha_factor'] = df['alpha_factor'].apply(lambda x: x if abs(x) > fixed_threshold else 0)
+    
+    # Adjust for Market Volatility
+    df['final_alpha_factor_vol_adjusted'] = df['final_alpha_factor'] / df['20_day_volatility']
+    
+    return df['final_alpha_factor_vol_adjusted']
+```

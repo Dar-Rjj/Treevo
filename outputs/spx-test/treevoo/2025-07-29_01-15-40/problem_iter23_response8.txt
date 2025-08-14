@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Average Intraday High-Low Spread over past N days (e.g., 10)
+    n = 10
+    df['avg_high_low_spread'] = df['high_low_spread'].rolling(window=n).mean()
+    
+    # High-Low Momentum Score
+    df['high_low_momentum_score'] = np.where(df['high_low_spread'] > df['avg_high_low_spread'], 1, -1) * df['volume']
+    
+    # Price Momentum over the last 5 days
+    period = 5
+    df['price_change'] = df['close'] - df['close'].shift(period)
+    df['price_momentum'] = df['price_change'].rolling(window=period).sum()
+    
+    # Moving Averages
+    short_period = 5
+    long_period = 20
+    df['short_ma'] = df['close'].rolling(window=short_period).mean()
+    df['long_ma'] = df['close'].rolling(window=long_period).mean()
+    df['trend_indicator'] = df['short_ma'] - df['long_ma']
+    
+    # Average Daily Trading Volume over the last 14 days
+    vol_period = 14
+    df['avg_volume'] = df['volume'].rolling(window=vol_period).mean()
+    df['relative_volume_activity'] = np.where(df['volume'] > df['avg_volume'], 1, -1)
+    
+    # Volatility Measures
+    volatility_window = 20
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility'] = df['daily_returns'].rolling(window=volatility_window).std()
+    df['high_low_range_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Range Momentum
+    m = 20
+    df['avg_daily_range'] = df['high_low_spread'].rolling(window=m).mean()
+    df['range_momentum'] = np.where(df['high_low_spread'] > df['avg_daily_range'], 1, -1)
+    
+    # Open-Price and Close-Price Movement
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_low_diff'] = df['open'] - df['low']
+    df['open_close_sum'] = df['open_close_diff'].rolling(window=period).sum()
+    df['open_low_sum'] = df['open_low_diff'].rolling(window=period).sum()
+    
+    # Volume-Weighted Rolling Average of High-Low Ratios
+    rolling_window = 10
+    df['high_low_ratio'] = (df['high'] - df['low']) / df['close']
+    df['volume_weighted_mean'] = (df['high_low_ratio'] * df['volume']).rolling(window=rolling_window).sum() / df['volume'].rolling(window=rolling_window).sum()
+    df['smoothed_volume_weighted_mean'] = df['volume_weighted_mean'].ewm(alpha=0.2).mean()
+    
+    # Combine Factors
+    factor = (0.1 * df['high_low_momentum_score'] 
+              + 0.15 * df['price_momentum'] 
+              + 0.1 * df['trend_indicator'] 
+              + 0.1 * df['relative_volume_activity'] 
+              + 0.1 * df['volatility'] 
+              + 0.1 * df['range_momentum'] 
+              + 0.1 * df['open_close_sum'] 
+              + 0.1 * df['open_low_sum'] 
+              + 0.1 * df['smoothed_volume_weighted_mean'])
+    
+    return factor.dropna()
+
+# Example usage:
+# df = pd.DataFrame({'date': pd.date_range(start='2023-01-01', periods=100),
+#                    'open': np.random.uniform(100, 200, 100),
+#                    'high': np.random.uniform(100, 200, 100),
+#                    'low': np.random.uniform(100, 200, 100),
+#                    'close': np.random.uniform(100, 200, 100),
+#                    'volume': np.random.randint(100000, 1000000, 100)})
+# df.set_index('date', inplace=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+

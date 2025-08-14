@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 20-day return as a longer-term momentum indicator
+    df['momentum_20d'] = df['close'].pct_change(periods=20)
+    
+    # Calculate the 60-day rolling standard deviation of log returns as a more stable volatility factor
+    df['log_returns'] = np.log(df['close']).diff()
+    df['volatility_60d'] = df['log_returns'].rolling(window=60).std()
+    
+    # Smoothed volume using Exponential Moving Average (EMA) with a span of 30
+    df['smoothed_volume_ema_30'] = df['volume'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the relative strength index (RSI) as a trend measure
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Integrate market sentiment using the ratio of high and low prices
+    df['market_sentiment'] = df['high'] / df['low']
+    
+    # Calculate the 50-day average trading volume to identify trading volume patterns
+    df['avg_volume_50d'] = df['volume'].rolling(window=50).mean()
+    
+    # Calculate the 104-week high and low for mean reversion
+    df['104w_high'] = df['close'].rolling(window=520).max()
+    df['104w_low'] = df['close'].rolling(window=520).min()
+    df['mean_reversion'] = (df['close'] - df['104w_low']) / (df['104w_high'] - df['104w_low'])
+    
+    # Calculate the 120-day volume-weighted moving average price
+    df['vwap_120d'] = (df['close'] * df['volume']).rolling(window=120).sum() / df['volume'].rolling(window=120).sum()
+    
+    # Calculate the 200-day EMA of the close price for long-term smoothing
+    df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the 200-day EMA of the volume for long-term volume smoothing
+    df['volume_ema_200'] = df['volume'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the alpha factor as the product of momentum, the inverse of volatility,
+    # weighted by the smoothed volume, adjusted by the RSI, market sentiment, average trading volume,
+    # mean reversion, 120-day volume-weighted moving average price, 200-day EMA, and 200-day EMA of volume
+    df['inv_volatility'] = 1 / (df['volatility_60d'] + 1e-7)
+    alpha_factor = (df['momentum_20d'] * df['inv_volatility'] * df['smoothed_volume_ema_30'] *
+                    df['rsi_14'] * df['market_sentiment'] * df['avg_volume_50d'] * df['mean_reversion'] *
+                    df['vwap_120d'] * df['ema_200'] * df['volume_ema_200'])
+    
+    return alpha_factor
+```

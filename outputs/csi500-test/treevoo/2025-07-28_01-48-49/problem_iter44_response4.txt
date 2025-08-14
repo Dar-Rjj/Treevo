@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Adjust by Volume Change and Price Level
+    volume_change = df['volume'] / df['volume'].shift(1)
+    price_level_adjustment = df['close'] / df['open']
+    adjusted_range = intraday_range * volume_change * price_level_adjustment
+    
+    # Integrate Intraday Price Movement and Volume
+    intraday_momentum_score = intraday_range * volume_change
+    intraday_momentum_score.name = 'IntradayMomentumScore'
+    
+    # Calculate 5-Day Average High-Low Spread
+    five_day_high_low_spread = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    five_day_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    high_low_spread_momentum = five_day_high_low_spread * five_day_momentum
+    high_low_spread_momentum.name = 'HighLowSpreadMomentum'
+    integrated_momentum_factor = intraday_momentum_score + high_low_spread_momentum
+    integrated_momentum_factor.name = 'IntegratedMomentumFactor'
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    volume_weighted_average_price = (df['high'] + df['low'] + df['close']) / 3
+    volume_adjusted_trend = (close_to_close_return * intraday_range) / volume_weighted_average_price
+    volume_adjusted_trend.name = 'VolumeAdjustedTrend'
+    
+    # Introduce Volume Trend
+    five_day_sum_volume = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / five_day_sum_volume
+    volume_trend_adjusted_factor = volume_adjusted_trend * volume_ratio
+    volume_trend_adjusted_factor.name = 'VolumeTrendAdjustedFactor'
+    
+    # Utilize High and Low Prices for Volatility Measures
+    daily_range = df['high'] - df['low']
+    relative_range = daily_range / df['close']
+    average_daily_range = daily_range.rolling(window=20).mean()
+    volatility_spike = (daily_range > 1.5 * average_daily_range).astype(int)
+    
+    # Generate Complex Alpha Factors from Basic Components
+    momentum_volatility_score = integrated_momentum_factor * (1 + volatility_spike)
+    comprehensive_alpha_factor = (volume_adjusted_trend * volume_trend_adjusted_factor) + (relative_range * volume_ratio)
+    
+    # Final Factor Calculation
+    final_factor = (
+        0.2 * adjusted_range +
+        0.3 * five_day_momentum +
+        0.2 * integrated_momentum_factor +
+        0.3 * volume_trend_adjusted_factor
+    )
+    
+    return final_factor
+```

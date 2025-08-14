@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['vwco_return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+    
+    # Adaptive Lookback Periods
+    short_term_volatility = df['vwco_return'].rolling(window=5).std()
+    mid_term_volatility = df['vwco_return'].rolling(window=10).std()
+    long_term_volatility = df['vwco_return'].rolling(window=20).std()
+    
+    # Combine Multi-Period Volatilities with Weights
+    weights = [0.4, 0.3, 0.3]  # Short, Mid, Long term weights
+    combined_volatility = (short_term_volatility * weights[0] +
+                           mid_term_volatility * weights[1] +
+                           long_term_volatility * weights[2])
+    
+    # Incorporate Dynamic Market Trend Adjustments
+    close_5d_ma = df['close'].rolling(window=5).mean()
+    close_20d_ma = df['close'].rolling(window=20).mean()
+    price_trend = (close_5d_ma - close_20d_ma) / close_20d_ma
+    
+    # Non-Linear Transformation
+    log_vwco_return = np.log1p(np.abs(df['vwco_return']))
+    sqrt_combined_volatility = np.sqrt(combined_volatility)
+    
+    # Incorporate Trade Volume Changes
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    volume_change_5d_ma = df['volume_change'].rolling(window=5).mean()
+    volume_change_20d_ma = df['volume_change'].rolling(window=20).mean()
+    volume_trend = np.where(volume_change_5d_ma > volume_change_20d_ma, 1, -1)
+    
+    # Final Alpha Factor
+    alpha_factor = (log_vwco_return / sqrt_combined_volatility) * price_trend * volume_trend
+    
+    return alpha_factor
+```

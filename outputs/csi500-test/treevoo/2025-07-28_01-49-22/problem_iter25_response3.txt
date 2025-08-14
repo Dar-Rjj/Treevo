@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    abs_close_to_close = (df['close'] - df['close'].shift(1)).abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_high_low_close = high_low_range - abs_close_to_close
+    
+    # Calculate Volume Adjusted Intraday Range
+    volume_adjusted_intraday_range = high_low_range * df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_low_range.rolling(window=10).mean()
+    
+    # Calculate Close Price Momentum
+    close_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = high_low_range / (df['high'] + df['low'])
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha = (
+        volume_adjusted_intraday_range +
+        combined_high_low_close +
+        intraday_range_ratio -
+        (df['open'] - df['close'].shift(1))
+    )
+    
+    # Introduce Dynamic Threshold Adjustment
+    ten_day_ma_intraday_range_ratio = intraday_range_ratio.rolling(window=10).mean()
+    dynamic_adjustment = 1.5 if intraday_range_ratio > ten_day_ma_intraday_range_ratio else 0.5
+    adjusted_intermediate_alpha = intermediate_alpha * dynamic_adjustment
+    
+    # Introduce Volume Momentum
+    ten_day_avg_volume = df['volume'].rolling(window=10).mean()
+    volume_momentum_factor = (df['volume'] / ten_day_avg_volume)
+    volume_adjustment = 1.15 if volume_momentum_factor > 1 else 0.85
+    final_alpha = adjusted_intermediate_alpha * volume_adjustment
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = intraday_volatility * (final_alpha + close_momentum)
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] / df['open'] - 1
+    
+    # Calculate Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+    
+    # Calculate Daily Price Return
+    df['daily_price_return'] = df['close'].pct_change()
+    
+    # Calculate 20-Day Weighted Moving Average of Returns
+    df['weighted_return'] = df['daily_price_return'] * df['volume']
+    df['sum_weighted_return_22d'] = df['weighted_return'].rolling(window=22).sum()
+    df['sum_volume_22d'] = df['volume'].rolling(window=22).sum()
+    df['wma_returns_22d'] = df['sum_weighted_return_22d'] / df['sum_volume_22d']
+    
+    # Adjust for Price Volatility
+    df['price_range'] = df['high'] - df['low']
+    df['avg_price_range_22d'] = df['price_range'].rolling(window=22).mean()
+    df['final_factor_value'] = df['wma_returns_22d'] - df['avg_price_range_22d']
+    
+    # Combine Factors
+    df['atr'] = pd.DataFrame({
+        'h-l': df['high'] - df['low'],
+        'h-pc': df['high'] - df['close'].shift(1),
+        'l-pc': df['low'] - df['close'].shift(1)
+    }).max(axis=1)
+    df['adjusted_atr'] = df['atr'] * df['reversal_signal']
+    df['combined_factor'] = df['wma_returns_22d'] + df['adjusted_atr']
+    
+    # Introduce Volume-Weighted Price Change
+    df['volume_weighted_price'] = (df['close'] * df['volume']).rolling(window=22).sum() / df['sum_volume_22d']
+    df['volume_weighted_price_change'] = df['close'] - df['volume_weighted_price']
+    
+    # Incorporate into Combined Factor
+    df['incorporated_factor'] = df['reversal_signal'] + df['wma_returns_22d'] + df['final_factor_value'] + df['volume_weighted_price_change'] + df['adjusted_atr']
+    df['final_factor'] = df['incorporated_factor'].ewm(span=5, adjust=False).mean()  # Apply EMA with short period (e.g., 5 days)
+    
+    return df['final_factor']
+```

@@ -1,0 +1,39 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Incorporate market depth with a simple measure of price range
+    price_range = df['high'] - df['low']
+    market_depth_factor = (df['close'] - df['low']) / (price_range + 1e-7)
+    
+    # Exponential smoothing for the factor
+    factor_smoothed = factor.ewm(span=5, adjust=False).mean()
+    
+    # Volume Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Multi-period momentum
+    momentum_5 = (df['close'] / df['close'].shift(5)) - 1
+    momentum_20 = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Combine VWAP with multi-period momentum
+    combined_momentum = (momentum_5 + momentum_20) / 2
+    vwap_momentum = vwap * combined_momentum
+    
+    # Seasonality factor (simplified by using day of the week)
+    df['day_of_week'] = df.index.dayofweek
+    seasonality_factor = df['day_of_week'].rolling(window=5).mean() / 4  # Normalize to [0, 1]
+    
+    # Final factor combining all elements
+    final_factor = (factor_smoothed + market_depth_factor + vwap_momentum + seasonality_factor) / 4
+
+    return final_factor

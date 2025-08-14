@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def average_true_range(high, low, close, n=14):
+    tr = pd.DataFrame(index=high.index)
+    tr['h-l'] = high - low
+    tr['h-pc'] = abs(high - close.shift(1))
+    tr['l-pc'] = abs(low - close.shift(1))
+    tr['tr'] = tr.max(axis=1)
+    atr = tr['tr'].rolling(window=n).mean()
+    return atr
+
+def rate_of_change(close, n=10):
+    return (close / close.shift(n) - 1) * 100
+
+def positive_directional_movement(high, low, n=14):
+    up_move = high - high.shift(1)
+    down_move = low.shift(1) - low
+    plus_dm = pd.Series(0, index=high.index)
+    plus_dm[(up_move > down_move) & (up_move > 0)] = up_move
+    return plus_dm.rolling(window=n).sum()
+
+def negative_directional_movement(high, low, n=14):
+    up_move = high - high.shift(1)
+    down_move = low.shift(1) - low
+    minus_dm = pd.Series(0, index=high.index)
+    minus_dm[(down_move > up_move) & (down_move > 0)] = down_move
+    return minus_dm.rolling(window=n).sum()
+
+def on_balance_volume(close, volume):
+    obv = (volume * ((close > close.shift(1)).astype(int) - (close < close.shift(1)).astype(int))).cumsum()
+    return obv
+
+def chaikin_money_flow(high, low, close, volume, n=20):
+    mfm = ((close - low) - (high - close)) / (high - low)
+    mf_volume = mfm * volume
+    cmf = mf_volume.rolling(window=n).sum() / volume.rolling(window=n).sum()
+    return cmf
+
+def heuristics(df):
+    df['atr'] = average_true_range(df['high'], df['low'], df['close'])
+    df['roc'] = rate_of_change(df['close'])
+    df['pdm'] = positive_directional_movement(df['high'], df['low'])
+    df['ndm'] = negative_directional_movement(df['high'], df['low'])
+    df['obv'] = on_balance_volume(df['close'], df['volume'])
+    df['cmf'] = chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'])
+
+    # Custom factor combining DMI and OBV
+    df['dmi_obv'] = (df['pdm'] - df['ndm']) * df['obv']
+    
+    # Alpha indicator incorporating ATR and CMF
+    df['alpha_indicator'] = df['atr'] * df['cmf']
+
+    return df['alpha_indicator']
+```

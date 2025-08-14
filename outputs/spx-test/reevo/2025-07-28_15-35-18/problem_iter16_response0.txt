@@ -1,0 +1,56 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the multi-period momentum as the difference between today's close and the 20-day simple moving average of the close
+    multi_period_momentum = df['close'] - df['close'].rolling(window=20).mean()
+
+    # Compute the exponential moving average (EMA) of the volume over 30 days for a smoother liquidity measure
+    ema_volume = df['volume'].ewm(span=30, adjust=False).mean()
+
+    # Calculate the ratio of the high to the 30-day EMA of the high to capture relative strength
+    relative_high_ema = df['high'] / df['high'].ewm(span=30, adjust=False).mean()
+
+    # Calculate the ratio of the low to the 30-day EMA of the low to capture relative weakness
+    relative_low_ema = df['low'] / df['low'].ewm(span=30, adjust=False).mean()
+
+    # Calculate the 30-day EMA of the open price to incorporate market depth
+    ema_open = df['open'].ewm(span=30, adjust=False).mean()
+
+    # Calculate the 30-day EMA of the close price to incorporate market depth
+    ema_close = df['close'].ewm(span=30, adjust=False).mean()
+
+    # Calculate the bid-ask spread proxy as the difference between the 30-day EMA of the high and the 30-day EMA of the low
+    bid_ask_spread_proxy = df['high'].ewm(span=30, adjust=False).mean() - df['low'].ewm(span=30, adjust=False).mean()
+
+    # Incorporate a sophisticated volatility measure using the 30-day exponentially weighted standard deviation of the close price
+    ewm_volatility = df['close'].ewm(span=30, adjust=False).std()
+
+    # Calculate the price range as the difference between the high and low to capture intraday volatility
+    price_range = df['high'] - df['low']
+
+    # Calculate the inter-period relationship: the ratio of today's close to the previous day's close
+    inter_period_relationship = df['close'] / df['close'].shift(1)
+
+    # Introduce a factor that captures the trend in the price range
+    trend_in_price_range = (df['high'] - df['low']).pct_change().ewm(span=30, adjust=False).mean()
+
+    # Calculate the 30-day EMA of the daily return
+    daily_return = df['close'].pct_change()
+    ema_daily_return = daily_return.ewm(span=30, adjust=False).mean()
+
+    # Interaction term between the multi-period momentum and the EMA of the daily return
+    interaction_momentum_ema = multi_period_momentum * ema_daily_return
+
+    # Combine the components into a single factor
+    factor_values = (multi_period_momentum * 
+                     ema_volume * 
+                     relative_high_ema * 
+                     relative_low_ema * 
+                     (ema_open / ema_close) * 
+                     bid_ask_spread_proxy / ewm_volatility * 
+                     price_range * 
+                     inter_period_relationship * 
+                     trend_in_price_range * 
+                     (1 + interaction_momentum_ema))
+
+    return factor_values
+```

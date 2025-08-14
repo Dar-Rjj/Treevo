@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Momentum
+    df['Momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Impact Adjustment
+    df['Volume_Impact'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Daily Enhanced Dynamic Price Range
+    df['Daily_Enhanced_Range'] = (df['high'] - df['low']) * (df['close'] / df['open'])
+    
+    # Average Trading Price
+    df['Average_Trading_Price'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    
+    # Volume Adjusted Enhanced Range
+    df['Volume_Adjusted_Range'] = (df['Daily_Enhanced_Range'] / df['Average_Trading_Price']).replace([np.inf, -np.inf], 0) * df['volume']
+    
+    # Short-Term Rolling Avg of Volume Adjusted Enhanced Range
+    df['Short_Term_Volume_Adjusted_Range'] = df['Volume_Adjusted_Range'].rolling(window=15).mean()
+    
+    # Long-Term Rolling Avg of Volume Adjusted Enhanced Range
+    df['Long_Term_Volume_Adjusted_Range'] = df['Volume_Adjusted_Range'].rolling(window=25).mean()
+    
+    # Price Volatility
+    df['Price_Volatility'] = df['close'].rolling(window=30).std()
+    
+    # Trade Activity Influence
+    df['Trade_Activity_Influence'] = df['amount'] / df['amount'].rolling(window=30).mean()
+    
+    # Combine Momentum and Volume Impact
+    df['Combined_Momentum_Volume'] = df['Momentum'] * df['Volume_Impact']
+    
+    # Adjust for Price Volatility
+    df['Adjusted_Combined_Momentum_Volume'] = df['Combined_Momentum_Volume'] / df['Price_Volatility']
+    
+    # High-Low Range Momentum
+    df['High_Low_Range'] = df['high'] - df['low']
+    N = 7
+    alpha = 2 / (N + 1)
+    df['EMA_High_Low_Range'] = df['High_Low_Range'].ewm(alpha=alpha, adjust=False).mean()
+    df['Daily_Change_in_EMA'] = df['EMA_High_Low_Range'].diff()
+    
+    # Volume Shock
+    df['Volume_Percentage_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Volume_Shock_Flag'] = (df['Volume_Percentage_Change'].abs() > 0.6).astype(int)
+    
+    # Price Efficiency Ratio
+    df['Price_Efficiency'] = (df['close'] - df['close'].shift(30)) / (df['close'] - df['close'].shift(30)).abs()
+    
+    # Combine Indicators
+    df['Combined_Indicator'] = df['Daily_Change_in_EMA'] * np.sign(df['Volume_Shock_Flag'])
+    
+    # Finalize Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Short_Term_Volume_Adjusted_Range'] * 
+        df['Long_Term_Volume_Adjusted_Range'] * 
+        df['Combined_Indicator'] * 
+        df['Adjusted_Combined_Momentum_Volume'] * 
+        df['Trade_Activity_Influence'] * 
+        df['Price_Efficiency']
+    )
+    
+    return df['Alpha_Factor'].dropna()
+```

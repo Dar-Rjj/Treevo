@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Price momentum
+    df['close_roc_10'] = df['close'].pct_change(periods=10)
+    df['open_pct_change_10'] = df['open'].pct_change(periods=10)
+    
+    # Price volatility
+    df['range'] = df['high'] - df['low']
+    df['atr_14'] = df['range'].rolling(window=14).mean()
+    
+    # Trend strength
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_200'] = df['close'].rolling(window=200).mean()
+    df['sma_diff'] = df['sma_50'] - df['sma_200']
+    
+    # Volume momentum
+    df['volume_roc_10'] = df['volume'].pct_change(periods=10)
+    df['volume_pct_change_10'] = df['volume'].pct_change(periods=10)
+    
+    # Volume volatility
+    df['volume_std_10'] = df['volume'].rolling(window=10).std()
+    
+    # Volume trend
+    df['volume_sma_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_sma_50'] = df['volume'].rolling(window=50).mean()
+    df['volume_sma_diff'] = df['volume_sma_10'] - df['volume_sma_50']
+    
+    # On-balance volume (OBV)
+    df['obv'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['obv'] = df['obv'].cumsum()
+    
+    # Money flow index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['raw_money_flow'] * (df['typical_price'] > df['typical_price'].shift(1)).astype(int)
+    df['negative_money_flow'] = df['raw_money_flow'] * (df['typical_price'] < df['typical_price'].shift(1)).astype(int)
+    df['money_flow_ratio'] = df['positive_money_flow'].rolling(window=14).sum() / df['negative_money_flow'].rolling(window=14).sum()
+    df['mfi'] = 100 - (100 / (1 + df['money_flow_ratio']))
+    
+    # Chaikin money flow (CMF)
+    df['money_flow_multiplier'] = (2 * df['close'] - df['high'] - df['low']) / (df['high'] - df['low'])
+    df['money_flow_volume'] = df['money_flow_multiplier'] * df['volume']
+    df['cmf_14'] = df['money_flow_volume'].rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    
+    # Combine factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['close_roc_10'] + 
+        df['open_pct_change_10'] + 
+        df['range'] + 
+        df['atr_14'] + 
+        df['macd'] + 
+        df['sma_diff'] + 
+        df['volume_roc_10'] + 
+        df['volume_pct_change_10'] + 
+        df['volume_std_10'] + 
+        df['volume_sma_diff'] + 
+        df['obv'] + 
+        df['mfi'] + 
+        df['cmf_14']
+    )
+    
+    return df['alpha_factor']
+```

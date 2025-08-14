@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Day's momentum
+    df['days_momentum'] = df['close'] - df['open']
+    
+    # Relative closing position
+    df['relative_closing_position'] = (df['high'] - df['close']) / (df['high'] - df['low'])
+    
+    # Volume-weighted price
+    df['volume_weighted_price'] = (df['open'] * df['volume'] + df['high'] * df['volume'] + df['low'] * df['volume'] + df['close'] * df['volume']) / (4 * df['volume'])
+    
+    # Multi-day price change
+    for period in [5, 10, 20]:
+        df[f'price_change_{period}d'] = df['close'].pct_change(period)
+    
+    # Volume trend
+    df['volume_change_1d'] = df['volume'].pct_change()
+    df['volume_change_5d'] = df['volume'].pct_change(5)
+    
+    # High-low spread
+    df['high_low_spread'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    
+    # Price volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['volatility_20d'] = df['daily_return'].rolling(window=20).std()
+    
+    # Accumulation/Distribution Line
+    df['adl'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['adl'] = df['adl'].cumsum()
+    
+    # Money flow index
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    df['mfi'] = 100 - (100 / (1 + (positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum())))
+    
+    # RSI-like factor
+    gains = df['daily_return'].where(df['daily_return'] > 0, 0)
+    losses = -df['daily_return'].where(df['daily_return'] < 0, 0)
+    avg_gain = gains.rolling(window=14).mean()
+    avg_loss = losses.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Moving averages
+    df['sma_10d'] = df['close'].rolling(window=10).mean()
+    df['sma_50d'] = df['close'].rolling(window=50).mean()
+    df['ema_10d'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_50d'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Crossover signals
+    df['crossover_signal'] = np.where(df['sma_10d'] > df['sma_50d'], 1, 0)
+    
+    # Daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Volume return
+    df['volume_return_10d'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Open-close reversal
+    df['open_close_reversal'] = df['open'].shift(-1) - df['close']
+    
+    # Close-to-open gap
+    df['close_to_open_gap'] = df['open'].shift(-1) - df['close']
+    
+    # Average true range (ATR)
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['atr_14d'] = df['true_range'].rolling(window=14).mean()
+    
+    # Trend strength
+    df['trend_strength_20d'] = df['close'].rolling(window=20).apply(lambda x: linregress(range(len(x)), x)[0])
+    
+    # Return the DataFrame with the new columns
+    return df
+```

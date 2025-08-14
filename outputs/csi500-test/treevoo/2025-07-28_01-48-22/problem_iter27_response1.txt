@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between the closing price and the opening price
+    price_diff = df['close'] - df['open']
+    
+    # Combine the price difference with the volume traded on that day
+    weighted_momentum = price_diff * df['volume']
+    
+    # Calculate the intraday volatility (high - low)
+    intraday_volatility = df['high'] - df['low']
+    
+    # Apply a 5-day moving average to smooth out the intraday volatility
+    smoothed_intraday_volatility = intraday_volatility.rolling(window=5).mean()
+    
+    # Subtract the smoothed intraday volatility from the current day's intraday volatility
+    volatility_spike = intraday_volatility - smoothed_intraday_volatility
+    
+    # Calculate the ratio of the closing price to the volume
+    price_volume_ratio = df['close'] / df['volume']
+    
+    # Create a factor by taking the difference between the current day's ratio and the previous day's ratio
+    price_volume_change = price_volume_ratio - price_volume_ratio.shift(1)
+    
+    # Calculate the short-term (5 days) and long-term (20 days) moving averages of the closing price
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    
+    # Create a trend-following factor by subtracting the short-term moving average from the long-term moving average
+    trend_following_factor = short_term_ma - long_term_ma
+    
+    # Adjust the trend-following factor by the ratio of the current day's amount to the average amount over the long-term period
+    avg_long_term_amount = df['amount'].rolling(window=20).mean()
+    adjusted_trend_following_factor = trend_following_factor * (df['amount'] / avg_long_term_amount)
+    
+    # Calculate the gap between the current day's opening price and the previous day's closing price
+    overnight_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine the overnight gap with the volume of the first 30 minutes of trading (assuming we have this data)
+    # For simplicity, we assume the first 30 minutes' volume is proportional to the total volume
+    overnight_sentiment = overnight_gap * (df['volume'] / df['volume'].mean())
+    
+    # Calculate the relative position of the closing price within the day's range
+    close_position_ratio = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Create a factor that indicates the strength of the closing price
+    strong_close_factor = close_position_ratio
+    
+    # Combine all the factors into a single alpha factor
+    alpha_factor = (
+        weighted_momentum +
+        volatility_spike +
+        price_volume_change +
+        adjusted_trend_following_factor +
+        overnight_sentiment +
+        strong_close_factor
+    )
+    
+    return alpha_factor
+```

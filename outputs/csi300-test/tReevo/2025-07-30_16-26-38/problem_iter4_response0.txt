@@ -1,0 +1,28 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=5, volume_threshold=1e6):
+    # Calculate Intraday Return components
+    df['intraday_range'] = (df['high'] - df['low']) / df['low']
+    df['true_intraday_movement'] = (df['close'] - df['open']) / df['open']
+    
+    # Measure Overnight Return
+    df['onr'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Construct Composite Factor
+    intraday_momentum = df['true_intraday_movement'].apply(lambda x: 1.5 * x if x > 0.01 else x)
+    onr_reversal = df['onr'].apply(lambda x: -1 if x > 0.03 else 0.5)
+    composite_score = intraday_momentum + onr_reversal
+    
+    # Volume-Adjusted Momentum
+    volume_weighted_price = (df['open'] + df['close']) / 2
+    volume_adjusted_momentum = volume_weighted_price * df['volume']
+    composite_score += volume_adjusted_momentum.apply(lambda x: 1.2 * x if x > volume_threshold else x)
+    
+    # Enhance with Volume-Weighted Intraday and Overnight Factors
+    volume_weighted_intraday = (df['true_intraday_movement'] * df['volume']).rolling(window=n_days).sum()
+    volume_weighted_onr = (df['onr'] * df['volume']).rolling(window=n_days).sum()
+    final_alpha_factor = composite_score + volume_weighted_intraday + volume_weighted_onr
+    
+    return final_alpha_factor
+```

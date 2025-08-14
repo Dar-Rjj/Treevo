@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def heuristics_v2(df):
+    # Calculate logarithmic returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Define a weighted moving average function
+    def wma(series, n):
+        weights = np.arange(1, n+1)
+        return series.rolling(n).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    
+    # Calculate Weighted Moving Average
+    df['wma_5'] = wma(df['close'], 5)
+    
+    # Define Hull Moving Average
+    def hma(series, n):
+        wma_1 = 2 * wma(series, n // 2) - wma(series, n)
+        hma = wma(wma_1, int(np.sqrt(n)))
+        return hma
+    
+    # Calculate Hull Moving Average
+    df['hma_5'] = hma(df['close'], 5)
+    
+    # Define Simple Moving Average
+    def sma(series, n):
+        return series.rolling(window=n).mean()
+    
+    # Define Exponential Moving Average
+    def ema(series, n):
+        return series.ewm(span=n, adjust=False).mean()
+    
+    # Calculate SMAs and EMAs
+    df['sma_5'] = sma(df['close'], 5)
+    df['sma_10'] = sma(df['close'], 10)
+    df['ema_5'] = ema(df['close'], 5)
+    df['ema_10'] = ema(df['close'], 10)
+    
+    # Identify Adaptive Crossovers
+    df['adaptive_sma_crossover'] = (df['sma_5'] > df['sma_10']) & (df['log_returns'] > 0)
+    df['adaptive_ema_crossover'] = (df['ema_5'] > df['ema_10']) & (df['log_returns'].rolling(5).std() < df['log_returns'].rolling(20).std())
+    
+    # Calculate Volume-Price Trend
+    df['vpt'] = (df['vpt'].shift(1) + df['volume'] * (df['close'] - df['close'].shift(1)) / df['close'].shift(1)).fillna(0)
+    
+    # Calculate Money Flow Index
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_flow = np.where(typical_price > typical_price.shift(1), money_flow, 0)
+    negative_flow = np.where(typical_price < typical_price.shift(1), money_flow, 0)
+    positive_money_flow = positive_flow.rolling(window=14).sum()
+    negative_money_flow = negative_flow.rolling(window=14).sum()
+    df['mfi'] = 100 - (100 / (1 + positive_money_flow / negative_money_flow))
+    
+    # Calculate True Range
+    df['true_range'] = df[['high' - 'low', 'high' - 'open', 'low' - 'open']].abs().max(axis=1)
+    
+    # Calculate Smoothed ATR
+    df['satr'] = df['true_range'].ewm(span=14, adjust=False).mean()
+    
+    # Analyze Open and Close Price Relationship
+    df['gap_up_with_volume_spike'] = (df['open'] > df['close'].shift(1)) & (df['volume'] > df['volume'].rolling(window=20).mean())
+    df['gap_down_with_volume_spike'] = (df['open'] < df['close'].shift(1)) & (df['volume'] > df['volume'].rolling(window=20).mean())
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['log_returns'] +
+        (df['wma_5'] - df['hma_5']) +
+        (df['sma_5'] - df['sma_10']) +
+        (df['ema_5'] - df['ema_10']) +
+        df['vpt'] +
+        (df['mfi'] - 50) +
+        df['satr'] +
+        df['gap_up_with_volume_spike'].astype(int) -
+        df['gap_down_with_volume_spike'].astype(int)
+    )
+    
+    return alpha_factor
+```

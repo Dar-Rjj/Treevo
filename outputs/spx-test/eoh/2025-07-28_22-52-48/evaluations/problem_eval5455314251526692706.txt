@@ -1,0 +1,39 @@
+def heuristics_v2(df):
+    def compute_roc(price_series, n=14):
+        return price_series.pct_change(n)
+
+    def compute_cmf(high_series, low_series, close_series, volume_series, n=20):
+        mfv = ((close_series - low_series) - (high_series - close_series)) / (high_series - low_series)
+        mfv = mfv.fillna(0.0) * volume_series
+        cmf = mfv.rolling(window=n).sum() / volume_series.rolling(window=n).sum()
+        return cmf
+
+    def compute_adx(high_series, low_series, close_series, n=30):
+        tr = pd.concat([high_series - low_series, abs(high_series - close_series.shift(1)), 
+                        abs(low_series - close_series.shift(1))], axis=1).max(axis=1)
+        atr = tr.rolling(window=n).mean()
+        
+        move_up = high_series - high_series.shift(1)
+        move_down = low_series.shift(1) - low_series
+        pos = pd.Series(index=move_up.index, dtype='float64')
+        neg = pd.Series(index=move_up.index, dtype='float64')
+        pos[move_up > move_down] = move_up
+        neg[move_down > move_up] = move_down
+        pos = pos.rolling(window=n).mean()
+        neg = neg.rolling(window=n).mean()
+        
+        adx = 100 * (abs(pos - neg) / (pos + neg)).rolling(window=n).mean()
+        return adx
+
+    close_prices = df['close']
+    high_prices = df['high']
+    low_prices = df['low']
+    volume = df['volume']
+
+    roc_values = compute_roc(close_prices)
+    cmf_values = compute_cmf(high_prices, low_prices, close_prices, volume)
+    adx_values = compute_adx(high_prices, low_prices, close_prices)
+
+    # Heuristic matrix: weighted combination of ROC and CMF with ADX-based trend strength adjustment
+    heuristics_matrix = (roc_values * 0.6 + cmf_values * 0.4) * adx_values
+    return heuristics_matrix

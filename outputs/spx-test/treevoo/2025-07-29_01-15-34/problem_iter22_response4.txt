@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    close_position = (df['close'] - df['open']) / intraday_range
+    
+    # Calculate Intraday Volume Intensity
+    volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Intraday Price Change
+    price_change = (df['close'] - df['open']) / intraday_range
+    
+    # Close-to-Open Momentum Shift
+    momentum_shift = (df['close'] - df['open']) / df['open']
+    
+    # Daily Return Volatility
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    daily_return_volatility = daily_return / daily_return.rolling(window=20).std()
+    
+    # Combine Intraday Components
+    combined_intraday = (volume_intensity * close_position) + price_change + momentum_shift
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = ema_20 - df['close']
+    
+    # Incorporate Daily Return Volatility
+    volatility_adjusted = combined_intraday * daily_return_volatility + trend_adjustment
+    
+    # Volume Weighted Average Price (VWAP) Component
+    vwap = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_component = df['close'] - vwap
+    
+    # Final Alpha Factor
+    factor = volatility_adjusted + vwap_component
+    
+    # Multiply by Volume Activity Ratio
+    volume_activity_ratio = df['volume'].rolling(window=20).sum() / df['volume'].rolling(window=20).mean()
+    factor = factor * volume_activity_ratio
+    
+    # Incorporate Volume Spike Indicator
+    volume_spike = (df['volume'] - df['volume'].shift(1)) / df['volume'].rolling(window=10).mean()
+    factor = factor * (1 + volume_spike)
+    
+    # Integrate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    factor = factor * (rsi / 50)
+    
+    return factor
+```

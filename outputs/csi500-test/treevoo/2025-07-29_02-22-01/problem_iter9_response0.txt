@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Dynamic Volume Trend
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    dynamic_volume_trend = np.abs(df['volume'] - ema_volume)
+    
+    # Combine Metrics for Volatility
+    combined_metric = high_low_spread * dynamic_volume_trend + daily_return
+    volatility_sma = combined_metric.rolling(window=20).mean()
+    
+    # Integrate Price Momentum and Advanced Volume Confirmation
+    # Calculate Price Momentum
+    daily_price_change = df['close'].pct_change()
+    momentum = daily_price_change.rolling(window=30).sum()
+    
+    # Advanced Volume Confirmation
+    daily_volume_change = df['volume'].pct_change()
+    weighted_volume_increase = (daily_volume_change[daily_volume_change > 0] * np.arange(1, len(daily_volume_change) + 1)).rolling(window=20).sum()
+    positive_volume_days = (daily_volume_change > 0).astype(int).rolling(window=20).sum()
+    
+    # Final Alpha Factor
+    alpha_factor = volatility_sma * momentum
+    if positive_volume_days.iloc[-1] > 10:
+        alpha_factor = alpha_factor
+    else:
+        alpha_factor = alpha_factor * 0.9  # Reduce factor by 10% if volume confirmation is weak
+    
+    # Incorporate Trend Following Indicator
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd = short_ema - long_ema
+    signal_line = macd.ewm(span=9, adjust=False).mean()
+    
+    # Adjust Final Alpha Factor
+    trend_indicator = np.where(macd > signal_line, 1.1, 0.9)  # Increase by 10% if bullish, decrease by 10% if bearish
+    alpha_factor = alpha_factor * trend_indicator
+    alpha_factor = np.maximum(alpha_factor, 0)  # Ensure non-negative
+    
+    return pd.Series(alpha_factor, index=df.index)
+```

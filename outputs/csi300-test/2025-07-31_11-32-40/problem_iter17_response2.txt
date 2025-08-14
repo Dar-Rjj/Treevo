@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Calculate Close to Midpoint Deviation
+    df['CloseToMidpointDev'] = df['close'] - (df['high'] + df['low']) / 2
+    
+    # Calculate Adjusted Intraday Reversal with Momentum Adjustment
+    df['IntradayReversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    df['MomentumAdjustment'] = 1 + (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['AdjustedIntradayReversal'] = df['IntradayReversal'] * df['MomentumAdjustment']
+    
+    # Calculate Previous Day Return
+    df['PrevDayReturn'] = df['close'].shift(1) / df['open'].shift(1) - 1
+    
+    # Generate Intermediate Alpha Factor 1
+    df['IntermediateAlphaFactor1'] = df['IntradayRange'] * df['CloseToMidpointDev'] - df['PrevDayReturn']
+    
+    # Calculate Daily Volume Surprise
+    df['VolumeMA10'] = df['volume'].rolling(window=10).mean()
+    df['VolumeSurprise'] = df['volume'] - df['VolumeMA10']
+    
+    # Combine Price Momentum and Volume Surprise
+    df['PriceMomentum'] = df['close'] - df['close'].shift(10)
+    df['CombinedMomentumVolSurprise'] = df['PriceMomentum'] * df['VolumeSurprise']
+    
+    # Calculate High-Low Price Difference
+    df['HighLowDiff'] = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    df['UpwardVolume'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else 0, axis=1).rolling(window=10).sum()
+    df['DownwardVolume'] = df.apply(lambda row: row['volume'] if row['close'] < row['open'] else 0, axis=1).rolling(window=10).sum()
+    df['VolumeInfluenceRatio'] = df['UpwardVolume'] / df['DownwardVolume'].replace(to_replace=0, value=np.nan)
+    
+    # Adjust Momentum by Volume and Amount
+    df['VolumeWeightedReturn'] = df['HighLowDiff'] * df['volume'] * df['VolumeInfluenceRatio']
+    
+    # Introduce Time Decay
+    decay_rate = 0.95
+    df['DecayedVolumeAdjMomentum'] = df['VolumeWeightedReturn'] * (decay_rate ** (df.index.get_level_values('date') - df.index.get_level_values('date').min()))
+    
+    # Intermediate Alpha Factor Synthesis 1
+    df['IntermediateAlphaFactorSynth1'] = df['CombinedMomentumVolSurprise'] * df['HighLowDiff']
+    
+    # Calculate Adjusted Daily Momentum
+    df['AdjustedDailyMomentum'] = df['close'] - df['close'].shift(10)
+    
+    # Adjust by High-Low Spread
+    df['HighLowSpread'] = df['high'] - df['low']
+    df['SmoothedHighLowSpread'] = df['HighLowSpread'].ewm(span=10, adjust=False).mean()
+    
+    # Incorporate Intraday Return
+    df['IntradayReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Adjusted Momentum, High-Low Spread, and Intraday Return
+    df['CombinedMomentumHLSpreadIntradayReturn'] = df['AdjustedDailyMomentum'] * df['SmoothedHighLowSpread'] + df['IntradayReturn']
+    
+    # Adjust by Volume Change
+    df['VolumeRatio'] = df['volume'] / df['volume'].shift(1)
+    df['SmoothedVolumeRatio'] = df['VolumeRatio'].rolling(window=10).mean()
+    
+    # Combine Volume Impact Factors
+    df['CombinedVolumeImpact'] = df['VolumeSurprise'] * df['SmoothedVolumeRatio']
+    
+    # Intermediate Alpha Factor Synthesis 2
+    df['IntermediateAlphaFactorSynth2'] = df['CombinedMomentumHLSpreadIntradayReturn'] * df['CombinedVolumeImpact']
+    
+    # Calculate Volume Weighted Price
+    df['TotalVolume'] = df['volume'].rolling(window=1).sum()
+    df['VolumeWeightedPrice'] = (df['close'] * df['volume']) / df['

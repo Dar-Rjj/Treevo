@@ -1,0 +1,48 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+
+    # Hull Moving Averages with adaptive windows
+    df['hma_10d'] = (2 * df['close'].ewm(span=5, adjust=False).mean()) - (df['close'].ewm(span=10, adjust=False).mean())
+    df['hma_30d'] = (2 * df['close'].ewm(span=15, adjust=False).mean()) - (df['close'].ewm(span=30, adjust=False).mean())
+
+    # Non-linear transformation of the difference between HMA
+    df['nonlinear_momentum'] = np.tanh(df['hma_10d'] - df['hma_30d'])
+
+    # Volatility - Average True Range (ATR) over the last 30 days
+    df['high_low'] = df['high'] - df['low']
+    df['high_close'] = np.abs(df['high'] - df['close'].shift())
+    df['low_close'] = np.abs(df['low'] - df['close'].shift())
+    df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+    df['atr_30d'] = df['tr'].rolling(window=30).mean()
+
+    # Dynamic weights based on ATR
+    df['dynamic_weight'] = 1 / (df['atr_30d'] + 1e-7)
+
+    # Log returns
+    df['log_returns'] = np.log(df['close']).diff()
+
+    # Adaptive Weights - Use a simple smoothed moving average cross-over to determine the trend direction
+    df['trend_direction'] = (df['hma_10d'] > df['hma_30d']).astype(int)
+
+    # Regime-Based Adjustments - Apply different weights based on the ATR regime
+    df['vol_regime'] = (df['atr_30d'] > df['atr_30d'].quantile(0.5)).astype(int)
+
+    # Market Sentiment - Calculate the 10-day moving average of the high and low prices
+    df['ma_high_10d'] = df['high'].rolling(window=10).mean()
+    df['ma_low_10d'] = df['low'].rolling(window=10).mean()
+    df['market_sentiment'] = df['ma_high_10d'] - df['ma_low_10d']
+
+    # Composite Factor
+    df['composite_factor'] = (
+        df['nonlinear_momentum'] * (0.4 + 0.1 * (df['vol_regime'] - 0.5)) +
+        df['log_returns'] * (0.2 + 0.05 * (df['vol_regime'] - 0.5)) +
+        df['market_sentiment'] * (0.2 + 0.05 * (df['vol_regime'] - 0.5)) +
+        df['dynamic_weight'] * (0.2 - 0.05 * (df['vol_regime'] - 0.5))
+    )
+
+    # Non-linear transformations for robustness
+    df['composite_factor'] = df['composite_factor'].apply(lambda x: np.sign(x) * np.sqrt(np.abs(x)))
+
+    # Return the composite factor
+    return df['composite_factor']
+```

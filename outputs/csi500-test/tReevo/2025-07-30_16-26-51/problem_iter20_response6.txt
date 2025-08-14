@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) / df['open'].shift(1) - 1
+    
+    # Volume-Weight the Return
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume'].shift(-1)
+    
+    # Dynamic Lookback Periods for Momentum
+    short_term_sma = df['volume_weighted_return'].rolling(window=5).mean()
+    short_term_ema = df['volume_weighted_return'].ewm(span=5, adjust=False).mean()
+    mid_term_sma = df['volume_weighted_return'].rolling(window=10).mean()
+    mid_term_ema = df['volume_weighted_return'].ewm(span=10, adjust=False).mean()
+    long_term_sma = df['volume_weighted_return'].rolling(window=20).mean()
+    long_term_ema = df['volume_weighted_return'].ewm(span=20, adjust=False).mean()
+    
+    # Adaptive Volatility Stabilization
+    short_term_vol = df['volume_weighted_return'].rolling(window=5).std()
+    long_term_vol = df['volume_weighted_return'].rolling(window=20).std()
+    adaptive_volatility = 0.6 * short_term_vol + 0.4 * long_term_vol
+    
+    # Integrated Momentum and Adaptive Volatility
+    integrated_momentum = (short_term_sma + mid_term_ema + long_term_ema) / adaptive_volatility
+    
+    # Incorporate High-Low Price Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Integrate High-Low Momentum
+    high_low_momentum = df['high_low_ratio'].rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    alpha_factor = integrated_momentum + high_low_momentum + df['volume_weighted_return']
+    
+    return alpha_factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

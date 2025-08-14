@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum factor
+    df['SMA_14'] = df['close'].rolling(window=14).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Momentum'] = df['SMA_14'] - df['SMA_50']
+
+    # Volatility
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Volatility'] = df['Daily_Returns'].rolling(window=20).std()
+
+    # Volume ratio
+    df['Volume_7'] = df['volume'].rolling(window=7).mean()
+    df['Volume_21'] = df['volume'].rolling(window=21).mean()
+    df['Volume_Ratio'] = df['Volume_7'] / df['Volume_21']
+
+    # Money Flow Index
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Raw_Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Positive_Money_Flow'] = np.where(df['Typical_Price'] > df['Typical_Price'].shift(1), df['Raw_Money_Flow'], 0)
+    df['Negative_Money_Flow'] = np.where(df['Typical_Price'] < df['Typical_Price'].shift(1), df['Raw_Money_Flow'], 0)
+    df['Pos_MF_14'] = df['Positive_Money_Flow'].rolling(window=14).sum()
+    df['Neg_MF_14'] = df['Negative_Money_Flow'].rolling(window=14).sum()
+    df['Money_Flow_Ratio'] = df['Pos_MF_14'] / df['Neg_MF_14']
+    df['Money_Flow_Index'] = 100 - (100 / (1 + df['Money_Flow_Ratio']))
+
+    # Relative Strength
+    df['EMA_14'] = df['close'].ewm(span=14, adjust=False).mean()
+    df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    df['Relative_Strength'] = df['EMA_14'] / df['EMA_200']
+
+    # Open Interest (assuming 'open_interest' is available)
+    if 'open_interest' in df.columns:
+        df['Open_Interest_Change'] = df['open_interest'].diff()
+        df['Open_Interest_Sum_30'] = df['Open_Interest_Change'].rolling(window=30).sum()
+    else:
+        df['Open_Interest_Sum_30'] = 0  # or handle it as needed
+
+    # Market Sentiment
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Sentiment_Score'] = df['Close_Open_Diff'].rolling(window=10).sum()
+
+    # Market Breadth (assuming 'advancing_stocks' and 'declining_stocks' are available)
+    if 'advancing_stocks' in df.columns and 'declining_stocks' in df.columns:
+        df['Advance_Decline_Line'] = (df['advancing_stocks'] - df['declining_stocks']).rolling(window=20).sum()
+    else:
+        df['Advance_Decline_Line'] = 0  # or handle it as needed
+
+    # Factor combination
+    combined_factor = (0.3 * df['Momentum'] +
+                       0.2 * df['Volatility'] +
+                       0.15 * df['Volume_Ratio'] +
+                       0.1 * df['Money_Flow_Index'] +
+                       0.1 * df['Relative_Strength'] +
+                       0.05 * df['Open_Interest_Sum_30'] +
+                       0.05 * df['Sentiment_Score'] +
+                       0.05 * df['Advance_Decline_Line'])
+
+    # Non-linear transformation
+    final_factor = 1 / (1 + np.exp(-combined_factor))
+
+    return final_factor
+```

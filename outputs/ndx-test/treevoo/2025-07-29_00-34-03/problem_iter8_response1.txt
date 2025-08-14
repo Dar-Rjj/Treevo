@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = df['volume'] * df['close']
+    
+    # Calculate Simple Moving Average (SMA) of Volume-Weighted Prices
+    df['sma_volume_weighted_price'] = df['volume_weighted_price'].rolling(window=5).mean()
+    
+    # Intraday Volatility Adjustment Factor
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['adjusted_sma'] = df['sma_volume_weighted_price'] - df['intraday_volatility']
+    
+    # Volume Surge Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    volume_surge_threshold = df['volume_change'].quantile(0.9)
+    df['volume_surge'] = df['volume_change'] > volume_surge_threshold
+    
+    # Short-Term Momentum
+    df['average_close_price'] = df['close'].shift(1).rolling(window=4).mean()
+    df['current_momentum'] = df['close'] - df['average_close_price']
+    
+    # Finalize Alpha Factor
+    df['alpha_factor'] = df['adjusted_sma'] + df['current_momentum']
+    
+    # Apply Price Filter
+    df['avg_high_low'] = (df['high'] + df['low']) / 2
+    df['avg_high_low_shift'] = df['avg_high_low'].shift(1)
+    price_filter_condition = df['avg_high_low'] > df['avg_high_low_shift']
+    
+    df.loc[price_filter_condition, 'alpha_factor'] += 1
+    df.loc[~price_filter_condition, 'alpha_factor'] -= 1
+    
+    # Increase Alpha Factor if Volume Surge is detected
+    df.loc[df['volume_surge'], 'alpha_factor'] *= 2
+    
+    return df['alpha_factor'].dropna()
+```

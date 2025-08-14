@@ -1,0 +1,47 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['TotalVolume'] = df['volume']
+    df['TotalDollarValue'] = df['volume'] * df['close']
+    df['VWAP'] = df['TotalDollarValue'].cumsum() / df['TotalVolume'].cumsum()
+    
+    # Calculate VWAP Deviation
+    df['VWAPDeviation'] = df['close'] - df['VWAP']
+    
+    # Calculate Cumulative VWAP Deviation
+    df['CumulativeVWAPDeviation'] = df['VWAPDeviation'].cumsum()
+    
+    # Integrate Weighted Short-Term Momentum (5 days)
+    def weighted_momentum(series, period, weights):
+        return (series.rolling(window=period).apply(lambda x: (x * weights).sum(), raw=True))
+    
+    short_term_weights = pd.Series([1, 0.8, 0.6, 0.4, 0.2])
+    df['ShortTermMomentum'] = weighted_momentum(df['VWAPDeviation'], 5, short_term_weights)
+    
+    # Integrate Weighted Medium-Term Momentum (10 days)
+    medium_term_weights = pd.Series([1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
+    df['MediumTermMomentum'] = weighted_momentum(df['VWAPDeviation'], 10, medium_term_weights)
+    
+    # Integrate Weighted Long-Term Momentum (20 days)
+    long_term_weights = pd.Series(pd.np.linspace(1, 0.1, 20))
+    df['LongTermMomentum'] = weighted_momentum(df['VWAPDeviation'], 20, long_term_weights)
+    
+    # Combine with Cumulative VWAP Deviation
+    df['CombinedFactor'] = df['CumulativeVWAPDeviation'] + df['ShortTermMomentum'] + df['MediumTermMomentum'] + df['LongTermMomentum']
+    
+    # Calculate Intraday Volatility
+    df['HighLowRange'] = df['high'] - df['low']
+    df['AbsVWAPDeviation'] = abs(df['close'] - df['VWAP'])
+    df['IntradayVolatility'] = df['HighLowRange'] + df['AbsVWAPDeviation']
+    
+    # Normalize Intraday Volatility (20 days)
+    df['AverageIntradayVolatility'] = df['IntradayVolatility'].rolling(window=20).mean()
+    df['NormalizedIntradayVolatility'] = df['IntradayVolatility'] / df['AverageIntradayVolatility']
+    
+    # Final Alpha Factor
+    df['AlphaFactor'] = df['CombinedFactor'] + df['NormalizedIntradayVolatility']
+    
+    return df['AlphaFactor']

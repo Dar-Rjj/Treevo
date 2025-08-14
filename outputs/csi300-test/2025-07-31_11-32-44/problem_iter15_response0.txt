@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Integrated Intraday Adjusted Return
+    intraday_range = (df['high'] - df['low']) / df['low']
+    intraday_volatility = abs(df['close'] - df['open']) / ((df['high'] + df['low']) / 2)
+    volume_weighted_return = intraday_range * (df['volume'] / df['volume'].rolling(window=20).max())
+    trend_continuity = np.sign(df['close'] - df['close'].shift(1))
+    intraday_adjusted_return = volume_weighted_return * trend_continuity
+
+    # Calculate Multi-Period Price Momentum
+    one_period_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    five_period_momentum = one_period_return.rolling(window=5).mean()
+
+    # Combine Intraday and Multi-Period Momentum
+    combined_momentum = intraday_adjusted_return * five_period_momentum
+
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+
+    # Calculate Previous Day's Intraday High-Low Spread
+    prev_day_intraday_high_low_spread = (df['high'].shift(1) - df['low'].shift(1))
+
+    # Calculate Intraday Momentum
+    intraday_momentum = intraday_high_low_spread - prev_day_intraday_high_low_spread
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # VWAP to Close Difference
+    vwap_close_diff = df['close'] - vwap
+
+    # Volume Reversal Z-score
+    volume_change = df['volume'] - df['volume'].shift(1)
+    rolling_mean = volume_change.rolling(window=20).mean()
+    rolling_std = volume_change.rolling(window=20).std()
+    volume_reversal_zscore = (volume_change - rolling_mean) / rolling_std
+
+    # Calculate Amount Change
+    amount_change = df['amount'] - df['amount'].shift(1)
+
+    # Generate Alpha Factor Component
+    alpha_factor_component = five_period_momentum * np.sign(volume_change + amount_change)
+
+    # Apply Volume and Amount Confirmation
+    volume_amount_combined_change = volume_change + amount_change
+    volume_amount_confirmation = np.sign(volume_amount_combined_change)
+
+    # Combine All Factors
+    alpha_factor = (combined_momentum * vwap_close_diff * volume_reversal_zscore + alpha_factor_component) * volume_amount_confirmation
+    alpha_factor += intraday_momentum
+
+    return alpha_factor
+```

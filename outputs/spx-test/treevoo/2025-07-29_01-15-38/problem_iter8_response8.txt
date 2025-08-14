@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    avg_volume_5_days = df['volume'].rolling(window=5).mean()
+    relative_volume = df['volume'] / avg_volume_5_days
+    adjusted_momentum = short_term_momentum * relative_volume
+    
+    # Integrate Amount Influence
+    avg_amount_5_days = df['amount'].rolling(window=5).mean()
+    relative_amount = df['amount'] / avg_amount_5_days
+    amount_influence = adjusted_momentum * relative_amount
+    
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    open_to_close_returns = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    volume_trend = pd.Series(index=df.index, data=0.0)
+    volume_trend[volume_ratio > 1.5] = 2
+    volume_trend[(volume_ratio >= 0.5) & (volume_ratio <= 1.5)] = 0
+    volume_trend[volume_ratio < 0.5] = -2
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend
+    
+    # Synthesize Overall Alpha Factor
+    overall_factor = amount_influence * adjusted_combined_returns
+    
+    # Apply Weighted Moving Average
+    weights = [5, 4, 3, 2, 1]
+    wma = overall_factor.rolling(window=5).apply(lambda x: (x * weights).sum() / sum(weights), raw=False)
+    
+    return wma
+```

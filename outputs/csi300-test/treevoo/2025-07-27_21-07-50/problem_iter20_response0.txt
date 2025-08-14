@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=21, ema_period=21, m_days=10, long_trend_period=200, short_trend_period=50):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Volume into Intraday Return
+    volume_adjusted_intraday_return = intraday_return * np.sqrt(df['volume'])
+    
+    # Enhance Volatility Correction
+    price_volatility = df['close'].pct_change().rolling(window=lookback_period).std()
+    volume_volatility = df['volume'].rolling(window=lookback_period).std()
+    corrected_intraday_momentum = volume_adjusted_intraday_return - price_volatility - volume_volatility
+    
+    # Incorporate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Combine High-Low Spread Ratio and Corrected Intraday Momentum
+    combined_factor = high_low_spread_ratio + corrected_intraday_momentum
+    
+    # Intraday Log-Return Scaled by True Range
+    intraday_log_return = np.log(df['close'] / df['open'])
+    true_range = pd.concat([df['high'] - df['low'], abs(df['high'] - df['close'].shift(1)), abs(df['low'] - df['close'].shift(1))], axis=1).max(axis=1)
+    scaled_intraday_log_return = intraday_log_return / true_range
+    
+    # Composite Alpha Factor
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    ema_close = df['close'].ewm(span=ema_period, adjust=False).mean()
+    composite_alpha_factor = volume_weighted_close_open_diff - ema_close
+    medium_term_reversal = df['close'].pct_change().rolling(window=m_days).sum()
+    composite_alpha_factor += medium_term_reversal
+    
+    # Generate Adjusted Return
+    average_volume = df['volume'].rolling(window=lookback_period).mean()
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_return = scaled_intraday_log_return + volume_change
+    
+    # Final Integration
+    final_factor = combined_factor + composite_alpha_factor + adjusted_return
+    
+    # Incorporate Trend Adjustment
+    long_term_trend = df['close'].rolling(window=long_trend_period).mean()
+    short_term_trend = df['close'].ewm(span=short_trend_period, adjust=False).mean()
+    trend_difference = short_term_trend - long_term_trend
+    
+    positive_adjustment_factor = 1.1
+    negative_adjustment_factor = 0.9
+    final_factor = final_factor * np.where(trend_difference > 0, positive_adjustment_factor, negative_adjustment_factor)
+    
+    return final_factor
+```

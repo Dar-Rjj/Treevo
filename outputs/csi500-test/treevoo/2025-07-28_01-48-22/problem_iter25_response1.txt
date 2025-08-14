@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    short_term_return = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate Long-Term Return
+    long_term_return = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Relative Strength
+    relative_strength = short_term_return - long_term_return
+    
+    # Calculate Intraday and Open-to-Close Returns
+    intraday_open_to_close = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Identify Volume Spikes
+    volume_mean = df['volume'].rolling(window=20).mean()
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_spike = (df['volume'] > (volume_mean + 2 * volume_std)).astype(int)
+    
+    # Combine Factors
+    combined_factor = relative_strength * volume_spike + intraday_open_to_close
+    
+    # Adjusted Integrated Factor
+    volume_average = df['volume'].rolling(window=5).mean()
+    volatility = (df['close'] - df['open']).rolling(window=20).std() / df['open']
+    adjusted_integrated_factor = combined_factor * volume_average * volatility
+    
+    # Calculate Combined Momentum
+    intraday_momentum = (df['close'] - df['open']) / df['open'] * df['volume']
+    historical_momentum = df['close'] - df['close'].shift(10)
+    combined_momentum = intraday_momentum + historical_momentum
+    
+    # Smoothed Momentum
+    smoothed_momentum = combined_momentum.rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    daily_high_low_range = df['high'] - df['low']
+    average_daily_range = daily_high_low_range.rolling(window=10).mean()
+    volatility_multiplier = 1 / (average_daily_range + 1)
+    adjusted_smoothed_momentum = smoothed_momentum * volatility_multiplier
+    
+    # Integrate Volume and Price Information
+    integrated_volume_price = (df['volume'] - df['volume'].shift(1)) + \
+                             (df['high'] - df['low']).rolling(window=5).mean() + \
+                             (df['close'] - df['close'].shift(1))
+    
+    # Final Alpha Factor
+    final_alpha_factor = adjusted_integrated_factor + adjusted_smoothed_momentum + integrated_volume_price
+    
+    return final_alpha_factor
+```

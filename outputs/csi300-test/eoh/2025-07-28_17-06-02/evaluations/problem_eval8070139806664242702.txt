@@ -1,0 +1,25 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate exponential moving averages
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    ema_14 = df['close'].ewm(span=14, adjust=False).mean()
+    ema_ratio = (ema_7 / ema_14) - 1
+    
+    # Modified Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    avg_gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
+    avg_loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # True Range (TR) adjusted by volume
+    tr = df['high'] - df['low']
+    atr = (tr * df['volume']).ewm(span=21, adjust=False).mean() / df['volume'].rolling(window=21).mean()
+    
+    # Volume weighted by close price
+    volume_weighted = df['volume'] * df['close']
+    
+    # Composite heuristic with weights
+    heuristics_matrix = (0.3*ema_ratio + 0.3*rsi - 0.2*atr + 0.2*volume_weighted)
+    return heuristics_matrix

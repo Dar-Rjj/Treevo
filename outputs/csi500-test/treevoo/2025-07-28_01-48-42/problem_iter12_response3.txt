@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Price Change
+    df['price_change'] = df['close'] - df['open'].shift(1)
+    
+    # Compute Volume Delta
+    df['volume_delta'] = df['volume'] - df['volume'].shift(1)
+    
+    # Multiply Price Change by Volume Delta
+    df['price_volume_momentum'] = df['price_change'] * df['volume_delta']
+    
+    # Apply EMA with 7-day span on Price-Volume Momentum
+    df['smoothed_price_volume_momentum'] = df['price_volume_momentum'].ewm(span=7).mean()
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Returns
+    df['intraday_return_high'] = df['high'] - df['open']
+    df['intraday_return_low'] = df['open'] - df['low']
+    
+    # Compute Standard Deviation over past 20 days
+    df['intraday_volatility'] = (df[['intraday_return_high', 'intraday_return_low']].std(axis=1)).rolling(window=20).mean()
+    
+    # Adjust for Volume
+    df['volume_adjusted_range'] = df['volume'] * df['high_low_range']
+    
+    # Compute Momentum over the last 15 days
+    df['momentum'] = df['price_change'].rolling(window=15).sum()
+    
+    # Combine Momentum and Volume-Adjusted Range
+    df['combined_momentum_and_range'] = df['momentum'] / df['volume_adjusted_range']
+    
+    # Calculate Average Volume Spike
+    df['volume_difference'] = df['volume'] - df['volume'].shift(1)
+    df['average_volume_spike'] = df['volume_difference'].rolling(window=10).sum()
+    
+    # Combine All Factors
+    df['factor'] = (0.35 * df['intraday_volatility']) + \
+                   (0.25 * df['average_volume_spike']) + \
+                   (0.4 * df['combined_momentum_and_range'])
+    
+    return df['factor']
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum factor based on the last 5 days closing prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['Momentum'] = df['close'] - df['SMA_5']
+
+    # Volatility factor using high and low prices over the last 10 days
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Avg_Daily_Range_10'] = df['Daily_Range'].rolling(window=10).mean()
+    df['Volatility'] = df['Daily_Range'].rolling(window=10).std()
+
+    # Money Flow Index (MFI) factor using close, high, low, and volume data over the last 14 days
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Raw_Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Positive_Money_Flow'] = df['Raw_Money_Flow'] * (df['Typical_Price'] > df['Typical_Price'].shift(1))
+    df['Negative_Money_Flow'] = df['Raw_Money_Flow'] * (df['Typical_Price'] < df['Typical_Price'].shift(1))
+    df['Positive_Money_Flow_Sum'] = df['Positive_Money_Flow'].rolling(window=14).sum()
+    df['Negative_Money_Flow_Sum'] = df['Negative_Money_Flow'].rolling(window=14).sum()
+    df['Money_Flow_Ratio'] = df['Positive_Money_Flow_Sum'] / (df['Positive_Money_Flow_Sum'] + df['Negative_Money_Flow_Sum'])
+    df['MFI'] = 100 - (100 / (1 + df['Money_Flow_Ratio']))
+
+    # Relative Strength (RS) factor using the closing prices of the last 26 weeks and the last 14 weeks
+    df['Return_26w'] = df['close'].pct_change().rolling(window=26*5).sum()
+    df['Return_14w'] = df['close'].pct_change().rolling(window=14*5).sum()
+    df['RS'] = df['Return_26w'] / df['Return_14w']
+
+    # Volume Weighted Average Price (VWAP) factor using the opening, high, low, close, and volume data over the last 20 days
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VWAP_Contribution'] = df['Typical_Price'] * df['volume']
+    df['Total_VWAP_Contribution'] = df['VWAP_Contribution'].rolling(window=20).sum()
+    df['Total_Volume'] = df['volume'].rolling(window=20).sum()
+    df['VWAP'] = df['Total_VWAP_Contribution'] / df['Total_Volume']
+
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (df['Momentum'] + df['Volatility'] + df['MFI'] + df['RS'] + df['VWAP']) / 5
+    
+    return df['Alpha_Factor']
+```

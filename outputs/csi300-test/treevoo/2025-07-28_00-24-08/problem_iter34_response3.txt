@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20):
+    # Calculate price-based features
+    df['daily_return'] = df['close'].pct_change()
+    df['high_low_range'] = df['high'] - df['low']
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['body_size'] = abs(df['open'] - df['close'])
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1).loc[x.name]), abs(x['low'] - df['close'].shift(1).loc[x.name])), axis=1)
+
+    # Calculate volume and amount-based features
+    df['change_in_volume'] = df['volume'] - df['volume'].shift(1)
+    df['change_in_amount'] = df['amount'] - df['amount'].shift(1)
+    df['vwap'] = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+
+    # Calculate volatility measures
+    df['std_daily_return'] = df['daily_return'].rolling(window=lookback_period).std()
+
+    # Calculate momentum indicators
+    df['sma_close'] = df['close'].rolling(window=lookback_period).mean()
+    df['ema_close'] = df['close'].ewm(span=lookback_period, adjust=False).mean()
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=lookback_period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=lookback_period).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Calculate trend indicators
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['trend_diff'] = df['sma_close'] - df['close'].rolling(window=lookback_period // 2).mean()
+
+    # Calculate candlestick pattern recognition
+    df['doji'] = np.where(abs(df['open'] - df['close']) < 0.005 * df['high_low_range'], 1, 0)
+    df['bullish_engulfing'] = np.where((df['open'] < df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['close'] > df['open'].shift(1)), 1, 0)
+    df['bearish_engulfing'] = np.where((df['open'] > df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['close'] < df['open'].shift(1)), 1, 0)
+
+    # Calculate money flow and accumulation/distribution
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    mf = tp * df['volume']
+    positive_mf = np.where(df['close'] > df['close'].shift(1), mf, 0)
+    negative_mf = np.where(df['close'] < df['close'].shift(1), mf, 0)
+    mfr = positive_mf.rolling(window=lookback_period).sum() / negative_mf.rolling(window=lookback_period).sum()
+    df['mfi'] = 100 - (100 / (1 + mfr))
+    
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+
+    # Calculate breakout and resistance levels
+    df['rolling_max_high'] = df['high'].rolling(window=lookback_period).max()
+    df['rolling_min_low'] = df['low'].rolling(window=lookback_period).min()
+
+    # Combine features for comprehensive alpha factor
+    df['composite_score'] = (
+        0.2 * df['daily_return'] +
+        0.1 * (df['high_low_range'] / df['close']) +
+        0.1 * (df['upper_shadow'] / df['close']) +
+        0.1 * (df['lower_shadow'] / df['close'])

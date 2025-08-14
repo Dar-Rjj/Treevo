@@ -1,0 +1,88 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short = 20
+    sma_long = 50
+    vol_adjusted_lookback = 10
+    momentum_lookback = 10
+    pct_change_lookback = 5
+    liquidity_lookback = 20
+    dynamic_window_range = range(10, 60, 10)
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_adjusted_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+    
+    # Incorporate Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Liquidity'] = df['Daily_Turnover'].rolling(window=liquidity_lookback).mean()
+    
+    # Dynamically Adjust Component Weights Based on Market Trend and Liquidity
+    initial_weights = {
+        'Momentum': 0.3,
+        'Volume_Adjusted_Volatility': 0.2,
+        'Pct_Change': 0.2,
+        'High_Low_Range': 0.1,
+        'Trend_Indicator': 0.1,
+        'Liquidity': 0.1
+    }
+    
+    def adjust_weights(trend, liquidity):
+        if trend == 1 and liquidity > 0:
+            return {
+                'Momentum': 0.4,
+                'Volume_Adjusted_Volatility': 0.25,
+                'Pct_Change': 0.25,
+                'High_Low_Range': 0.075,
+                'Trend_Indicator': 0.025
+            }
+        elif trend == 0 and liquidity > 0:
+            return {
+                'Momentum': 0.2,
+                'Volume_Adjusted_Volatility': 0.15,
+                'Pct_Change': 0.15,
+                'High_Low_Range': 0.075,
+                'Trend_Indicator': 0.025
+            }
+        else:
+            return initial_weights
+    
+    # Optimize Lookback Periods Dynamically
+    def dynamic_window_optimizer(df, metric, window_range):
+        best_sharpe = -float('inf')
+        best_window = None
+        for window in window_range:
+            returns = df['close'].pct_change().rolling(window=window).sum()
+            sharpe = (returns.mean() / returns.std()) * (252**0.5)
+            if sharpe > best_sharpe:
+                best_sharpe = sharpe
+                best_window = window
+        return best_window
+    
+    optimal_sma_short = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    optimal_sma_long = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    optimal_vol_adjusted_lookback = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    optimal_momentum_lookback = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    optimal_pct_change_lookback = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    optimal_liquidity_lookback = dynamic_window_optimizer(df, 'sharpe', dynamic_window_range)
+    
+    # Recalculate with optimal lookback periods
+    df['SMA_Short_Opt'] = df['close'].rolling(window=optimal_sma_short).mean()
+    df['SMA_Long_Opt'] = df['close'].rolling(window=optimal_sma_long).mean()
+    df['Volume_Adjusted_Volatility_Opt'] = (df['High_Low_Diff'] * df['volume']).rolling(window=optimal_vol_adjusted_lookback).

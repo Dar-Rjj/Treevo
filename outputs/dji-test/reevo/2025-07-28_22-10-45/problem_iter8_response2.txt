@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change (close - open)
+    price_change = df['close'] - df['open']
+    
+    # Calculate the average of high and low
+    avg_high_low = (df['high'] + df['low']) / 2
+    
+    # Calculate the standard deviation of the price change to measure volatility with an adaptive window
+    volatility = price_change.rolling(window=5).std()
+    
+    # Calculate the rolling mean of the close price to measure trend strength with an adaptive window
+    trend_strength = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Detect volume spikes by comparing the current volume to the exponential moving average of the last 5 days
+    volume_spike = (df['volume'] - df['volume'].ewm(span=5, adjust=False).mean()) / df['volume'].ewm(span=5, adjust=False).std()
+    
+    # Calculate the weighted price movement relative to the average high and low
+    weighted_price_movement = (price_change * df['volume']) / (avg_high_low * df['volume'].ewm(span=5, adjust=False).mean())
+    
+    # Incorporate market sentiment using a combination of EMA and SMA cross-over
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_sma = df['close'].rolling(window=20).mean()
+    sentiment_crossover = short_term_ema - long_term_sma
+    
+    # Add a new technical indicator: Exponentially Weighted Moving Average Relative Strength Index (EWMA RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.ewm(span=14, adjust=False).mean()
+    avg_loss = loss.ewm(span=14, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Introduce a new factor: Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(price_change > 0, 0).fillna(0)
+    negative_money_flow = money_flow.where(price_change < 0, 0).fillna(0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Combine the factors into a single alpha factor
+    alpha_factor = (weighted_price_movement + trend_strength - volatility + volume_spike + sentiment_crossover + rsi + mfi) / 7
+    
+    return alpha_factor.fillna(0)
+```

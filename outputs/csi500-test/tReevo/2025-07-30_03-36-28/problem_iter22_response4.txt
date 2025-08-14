@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short_period = 20
+    sma_long_period = 60
+    vol_adj_vol_lookback = 30
+    price_momentum_n = 10
+    percent_change_lookback = 5
+    turnover_lookback = 30
+    avg_dollar_volume_lookback = 30
+    liquidity_ratio_lookback = 30
+
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Vol'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adj_Vol_Rolling_Avg'] = df['Volume_Adjusted_Vol'].rolling(window=vol_adj_vol_lookback).mean()
+
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=price_momentum_n).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['Close_Percent_Change'] = df['close'].pct_change(periods=percent_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['Market_Trend'] = df.apply(lambda row: 1 if row['SMA_Short'] > row['SMA_Long'] else -1, axis=1)
+
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    df['Turnover_Weight'] = df['Rolling_Avg_Daily_Turnover'].rank(pct=True)
+
+    df['Avg_Dollar_Volume'] = (df['volume'] * df['close']).rolling(window=avg_dollar_volume_lookback).mean()
+    df['Rolling_Avg_Dollar_Volume'] = df['Avg_Dollar_Volume'].rolling(window=avg_dollar_volume_lookback).mean()
+    df['Dollar_Volume_Weight'] = df['Rolling_Avg_Dollar_Volume'].rank(pct=True)
+
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    df['Rolling_Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_ratio_lookback).mean()
+    df['Liquidity_Ratio_Weight'] = df['Rolling_Avg_Liquidity_Ratio'].rank(pct=True)
+
+    # Final Alpha Factor
+    weights = {
+        'Price_Momentum': 0.3,
+        'Vol_Adj_Vol_Rolling_Avg': -0.2,
+        'Close_Percent_Change': 0.15,
+        'High_Low_Range': 0.1,
+        'Market_Trend': 0.05,
+        'Turnover_Weight': 0.1,
+        'Dollar_Volume_Weight': 0.1,
+        'Liquidity_Ratio_Weight': 0.05
+    }
+
+    df['Alpha_Factor'] = (
+        weights['Price_Momentum'] * df['Price_Momentum'] +
+        weights['Vol_Adj_Vol_Rolling_Avg'] * df['Vol_Adj_Vol_Rolling_Avg'] +
+        weights['Close_Percent_Change'] * df['Close_Percent_Change'] +
+        weights['High_Low_Range'] * df['High_Low_Range'] +
+        weights['Market_Trend'] * df['Market_Trend'] +
+        weights['Turnover_Weight'] * df['Turnover_Weight'] +
+        weights['Dollar_Volume_Weight'] * df['Dollar_Volume_Weight'] +
+        weights['Liquidity_Ratio_Weight'] * df['Liquidity_Ratio_Weight']
+    )
+
+    return df['Alpha_Factor']
+```

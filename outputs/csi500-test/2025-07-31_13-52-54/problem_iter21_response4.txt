@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Weighted Moving Averages (WMA)
+    df['WMA_10'] = df['close'].rolling(window=10).apply(lambda x: np.average(x, weights=np.arange(1, 11)))
+    df['WMA_20'] = df['close'].rolling(window=20).apply(lambda x: np.average(x, weights=np.arange(1, 21)))
+    
+    # Determine if 10-day WMA is above or below 20-day WMA
+    df['WMA_Trend'] = np.where(df['WMA_10'] > df['WMA_20'], 1, -1)
+    
+    # Calculate Rate of Change (ROC) in close prices
+    df['ROC_5'] = df['close'].pct_change(periods=5)
+    df['ROC_14'] = df['close'].pct_change(periods=14)
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP_10'] = (df['amount'] / df['volume']).rolling(window=10).mean()
+    df['VWAP_20'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+    
+    # Correlate VWAP with price changes
+    df['VWAP_Price_Corr_10'] = df['close'].rolling(window=10).corr(df['VWAP_10'])
+    df['VWAP_Price_Corr_20'] = df['close'].rolling(window=20).corr(df['VWAP_20'])
+    
+    # Identify bullish hammer pattern
+    df['Bullish_Hammer'] = ((df['close'] > df['open']) & 
+                            (df['low'] - df[['open', 'close']].min(axis=1) >= 2 * (df[['open', 'close']].max(axis=1) - df[['open', 'close']].min(axis=1))))
+    
+    # Identify bearish hanging man pattern
+    df['Bearish_Hanging_Man'] = ((df['close'] < df['open']) & 
+                                (df['low'] - df[['open', 'close']].min(axis=1) >= 2 * (df[['open', 'close']].max(axis=1) - df[['open', 'close']].min(axis=1))))
+    
+    # Calculate standard deviation of daily returns
+    df['StdDev_10'] = df['close'].pct_change().rolling(window=10).std()
+    df['StdDev_20'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Analyze high-low range
+    df['High_Low_Range_10'] = df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()
+    df['High_Low_Range_20'] = df['high'].rolling(window=20).mean() - df['low'].rolling(window=20).mean()
+    
+    # Combine all the factors into a single alpha factor
+    df['Alpha_Factor'] = (df['WMA_Trend'] * 0.3 + 
+                          df['ROC_5'] * 0.2 + 
+                          df['VWAP_Price_Corr_10'] * 0.1 +
+                          df['Bullish_Hammer'] * 0.15 +
+                          (1 - df['Bearish_Hanging_Man']) * 0.15 +
+                          df['StdDev_10'] * 0.1)
+    
+    return df['Alpha_Factor']
+```

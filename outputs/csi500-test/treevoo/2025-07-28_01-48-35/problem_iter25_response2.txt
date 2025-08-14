@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, M=5):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    df['close_to_range_ratio'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] / df['open'] - 1
+    
+    # Calculate Volume Adjusted Spread
+    df['volume_adjusted_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate Momentum Component
+    df['momentum_component'] = df['intraday_return'].rolling(window=N).sum() * df['close_to_range_ratio']
+    
+    # Adjust for Volume Activity
+    df['volume_change_5d'] = df['volume'] / df['volume'].shift(M) - 1
+    df['volume_trend_indicator'] = df['volume_change_5d'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Average Intraday Return
+    df['average_intraday_return'] = df['intraday_return'].rolling(window=N).mean()
+    
+    # Combine Initial Signals
+    df['initial_signal'] = df['average_intraday_return'] + df['volume_adjusted_spread']
+    
+    # Introduce Opening Impact Factor
+    df['opening_impact_factor'] = df['open'] / df['close'] - 1
+    df['combined_signal'] = df['initial_signal'] - df['opening_impact_factor']
+    
+    # Enhance Combined Momentum, Volume, and Price Factor
+    df['average_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['combined_momentum_and_price_factor'] = (df['momentum_component'] * df['volume_trend_indicator']) / df['average_volume_20d']
+    
+    # Introduce Volatility Component
+    df['daily_volatility'] = (df['high'] - df['low']).rolling(window=N).std()
+    
+    # Output as Final Alpha Factor
+    df['final_alpha_factor'] = df['combined_signal'] * df['combined_momentum_and_price_factor'] * (df['high'] - df['low']) / df['high'].shift(1)
+    
+    return df['final_alpha_factor'].dropna()
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

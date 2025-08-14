@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_window=20, long_window=50, vol_lookback=30, pct_change_window=10):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_short'] = df['close'].rolling(window=short_window).mean()
+    df['SMA_long'] = df['close'].rolling(window=long_window).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_high_low_diff'] = df['high_low_diff'] * df['volume']
+    df['vol_adjusted_volatility'] = df['vol_weighted_high_low_diff'].rolling(window=vol_lookback).mean()
+
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['SMA_short']) / df['close'].rolling(window=short_window).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['pct_change_close'] = df['close'].pct_change(periods=pct_change_window)
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['trend_indicator'] = df.apply(lambda x: 1 if x['SMA_short'] > x['SMA_long'] else -1, axis=1)
+
+    # Define weights for the components
+    price_momentum_weight = 0.4
+    vol_adjusted_volatility_weight = 0.2
+    pct_change_close_weight = 0.2
+    high_low_range_weight = 0.1
+    trend_indicator_weight = 0.1
+
+    # Adjust weights based on market trend
+    df['adjusted_price_momentum_weight'] = df['trend_indicator'].apply(lambda x: price_momentum_weight * (1 + x * 0.1))
+    df['adjusted_pct_change_close_weight'] = df['trend_indicator'].apply(lambda x: pct_change_close_weight * (1 + x * 0.1))
+    df['adjusted_high_low_range_weight'] = df['trend_indicator'].apply(lambda x: high_low_range_weight * (1 + x * 0.1))
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['price_momentum'] * df['adjusted_price_momentum_weight'] +
+                          df['vol_adjusted_volatility'] * vol_adjusted_volatility_weight +
+                          df['pct_change_close'] * df['adjusted_pct_change_close_weight'] +
+                          df['high_low_range'] * df['adjusted_high_low_range_weight'] +
+                          df['trend_indicator'] * trend_indicator_weight)
+
+    return df['alpha_factor']
+```

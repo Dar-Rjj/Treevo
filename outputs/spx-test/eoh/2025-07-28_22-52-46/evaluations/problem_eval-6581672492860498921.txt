@@ -1,0 +1,36 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate RSI of volume
+    delta_vol = df['volume'].diff()
+    gain_vol = delta_vol.where(delta_vol > 0, 0)
+    loss_vol = -delta_vol.where(delta_vol < 0, 0)
+    avg_gain_vol = gain_vol.rolling(window=14).mean()
+    avg_loss_vol = loss_vol.rolling(window=14).mean()
+    rs_vol = avg_gain_vol / avg_loss_vol
+    rsi_vol = 100 - (100 / (1 + rs_vol))
+    
+    # Dynamically adjust the window size for WMA based on RSI_vol
+    def dynamic_window_size(rsi_val):
+        if rsi_val < 30:
+            return 5
+        elif rsi_val < 70:
+            return 10
+        else:
+            return 20
+    
+    df['wma_window'] = rsi_vol.apply(dynamic_window_size)
+    
+    # Calculate Weighted Moving Average (WMA) of close price
+    def wma_series(series, n):
+        weights = np.arange(1, n+1)
+        wma = series.rolling(window=n).apply(lambda x: np.dot(x, weights)/weights.sum(), raw=True)
+        return wma
+
+    df['wma_close'] = df.apply(lambda row: wma_series(df.loc[:row.name, 'close'], row['wma_window']), axis=1)
+    
+    # Heuristics matrix
+    heuristics_matrix = df['close'] / df['wma_close']
+    
+    return heuristics_matrix

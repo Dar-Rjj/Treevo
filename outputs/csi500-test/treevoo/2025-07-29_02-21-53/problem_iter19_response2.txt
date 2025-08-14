@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Change'] = df['close'] - df['open']
+
+    # Aggregate Price Movements
+    window = 20
+    df['Sum_High_Low_Range'] = df['High_Low_Range'].rolling(window=window).sum()
+    df['Sum_Close_Open_Change'] = df['Close_Open_Change'].rolling(window=window).sum()
+
+    # Smooth High-Low Range
+    df['Smoothed_High_Low_Range'] = df['High_Low_Range'].ewm(span=20, adjust=False).mean()
+
+    # Calculate Long-Term High-Low Range
+    long_window = 50
+    df['Long_Term_High_Low_Range'] = df['high'].rolling(window=long_window).max() - df['low'].rolling(window=long_window).min()
+
+    # Compute Momentum of High-Low Ranges
+    df['Momentum_High_Low_Range'] = df['Long_Term_High_Low_Range'] - df['Smoothed_High_Low_Range']
+
+    # Calculate True Range
+    df['True_Range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    atr_window = 14
+    df['ATR'] = df['True_Range'].rolling(window=atr_window).mean()
+
+    # Adjust Price Momentum by ATR
+    df['Adjusted_Momentum'] = (df['Sum_High_Low_Range'] + df['Sum_Close_Open_Change']) / df['ATR']
+
+    # Evaluate Volume Activity
+    volume_window = 20
+    df['Average_Volume'] = df['volume'].rolling(window=volume_window).mean()
+    df['High_Volume'] = (df['volume'] > 1.5 * df['Average_Volume']).astype(int)
+
+    # Detect Volume Spike
+    spike_window = 5
+    df['Volume_Spike'] = (df['volume'] > 2 * df['volume'].rolling(window=spike_window).mean()).astype(int)
+
+    # Adjust Momentum Based on Volume
+    df['Adjusted_Momentum'] = df['Adjusted_Momentum'] * (1 - 0.2 * df['Volume_Spike'])
+
+    # Integrate Combined Factors
+    df['Combined_Factor'] = df['Adjusted_Momentum'] * df['High_Volume']
+
+    # Combine ATR and Price Momentum
+    df['Interim_Alpha_Factor'] = df['Combined_Factor'] + df['Momentum_High_Low_Range']
+
+    # Final Alpha Factor
+    trend_window = 10
+    df['Moving_Average_Close'] = df['close'].rolling(window=trend_window).mean()
+    df['Recent_Price_Trend'] = (df['close'] > df['Moving_Average_Close']).astype(int) * 2 - 1
+    df['Final_Alpha_Factor'] = df['Interim_Alpha_Factor'] * df['Recent_Price_Trend']
+
+    return df['Final_Alpha_Factor']
+```

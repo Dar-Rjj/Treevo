@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Raw Momentum
+    n = 14  # Number of days for momentum
+    df['Raw_Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Weight by Cumulative Volume
+    df['Cum_Volume'] = df['volume'].rolling(window=n).sum().shift(1)
+    df['Vol_Adjusted_Momentum'] = df['Raw_Momentum'] / df['Cum_Volume']
+    
+    # Simple Moving Average Cross Over
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_Cross'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Exponential Weighted Moving Average Growth
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['EMA_Growth'] = (df['EMA_10'] > df['EMA_30']).astype(int)
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    RS = gain / loss
+    df['RSI'] = 100 - (100 / (1 + RS))
+    df['RSI_Trend'] = (df['RSI'] > 50).astype(int)
+    
+    # Incorporate ADMI Factor
+    df['TR'] = np.maximum(
+        np.maximum(
+            df['high'] - df['low'], 
+            abs(df['high'] - df['close'].shift(1))
+        ), 
+        abs(df['low'] - df['close'].shift(1))
+    )
+    df['ATR'] = df['TR'].rolling(window=n).mean()
+    
+    df['+DM'] = np.where((df['high'] - df['high'].shift(1) > df['low'].shift(1) - df['low']), 
+                         df['high'] - df['high'].shift(1), 0)
+    df['-DM'] = np.where((df['low'].shift(1) - df['low'] > df['high'] - df['high'].shift(1)), 
+                         df['low'].shift(1) - df['low'], 0)
+    
+    df['+DM_Smoothed'] = df['+DM'].rolling(window=n).mean()
+    df['-DM_Smoothed'] = df['-DM'].rolling(window=n).mean()
+    
+    df['+DI'] = 100 * (df['+DM_Smoothed'] / df['ATR'])
+    df['-DI'] = 100 * (df['-DM_Smoothed'] / df['ATR'])
+    
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+    
+    df['ADMI_Adjusted_Momentum'] = df['Vol_Adjusted_Momentum'] * df['ADMI'] + df['Vol_Adjusted_Momentum']
+    
+    # Measure Enhanced Volatility
+    df['True_Range'] = np.maximum(
+        np.maximum(
+            df['high'] - df['low'], 
+            abs(df['high'] - df['close'].shift(1))
+        ), 
+        abs(df['low'] - df['close'].shift(1))
+    )
+    df['ATR_20'] = df['True_Range'].rolling(window=20).mean()
+    
+    df['Volume_Weighted_Price_Change'] = (abs(df['close'] - df['close'].shift(1)) * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    df['Volume_Change_Ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine All Factors
+    df['Enhanced_Momentum'] = df['SMA_Cross'] + df['EMA_Growth'] + df['RSI_Trend']
+    df['Enhanced_Volatility'] = df['ATR_20'] + df['Volume_Weighted_Price_Change'] + df['Volume_Change_Ratio']
+    
+    df['

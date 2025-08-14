@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Changes
+    df['close_change'] = df['close'].diff()
+    
+    # Exponentially Weighted Moving Average (EWMA) of Close Changes
+    alpha = 0.3
+    df['ewma_close_change'] = df['close_change'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Volume-Weight the EWMA
+    df['volume_multiplier'] = df['volume'] / df['volume'].rolling(window=10).sum()
+    df['ewma_volume_weighted'] = df['ewma_close_change'] * df['volume_multiplier']
+    
+    # Integrate Intraday Price Information
+    df['high_low_spread'] = df['high'] - df['low']
+    df['close_open_spread'] = df['close'] - df['open']
+    df['combined_spreads'] = df['high_low_spread'] + df['close_open_spread']
+    
+    # Adjust for Price Range
+    df['avg_high_10d'] = df['high'].rolling(window=10).mean()
+    df['avg_low_10d'] = df['low'].rolling(window=10).mean()
+    df['price_range'] = df['avg_high_10d'] - df['avg_low_10d']
+    df['final_combined_spreads'] = df['combined_spreads'] / df['price_range']
+    
+    # Adjusted Momentum and Volume Factor
+    df['avg_close_10d'] = df['close'].rolling(window=10).mean()
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    df['adj_close_diff'] = df['close'] - df['avg_close_10d']
+    df['adj_volume_diff'] = df['volume'] - df['avg_volume_10d']
+    df['adjusted_factor'] = (df['adj_close_diff'] / df['final_combined_spreads']) * df['adj_volume_diff']
+    
+    # Final Exponential Smoothing
+    df['final_factor'] = df['adjusted_factor'].ewm(alpha=alpha, adjust=False).mean()
+    
+    return df['final_factor']
+```

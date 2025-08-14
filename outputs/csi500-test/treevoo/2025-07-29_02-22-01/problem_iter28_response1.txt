@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between today's and yesterday's closing prices
+    df['momentum'] = df['close'].diff()
+    
+    # Calculate the rate of change over n-periods (e.g., 10 days)
+    n = 10
+    df['trend_strength'] = df['close'].pct_change(periods=n)
+    
+    # Measure the size of the trading range (high - low)
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Apply a moving average to the daily range
+    df['range_ma'] = df['daily_range'].rolling(window=10).mean()
+    
+    # Evaluate the closing price relative to the daily range
+    df['range_position'] = (df['close'] - df['low']) / df['daily_range']
+    
+    # Compute the Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['volume'] * df['close']).cumsum() / df['volume'].cumsum()
+    
+    # Use VWAP deviations from the current price as a buying or selling signal
+    df['VWAP_deviation'] = df['close'] - df['VWAP']
+    
+    # Create a 'volume surge' factor that flags when volume exceeds a certain threshold over its moving average
+    df['volume_surge'] = df['volume'] > df['volume'].rolling(window=10).mean() * 2
+    
+    # Examine the direction of the market by comparing up-volume and down-volume
+    df['up_volume'] = df.apply(lambda x: x['volume'] if x['close'] > x['close'].shift(1) else 0, axis=1)
+    df['down_volume'] = df.apply(lambda x: x['volume'] if x['close'] < x['close'].shift(1) else 0, axis=1)
+    
+    # Formulate an 'accumulation/distribution' line
+    df['accumulation_distribution'] = (df['close'] - df['low'] - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['accumulation_distribution'] = df['accumulation_distribution'].cumsum()
+    
+    # Develop a 'momentum-volatility' factor
+    df['momentum_volatility'] = df['trend_strength'] * df['range_ma']
+    
+    # Generate a 'price-volume anomaly' factor
+    df['price_volume_anomaly'] = df.apply(lambda x: 1 if (x['close'] > x['close'].shift(1)) and (x['volume'] < x['volume'].shift(1)) else 0, axis=1)
+    
+    # Construct a 'liquidity adjusted return' factor
+    df['liquidity_adjusted_return'] = df['close'].pct_change() * (df['volume'] / df['volume'].rolling(window=10).mean())
+    
+    # Return the final alpha factor
+    return df['liquidity_adjusted_return'].dropna()
+```

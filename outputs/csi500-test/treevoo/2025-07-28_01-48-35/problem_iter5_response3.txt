@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 10-Day EMA of Close Prices
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    # Price Momentum
+    df['price_momentum'] = df['close'] - df['ema_10']
+    
+    # Adjusted High-Low Range
+    df['prev_close'] = df['close'].shift(1)
+    df['adjusted_high_low'] = df['high'] - df['low'] - (df['open'] - df['prev_close'])
+    
+    # Combine High-Low and Open-Close
+    df['combined_range'] = df['adjusted_high_low'] + (df['close'] - df['open'])
+    
+    # Measure Closing Behavior
+    df['close_to_prev_close_return'] = df['close'] / df['prev_close'] - 1
+    df['final_combined_factor'] = (df['combined_range'] * 
+                                   np.abs(df['close_to_prev_close_return']))
+    
+    # Volume Trend
+    df['volume_20_sum'] = df['volume'].rolling(window=20).sum()
+    df['volume_trend'] = df['volume'] / df['volume_20_sum']
+    
+    # Range Expansion
+    tr = np.maximum(np.maximum(df['high'] - df['low'], 
+                               abs(df['high'] - df['prev_close'])), 
+                    abs(df['low'] - df['prev_close']))
+    df['atr_10'] = tr.rolling(window=10).mean()
+    df['range_expansion'] = tr / df['atr_10']
+    
+    # Composite Factor
+    df['composite_factor'] = df['price_momentum'] * df['volume_trend'] * df['range_expansion']
+    df['combined_final_factor'] = df['final_combined_factor'] * df['composite_factor']
+    
+    # Smooth the Combined Factor
+    df['smoothed_combined_factor'] = df['combined_final_factor'].rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = df['smoothed_combined_factor'].copy()
+    
+    return alpha_factor
+```

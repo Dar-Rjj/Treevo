@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 3-Day and 5-Day Rolling Returns
+    df['3_day_return'] = df['close'].pct_change(3)
+    df['5_day_return'] = df['close'].pct_change(5)
+    
+    # Smooth Returns with EMA
+    df['3_day_ema'] = df['3_day_return'].ewm(span=2, min_periods=2).mean()
+    df['5_day_ema'] = df['5_day_return'].ewm(span=4, min_periods=4).mean()
+    
+    # Combine 3-Day and 5-Day Smoothed Returns
+    df['combined_returns'] = (df['3_day_ema'] * 0.6) + (df['5_day_ema'] * 0.4)
+    
+    # Volume-Adjusted Multi-Day Price Momentum
+    df['volume_adjusted_momentum'] = df['combined_returns'] * df['volume']
+    
+    # Calculate 10-Day High-Low Range
+    df['10_day_high'] = df['high'].rolling(window=10, min_periods=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10, min_periods=10).min()
+    df['10_day_high_low_range'] = df['10_day_high'] - df['10_day_low']
+    
+    # Calculate 10-Day Open-Close Range
+    df['10_day_open_close_range'] = df['open'] - df['close']
+    df['10_day_open_close_range_sum'] = df['10_day_open_close_range'].rolling(window=10, min_periods=10).sum()
+    
+    # 10-Day Mean Price
+    df['10_day_mean_price'] = (df['open'] + df['close']).rolling(window=10, min_periods=10).sum() / 20
+    
+    # Enhanced Open-High-Low Volatility Index
+    df['enhanced_volatility_index'] = (df['10_day_high_low_range'] + abs(df['10_day_open_close_range_sum'])) / df['10_day_mean_price']
+    
+    # 20-Day Volume EMA
+    df['20_day_volume_ema'] = df['volume'].ewm(span=20, min_periods=20).mean()
+    
+    # Normalize Volume
+    df['normalized_volume'] = df['volume'] / df['20_day_volume_ema']
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['volume_adjusted_momentum'] - df['enhanced_volatility_index'] * df['normalized_volume']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor = heuristics_v2(df)
+# print(factor)
+```

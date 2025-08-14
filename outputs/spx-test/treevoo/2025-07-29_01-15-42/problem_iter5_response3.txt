@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = df['price_range'] / df['open']
+    
+    # Compute Relative True Strength Index (RTSI)
+    df['close_shifted'] = df['close'].shift(1)
+    df['gains'] = (df['close'] - df['close_shifted']).apply(lambda x: max(x, 0))
+    df['losses'] = (df['close'] - df['close_shifted']).apply(lambda x: -min(x, 0))
+    
+    df['avg_gain'] = df['gains'].rolling(window=14).mean()
+    df['avg_loss'] = df['losses'].rolling(window=14).mean()
+    
+    df['rtsi'] = 100 * (df['avg_gain'] / (df['avg_gain'] + df['avg_loss']))
+    
+    # Calculate Volume Volatility
+    df['vol_volatility'] = df['volume'].rolling(window=20).std() / df['volume'].rolling(window=20).mean()
+    
+    # Combine Price and Volume Intensity
+    df['price_volume_intensity'] = df['price_range_ratio'] * df['rtsi'] * df['vol_volatility']
+    
+    # Analyze Volume Trends
+    df['ma_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Adjust Daily Price Range by Moving Average Volume
+    df['volume_adjusted_price_range'] = df['price_range'] / df['ma_volume']
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    threshold = df['volume_adjusted_price_range'].std()
+    df['imbalance'] = df['volume_adjusted_price_range'].apply(
+        lambda x: 1 if x > threshold else (-1 if x < -threshold else 0)
+    )
+    
+    # Generate Initial Alpha Signal
+    df['alpha_signal'] = df['imbalance']
+    
+    # Calculate Intraday Price Range
+    df['intraday_range_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Close to Range Midpoint Deviation
+    df['close_to_midpoint_deviation'] = df['close'] - df['intraday_range_midpoint']
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Adjust Alpha Signal
+    df['adjusted_alpha_signal'] = df['close_to_midpoint_deviation'] * df['volume_change'] + df['alpha_signal']
+    
+    # Combine Intensity and Adjusted Alpha Factor
+    df['final_alpha_factor'] = df['price_volume_intensity'] * df['adjusted_alpha_signal']
+    
+    return df['final_alpha_factor']
+```

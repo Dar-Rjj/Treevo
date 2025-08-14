@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the RSI with an adaptive window
+    def adaptive_rsi(prices, short_window=10, long_window=20):
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=short_window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=short_window).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi.ewm(span=long_window, adjust=False).mean()
+
+    rsi = adaptive_rsi(df['close'])
+
+    # Calculate the MACD with an adaptive window
+    def adaptive_macd(prices, fast_window=10, slow_window=20, signal_window=9):
+        ema_fast = prices.ewm(span=fast_window, adjust=False).mean()
+        ema_slow = prices.ewm(span=slow_window, adjust=False).mean()
+        macd = ema_fast - ema_slow
+        signal = macd.ewm(span=signal_window, adjust=False).mean()
+        return macd, signal
+
+    macd, signal = adaptive_macd(df['close'])
+
+    # Calculate the Bollinger Bands with an adaptive window
+    def adaptive_bollinger_bands(prices, window=20, multiplier=2):
+        rolling_mean = prices.rolling(window=window).mean()
+        rolling_std = prices.rolling(window=window).std()
+        upper_band = rolling_mean + (multiplier * rolling_std)
+        lower_band = rolling_mean - (multiplier * rolling_std)
+        return rolling_mean, upper_band, lower_band
+
+    bb_mean, bb_upper, bb_lower = adaptive_bollinger_bands(df['close'])
+
+    # Calculate the volume-weighted close price
+    vwp = (df['close'] * df['volume']).rolling(window=10).mean() / df['volume'].rolling(window=10).mean()
+
+    # Calculate the 50-day and 200-day moving averages of closing prices
+    ma_50 = df['close'].rolling(window=50).mean()
+    ma_200 = df['close'].rolling(window=200).mean()
+
+    # Calculate the trend strength as the difference between the 50-day and 200-day moving averages
+    trend_strength = ma_50 - ma_200
+
+    # Calculate the 10-day rolling mean of the high-low range
+    hl_range_mean = (df['high'] - df['low']).rolling(window=10).mean()
+
+    # Combine the RSI, MACD, Bollinger Bands, volume-weighted price, trend strength, and high-low range into an alpha factor
+    alpha_factor = (rsi * (macd - signal) * (vwp - bb_mean) * trend_strength) / (hl_range_mean + 1e-7)
+
+    # Smooth the alpha factor using a 3-day exponentially weighted moving average
+    smoothed_alpha_factor = alpha_factor.ewm(span=3, adjust=False).mean()
+
+    return smoothed_alpha_factor
+```

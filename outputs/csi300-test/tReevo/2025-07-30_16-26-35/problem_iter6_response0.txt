@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-to-Low Range
+    df['volume_weighted_range'] = df['high_low_range'] * df['volume']
+    
+    # Calculate Rolling Sum of Volume-Weighted High-to-Low Ranges over a 20-day Window
+    df['rolling_sum_volume_weighted_range'] = df['volume_weighted_range'].rolling(window=20).sum()
+    
+    # Calculate Intraday Volatility (20-day Moving Average of High-to-Low Ranges)
+    df['intraday_volatility'] = df['high_low_range'].rolling(window=20).mean()
+    
+    # Calculate Close-to-Open Logarithmic Return
+    df['close_to_open_return'] = np.log(df['close'] / df['open'])
+    
+    # Normalize by Intraday Volatility
+    df['normalized_return'] = df['close_to_open_return'] / df['intraday_volatility']
+    
+    # Adjust for Momentum
+    df['momentum_20_day'] = df['close_to_open_return'].rolling(window=20).mean()
+    df['momentum_factor'] = df['momentum_20_day'] - df['close_to_open_return']
+    
+    # Incorporate Dynamic Volatility Measures
+    df['ema_high_low_range'] = df['high_low_range'].ewm(span=20, adjust=False).mean()
+    df['volatility_ratio'] = df['intraday_volatility'] / df['ema_high_low_range']
+    
+    # Combine Intraday Volatility, Return, and Volatility Ratio
+    df['combined_factor'] = df['normalized_return'] * df['volatility_ratio']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['rolling_sum_volume_weighted_range'] * df['combined_factor'] * df['momentum_factor']
+    
+    # Integrate Multi-Period Returns
+    df['short_term_ma'] = df['close_to_open_return'].rolling(window=5).mean()
+    df['long_term_ma'] = df['close_to_open_return'].rolling(window=20).mean()
+    df['multi_period_adjustment'] = df['long_term_ma'] - df['short_term_ma']
+    
+    # Adjust Final Alpha Factor
+    df['final_alpha_factor'] = df['alpha_factor'] * df['multi_period_adjustment']
+    
+    return df['final_alpha_factor']
+```

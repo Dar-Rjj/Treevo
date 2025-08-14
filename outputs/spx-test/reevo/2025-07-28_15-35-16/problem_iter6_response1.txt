@@ -1,0 +1,59 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low, which represents the price range of the day
+    price_range = df['high'] - df['low']
+    
+    # Calculate the closing price as a percentage of the day's high
+    close_to_high = (df['close'] - df['low']) / (price_range + 1e-7)
+    
+    # Calculate a momentum indicator by looking at the change in closing price over the last 5 days
+    momentum_5d = df['close'].pct_change(periods=5).fillna(0)
+    
+    # Calculate a trend indicator based on the moving average of the last 20 days vs. the last 5 days
+    ma_20 = df['close'].rolling(window=20).mean()
+    ma_5 = df['close'].rolling(window=5).mean()
+    trend = (ma_5 - ma_20) / ma_20
+    
+    # Integrate volatility using the standard deviation of the last 20 days' closing prices
+    volatility = df['close'].rolling(window=20).std().fillna(0)
+    
+    # Incorporate trading volume by calculating the percentage change in volume
+    volume_momentum = df['volume'].pct_change(periods=1).fillna(0)
+    
+    # Refined momentum by combining close-to-high, 5-day momentum, and volume momentum
+    refined_momentum = (close_to_high + momentum_5d + volume_momentum) / 3
+    
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    vwap = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Calculate the Relative Strength Index (RSI) for the close price
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    money_flow_ratio = raw_money_flow.rolling(window=14).apply(lambda x: (x[x > 0].sum() / x.sum()) if x.sum() != 0 else 0, raw=True)
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Calculate the Stochastic Oscillator
+    lowest_low = df['low'].rolling(window=14).min()
+    highest_high = df['high'].rolling(window=14).max()
+    k_percent = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low + 1e-7)
+    
+    # Combine these signals into an alpha factor
+    alpha_factor = (
+        0.4 * (refined_momentum * trend / (volatility + 1e-7)) +
+        0.3 * (vwap - df['close']) +
+        0.2 * (rsi - 50) +
+        0.1 * (mfi - 50) +
+        0.1 * (k_percent - 50)
+    )
+    
+    return alpha_factor
+```

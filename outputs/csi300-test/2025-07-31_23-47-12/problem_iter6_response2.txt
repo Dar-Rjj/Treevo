@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor that could help predict future stock returns.
+    
+    :param df: pandas DataFrame with columns (open, high, low, close, amount, volume) and index (date)
+    :return: pandas Series indexed by (date) representing the factor values
+    """
+    # Calculate Multi-Period Momentum
+    N1, N2, N3 = 5, 10, 20  # Define the periods for momentum
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff()
+    
+    momentum_N1 = log_returns.rolling(window=N1).sum()
+    momentum_N2 = log_returns.rolling(window=N2).sum()
+    momentum_N3 = log_returns.rolling(window=N3).sum()
+
+    # Adjust for Dynamic Volume
+    P = 5  # Volume change period
+    volume_change = df['volume'].pct_change(periods=P)
+    volume_threshold = 0.10  # 10% threshold
+    
+    weighted_momentum = (momentum_N1 + momentum_N2 + momentum_N3) / 3
+    weighted_momentum[volume_change < volume_threshold] = 0
+
+    # Incorporate Adaptive Volatility
+    M = 20  # Volatility lookback period
+    abs_price_changes = close_prices.diff().abs()
+    volatility = abs_price_changes.rolling(window=M).std()
+    
+    # Determine recent market trend
+    moving_avg = close_prices.rolling(window=50).mean()
+    trend = (close_prices > moving_avg).astype(int) - (close_prices < moving_avg).astype(int)
+    
+    # Adjust volatility based on market trend
+    adjusted_volatility = volatility * (1 + 0.5 * trend)  # Increase or decrease volatility based on trend
+    
+    # Final factor calculation
+    factor = weighted_momentum / adjusted_volatility
+    
+    return factor
+```

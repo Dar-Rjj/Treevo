@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+    
+    # Calculate Price Momentum Component
+    df['Price_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * 100
+    
+    # Calculate Volume Surge Component
+    df['Volume_Surge'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1) * 100
+    
+    # Combine High-Low Range and Volume
+    df['High_Low_Volume'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Compare with Recent Volume
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=5).mean()
+    
+    # Compare with Recent Amount
+    df['Amount_Ratio'] = df['amount'] / df['amount'].rolling(window=5).mean()
+    
+    # Assign Weighting Factors
+    w1, w2, w3, w4, w5 = 0.2, 0.3, 0.1, 0.2, 0.2
+    
+    # Combine Weighted Components
+    df['Weighted_Components'] = (w1 * df['High_Low_Volume'] + 
+                                 w2 * df['Price_Momentum'] + 
+                                 w3 * df['Volume_Surge'] + 
+                                 w4 * df['Volume_Ratio'] + 
+                                 w5 * df['Amount_Ratio'])
+    
+    # Calculate Momentum Indicator
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Short_Term_Momentum'] = df['Daily_Returns'].rolling(window=5).sum() - df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_Momentum'] = df['Daily_Returns'].rolling(window=20).sum() - df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Average True Range
+    df['True_Range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['Average_True_Range'] = df['True_Range'].ewm(span=14, adjust=False).mean()
+    
+    # Combine Momentum and Volatility
+    df['Combined_Momentum'] = (df['Short_Term_Momentum'] * 0.7 + df['Long_Term_Momentum'] * 0.3) / df['Average_True_Range']
+    df['Trend_Following'] = np.where(df['close'] > df['close'].rolling(window=50).mean(), 1.5, 1)
+    df['Combined_Momentum'] = df['Combined_Momentum'] * df['Trend_Following']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Weighted_Components'] * df['Combined_Momentum']
+    
+    return df['Alpha_Factor']
+```

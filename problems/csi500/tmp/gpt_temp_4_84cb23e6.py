@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive window for EMA, RSI, and VWAP based on the average volume of the last 30 days
+    avg_volume = df['volume'].rolling(window=30).mean()
+    vol_ratio = (df['volume'] - avg_volume) / avg_volume
+    ema_window = 7 + (vol_ratio * 3).astype(int)
+    rsi_window = 14 + (vol_ratio * 3).astype(int)
+    vwap_window = 7 + (vol_ratio * 3).astype(int)
+
+    # Volume-Weighted Average Price (VWAP)
+    vwap = (df['amount'] / df['volume']).rolling(window=vwap_window).mean()
+
+    # Exponential Moving Average (EMA) with adaptive window
+    ema_close = df['close'].ewm(span=ema_window, adjust=False).mean()
+
+    # Relative Strength Index (RSI) with adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+
+    # Dynamic volatility as the standard deviation of the logarithmic returns
+    dynamic_volatility = log_returns.rolling(window=5).std()
+
+    # Cross-asset correlations can be simplified by considering the correlation with its own past values
+    # For simplicity, we use the correlation between close and volume
+    cross_asset_corr = df['close'].rolling(window=30).corr(df['volume'])
+
+    # Order book imbalances can be approximated using the difference between high and low
+    order_imbalance = (df['high'] - df['low']) / df['close']
+
+    # Combine multiplicatively and normalize with ratios
+    factor = (df['close'] - ema_close) / vwap * rsi * log_returns * (1 + dynamic_volatility) * (1 + cross_asset_corr) * (1 + order_imbalance)
+
+    return factor

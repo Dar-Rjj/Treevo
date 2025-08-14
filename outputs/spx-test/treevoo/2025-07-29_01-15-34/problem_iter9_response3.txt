@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum Score
+    df['daily_return'] = df['close'].pct_change()
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum()
+    df['long_term_momentum'] = (df['close'] / df['close'].shift(20)) - 1
+    df['price_momentum_score'] = (df['short_term_momentum'].rank(pct=True) + df['long_term_momentum'].rank(pct=True)) * 100
+    
+    # Calculate Volume Activity Score
+    df['daily_volume_change'] = df['volume'].pct_change()
+    df['short_term_volume_change'] = df['daily_volume_change'].rolling(window=5).mean()
+    df['long_term_volume_activity'] = df['volume'].rolling(window=20).sum()
+    df['volume_activity_score'] = (df['short_term_volume_change'].rank(pct=True) + df['long_term_volume_activity'].rank(pct=True)) * 100
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    df['closing_position'] = (df['close'] - df['open']) / df['intraday_range']
+    
+    # Combine Factors
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['recent_price_trend'] = df['close'] - df['ema_20']
+    df['volume_intensity'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    df['combined_factors'] = (df['volume_intensity'] * df['closing_position'] + df['recent_price_trend'])
+    
+    # Weighted Sum of Scores
+    df['weighted_sum_scores'] = (df['price_momentum_score'] * 0.6 + 
+                                 df['volume_activity_score'] * 0.3 + 
+                                 (df['intraday_range'] / df['close']) * 0.1)
+    
+    # Final Alpha Factor Combination
+    df['alpha_factor'] = df['combined_factors'] * df['weighted_sum_scores']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    df['combined_indicator'] = df['intraday_change'] * df['volume_ratio']
+    
+    # Apply Threshold to Identify Significant Movements
+    daily_returns = df['close'].pct_change()
+    ems_volatility = daily_returns.ewm(span=20).std()
+    significant_movement_threshold = 2 * ems_volatility
+    df['significant_movement'] = df['combined_indicator'] > significant_movement_threshold
+    
+    # Confirm with Price Momentum
+    lookback_period = 20
+    ema_close = df['close'].ewm(span=lookback_period).mean()
+    df['momentum'] = (df['close'] - ema_close) / ema_close
+    
+    # Combine Momentum and Volume Indicators
+    volume_ema = df['volume'].ewm(span=lookback_period).mean()
+    volume_threshold = 1.5 * volume_ema
+    df['volume_above_threshold'] = df['volume'] > volume_threshold
+    df['synthesized_indicator'] = 0.5 * df['combined_indicator'] + 0.3 * df['momentum']
+    
+    # Integrate Opening Gap Analysis
+    df['opening_gap'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['final_indicator'] = 0.4 * df['synthesized_indicator'] + 0.6 * df['opening_gap']
+    
+    return df['final_indicator']
+```

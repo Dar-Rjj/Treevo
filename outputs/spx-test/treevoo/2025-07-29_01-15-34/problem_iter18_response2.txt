@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    df['close_pos_in_range'] = (df['close'] - df['open']) / df['high_low_range']
+    
+    # Calculate Intraday Volume Intensity
+    df['volume_intensity'] = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Calculate Intraday Price Change
+    df['price_change'] = (df['close'] - df['open']) / df['high_low_range']
+    
+    # Combine Intraday Components
+    df['intraday_component'] = df['volume_intensity'] * df['close_pos_in_range'] + df['price_change']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    total_volume = df['volume'].rolling(window=20).sum()
+    vwap_series = (typical_price * df['volume']).rolling(window=20).sum() / total_volume
+    df['vwap'] = vwap_series
+    
+    # Adjust for Recent Price Trend
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['trend_adjustment'] = df['ema_20'] - df['close']
+    
+    # Weighted Ratio of High-Low to Open-Close
+    df['high_low_to_open_close_ratio'] = df['high_low_range'] / abs(df['open'] - df['close'])
+    
+    # VWAP Deviation from Close
+    df['vwap_deviation'] = df['vwap'] - df['close']
+    
+    # Identify Trend Strength and Reversal Signals
+    df['positive_momentum'] = (df['high_low_range'] > 1.5 * abs(df['open'] - df['close'])).astype(int)
+    df['potential_reversal'] = ((abs(df['open'] - df['close']) > 0.8 * df['high_low_range']) & (df['vwap_deviation'] < 0) & (df['open'] - df['close'] < 0)).astype(int)
+    
+    # Intraday Range Percentage
+    df['intraday_range_percentage'] = df['high_low_range'] / df['close']
+    
+    # Close-to-Open Momentum Shift
+    df['close_open_momentum_shift'] = (df['close'] - df['open']) / df['open']
+    
+    # Volume Activity Ratio
+    df['volume_activity_ratio'] = df['volume'].rolling(window=20).sum() / df['volume'].rolling(window=20).mean()
+    
+    # Price Volatility Factor
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['volatility_factor'] = df['daily_return'] / df['daily_return'].rolling(window=20).std()
+    
+    # Enhanced Intraday Momentum
+    df['enhanced_intraday_momentum'] = (df['close'] - df['open']) / df['open'] * df['volume_intensity']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['intraday_component'] +
+        df['trend_adjustment'] +
+        df['high_low_to_open_close_ratio'] +
+        df['vwap_deviation'] +
+        df['positive_momentum'] +
+        df['potential_reversal'] +
+        df['intraday_range_percentage'] +
+        df['close_open_momentum_shift'] +
+        df['volume_activity_ratio'] +
+        df['volatility_factor'] +
+        df['enhanced_intraday_momentum']
+    )
+    
+    return df['final_alpha_factor']
+```

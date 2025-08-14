@@ -1,0 +1,33 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=20, vol_spike_threshold=2.0):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Weighted Daily Return
+    df['volume_weighted_return'] = df['daily_price_change'] * df['volume']
+    total_volume = df['volume'].rolling(window=n_days).sum()
+    volume_weighted_return = df['volume_weighted_return'].rolling(window=n_days).sum() / total_volume
+    
+    # Incorporate Intraday Range Indicator
+    df['intraday_range'] = df['high'] - df['low']
+    intraday_range_factor = (df['intraday_range'] > df['intraday_range'].mean()).astype(int) * 1.2 + 0.8
+    
+    # Integrate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_diff = df['close'] - df['vwap']
+    vwap_factor = (vwap_diff > 0).astype(int) * 1.1 + 0.9
+    
+    # Adjust Volume-Weighted Daily Return for Combined Intraday Analysis
+    adjusted_volume_weighted_return = volume_weighted_return * intraday_range_factor * vwap_factor
+    
+    # Incorporate Enhanced Volume Spike Indicator
+    std_dev_vol = df['volume'].rolling(window=n_days).std()
+    df['is_volume_spike'] = (df['volume'] > vol_spike_threshold * std_dev_vol).astype(int)
+    daily_return = df['daily_price_change'] / df['close'].shift(1)
+    volume_spike_factor = (daily_return > 0).astype(int) * 1.5 + 0.7
+    adjusted_volume_weighted_return[df['is_volume_spike'] == 1] *= volume_spike_factor[df['is_volume_spike'] == 1]
+    
+    return adjusted_volume_weighted_return
+```

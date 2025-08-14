@@ -1,0 +1,59 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def adaptive_ema(data, period):
+    alpha = 2 / (period + 1)
+    return data.ewm(alpha=alpha).mean()
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    combined_factor = intraday_return * high_low_range
+    smoothed_combined_factor = adaptive_ema(combined_factor, 14)
+    
+    # Apply Volume Weighting
+    volume_weighted_factor = smoothed_combined_factor * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    closing_gap = df['open'].diff()
+    gap_adjusted_factor = volume_weighted_factor + closing_gap
+    
+    # Integrate Long-Term Momentum
+    long_term_return = df['close'] - df['close'].shift(50)
+    normalized_long_term_return = long_term_return / high_low_range
+    
+    # Include Enhanced Dynamic Volatility Component
+    rolling_std = df['close'].pct_change().rolling(window=20).std()
+    atr = df[['high', 'low', 'close']].shift().apply(lambda x: np.max(x) - np.min(x), axis=1).rolling(window=14).mean()
+    combined_volatility = (rolling_std + atr) / 2
+    
+    # Adjust Volatility Component with Volume
+    volume_adjusted_volatility = combined_volatility * df['volume']
+    
+    # Incorporate Market Sentiment (Assuming a sentiment score column named 'sentiment')
+    sentiment_score = df['sentiment']
+    market_sentiment_volatility = volume_adjusted_volatility * sentiment_score
+    
+    # Integrate Sector-Specific Volatility (Assuming a sector volatility column named 'sector_volatility')
+    sector_volatility = df['sector_volatility']
+    sector_specific_volatility = volume_adjusted_volatility * sector_volatility
+    
+    # Final Factor Calculation
+    final_factor = (
+        gap_adjusted_factor +
+        normalized_long_term_return +
+        market_sentiment_volatility +
+        sector_specific_volatility
+    )
+    
+    # Apply Non-Linear Transformation
+    final_factor = np.log1p(final_factor)
+    
+    return final_factor

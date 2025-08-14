@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['hl_range'] = df['high'] - df['low']
+    
+    # Calculate Recent Average High-Low Range (21-day rolling sum)
+    df['avg_hl_range'] = df['hl_range'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = df['hl_range'] / df['avg_hl_range']
+    
+    # Calculate Volume Weighted Momentum
+    df['close_change'] = df['close'] - df['close'].shift(1)
+    df['vol_weighted_momentum'] = df['close_change'] * df['volume']
+    
+    # Combine Breakout Strength with Volume Weighted Momentum
+    df['combined_bvwm'] = df['breakout_strength'] * df['vol_weighted_momentum']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Weight by Volume for Close-to-Open Return
+    df['weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Combine Weighted Close-to-Open Return and Breakout-VW Momentum
+    df['combined_return_momentum'] = (df['weighted_close_to_open_return'] * 0.4 + 
+                                      df['combined_bvwm'] * 0.6)
+    
+    # Calculate Price Momentum (7-day and 21-day returns)
+    df['7_day_return'] = (df['close'] / df['close'].shift(7)) - 1
+    df['21_day_return'] = (df['close'] / df['close'].shift(21)) - 1
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+    
+    # Calculate Volume Activity (Ratio of 7-day to 21-day Volume Averages)
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).mean()
+    df['21_day_avg_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_activity'] = df['7_day_avg_volume'] / df['21_day_avg_volume']
+    
+    # Final Alpha Factor
+    df['final_alpha'] = (df['combined_return_momentum'] * 0.7 * 
+                         df['price_momentum'] * 0.5 * 
+                         df['volume_activity'] * 0.8)
+    
+    # Incorporate High-Low Range Signal
+    df['high_low_signal'] = (df['hl_range'] > df['avg_hl_range']).astype(int)
+    
+    # Integrate Combined Return and Momentum with High-Low Range Signal
+    df['final_factor'] = (df['final_alpha'] * 0.7 + 
+                          df['high_low_signal'] * 0.3)
+    
+    return df['final_factor'].dropna()
+```

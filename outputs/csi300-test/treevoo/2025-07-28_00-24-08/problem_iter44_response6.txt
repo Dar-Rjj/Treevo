@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day's Overnight Return
+    overnight_return = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Weight High-Low Range by Volume
+    high_low_range = df['high'] - df['low']
+    volume_weighted_high_low = high_low_range * df['volume']
+    
+    # Adjust for Combined Volatility
+    adjusted_returns = aggregate_returns * volume_weighted_high_low
+    
+    # Smoothed Moving Average
+    sma_adjusted_returns = adjusted_returns.rolling(window=5).mean()
+    smoothed_returns = sma_adjusted_returns.ewm(span=5, adjust=False).mean()
+    
+    # Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    integrated_factors = intraday_return * overnight_return * price_momentum_ratio
+    average_volume = df['volume'].rolling(window=5).mean()
+    integrated_factors = np.where(df['volume'] > average_volume, integrated_factors * 1.7, integrated_factors * 0.3)
+    
+    # Final Factor
+    final_factor = integrated_factors
+    
+    return pd.Series(final_factor, index=df.index)
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+```

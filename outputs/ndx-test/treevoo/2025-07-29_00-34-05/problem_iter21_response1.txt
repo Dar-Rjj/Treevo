@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_diff = short_ema - long_ema
+    
+    # Assess Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    avg_range_volatility = daily_range.rolling(window=30).mean()
+    
+    # Incorporate Volume Influence
+    positive_volume_days = (df['volume'].diff() > 0).rolling(window=20).sum()
+    negative_volume_days = (df['volume'].diff() < 0).rolling(window=20).sum()
+    avg_30_day_volume = df['volume'].rolling(window=30).mean()
+    volume_deviation_score = df['volume'] - avg_30_day_volume
+    volume_acceleration = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Combine Momentum and Volume Indicators
+    combined_momentum = (short_ema * positive_volume_days) + (long_ema * negative_volume_days)
+    adjusted_momentum = momentum_diff / avg_range_volatility
+    momentum_and_volume = adjusted_momentum * volume_acceleration
+    
+    # Calculate Volume Adjusted Range
+    volume_adjusted_range = (df['high'] - df['low']) / ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    
+    # Calculate Short-Term and Long-Term Rolling Average of Volume Adjusted Range
+    short_term_avg_var = volume_adjusted_range.rolling(window=10).mean()
+    long_term_avg_var = volume_adjusted_range.rolling(window=20).mean()
+    
+    # Integrate Volume and Volatility Adjusted Momentum
+    integrated_factor = (combined_momentum 
+                         + short_term_avg_var 
+                         - long_term_avg_var 
+                         + volume_deviation_score)
+    
+    # Include Open to Close Price Change
+    open_to_close_change = (df['close'] - df['open']) / df['open']
+    
+    # Final Alpha Factor
+    final_alpha_factor = integrated_factor + open_to_close_change
+    
+    return final_alpha_factor
+```

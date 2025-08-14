@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    
+    # Compute Moving Average Volume
+    df['Moving_Average_Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Generate Volume-Adjusted Price Range
+    df['Volume_Adjusted_Price_Range'] = df['Daily_Price_Range'] / df['Moving_Average_Volume']
+    
+    # Calculate Long-Term Price Momentum
+    df['Long_Term_Momentum'] = df['close'].pct_change(periods=14)
+    
+    # Calculate Short-Term Price Momentum
+    df['Short_Term_Momentum'] = df['close'].pct_change(periods=5)
+    
+    # Combine Long-Term and Short-Term Momentum
+    df['Combined_Momentum'] = df['Long_Term_Momentum'] + df['Short_Term_Momentum']
+    
+    # Calculate Intraday Price Range
+    df['Intraday_Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Close to Range Midpoint Deviation
+    df['Range_Midpoint'] = (df['high'] + df['low']) / 2
+    df['Close_to_Midpoint_Deviation'] = df['close'] - df['Range_Midpoint']
+    
+    # Incorporate Volume and Amount Trends
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Amount_Change'] = df['amount'].pct_change()
+    
+    # Calculate Intraday High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Movement
+    df['Close_to_Open_Movement'] = df['close'] - df['open']
+    
+    # Weighted Average of Momentum, Intraday, and Volume-Amount Components
+    weights = {
+        'Combined_Momentum': 0.3,
+        'High_Low_Spread': 0.2,
+        'Close_to_Open_Movement': 0.2,
+        'Volume_Adjusted_Price_Range': 0.1,
+        'Close_to_Midpoint_Deviation': 0.2
+    }
+    
+    df['Weighted_Average'] = (df['Combined_Momentum'] * weights['Combined_Momentum'] +
+                              df['High_Low_Spread'] * weights['High_Low_Spread'] +
+                              df['Close_to_Open_Movement'] * weights['Close_to_Open_Movement'] +
+                              df['Volume_Adjusted_Price_Range'] * weights['Volume_Adjusted_Price_Range'] +
+                              df['Close_to_Midpoint_Deviation'] * weights['Close_to_Midpoint_Deviation'])
+    
+    # Calculate Volume Acceleration
+    df['Volume_Acceleration'] = df['volume'].pct_change(periods=10)
+    
+    # Generate Alpha Signal
+    df['Momentum_Volume_Adjusted_Signal'] = df['Weighted_Average'] * df['Volume_Acceleration']
+    
+    # Final Alpha Factor
+    threshold = 0.05
+    df['Alpha_Factor'] = 0
+    df.loc[df['Momentum_Volume_Adjusted_Signal'] > threshold, 'Alpha_Factor'] = 1 * df['Momentum_Volume_Adjusted_Signal']
+    df.loc[df['Momentum_Volume_Adjusted_Signal'] < -threshold, 'Alpha_Factor'] = -1 * df['Momentum_Volume_Adjusted_Signal']
+    
+    # Refine Final Alpha Factor
+    volume_adjusted_threshold = 0.05
+    df.loc[df['Volume_Adjusted_Price_Range'] > volume_adjusted_threshold, 'Alpha_Factor'] = 1 * df['Alpha_Factor']
+    df.loc[df['Volume_Adjusted_Price_Range'] < -volume_adjusted_threshold, 'Alpha_Factor'] = -1 * df['Alpha_Factor']
+    
+    return df['Alpha_Factor']
+```

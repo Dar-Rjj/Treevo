@@ -1,0 +1,53 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price momentum
+    df['price_momentum'] = df['close'].pct_change()
+    
+    # Calculate the volume momentum
+    df['volume_momentum'] = df['volume'].pct_change()
+    
+    # Calculate the volatility of the close price over the last 10 days
+    df['volatility'] = df['close'].rolling(window=10).std()
+    
+    # Calculate the relative strength index (RSI) for the close price
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 5-day and 20-day moving averages of the close prices
+    df['ma_5_close'] = df['close'].rolling(window=5).mean()
+    df['ma_20_close'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate the trend strength as the difference between the 5-day and 20-day moving averages
+    df['trend_strength'] = df['ma_5_close'] - df['ma_20_close']
+    
+    # Calculate the percentage change in trend strength
+    df['trend_strength_change'] = df['trend_strength'].pct_change()
+    
+    # Calculate the accumulation distribution line
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['acc_dist_line'] = money_flow_volume.cumsum()
+    
+    # Calculate the rate of change in the accumulation distribution line
+    df['acc_dist_roc'] = df['acc_dist_line'].pct_change()
+    
+    # Dynamic weighting based on the current market regime
+    df['regime'] = (df['trend_strength'] > 0).astype(int)
+    
+    # Combine the factors with dynamic weights
+    factor = (
+        df['regime'] * 0.5 * df['price_momentum'] +
+        df['regime'] * 0.3 * df['volume_momentum'] +
+        df['regime'] * 0.1 * (df['volatility'] - df['volatility'].shift(1)) +
+        df['regime'] * 0.1 * (50 - abs(df['rsi'] - 50)) +
+        (1 - df['regime']) * 0.6 * df['trend_strength_change'] +
+        (1 - df['regime']) * 0.4 * df['acc_dist_roc']
+    )
+    
+    return factor
+```

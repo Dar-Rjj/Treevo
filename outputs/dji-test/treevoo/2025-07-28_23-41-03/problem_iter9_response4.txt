@@ -1,0 +1,29 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Weighted Reversal Signal
+    df['volume_weighted_signal'] = df.apply(lambda row: -1 * row['volume'] if row['intraday_return'] > 0 else 1 * row['volume'], axis=1)
+    
+    # Calculate ATR Component
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low', 'prev_close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['prev_close'] - x['low'])), axis=1
+    )
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Price Volatility Component
+    df['price_volatility'] = df['high'] - df['low']
+    df['price_volatility'] = df['price_volatility'].rolling(window=5).std()
+    
+    # Calculate Combined Momentum Component
+    df['combined_momentum'] = (df['volume_weighted_signal'] * df['atr']) + (df['price_volatility'] * df['volume_weighted_signal'])
+    
+    # Exponential Moving Average (EMA) of Combined Momentum Component
+    df['factor_value'] = df['combined_momentum'].ewm(span=5, adjust=False).mean()
+    
+    return df['factor_value']
+```

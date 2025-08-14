@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 50-day moving averages of closing prices
+    df['ma_10'] = df['close'].rolling(window=10).mean()
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate the difference between the current close and the 10-day moving average
+    df['close_ma_10_diff'] = df['close'] - df['ma_10']
+    
+    # Calculate the 10-day rolling standard deviation to represent volatility
+    df['volatility_10d'] = df['close'].rolling(window=10).std()
+    
+    # Calculate the 10-day momentum
+    df['momentum_10d'] = df['close'].pct_change(periods=10)
+    
+    # Calculate the 50-day trend strength as the ratio of the 10-day moving average to the 50-day moving average
+    df['trend_strength'] = df['ma_10'] / df['ma_50']
+    
+    # Calculate the liquidity as the ratio of volume to the 10-day rolling mean of volume
+    df['liquidity'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Calculate the 14-day RSI (Relative Strength Index)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 10-day ATR (Average True Range)
+    tr = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), abs(df['low'] - df['close'].shift(1)))
+    df['atr_10'] = tr.rolling(window=10).mean()
+    
+    # Define market regimes based on RSI and ATR
+    df['regime'] = 0
+    df.loc[df['rsi_14'] > 70, 'regime'] = 1  # Overbought regime
+    df.loc[df['rsi_14'] < 30, 'regime'] = -1  # Oversold regime
+    df.loc[(df['rsi_14'] <= 70) & (df['rsi_14'] >= 30), 'regime'] = 0  # Neutral regime
+    
+    # Use machine learning for dynamic factor weighting (simple example using a linear model)
+    X = df[['close_ma_10_diff', 'volatility_10d', 'momentum_10d', 'trend_strength', 'liquidity', 'atr_10']].dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index]  # Target: next day's return
+    from sklearn.linear_model import LinearRegression
+    model = LinearRegression()
+    model.fit(X, y)
+    weights = model.coef_
+    
+    # Combine the factors with the learned weights
+    alpha_factor = (X * weights).sum(axis=1)
+    
+    return alpha_factor.dropna()
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    close_change = df['close'].pct_change()
+    price_momentum = close_change.rolling(window=20).mean()
+
+    # Identify Volume Spike
+    volume_change = df['volume'].pct_change()
+    volume_spike_threshold = 2.0
+    volume_spike = (volume_change > volume_spike_threshold)
+
+    # Combine Price Momentum and Volume Spike
+    high_factor = 2.0
+    adjusted_price_momentum = price_momentum * (high_factor if volume_spike.any() else 1.0)
+
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_high_low = (df['high'] - df['low']) / df['low']
+
+    # Incorporate Volume Spike in Intraday Dynamics
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    combined_indicator = intraday_high_low * volume_ratio
+
+    # Calculate Daily Log Return
+    daily_log_return = df['close'].apply(lambda x: np.log(x) - np.log(df['close'].shift(1)))
+
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+
+    # Adjust Moving Average Return by Volume
+    sma_volume = df['volume'].rolling(window=20).mean()
+    adjusted_return = daily_log_return.rolling(window=20).mean() * (ema_volume / sma_volume)
+
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_return.rolling(window=5).mean()
+
+    # Calculate Intraday Price Movement
+    intraday_range = df['high'] - df['low']
+    intraday_direction = df['close'] - df['open']
+
+    # Calculate Weighted Volume Activity
+    average_volume = df['volume'].rolling(window=20).mean()
+    relative_volume = df['volume'] / average_volume
+
+    # Combine Intraday Price and Volume Metrics
+    weighted_intraday_range = intraday_range * relative_volume
+    weighted_intraday_direction = intraday_direction * relative_volume
+    combined_metric = weighted_intraday_range + weighted_intraday_direction
+
+    # Generate Final Alpha Factor
+    final_alpha_factor = (combined_metric * (high_factor if volume_spike.any() else 1.0)) + smoothed_adjusted_return
+
+    return final_alpha_factor
+```

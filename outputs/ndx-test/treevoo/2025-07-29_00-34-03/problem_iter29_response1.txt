@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = (df['close'].shift(1) - df['open']) / df['open']
+    
+    # Weight by Volume
+    df['volume_weighted_return'] = df['volume'] * df['open_to_close_return']
+    
+    # Scale by Volume
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_20d']
+    
+    # Calculate Short-Term and Long-Term Price Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=5).mean()
+    df['long_term_momentum'] = df['close'].rolling(window=20).mean()
+    df['momentum_diff'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Calculate Adjusted Intraday Range
+    df['adjusted_intraday_range'] = df['intraday_range'] * df['scaled_volume']
+    
+    # Calculate Realized Volatility
+    df['hl_range'] = df['high'] - df['low']
+    df['realized_volatility'] = df['hl_range'].rolling(window=10).sum() ** 0.5
+    
+    # Adjust Short-Term Momentum by Volatility
+    df['adjusted_short_term_momentum'] = df['short_term_momentum'] / df['realized_volatility']
+    
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = df['volume'] * df['close']
+    df['cumulative_volume_weighted_price'] = df['volume_weighted_price'].cumsum()
+    
+    # Intraday Volatility Adjustment
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['sma_intraday_volatility'] = df['intraday_volatility'].rolling(window=20).mean()
+    df['adjusted_sma'] = df['sma_intraday_volatility'] - df['intraday_volatility']
+    
+    # Volume Surge Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_surge'] = df['volume_change'] > 0
+    df['volume_surge_factor'] = df['volume_surge'].apply(lambda x: 1.5 if x else 1)
+    
+    # True Average Price
+    df['true_avg_price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Rolling Volatility of Close Prices
+    df['rolling_volatility'] = df['close'].rolling(window=20).std()
+    
+    # Adjust Momentum by Volatility
+    df['rolling_avg_daily_return'] = df['close'].pct_change().rolling(window=20).mean()
+    df['volatility_adjusted_momentum'] = df['rolling_avg_daily_return'] / df['rolling_volatility']
+    
+    # Volume-Price Movement Score
+    df['volume_price_movement_score'] = df['volume'] * (df['high'] - df['open'])
+    
+    # Volume Trend
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['volume_trend'] = df['avg_volume_5d'] - df['avg_volume_20d']
+    
+    # Combined Momentum and Volume Trends
+    df['combined_momentum_volume'] = df['momentum_diff'] + df['volume_trend']
+    
+    # Adjusted True Average Price
+    df['price_range_volatility'] = df['hl_range'].rolling(window=20).std()
+    df['adjusted_true_avg_price'] = df['true_avg_price'] / df['price_range_volatility']
+    
+    # Final Momentum Indicator
+    df['final_momentum_indicator'] = df['adjusted_true_avg_price'] * df['volume_price_movement_score']
+    
+    # Enhanced Momentum-Volatility Interaction
+    df['ema_close'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_volatility_adjusted'] = df['ema_close'] / df['rolling_volatility']
+    
+    # Volume-Adjusted Momentum
+    df['cumulative_volume_weighted_momentum'] = df['cumulative_volume_weighted_price'].diff()
+    df['volume_adjusted_momentum'] = df['cumulative_volume_weighted_momentum']

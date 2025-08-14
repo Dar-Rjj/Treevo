@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Combine Intraday Measures
+    weight_high_low = 0.6
+    weight_close_open = 0.4
+    combined_intraday_measure = (weight_high_low * intraday_high_low_spread + 
+                                 weight_close_open * close_to_open_change)
+    
+    # Adjust for Volume
+    volume_adjusted_combined_measure = combined_intraday_measure * df['volume']
+    
+    # Aggregate Price Movements and Smooth High-Low Ranges
+    period = 10
+    high_low_sum = df['high'] - df['low']
+    close_open_sum = df['close'] - df['open']
+    smoothed_high_low = high_low_sum.rolling(window=20).mean()
+    long_term_high_low_range = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Calculate Combined Price and High-Low Range Momentum
+    short_term_smoothed_high_low_diff = smoothed_high_low.rolling(window=period).mean()
+    short_term_smoothed_close_open_diff = close_open_sum.rolling(window=period).mean()
+    range_momentum = short_term_smoothed_high_low_diff - long_term_high_low_range
+    
+    # Weight by Recent Price Volatility
+    price_volatility = df['close'].rolling(window=period).std()
+    weighted_range_momentum = range_momentum * price_volatility
+    
+    # Evaluate Volume Activity
+    average_volume = df['volume'].rolling(window=period).mean()
+    high_volume_indicator = (df['volume'] > average_volume).astype(int)
+    
+    # Integrate Price, High-Low Range, and Volume Activity
+    final_alpha_factor = weighted_range_momentum * high_volume_indicator
+    
+    # Smooth Oscillation with Exponential Moving Average
+    ema_window = 14
+    final_alpha_factor_ema = final_alpha_factor.ewm(span=ema_window, adjust=False).mean()
+    
+    return final_alpha_factor_ema
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    short_term_return = df['close'].pct_change(5)
+    
+    # Calculate Long-Term Return
+    long_term_return = df['close'].pct_change(20)
+    
+    # Calculate Relative Strength
+    relative_strength = short_term_return - long_term_return
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Average High-Low Range
+    avg_high_low_range = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate High-Low Range Over Average
+    high_low_range_over_avg = high_low_range / avg_high_low_range
+    
+    # Calculate Intraday Return
+    intraday_return = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    open_to_close_return = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_return = intraday_return + open_to_close_return
+    
+    # Identify Volume Spikes
+    N = 20
+    K = 2
+    mean_volume = df['volume'].rolling(window=N).mean()
+    std_volume = df['volume'].rolling(window=N).std()
+    volume_spike_indicator = (df['volume'] > (mean_volume + K * std_volume)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    combined_return_vol_spike = combined_return * volume_spike_indicator
+    
+    # Calculate Volume Difference
+    volume_difference = df['volume'].diff()
+    
+    # Calculate VWAP
+    vwap = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    
+    # Calculate Volume-to-VWAP Ratio
+    volume_to_vwap_ratio = df['volume'] / vwap
+    
+    # Integrate Volume and Price Information
+    integrated_info = (0.5 * volume_difference) + (0.3 * avg_high_low_range) + (df['close'] - df['close'].shift(1))
+    
+    # Combine Indicators
+    factor_1 = high_low_range_over_avg * volume_difference * volume_to_vwap_ratio * (df['close'] - df['close'].shift(1))
+    
+    # Weight by Volume and Volatility
+    volume_average = df['volume'].rolling(window=5).mean()
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=20).std()
+    weighted_relative_strength = relative_strength * (volume_average * volatility)
+    
+    # Final Alpha Factor
+    alpha_factor = weighted_relative_strength + factor_1 + integrated_info
+    
+    return alpha_factor
+```

@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+
+    # Determine Volatility
+    df['Volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+
+    # Adjust Window Size Based on Volatility
+    def get_window_size(volatility, high_volatility_threshold, low_volatility_threshold):
+        if volatility > high_volatility_threshold:
+            return 5
+        elif volatility < low_volatility_threshold:
+            return 30
+        else:
+            return 20
+
+    high_volatility_threshold = df['Volatility'].quantile(0.75)
+    low_volatility_threshold = df['Volatility'].quantile(0.25)
+    
+    df['Window_Size'] = df['Volatility'].apply(lambda vol: get_window_size(vol, high_volatility_threshold, low_volatility_threshold))
+
+    # Incorporate Momentum and Market Trends
+    df['Momentum'] = df['close'].rolling(window=10).mean()
+    df['Market_Trend'] = df['close'].rolling(window=50).mean()
+
+    df['Trend_Signal'] = 0
+    df.loc[(df['Momentum'] > 0) & (df['Market_Trend'] > 0), 'Trend_Signal'] = 1  # Bullish
+    df.loc[(df['Momentum'] < 0) & (df['Market_Trend'] < 0), 'Trend_Signal'] = -1  # Bearish
+
+    # Rolling Statistics with Adaptive Window
+    rolling_mean = df.groupby('Window_Size')['Volume_Weighted_Return'].transform(lambda x: x.rolling(x.name).mean())
+    rolling_std = df.groupby('Window_Size')['Volume_Weighted_Return'].transform(lambda x: x.rolling(x.name).std())
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = rolling_mean / rolling_std
+
+    return df['Alpha_Factor'].dropna()
+```

@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price change (close - open)
+    price_change = df['close'] - df['open']
+    
+    # Calculate the average of high and low
+    avg_high_low = (df['high'] + df['low']) / 2
+    
+    # Calculate the standard deviation of the price change to measure volatility
+    volatility = price_change.rolling(window=5).std()
+    
+    # Calculate the rolling mean of the close price to measure trend strength
+    trend_strength = df['close'].rolling(window=5).mean()
+    
+    # Detect volume spikes by comparing the current volume to the rolling mean of the last 5 days
+    volume_spike = (df['volume'] - df['volume'].rolling(window=5).mean()) / df['volume'].rolling(window=5).std()
+    
+    # Calculate the weighted price movement relative to the average high and low
+    weighted_price_movement = (price_change * df['volume']) / (avg_high_low * df['volume'].rolling(window=5).mean())
+    
+    # Incorporate a multi-day pattern by calculating the log return over the last 5 days
+    log_return_5d = (df['close'] / df['close'].shift(5)).apply(np.log)
+    
+    # Calculate the skewness of the price change over the last 5 days for asymmetry in price movements
+    skewness = price_change.rolling(window=5).skew()
+    
+    # Calculate the kurtosis of the price change over the last 5 days for peakiness in price movements
+    kurtosis = price_change.rolling(window=5).kurt()
+    
+    # Calculate the adaptive weights based on the standard deviation of the factors
+    std_weighted_price_movement = weighted_price_movement.rolling(window=5).std()
+    std_trend_strength = trend_strength.rolling(window=5).std()
+    std_volatility = volatility.rolling(window=5).std()
+    std_volume_spike = volume_spike.rolling(window=5).std()
+    std_log_return_5d = log_return_5d.rolling(window=5).std()
+    std_skewness = skewness.rolling(window=5).std()
+    std_kurtosis = kurtosis.rolling(window=5).std()
+    
+    total_std = (std_weighted_price_movement + std_trend_strength + std_volatility + std_volume_spike + std_log_return_5d + std_skewness + std_kurtosis)
+    
+    w1 = std_weighted_price_movement / total_std
+    w2 = std_trend_strength / total_std
+    w3 = std_volatility / total_std
+    w4 = std_volume_spike / total_std
+    w5 = std_log_return_5d / total_std
+    w6 = std_skewness / total_std
+    w7 = std_kurtosis / total_std
+    
+    # Combine the factors into a single alpha factor with adaptive weights
+    alpha_factor = (w1 * weighted_price_movement + w2 * trend_strength - w3 * volatility + w4 * volume_spike + w5 * log_return_5d + w6 * skewness + w7 * kurtosis)
+    
+    # Add a momentum factor by considering the 20-day return
+    momentum = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate the adaptive weight for the momentum factor
+    std_momentum = momentum.rolling(window=5).std()
+    total_std += std_momentum
+    w8 = std_momentum / total_std
+    
+    # Incorporate the momentum factor into the alpha factor
+    alpha_factor += w8 * momentum
+    
+    return alpha_factor.fillna(0)
+```

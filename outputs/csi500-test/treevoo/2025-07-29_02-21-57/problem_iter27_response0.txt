@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 5-Day Close Price Return
+    close_t_5 = df['close'].shift(5)
+    close_t = df['close']
+    close_return = (close_t - close_t_5) / close_t_5
+    
+    # Calculate 5-Day Volume Ratio
+    volume_5_day_sum = df['volume'].rolling(window=5).sum()
+    volume_5_day_avg = df['volume'].rolling(window=20).mean()
+    volume_ratio = volume_5_day_sum / volume_5_day_avg
+    
+    # Multiply Close Price Return by Volume Ratio
+    volume_adjusted_momentum = close_return * volume_ratio
+    
+    # Calculate High-Low Price Oscillation
+    high_low_range = df['high'] - df['low']
+    std_high_low_range = high_low_range.rolling(window=10).std()
+    mean_high_low_range = high_low_range.rolling(window=10).mean()
+    adjusted_price_oscillation = (high_low_range - mean_high_low_range) / std_high_low_range
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Moving Averages of Intraday Returns
+    short_term_ma = intraday_return.rolling(window=5).mean()
+    long_term_ma = intraday_return.rolling(window=20).mean()
+    
+    # Compute Intraday Return Difference
+    intraday_return_diff = short_term_ma - long_term_ma
+    
+    # Filter by Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    intraday_return_diff_filtered = intraday_return_diff.where(volume_change > 0, 0)
+    
+    # Calculate Short-Term Volume Weighted Moving Average (VWMA)
+    close_prices = df['close']
+    volume = df['volume']
+    short_term_vwma = (close_prices * volume).rolling(window=5).sum() / volume.rolling(window=5).sum()
+    
+    # Calculate Long-Term Volume Weighted Moving Average (VWMA)
+    long_term_vwma = (close_prices * volume).rolling(window=20).sum() / volume.rolling(window=20).sum()
+    
+    # Generate Combined Signal
+    vwma_signal = (short_term_vwma > long_term_vwma).astype(int) - (short_term_vwma < long_term_vwma).astype(int)
+    momentum_signal = (volume_adjusted_momentum > 0).astype(int) - (volume_adjusted_momentum < 0).astype(int)
+    oscillation_signal = (adjusted_price_oscillation > 0).astype(int) - (adjusted_price_oscillation < 0).astype(int)
+    
+    combined_signal = pd.Series(0, index=df.index)
+    for i in range(len(combined_signal)):
+        if vwma_signal.iloc[i] == 1 and momentum_signal.iloc[i] == 1 and oscillation_signal.iloc[i] == 1:
+            combined_signal.iloc[i] = 1
+        elif vwma_signal.iloc[i] == -1 and momentum_signal.iloc[i] == -1 and oscillation_signal.iloc[i] == -1:
+            combined_signal.iloc[i] = -1
+        elif (vwma_signal.iloc[i] == 1 and momentum_signal.iloc[i] == 1) or (vwma_signal.iloc[i] == 1 and oscillation_signal.iloc[i] == 1) or (momentum_signal.iloc[i] == 1 and oscillation_signal.iloc[i] == 1):
+            combined_signal.iloc[i] = 0.5
+        elif (vwma_signal.iloc[i] == -1 and momentum_signal.iloc[i] == -1) or (vwma_signal.iloc[i] == -1 and oscillation_signal.iloc[i] == -1) or (momentum_signal.iloc[i] == -1 and oscillation_signal.iloc[i] == -1):
+            combined_signal.iloc[i] = -0.5
+        else:
+            combined_signal.iloc[i] = 0
+    
+    return combined_signal
+```

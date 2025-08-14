@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Close Price Momentum
+    simple_momentum_21 = df['close'] - df['close'].shift(21)
+    simple_momentum_63 = df['close'] - df['close'].shift(63)
+    avg_volume_21 = df['volume'].rolling(window=21).mean()
+    avg_volume_63 = df['volume'].rolling(window=63).mean()
+    volume_adjusted_momentum = (simple_momentum_21 * avg_volume_21 + simple_momentum_63 * avg_volume_63) / 2
+    
+    # Combined Price Momentum
+    price_momentum_21 = df['close'] - df['close'].shift(21)
+    price_momentum_63 = df['close'] - df['close'].shift(63)
+    combined_price_momentum = 0.5 * price_momentum_21 + 0.5 * price_momentum_63
+    
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    breakout_strength = daily_range * (df['volume'] / df['volume'].rolling(window=21).mean()) + open_to_close_movement
+    
+    # Enhanced Price Reversion
+    highest_high_10 = df['high'].rolling(window=10).max()
+    lowest_low_10 = df['low'].rolling(window=10).min()
+    proximity_to_high = (highest_high_10 - df['close']) / (highest_high_10 - lowest_low_10)
+    proximity_to_low = (df['close'] - lowest_low_10) / (highest_high_10 - lowest_low_10)
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    inverted_proximity = 1 / (min_proximity + 1e-6)
+    volatility_20 = df['close'].pct_change().rolling(window=20).std()
+    enhanced_price_reversion = inverted_proximity / volatility_20
+    
+    # Volume-Adjusted High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    volume_adjusted_spread = high_low_spread * df['volume']
+    
+    # Moving Sum of Volume-Adjusted High-Low Spread
+    moving_sum_spread = volume_adjusted_spread.rolling(window=20).sum()
+    
+    # Adjusted Spread Momentum
+    spread_momentum = moving_sum_spread - moving_sum_spread.shift(1)
+    
+    # Volume-Adjusted Momentum and Breakout Indicator
+    momentum_indicator = df['close'] - df['close'].shift(1) + volume_adjusted_spread
+    combined_indicator = 0.7 * breakout_strength + 0.3 * momentum_indicator
+    strong_moves_indicator = (combined_indicator > 0).astype(int)
+    
+    # Integrated Factor
+    integrated_factor = (
+        0.4 * volume_adjusted_momentum +
+        0.3 * breakout_strength +
+        0.2 * enhanced_price_reversion +
+        0.1 * spread_momentum +
+        0.2 * strong_moves_indicator
+    )
+    
+    return integrated_factor
+```

@@ -1,0 +1,32 @@
+def heuristics_v2(df):
+    # Calculate 5-day return
+    df['five_day_return'] = df['close'].pct_change(5)
+    
+    # Calculate Z-score of 5-day return
+    df['z_score_5d_ret'] = (df['five_day_return'] - df['five_day_return'].rolling(window=60).mean()) / df['five_day_return'].rolling(window=60).std()
+    
+    # Calculate positive and negative volumes
+    df['positive_volume'] = df['volume'] * (df['close'] > df['close'].shift(1))
+    df['negative_volume'] = df['volume'] * (df['close'] < df['close'].shift(1))
+    
+    # Calculate positive to negative volume ratio
+    df['pos_neg_vol_ratio'] = df['positive_volume'].rolling(window=10).sum() / df['negative_volume'].rolling(window=10).sum()
+    
+    # Compute EMA for close price
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate EMA crossover
+    df['ema_crossover'] = df['ema_10'] - df['ema_30']
+    
+    # Rolling 60-day cumulative returns for each component
+    cum_ret_z_score = (df['z_score_5d_ret'] + 1).cumprod().pct_change(60)
+    cum_ret_pos_neg_vol_ratio = (df['pos_neg_vol_ratio'] + 1).cumprod().pct_change(60)
+    cum_ret_ema_cross = (df['ema_crossover'] + 1).cumprod().pct_change(60)
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['z_score_5d_ret'] * cum_ret_z_score +
+                         df['pos_neg_vol_ratio'] * cum_ret_pos_neg_vol_ratio +
+                         df['ema_crossover'] * cum_ret_ema_cross)
+    
+    return heuristics_matrix

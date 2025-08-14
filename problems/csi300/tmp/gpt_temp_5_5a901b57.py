@@ -1,0 +1,41 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Determine Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Adjust Volatility by Volume
+    adjusted_volatility = intraday_volatility * df['volume']
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = df['close'].diff(1)
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = df['close'].diff(5)
+    
+    # Integrate Market Sentiment
+    # Assuming 'sentiment' column exists in the DataFrame
+    sentiment_weight = 0.5
+    weighted_sentiment = sentiment_weight * df['sentiment']
+    
+    # Calculate 5-Day Moving Average of Intraday Return
+    moving_avg_intraday_return = intraday_return.rolling(window=5).mean()
+    
+    # Combine Intraday Return, Adjusted Volatility, Momentums, and Sentiment
+    combined_value = (intraday_return 
+                      - adjusted_volatility 
+                      + short_term_momentum 
+                      + long_term_momentum 
+                      + weighted_sentiment)
+    
+    # Generate Final Alpha Factor
+    alpha_factor = (combined_value > 0).astype(int)
+    
+    return alpha_factor

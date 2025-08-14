@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+
+    # Calculate Exponential Moving Averages (EMA)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Calculate MACD Line and Signal Line
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+
+    # Calculate MACD Histogram
+    macd_histogram = macd_line - signal_line
+
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate Volume Moving Averages (VMA)
+    vma_20 = df['volume'].rolling(window=20).mean()
+    vma_50 = df['volume'].rolling(window=50).mean()
+
+    # Calculate On-Balance Volume (OBV)
+    obv = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0).cumsum() * df['volume']
+
+    # Calculate Volume-price trend (VPT)
+    vpt = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    vpt = vpt.cumsum()
+
+    # Develop a composite alpha factor
+    # Weights are determined based on historical performance
+    weights = {
+        'sma_50': 0.2,
+        'sma_200': 0.1,
+        'ema_12': 0.2,
+        'ema_26': 0.1,
+        'macd_histogram': 0.2,
+        'rsi': 0.1,
+        'vma_20': 0.05,
+        'vma_50': 0.05,
+        'obv': 0.05
+    }
+
+    composite_factor = (
+        weights['sma_50'] * (sma_50 - sma_200) +
+        weights['ema_12'] * (ema_12 - ema_26) +
+        weights['macd_histogram'] * macd_histogram +
+        weights['rsi'] * (50 - rsi) +
+        weights['vma_20'] * (vma_20 - vma_50) +
+        weights['obv'] * obv
+    )
+
+    return composite_factor
+```

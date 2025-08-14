@@ -1,0 +1,26 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    window_size_slow = 26
+    window_size_fast = 12
+    window_signal = 9
+    rsi_window = 14
+    vol_window = 20
+
+    df['ema_close_slow'] = df['close'].ewm(span=window_size_slow, adjust=False).mean()
+    df['ema_close_fast'] = df['close'].ewm(span=window_size_fast, adjust=False).mean()
+    df['macd_line'] = df['ema_close_fast'] - df['ema_close_slow']
+    df['signal_line'] = df['macd_line'].ewm(span=window_signal, adjust=False).mean()
+    df['macd_hist'] = df['macd_line'] - df['signal_line']
+
+    delta = df['amount'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    df['rsi_amount'] = 100 - (100 / (1 + rs))
+
+    df['vol_avg'] = df['volume'].rolling(window=vol_window).mean()
+    df['vol_ratio'] = df['volume'] / df['vol_avg']
+
+    heuristics_matrix = df['macd_hist'] * df['rsi_amount'] * df['vol_ratio']
+    return heuristics_matrix

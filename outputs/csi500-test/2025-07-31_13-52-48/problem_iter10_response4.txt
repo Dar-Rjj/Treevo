@@ -1,0 +1,31 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Price_Momentum'] = df['Log_Return'].rolling(window=5).sum()
+
+    # Apply Volume-Adjusted Momentum Filter
+    df['Volume_Adjusted_Momentum'] = (df['volume'] - df['volume'].shift(1)) * df['Price_Momentum']
+    df['Rolling_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'].rolling(window=20).sum()
+    volume_adjusted_momentum_75th = df['Rolling_Volume_Adjusted_Momentum'].quantile(0.75)
+    df = df[df['Rolling_Volume_Adjusted_Momentum'].abs() < volume_adjusted_momentum_75th]
+
+    # Calculate Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / df['open']
+    df['Close_Open_Price_Movement'] = (df['close'] - df['open']) / df['open']
+
+    # Combine Intraday Price Movements
+    df['Average_Price_Movement'] = (df['Intraday_Price_Movement'] + df['Close_Open_Price_Movement']) / 2
+    df['Smoothed_Price_Movement'] = df['Average_Price_Movement'].ewm(span=3).mean()
+
+    # Confirm with Volume
+    df['Volume_Change_Percentage'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    # Weighted Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Smoothed_Price_Movement'] * df['Volume_Change_Percentage']
+
+    return df['Final_Alpha_Factor']
+```

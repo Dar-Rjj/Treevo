@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['weighted_close'] = df['close'] * df['volume']
+    df['volume_weighted_price'] = df['weighted_close'].cumsum() / df['volume'].cumsum()
+    
+    # Calculate Simple Moving Average (SMA) of Volume-Weighted Prices
+    df['sma_volume_weighted_price'] = df['volume_weighted_price'].rolling(window=20).mean()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Scale by Volume
+    df['avg_volume_20_days'] = df['volume'].rolling(window=20).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_20_days']
+    
+    # Calculate Previous Day's Return
+    df['prev_close'] = df['close'].shift(1)
+    df['prev_return'] = df['close'] / df['prev_close'] - 1
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Rolling Average Daily Return
+    df['rolling_avg_daily_return'] = df['daily_return'].rolling(window=21).mean()
+    
+    # Calculate Rolling Volatility of Daily Returns
+    df['rolling_volatility'] = df['daily_return'].rolling(window=20).std()
+    
+    # Adjust Momentum by Volatility
+    df['momentum_adjusted'] = df['rolling_avg_daily_return'] / df['rolling_volatility']
+    
+    # Combine Factors
+    df['inverse_intraday_range'] = 1 / df['intraday_range']
+    df['combined_factor'] = df['prev_return'] * df['inverse_intraday_range'] * df['momentum_adjusted']
+    
+    # Final Volume and Volatility Adjustment
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['final_alpha'] = df['combined_factor'] * df['scaled_volume'] * df['volume_change']
+    
+    # Enhanced Volume Surge Indicator
+    df['volume_surge'] = df['volume_change'] > 0
+    df['significant_volume_surge'] = df['volume_change'] > (df['avg_volume_20_days'] * 1.5)
+    
+    # Adjust Final Alpha Factor
+    df['final_alpha'] = df['final_alpha'] * (1 + df['volume_surge']) * (1 + df['significant_volume_surge'])
+    
+    return df['final_alpha']
+```

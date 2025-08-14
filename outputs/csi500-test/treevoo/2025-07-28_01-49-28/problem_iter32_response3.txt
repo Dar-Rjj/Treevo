@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    df['open_close_movement'] = df['close'] - df['open']
+    
+    # Volume-Adjusted Breakout Strength
+    df['volume_adjusted_breakout_strength'] = (df['daily_range'] * df['volume']) + df['open_close_movement']
+    
+    # Spread Momentum
+    df['spread_momentum'] = df['high'] - df['low']
+    df['spread_momentum_ma'] = df['spread_momentum'].rolling(window=20).mean()
+    df['spread_momentum_diff'] = df['spread_momentum'] - df['spread_momentum_ma'].shift(1)
+    
+    # Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Simple Momentum for Close Prices
+    df['simple_momentum'] = df['close'] - df['close'].shift(1)
+    
+    # Incorporate Relative Strength
+    df['relative_strength'] = df['close'] / df['close'].rolling(window=20).mean()
+    
+    # Open-High-Low Volatility
+    df['open_high_vol'] = df['high'] - df['open']
+    df['open_low_vol'] = df['open'] - df['low']
+    df['open_high_low_vol'] = (df['open_high_vol'] + df['open_low_vol']) * df['volume']
+    df['open_high_low_vol'] = df['open_high_low_vol'].rolling(window=20).mean()
+    
+    # Enhanced Price Reversion
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['proximity_high'] = df['close'] / df['10_day_high']
+    df['proximity_low'] = df['close'] / df['10_day_low']
+    df['proximity_min'] = df[['proximity_high', 'proximity_low']].min(axis=1)
+    df['proximity_inv'] = 1 / df['proximity_min']
+    df['daily_return'] = df['close'].pct_change()
+    df['volatility'] = df['daily_return'].rolling(window=20).std()
+    df['enhanced_reversion'] = df['proximity_inv'] / df['volatility']
+    
+    # Long-Term Trend Indicator
+    df['50_sma'] = df['close'].rolling(window=50).mean()
+    df['200_sma'] = df['close'].rolling(window=200).mean()
+    df['long_term_trend'] = df['50_sma'] - df['200_sma']
+    
+    # Combined Indicators
+    combined_indicator = 0.5 * df['volume_adjusted_breakout_strength'] + df['spread_momentum_diff'] + df['volume_adjusted_momentum']
+    combined_indicator *= df['relative_strength']
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_indicator * 
+                          df['enhanced_reversion'] * 
+                          df['open_high_low_vol'] * 
+                          df['long_term_trend'])
+    
+    # Filter for Strong Moves
+    dynamic_threshold = final_alpha_factor.rolling(window=10).mean() + 2 * final_alpha_factor.rolling(window=10).std()
+    final_alpha_factor = (final_alpha_factor > dynamic_threshold).astype(int)
+    
+    return final_alpha_factor
+```

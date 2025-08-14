@@ -1,0 +1,89 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    df['close_to_range_ratio'] = df['close'] / df['intraday_range']
+    
+    # Adjust for Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    df['combined_high_low_open_close'] = df['intraday_range'] + df['opening_gap']
+    
+    # Measure Closing Behavior
+    df['close_to_prev_close_return'] = df['close'] / df['close'].shift(1)
+    df['final_combined_factor'] = (df['combined_high_low_open_close'] * 
+                                   df['close_to_prev_close_return']).apply(lambda x: max(x, 0))
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = ((df['high'] - df['low']) / df['low']) * df['volume']
+    
+    # Calculate Short-Term Price Change
+    df['short_term_price_change'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Average Intraday Return
+    df['avg_intraday_return'] = df['intraday_return'].rolling(window=10).mean()
+    
+    # Calculate Spread
+    df['spread'] = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Spread
+    df['volume_adjusted_spread'] = df['spread'] * df['volume']
+    
+    # Calculate Momentum Component
+    df['momentum_component'] = df['close'].pct_change().rolling(window=10).sum() * df['close_to_range_ratio']
+    
+    # Adjust for Volume Activity
+    df['short_term_volume_change'] = df['volume'] - df['volume'].shift(5)
+    df['volume_trend_indicator'] = df['short_term_volume_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Calculate Price Momentum
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['price_momentum'] = df['close'] - df['ema_10']
+    
+    # Composite Factor
+    df['composite_factor'] = (df['volume_weighted_close_to_open_return'] * 
+                              df['price_momentum'] + 
+                              df['final_combined_factor'])
+    
+    # Smooth the Composite Factor
+    df['sma_5'] = df['composite_factor'].rolling(window=5).mean()
+    df['smoothed_composite_factor'] = df['sma_5']
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_composite_factor'] * df['volume_trend_indicator']
+    
+    # Enhance Combined Momentum, Volume, and Price Factor
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    df['enhanced_combined_factor'] = (df['momentum_component'] * 
+                                      df['volume_trend_indicator'] * 
+                                      (df['open'] - df['close'].shift(1)) / 
+                                      avg_volume_20 * 
+                                      (df['volume_weighted_close_to_open_return'] * df['price_momentum']))
+    
+    # Output as Final Alpha Factor
+    df['final_alpha_factor'] = df['enhanced_combined_factor']
+    
+    # Combine Signals
+    df['combined_signal'] = (df['volume_weighted_intraday_return'] + 
+                             df['short_term_price_change'] + 
+                             df['spread'])
+    
+    # Final Factor
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    df['scaled_volume'] = df['volume'] / avg_volume_10
+    df['final_factor'] = df['combined_signal'] * df['scaled_volume'] * df['volume_trend_indicator']
+    
+    return df['final_factor']
+```

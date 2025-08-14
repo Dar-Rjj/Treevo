@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day return as a momentum indicator
+    momentum = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate the volume-weighted average price over the last 10 days
+    vwap_10 = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Calculate the 10-day price volatility using exponential smoothing
+    volatility = df['close'].pct_change().ewm(span=10, adjust=False).std()
+    
+    # Calculate the 10-day and 30-day exponentially weighted moving averages of the close price
+    ewma_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ewma_30 = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate the trend strength as the relative position of the 10-day EWMA to the 30-day EWMA
+    trend_strength = (ewma_10 - ewma_30) / df['close']
+    
+    # Calculate the 20-day and 50-day high-low ranges to capture short-term and long-term price movements
+    range_20 = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    range_50 = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Calculate the 20-day relative strength index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=20).mean()
+    avg_loss = loss.rolling(window=20).mean()
+    rs = avg_gain / avg_loss
+    rsi_20 = 100 - (100 / (1 + rs))
+    
+    # Calculate the volume ratio (current volume / 10-day average volume)
+    volume_ratio = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Calculate the 60-day exponentially weighted moving average of the close price for longer-term trend
+    ewma_60 = df['close'].ewm(span=60, adjust=False).mean()
+    
+    # Calculate the 60-day high-low range to capture very long-term price movement
+    range_60 = df['high'].rolling(window=60).max() - df['low'].rolling(window=60).min()
+    
+    # Incorporate the 60-day EWMA into the trend strength
+    long_trend_strength = (ewma_10 - ewma_60) / df['close']
+    
+    # Apply non-linear transformations to some components
+    nonlinear_momentum = np.log1p(np.abs(momentum))
+    nonlinear_volatility = 1 / (volatility + 1e-7)
+    nonlinear_trend_strength = np.sqrt(np.abs(trend_strength))
+    nonlinear_long_trend_strength = np.log1p(np.abs(long_trend_strength))
+    nonlinear_range_20 = 1 / (range_20 + 1e-7)
+    nonlinear_range_50 = 1 / (range_50 + 1e-7)
+    nonlinear_range_60 = 1 / (range_60 + 1e-7)
+    nonlinear_rsi_20 = np.log1p(rsi_20 / 100)
+    nonlinear_volume_ratio = np.sqrt(volume_ratio + 1e-7)
+    
+    # Combine the factors additively
+    factor = (nonlinear_momentum + vwap_10 + nonlinear_volatility + 
+              nonlinear_trend_strength + nonlinear_range_20 + nonlinear_range_50 + 
+              nonlinear_range_60 + nonlinear_rsi_20 + nonlinear_volume_ratio + 
+              nonlinear_long_trend_strength)
+    
+    # Apply machine learning for dynamic weighting
+    from sklearn.linear_model import LinearRegression
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_squared_error
+    
+    # Prepare the features and target
+    X = df[['open', 'high', 'low', 'close', 'volume']]
+    y = factor.dropna()
+    
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    
+    # Train a linear

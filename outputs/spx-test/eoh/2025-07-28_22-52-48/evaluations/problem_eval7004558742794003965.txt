@@ -1,0 +1,35 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    def compute_rsi(price_series, periods=14):
+        delta = price_series.diff(1)
+        gain = (delta.where(delta > 0, 0)).rolling(window=periods).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=periods).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    def compute_mfi(df, periods=14):
+        typical_price = (df['high'] + df['low'] + df['close']) / 3
+        raw_money_flow = typical_price * df['volume']
+        positive_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+        negative_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+        money_flow_ratio = positive_flow.rolling(window=periods).sum() / negative_flow.rolling(window=periods).sum()
+        mfi = 100 - (100 / (1 + money_flow_ratio))
+        return mfi
+    
+    def compute_ad_line(df):
+        money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+        money_flow_volume = money_flow_multiplier * df['volume']
+        ad_line = money_flow_volume.cumsum()
+        return ad_line
+    
+    close_prices = df['close']
+    
+    rsi_values = compute_rsi(close_prices)
+    mfi_values = compute_mfi(df)
+    ad_line = compute_ad_line(df)
+    
+    # Heuristic matrix: combination of RSI, MFI, and A/D line
+    heuristics_matrix = (rsi_values + mfi_values + ad_line) / 3
+    return heuristics_matrix

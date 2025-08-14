@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-Based Factor
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['Momentum_Factor'] = df['SMA_50'] - df['SMA_200']
+
+    # Volatility-Based Factor
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Volatility_Factor'] = df['Daily_Returns'].rolling(window=30).std()
+
+    # Volume-Based Factor
+    df['Volume_High'] = df['volume'].rolling(window=10).max()
+    df['Volume_Low'] = df['volume'].rolling(window=10).min()
+    df['Volume_Difference'] = df['Volume_High'] - df['Volume_Low']
+
+    # Price Action Factor
+    df['Price_Range'] = (df['high'] - df['low']) / df['low']
+    df['Extreme_Price_Action'] = (df['Price_Range'] > 0.05).astype(int)
+    df['Price_Action_Factor'] = df['Extreme_Price_Action'].rolling(window=20).sum()
+
+    # Trading Range Factor (Average True Range - ATR)
+    df['True_Range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[-1]) - min(x[1], x[-1]), axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['Trading_Range_Factor'] = df['ATR_14']
+
+    # Breakout Potential Factor
+    df['52_Week_High'] = df['high'].rolling(window=252).max()
+    df['52_Week_Low'] = df['low'].rolling(window=252).min()
+    df['Distance_to_52_Week_High'] = (df['close'] - df['52_Week_High']) / df['52_Week_High']
+    df['Distance_to_52_Week_Low'] = (df['close'] - df['52_Week_Low']) / df['52_Week_Low']
+    df['Breakout_Potential_Factor'] = df[['Distance_to_52_Week_High', 'Distance_to_52_Week_Low']].abs().min(axis=1)
+
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['Momentum_Factor'] +
+        df['Volatility_Factor'] * 100 +  # Scale to be on the same order of magnitude
+        df['Volume_Difference'] * 1e-6 +  # Scale to be on the same order of magnitude
+        df['Price_Action_Factor'] * 0.1 +  # Scale to be on the same order of magnitude
+        df['Trading_Range_Factor'] * 100 +  # Scale to be on the same order of magnitude
+        df['Breakout_Potential_Factor'] * 100  # Scale to be on the same order of magnitude
+    )
+
+    return df['Alpha_Factor']
+```

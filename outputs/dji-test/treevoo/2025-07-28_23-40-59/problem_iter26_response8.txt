@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    df['irwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Evaluate IRWAP Difference
+    df['irwap_diff'] = df['close'] - df['irwap']
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['daily_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['adjusted_return'] = df['daily_return'] / df['high_low_spread']
+    
+    # Smooth the Adjusted Return
+    df['smoothed_adjusted_return'] = df['adjusted_return'].rolling(window=5).mean()
+    
+    # Combine Short and Long-Term Momentum
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['short_term_momentum'] = df['log_returns'].rolling(window=7).sum()
+    df['long_term_momentum'] = df['log_returns'].rolling(window=25).sum()
+    df['combined_momentum'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Introduce Price Volatility Component
+    df['price_volatility'] = df['high_low_spread'].rolling(window=10).std()
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['price_volatility']
+    
+    # Confirm with Volume Trends
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['volume_trend_score'] = np.where(df['volume'] > df['avg_volume_20d'], 1, -1)
+    
+    # Smooth Intraday Strength
+    df['intraday_strength'] = (df['close'] - df['open']) / df['high_low_spread']
+    df['smoothed_intraday_strength'] = df['intraday_strength'].rolling(window=5).mean()
+    
+    # Filter by Volume
+    df['volume_filter'] = np.where(df['volume'] > 1.5 * df['avg_volume_20d'], True, False)
+    
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Weighted Moving Average of Daily Ranges
+    df['weighted_daily_range'] = df['daily_range'].ewm(span=5, adjust=False).mean()
+    
+    # Volume Change Momentum
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_change_momentum'] = df['volume_change'].ewm(span=5, adjust=False).mean()
+    
+    # Combine Factors
+    df['final_alpha_factor'] = (
+        df['smoothed_adjusted_return'] * 
+        df['volume_change_momentum'] * 
+        df['weighted_daily_range'] * 
+        df['adjusted_combined_momentum']
+    )
+    
+    return df['final_alpha_factor']
+```

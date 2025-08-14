@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate High-to-Low Price Range
+    df['high_to_low_range'] = df['high'] - df['low']
+    
+    # Combine Intraday and High-to-Low Features
+    df['combined_feature'] = (df['intraday_range'] + df['high_to_low_range']).rolling(window=20).mean()
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust for Opening Gap
+    df['adjusted_opening_gap'] = df['open'] - df['intraday_midpoint'] - df['opening_gap']
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = df['volume'] > df['volume'].shift(1) * 1.5  # Example threshold for a spike
+    
+    # Adjust Combined Feature by Volume Spike
+    def adjust_by_volume_spike(row):
+        if row['volume_spike']:
+            return min(row['adjusted_opening_gap'] / row['volume'], 10)  # Cap at 10 to avoid extreme values
+        else:
+            return row['adjusted_opening_gap'] * row['volume']
+    
+    df['adjusted_combined_feature'] = df.apply(adjust_by_volume_spike, axis=1)
+    
+    # Introduce Volatility Adjustment
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['log_returns'].rolling(window=20).std()
+    df['vol_adjusted_combined_feature'] = df['adjusted_combined_feature'] / df['volatility']
+    
+    # Calculate Weighted Momentum
+    df['prev_high_to_low_range'] = df['high_to_low_range'].shift(1)
+    df['momentum_factor'] = df['high_to_low_range'] - df['prev_high_to_low_range']
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['weighted_momentum'] = df['momentum_factor'] * df['volume_ratio']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Combine Momentum and Price Change Factors
+    df['momentum_price_change'] = (df['close_to_open_return'] + df['price_change']) * df['combined_feature']
+    
+    # Adjust for Volume Volatility
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_volatility'] = df['daily_volume_change'].rolling(window=20).std()
+    df['vol_adj_weighted_momentum'] = df['weighted_momentum'] / df['volume_volatility']
+    
+    # Apply Final Weighting
+    df['average_volume'] = df['volume'].rolling(window=20).mean()
+    df['final_factor'] = df['vol_adj_weighted_momentum'] * (df['volume'] / df['average_volume'])
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', index_col='date', parse_dates=True)
+# final_factor = heuristics_v2(df)
+# print(final_factor)
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Reversal Signal
+    df['reversal_signal'] = np.where(df['intraday_return'] > 0, -1, 1)
+    
+    # Calculate Daily Price Return
+    df['daily_price_return'] = df['close'].pct_change()
+    
+    # Calculate 20-Day Weighted Moving Average of Returns
+    weighted_returns = (df['daily_price_return'] * df['volume']).rolling(window=22).sum()
+    total_volume = df['volume'].rolling(window=22).sum()
+    df['weighted_moving_avg'] = weighted_returns / total_volume
+    
+    # Adjust for Price Volatility
+    df['price_range'] = df['high'] - df['low']
+    avg_price_range = df['price_range'].rolling(window=22).mean()
+    df['final_factor_value'] = df['weighted_moving_avg'] - avg_price_range
+    
+    # Compute Average True Range (ATR)
+    df['previous_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['previous_close']).abs()
+    df['tr3'] = (df['low'] - df['previous_close']).abs()
+    df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    df['atr'] = df['tr'].rolling(window=22).mean()
+    
+    # Combine Factors
+    df['combined_factor'] = (df['reversal_signal'] * df['atr']) + df['weighted_moving_avg']
+    df['combined_factor'] = df['combined_factor'].ewm(span=5, adjust=False).mean()
+    
+    # Introduce Volume-Weighted Price Change
+    volume_weighted_price = (df['close'] * df['volume']).rolling(window=22).sum() / total_volume
+    df['volume_weighted_price_change'] = df['close'] - volume_weighted_price
+    
+    # Incorporate into Combined Factor
+    df['final_combined_factor'] = (df['reversal_signal'] * df['atr']) + df['weighted_moving_avg'] + df['volume_weighted_price_change']
+    df['final_combined_factor'] = df['final_combined_factor'].ewm(span=5, adjust=False).mean()
+    
+    return df['final_combined_factor']
+```

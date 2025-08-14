@@ -1,0 +1,32 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price and Volume Changes
+    df['daily_price_change'] = df['close'].diff()
+    df['volume_change'] = df['volume'].diff()
+
+    # Compute True Range and Average True Range (ATR)
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_20'] = df['true_range'].rolling(window=20).mean()
+
+    # Determine Price Momentum
+    df['price_change_20_ma'] = df['daily_price_change'].rolling(window=20).mean()
+    df['price_change_50_ma'] = df['daily_price_change'].rolling(window=50).mean()
+    df['momentum_ratio'] = (df['price_change_20_ma'] / df['price_change_50_ma']) * df['atr_20']
+
+    # Volume Impact Adjustment
+    positive_volume_days = (df['volume_change'] > 0).rolling(window=20).sum()
+    negative_volume_days = (df['volume_change'] < 0).rolling(window=20).sum()
+    df['volume_smoothing'] = df['volume'].rolling(window=20).mean() / 20
+
+    # Adjusted Momentum
+    long_term_adjusted_momentum = df['price_change_50_ma'] * negative_volume_days
+    short_term_adjusted_momentum = df['price_change_20_ma'] * positive_volume_days
+    df['adjusted_momentum'] = (long_term_adjusted_momentum + short_term_adjusted_momentum) * df['volume_smoothing']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = long_term_adjusted_momentum - short_term_adjusted_momentum
+
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = 0.5 * high_low_diff + 0.5 * open_close_return
+
+    # Volume Shock Filter
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / df['avg_volume_5d']
+    volume_shock_filter = volume_ratio > 1.8
+
+    # Trend Confirmation with EMA
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    crossover_signal = (short_term_ema > long_term_ema) * 1 - (short_term_ema < long_term_ema) * 1
+
+    # Integrate with Intraday Momentum
+    amplified_momentum = intraday_momentum * (crossover_signal == 1)
+    dampened_momentum = intraday_momentum * (crossover_signal == -1)
+    smoothed_intraday_momentum = amplified_momentum + dampened_momentum
+
+    # Calculate On-Balance Volume (OBV)
+    obv = df['volume'].copy()
+    obv.iloc[0] = 0
+    for i in range(1, len(obv)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] + df['volume'].iloc[i]
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] - df['volume'].iloc[i]
+        else:
+            obv.iloc[i] = obv.iloc[i-1]
+
+    # Weight OBV by EMA Difference
+    ema_difference = abs(short_term_ema - long_term_ema)
+    weighted_obv = obv * ema_difference
+
+    # Final Alpha Factor
+    final_alpha_factor = smoothed_intraday_momentum * weighted_obv
+    final_alpha_factor = final_alpha_factor * volume_shock_filter
+
+    return final_alpha_factor
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range and Rolling Average True Range (ATR)
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low', 'prev_close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
+    n = 14
+    df['avg_true_range'] = df['true_range'].rolling(window=n).mean()
+
+    # Calculate Intraday Price Movement and Signed Transaction Volume
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    df['signed_volume'] = df['volume'] * df['high_low_diff'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Aggregate Price Movements and Accumulated Buy-Sell Imbalance
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=n).sum()
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=n).sum()
+    df['pos_vol'] = df['signed_volume'].apply(lambda x: x if x > 0 else 0)
+    df['neg_vol'] = df['signed_volume'].apply(lambda x: abs(x) if x < 0 else 0)
+    df['sum_pos_vol'] = df['pos_vol'].rolling(window=n).sum()
+    df['sum_neg_vol'] = df['neg_vol'].rolling(window=n).sum()
+
+    # Calculate Integrated Momentum Score
+    close_std = df['close'].std()
+    df['momentum_score'] = (df['sum_high_low_diff'] + df['sum_close_open_diff']) / close_std
+    total_vol = df['volume'].abs().rolling(window=n).sum()
+    df['vol_ratio'] = (df['sum_pos_vol'] / total_vol) - (df['sum_neg_vol'] / total_vol)
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low'] = df['high_low_diff'] * df['volume']
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    high_low_weight = df['high_low_diff'].rolling(window=n).std()
+    open_close_weight = df['close_open_diff'].rolling(window=n).std()
+    total_weight = high_low_weight + open_close_weight
+    df['weighted_avg'] = (high_low_weight * df['volume_adjusted_high_low'] + open_close_weight * df['close_open_diff']) / total_weight
+
+    # Dynamic Momentum Indicator
+    df['prev_momentum'] = df['momentum_score'].shift(1)
+    df['momentum_change'] = df['momentum_score'] - df['prev_momentum']
+    recent_returns_std = df['close'].pct_change().rolling(window=n).std()
+    df['smoothed_momentum'] = df['momentum_score'] * recent_returns_std
+
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['is_high_volume'] = df['volume'] > df['avg_volume']
+
+    # Integrate Combined Factors
+    df['volume_ratio_factor'] = df['volume'] / df['avg_volume']
+    df['norm_price_momentum'] = df['momentum_score'] / df['avg_true_range']
+    df['order_imbalance_score'] = df['sum_pos_vol'] - df['sum_neg_vol']
+    df['final_alpha_factor'] = (df['weighted_avg'] * df['volume_ratio_factor'] * df['norm_price_momentum'] + 
+                                df['order_imbalance_score'] * df['smoothed_momentum'])
+
+    return df['final_alpha_factor']
+```

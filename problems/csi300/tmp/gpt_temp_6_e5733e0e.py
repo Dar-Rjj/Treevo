@@ -1,0 +1,55 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days)
+    momentum_lookback = 20 + (np.sin(2 * np.pi * df.index.dayofyear / 365) * 10).astype(int)
+    momentum = np.log(df['close']).diff(periods=momentum_lookback)
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days)
+    liquidity_lookback = 30 + (np.sin(2 * np.pi * df.index.dayofyear / 365) * 10).astype(int)
+    liquidity = df['volume'].rolling(window=liquidity_lookback).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days)
+    market_sentiment_lookback = 10 + (np.sin(2 * np.pi * df.index.dayofyear / 365) * 5).astype(int)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=market_sentiment_lookback).mean()
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility_lookback = 40 + (np.sin(2 * np.pi * df.index.dayofyear / 365) * 10).astype(int)
+    volatility = np.log(df['close']).diff().rolling(window=volatility_lookback).std()
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5 days
+    intraday_dynamics = (df['high'] / df['low']).rolling(window=5).mean()
+    
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the moving average convergence divergence (MACD) with 12 and 26 periods
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal_line = macd.rolling(window=9).mean()
+    macd_histogram = macd - signal_line
+    
+    # Adaptive weights for each factor
+    momentum_weight = 1.5 if momentum.mean() > 0 else 0.5
+    liquidity_weight = 1.5 if liquidity.mean() > liquidity.median() else 0.5
+    market_sentiment_weight = 1.5 if market_sentiment.mean() > 1 else 0.5
+    volatility_weight = 0.5 if volatility.mean() < volatility.median() else 1.5
+    intraday_dynamics_weight = 1.5 if intraday_dynamics.mean() > 1 else 0.5
+    rsi_weight = 1.5 if rsi.mean() < 50 else 0.5
+    macd_histogram_weight = 1.5 if macd_histogram.mean() > 0 else 0.5
+    
+    # Combine factors multiplicatively with adaptive weights
+    factor = (momentum ** momentum_weight * 
+              liquidity ** liquidity_weight * 
+              market_sentiment ** market_sentiment_weight * 
+              intraday_dynamics ** intraday_dynamics_weight * 
+              rsi ** rsi_weight * 
+              macd_histogram ** macd_histogram_weight) / (volatility ** volatility_weight + 1e-6)
+    
+    return factor

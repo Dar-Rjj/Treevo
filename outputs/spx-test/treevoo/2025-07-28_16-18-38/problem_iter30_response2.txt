@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Combined Intraday Indicator
+    df['Combined_Intraday_Indicator'] = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Calculate Overnight Price Direction
+    df['Overnight_Price_Direction'] = np.where(df['close'] > df['close'].shift(1), 1, -1)
+    
+    # Calculate Simple Moving Average (SMA) of Close prices
+    sma_close = df['close'].rolling(window=20).mean()
+    df['SMA_Ratio'] = df['close'] / sma_close
+    
+    # Calculate Exponential Moving Average (EMA) of Close prices
+    ema_close = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_Ratio'] = df['close'] / ema_close
+    
+    # Calculate EMA of High-to-Low Range
+    ema_high_low_7 = (df['high'] - df['low']).ewm(span=7, adjust=False).mean()
+    ema_high_low_21 = (df['high'] - df['low']).ewm(span=21, adjust=False).mean()
+    df['Momentum_Ratio'] = ema_high_low_7 / ema_high_low_21
+    
+    # Calculate Adjusted Momentum Factor
+    df['Adjusted_Momentum_Factor'] = df['Momentum_Ratio'] * (df['high'] - df['low']) * (df['close'] - df['open'])
+    
+    # Calculate Volume Ratio
+    sma_volume = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / sma_volume
+    
+    # Calculate Price-Volume Momentum
+    df['Price_Volume_Momentum'] = (df['close'] - df['open']) * df['volume']
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Identify Volume Spike
+    df['Volume_Spike'] = np.where(df['volume'] > df['volume'].rolling(window=20).mean() * 2, 1, 0)
+    
+    # Calculate Transaction Value
+    df['Transaction_Value'] = df['amount'] / df['volume']
+    transaction_value_deviation = df['Transaction_Value'] - df['Transaction_Value'].rolling(window=30).mean()
+    
+    # Calculate Volume-Weighted High-Low Difference
+    df['Volume_Weighted_HL_Diff'] = (df['high'] - df['low']) * df['volume']
+    df['Volume_Weighted_HL_Diff_SMA'] = df['Volume_Weighted_HL_Diff'] - df['Volume_Weighted_HL_Diff'].rolling(window=14).mean()
+    
+    # Composite factor
+    composite_factor = df['SMA_Ratio'] + df['EMA_Ratio'] + df['Intraday_Volatility'] + df['Volume_Ratio'] + df['Price_Volume_Momentum']
+    
+    # Final Alpha Factor
+    final_alpha_factor = (df['Adjusted_Momentum_Factor'] + df['Volume_Weighted_HL_Diff_SMA']) / 2
+    final_alpha_factor = final_alpha_factor * df['Overnight_Price_Direction'] * (1 + df['Volume_Spike'])
+
+    return final_alpha_factor
+```

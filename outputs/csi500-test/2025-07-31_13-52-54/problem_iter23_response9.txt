@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted Price
+    volume_weighted_price = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Compute Ratio: Volume-Averaged High-Low Spread Ratio
+    vol_avg_high_low_ratio = high_low_spread / volume_weighted_price
+    
+    # Develop trend following alpha factor using close prices
+    sma_50 = df['close'].rolling(window=50).mean()
+    trend_signal = (df['close'] > sma_50).astype(int) - (df['close'] < sma_50).astype(int)
+    
+    # Explore momentum in high and low prices
+    high_momentum = df['high'].diff().fillna(0)
+    low_momentum = df['low'].diff().fillna(0)
+    combined_momentum_score = high_momentum + low_momentum
+    momentum_signal = (combined_momentum_score > 0).astype(int) - (combined_momentum_score < 0).astype(int)
+    
+    # Analyze volume patterns
+    volume_pct_change = df['volume'].pct_change().fillna(0)
+    volume_category = pd.cut(volume_pct_change, bins=[-float('inf'), -0.05, 0.05, float('inf')], labels=[-1, 0, 1])
+    
+    # Leverage price and volume for an intensity factor
+    daily_intensity = (df['close'] - df['close'].shift(1)).fillna(0) * df['volume']
+    smoothed_intensity = daily_intensity.rolling(window=20).mean()
+    
+    # Calculate Volume-Weighted High-Low Spread
+    vol_weighted_high_low_spread = (df['high'] - df['low']) * df['volume']
+    sum_vol_weighted_high_low_spread = vol_weighted_high_low_spread.rolling(window=20).sum()
+    
+    # Calculate Momentum Component
+    avg_past_n_days = sum_vol_weighted_high_low_spread.rolling(window=20).mean()
+    momentum_component = vol_weighted_high_low_spread - avg_past_n_days
+    
+    # Generate Final Factor
+    final_factor = (momentum_component + sum_vol_weighted_high_low_spread) / df['close']
+    
+    # Incorporate Price Trend
+    n_day_ma_close = df['close'].rolling(window=20).mean()
+    price_trend = (df['close'] - n_day_ma_close) * final_factor
+    
+    # Synthesize Factors
+    composite_alpha = (trend_signal + momentum_signal + smoothed_intensity) * vol_avg_high_low_ratio
+    
+    return composite_alpha
+```

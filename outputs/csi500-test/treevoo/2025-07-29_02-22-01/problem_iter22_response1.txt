@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted High-Low Spread
+    df['VolAdj_HighLow'] = (df['high'] - df['low']) * df['volume']
+    
+    # 10-Day Moving Average of Volume-Adjusted High-Low Spread
+    df['MA10_VolAdj_HighLow'] = df['VolAdj_HighLow'].rolling(window=10).mean()
+    
+    # Short-Term and Long-Term EMAs
+    df['EMA5_Close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA20_Close'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['PriceMomentum'] = df['EMA5_Close'] - df['EMA20_Close']
+    
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    df['CombinedMomentum'] = df['MA10_VolAdj_HighLow'] + df['PriceMomentum']
+    
+    # Daily Price Change
+    df['DailyReturn'] = df['close'].pct_change()
+    
+    # Momentum Calculation
+    df['N_DayMomentum'] = df['DailyReturn'].rolling(window=10).sum()
+    
+    # Volume Confirmation
+    df['VolumeChange'] = df['volume'].diff()
+    positive_vol_diff = df[df['VolumeChange'] > 0]['VolumeChange']
+    df['AverageVolIncrease'] = positive_vol_diff.rolling(window=10).sum() / (df['VolumeChange'] > 0).rolling(window=10).sum()
+    
+    # Volume Reversal Indicator
+    df['VolRateOfChange'] = df['volume'].pct_change(periods=10)
+    df['SmoothedVolRateOfChange'] = df['VolRateOfChange'].rolling(window=5).mean()
+    df['InvSmoothedVolRateOfChange'] = 1 / (1 + df['SmoothedVolRateOfChange'])
+    
+    # Intraday Return
+    df['IntradayReturn'] = df['close'] - df['open']
+    
+    # Volume Weighted Adjusted Return
+    df['VolWeightedReturn'] = df['volume'] * df['IntradayReturn']
+    
+    # Proportional Movement Index
+    df['ProportionalMovementIndex'] = (df['IntradayReturn'] / df['close']) * df['IntradayReturn']
+    
+    # Volatility
+    df['LogReturns'] = np.log(df['close']).diff()
+    df['Volatility'] = df['LogReturns'].rolling(window=20).std()
+    
+    # Volume-Weighted Price
+    df['VWAP'] = ((df['high'] + df['low'] + 2*df['close']) / 4) * df['volume']
+    df['VWAP'] = df['VWAP'].cumsum() / df['volume'].cumsum()
+    
+    # Incorporate Volume Reversal Indicator
+    df['FinalFactor'] = (df['CombinedMomentum'] 
+                         + df['ProportionalMovementIndex'] 
+                         + df['VolWeightedReturn'] 
+                         + df['N_DayMomentum'] 
+                         + (df['AverageVolIncrease'] * df['N_DayMomentum'])
+                         + (df['N_DayMomentum'] / df['Volatility'])
+                         + df['VWAP']
+                         ) * df['InvSmoothedVolRateOfChange']
+    
+    return df['FinalFactor']
+```

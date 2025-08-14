@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day and 10-Day Rolling Returns
+    df['5d_return'] = (df['close'].shift(-4) / df['close']) - 1
+    df['10d_return'] = (df['close'].shift(-9) / df['close']) - 1
+    
+    # Combine 5-Day and 10-Day Returns
+    df['combined_return'] = df['5d_return'] * 0.6 + df['10d_return'] * 0.4
+    
+    # Volume-Adjusted Multi-Day Price Momentum
+    df['volume_adjusted_momentum'] = df['combined_return'] * df['volume']
+    
+    # Calculate Enhanced Open-High-Low Volatility Index
+    df['20d_high_low_range'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    df['20d_open_close_range'] = (df['open'].rolling(window=20).max() - df['close'].rolling(window=20).min()).abs()
+    df['20d_mean_price'] = (df['open'].rolling(window=20).sum() + df['close'].rolling(window=20).sum()) / 40
+    df['enhanced_volatility_index'] = (df['20d_high_low_range'] + df['20d_open_close_range']) / df['20d_mean_price']
+    
+    # Integrate Market Sentiment
+    df['daily_change_in_amount'] = df['amount'] / df['amount'].shift(1) - 1
+    df['normalized_daily_change_in_amount'] = df['daily_change_in_amount'] / df['amount']
+    
+    # Incorporate Liquidity and Trend Strength
+    df['20d_volume_ema'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['normalized_volume'] = df['volume'] / df['20d_volume_ema']
+    
+    # Final Factor Calculation
+    df['final_factor'] = (
+        df['volume_adjusted_momentum'] 
+        - df['enhanced_volatility_index'] 
+        + df['normalized_daily_change_in_amount'] 
+        + df['normalized_volume']
+    )
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

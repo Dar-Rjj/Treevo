@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Raw Momentum
+    raw_momentum = df['close'] - df['close'].shift(20)
+    
+    # Calculate 5-Period Moving Average of Returns
+    returns_1_period = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    moving_avg_returns = returns_1_period.rolling(window=5).mean()
+    
+    # Generate Base Alpha Factor
+    high_low_range = df['high'] - df['low']
+    base_alpha_factor = raw_momentum * moving_avg_returns * high_low_range
+    
+    # Confirm with Volume
+    volume_delta = df['volume'] - df['volume'].shift(20)
+    abs_volume_delta = volume_delta.abs()
+    volume_sma = abs_volume_delta.rolling(window=5).mean()
+    
+    # Calculate Daily Momentum
+    daily_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Daily Momentum and 5-Period Moving Average of Returns
+    combined_momentum = daily_momentum + moving_avg_returns
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap_numerator = ((df['high'] + df['low']) / 2) * df['volume']
+    vwap = vwap_numerator.cumsum() / df['volume'].cumsum()
+    
+    # Adjust Combined Alpha Factor
+    adjusted_alpha_factor = base_alpha_factor * abs_volume_delta * (df['close'] - vwap)
+    
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    prev_intraday_spread = intraday_spread.shift(1)
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = intraday_spread - prev_intraday_spread
+    
+    # Generate Additional Alpha Factor Component
+    amount_change = df['amount'] - df['amount'].shift(1)
+    sign_volume_amount_change = np.sign(volume_delta + amount_change)
+    additional_alpha_factor = moving_avg_returns * sign_volume_amount_change
+    
+    # Combine All Components for Final Alpha Factor
+    final_alpha_factor = adjusted_alpha_factor + intraday_momentum + additional_alpha_factor + combined_momentum
+    
+    # Apply 5-day Exponential Moving Average
+    final_alpha_factor = final_alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return final_alpha_factor
+```

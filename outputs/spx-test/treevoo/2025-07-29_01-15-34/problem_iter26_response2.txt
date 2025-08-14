@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Price Movement Analysis
+    high_low_range = df['high'] - df['low']
+    open_close_movement = df['close'] - df['open']
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (df['volume'] * typical_price).cumsum() / df['volume'].cumsum()
+    high_low_to_open_close_ratio = high_low_range / open_close_movement.abs()
+    vwap_deviation = df['close'] - vwap
+    
+    # Trend and Reversal Signals
+    positive_momentum_signal = (high_low_range > 1.5 * open_close_movement)
+    potential_reversal_signal = (open_close_movement > 0.8 * high_low_range) & (vwap_deviation < 0) & (open_close_movement < 0)
+
+    # Intraday Range Analysis
+    range_percentage = (df['high'] - df['low']) / df['close']
+    closing_position_in_intraday_range = (df['close'] - df['open']) / (df['high'] - df['low'])
+
+    # Volume Analysis
+    volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    volume_trend = df['volume'].rolling(window=10).sum() / df['volume'].rolling(window=10).mean()
+
+    # Recent Price Trend Adjustment
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = df['close'] - ema_20
+
+    # Close-to-Open Momentum Shift
+    close_to_open_momentum_shift = (df['close'] - df['open']) / df.shift(1)['open']
+
+    # Intraday Range Percentage Enhanced
+    intraday_range_percentage_enhanced = (df['high'] - df['low']) / df['close']
+
+    # Adjust for Recent Price Trend
+    recent_price_trend_adjustment = ema_20 - df['close']
+
+    # Composite Alpha Factor
+    price_momentum_score = 0.6 * (df['close'].pct_change().rolling(window=5).sum())
+    volume_activity_score = 0.4 * (df['volume'].pct_change().rolling(window=5).mean())
+    
+    weighted_sum_scores = price_momentum_score + volume_activity_score
+    intraday_volume_closing_position = volume_intensity * closing_position_in_intraday_range
+    composite_alpha_factor = (
+        intraday_volume_closing_position +
+        intraday_range_percentage_enhanced +
+        close_to_open_momentum_shift +
+        trend_adjustment
+    )
+    recent_volatility = df['close'].rolling(window=20).std()
+    final_alpha_factor = (
+        weighted_sum_scores +
+        recent_price_trend_adjustment / recent_volatility
+    )
+
+    return final_alpha_factor
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor based on the given thought tree.
+    
+    Parameters:
+    df (pd.DataFrame): A DataFrame with (date) as index and columns (open, high, low, close, amount, volume).
+    
+    Returns:
+    pd.Series: A Series indexed by (date) representing the factor values.
+    """
+    # Calculate the daily return
+    df['return'] = df['close'].pct_change()
+    
+    # Calculate the average true range (ATR)
+    df['h-l'] = df['high'] - df['low']
+    df['h-cp'] = abs(df['high'] - df['close'].shift(1))
+    df['l-cp'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['h-l', 'h-cp', 'l-cp']].max(axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the price momentum
+    df['momentum'] = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate the money flow index (MFI)
+    df['tp'] = (df['high'] + df['low'] + df['close']) / 3
+    df['pmf'] = 0.0
+    df['nmf'] = 0.0
+    df.loc[df['tp'] > df['tp'].shift(1), 'pmf'] = df['tp'] * df['volume']
+    df.loc[df['tp'] < df['tp'].shift(1), 'nmf'] = df['tp'] * df['volume']
+    df['mfr'] = df['pmf'].rolling(window=14).sum() / df['nmf'].rolling(window=14).sum()
+    df['mfi'] = 100 - 100 / (1 + df['mfr'])
+    
+    # Combine the factors to create the final heuristic
+    df['heuristic_factor'] = df['return'] * df['atr'] * df['momentum'] * df['mfi']
+    
+    # Return the factor values
+    return df['heuristic_factor']
+```

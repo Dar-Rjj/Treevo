@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Momentum
+    df['Intraday_Momentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    
+    # Historical Momentum
+    df['Historical_Momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    
+    # Combined Momentum
+    df['Combined_Momentum'] = df['Intraday_Momentum'] + df['Historical_Momentum']
+    
+    # Smoothed Momentum
+    df['Smoothed_Momentum'] = df['Combined_Momentum'].rolling(window=5).mean()
+    
+    # Daily High-Low Range
+    df['Daily_High_Low_Range'] = (df['high'] - df['low']) / df['close']
+    
+    # Average Daily Range
+    df['Average_Daily_Range'] = df['Daily_High_Low_Range'].rolling(window=10).mean()
+    
+    # Adjusted Smoothed Momentum
+    df['Adjusted_Smoothed_Momentum'] = df['Smoothed_Momentum'] / (df['Average_Daily_Range'] + 1)
+    
+    # Volume-Price Indicator
+    df['Volume_Change'] = 0.5 * (df['volume'] - df['volume'].shift(1))
+    df['Avg_High_Low_Range_5_days'] = (df['high'] - df['low']) / df['close'].rolling(window=5).mean()
+    df['Volume_Price_Factor'] = df['Volume_Change'] + 0.3 * df['Avg_High_Low_Range_5_days'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Return-Based Strength
+    df['Short_Term_Return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['Long_Term_Return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['Relative_Strength'] = df['Short_Term_Return'] - df['Long_Term_Return']
+    
+    # Identify Volume Spikes
+    df['Volume_Spike'] = (df['volume'] > df['volume'].rolling(window=20).mean() + 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Adjusted Integrated Factor
+    df['Sum_Factors'] = df['Adjusted_Smoothed_Momentum'] + df['Volume_Price_Factor'] + (df['Relative_Strength'] * df['Volume_Spike'])
+    df['Volume_Average'] = df['volume'].rolling(window=5).mean()
+    df['Volatility'] = (df['close'] - df['open']).div(df['open']).rolling(window=20).std()
+    df['Adjusted_Integrated_Factor'] = df['Sum_Factors'] * df['Volume_Average'] * df['Volatility']
+    
+    # EMA of Daily High-Low Range
+    df['EMA_Daily_High_Low_Range'] = df['Daily_High_Low_Range'].ewm(span=10, adjust=False).mean()
+    
+    # Volatility Multiplier
+    df['Volatility_Multiplier'] = 1 / (df['EMA_Daily_High_Low_Range'] + 1)
+    
+    # Adjust Combined Momentum
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum'] * df['Volatility_Multiplier']
+    
+    # Dynamic Weighting Scheme
+    df['10_Day_MA_Final_Factor'] = df['Adjusted_Integrated_Factor'].rolling(window=10).mean()
+    df['Dynamic_Weight'] = (df['10_Day_MA_Final_Factor'] > df['10_Day_MA_Final_Factor'].shift(1)).astype(float) * 1.1 + (df['10_Day_MA_Final_Factor'] <= df['10_Day_MA_Final_Factor'].shift(1)).astype(float) * 0.9
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Adjusted_Smoothed_Momentum'] + df['Volume_Price_Factor'] + (df['Relative_Strength'] * df['Volume_Spike'])) * df['Dynamic_Weight']
+    
+    return df['Final_Alpha_Factor']
+```

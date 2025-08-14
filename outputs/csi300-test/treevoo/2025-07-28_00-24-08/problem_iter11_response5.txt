@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Intraday Trend Strength
+    df['daily_range'] = (df['high'] - df['low']) / df['low']
+    df['intraday_pct_change'] = (df['close'] - df['open']) / df['open']
+    df['intraday_trend_strength'] = df['intraday_pct_change'] * df['daily_range']
+    
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['vol_weighted_high_low_vol'] = df['high_low_range'] * (df['volume'] / df['avg_volume'])
+    
+    # Volume Adjusted Reversal Signal
+    df['volume_momentum'] = df['volume'] - df['volume'].shift(1)
+    df['volume_pct_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['close_to_next_open_return'] = (df['open'].shift(-1) - df['close']) / df['close']
+    df['reversal_signal'] = 0 - df['close_to_next_open_return']
+    
+    # Smoothed Moving Average of Composite Factor
+    df['composite_factor'] = (df['aggregate_returns'] + df['intraday_trend_strength'] 
+                              + df['vol_weighted_high_low_vol'] + df['reversal_signal'])
+    df['sma_composite'] = df['composite_factor'].rolling(window=5).mean()
+    df['ema_composite'] = df['sma_composite'].ewm(span=5, adjust=False).mean()
+    
+    # Intraday Return Factors
+    df['high_low_range_ratio'] = df['high'] / df['low']
+    df['open_close_direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Volume Weighted Smoothed Returns
+    df['sma_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_weighted_returns'] = (df['close'] - df['close'].shift(1)) * (df['volume'] / df['sma_volume'])
+    
+    # Summarize Momentum-Reversal Indicator
+    df['momentum_reversal_indicator'] = df['intraday_trend_strength'] + df['volume_weighted_returns']
+    df['final_factor'] = np.sign(df['momentum_reversal_indicator'])
+    
+    return df['final_factor']
+
+# Example usage:
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = (df['close'].shift(1) - df['close'].shift(2)) / df['close'].shift(2)
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+    
+    # Weight by Intraday Volatility
+    weighted_returns = intraday_volatility * volume_adjusted_returns
+    
+    # Smoothed Moving Average
+    sma = weighted_returns.rolling(window=5).mean()
+    ema = sma.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(7)
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(25)
+    
+    # Compute Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Integrate Intraday and Previous Day's Returns
+    integrated_returns = intraday_return * overnight_return
+    
+    # Combine Price Momentum and Intraday Reversal
+    combined_momentum = price_momentum_ratio * integrated_returns
+    
+    # Conditionally Adjust by Volume Surge
+    avg_7_day_volume = df['volume'].rolling(window=7).mean()
+    volume_condition = (df['volume'] > avg_7_day_volume)
+    conditionally_adjusted_momentum = np.where(volume_condition, combined_momentum * 1.8, combined_momentum * 0.7)
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = ema + conditionally_adjusted_momentum
+    
+    return final_alpha_factor
+```

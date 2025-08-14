@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['Intraday_Momentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    df['Historical_Momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Combined_Momentum'] = df['Intraday_Momentum'] + df['Historical_Momentum']
+    df['Smoothed_Momentum'] = df['Combined_Momentum'].rolling(window=5).mean()
+    
+    # Volatility-Adjusted Momentum
+    df['Daily_High_Low_Range'] = (df['high'] - df['low']) / df['close']
+    df['Average_Daily_Range'] = df['Daily_High_Low_Range'].rolling(window=10).sum() / 10
+    df['Adjusted_Smoothed_Momentum'] = df['Smoothed_Momentum'] / (df['Average_Daily_Range'] + 1)
+    
+    # Volume-Price Indicator
+    df['Volume_Change'] = 0.5 * (df['volume'] - df['volume'].shift(1))
+    df['Avg_High_Low_Range_5d'] = ((df['high'] - df['low']) / df['close']).rolling(window=5).sum() / 5
+    df['Volume_Price_Factor'] = df['Volume_Change'] + 0.3 * df['Avg_High_Low_Range_5d'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Return-Based Strength
+    df['Short_Term_Return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['Long_Term_Return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['Relative_Strength'] = df['Short_Term_Return'] - df['Long_Term_Return']
+    
+    # Identify Volume Spikes
+    df['Volume_Std'] = df['volume'].rolling(window=10).std()
+    df['Volume_Mean'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Spike_Indicator'] = (df['volume'] > (df['Volume_Mean'] + 2 * df['Volume_Std'])).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['Combined_Return'] = df['Relative_Strength'] * df['Volume_Spike_Indicator']
+    
+    # Adjusted Integrated Factor
+    df['Volume_Average'] = df['volume'].rolling(window=5).sum() / 5
+    df['Volatility'] = (df['close'] - df['open']) / df['open'].rolling(window=20).std()
+    df['Adjusted_Integrated_Factor'] = df['Combined_Return'] * (df['Volume_Average'] * df['Volatility'])
+    
+    # Incorporate Advanced Volatility Adjustment
+    df['EMA_Daily_Range'] = df['Daily_High_Low_Range'].ewm(span=10, adjust=False).mean()
+    df['Volatility_Multiplier'] = 1 / (df['EMA_Daily_Range'] + 1)
+    df['Advanced_Adjusted_Momentum'] = df['Combined_Momentum'] * df['Volatility_Multiplier']
+    
+    # Volume Momentum
+    df['Volume_Difference'] = df['volume'] - df['volume'].rolling(window=7).mean()
+    
+    # Close Price Momentum
+    df['Close_Price_Momentum'] = df['close'] - df['close'].rolling(window=21).mean() - df['close'].shift(1)
+    
+    # Integrate Hybrid Factors
+    df['Hybrid_Factor'] = 0.5 * df['Volume_Difference'] + df['Close_Price_Momentum']
+    df['Trend_Following_Adjustment'] = (df['close'].rolling(window=10).mean() > df['close'].rolling(window=30).mean()).astype(int) * 0.2 + 0.9
+    df['Final_Factor'] = df['Hybrid_Factor'] * df['Trend_Following_Adjustment']
+    
+    # Apply Dynamic Weighting Scheme
+    df['Final_Factor_10d_MA'] = df['Final_Factor'].rolling(window=10).mean()
+    df['Final_Factor_Weighted'] = df['Final_Factor'] * (df['Final_Factor_10d_MA'].diff() > 0).astype(int) * 0.

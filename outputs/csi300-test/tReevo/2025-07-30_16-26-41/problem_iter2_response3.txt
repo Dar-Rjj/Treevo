@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['open'] + df['close']) / 2
+    
+    # Determine Intraday Direction
+    df['intraday_direction'] = (df['close'] - df['open']).apply(lambda x: 1 if x > 0 else -1)
+    
+    # Compute Intraday Momentum Reversal Score
+    df['momentum_reversal_score'] = df['intraday_range'] * df['intraday_direction']
+    
+    # Integrate Volume Trend
+    df['volume_sma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_trend'] = (df['volume'] - df['volume_sma_5']).apply(lambda x: 1 if x > 0 else -1)
+    df['momentum_reversal_score'] *= df['volume_trend']
+    
+    # Incorporate Price Pattern Analysis
+    df['prev_high'] = df['high'].shift(1)
+    df['prev_low'] = df['low'].shift(1)
+    df['prev_close'] = df['close'].shift(1)
+    
+    df['bullish_engulfing'] = ((df['high'] > df['prev_high']) & 
+                               (df['low'] < df['prev_low']) & 
+                               (df['close'] > df['open']) & 
+                               (df['open'] <= df['prev_close'])).astype(int)
+    df['bearish_engulfing'] = ((df['high'] > df['prev_high']) & 
+                               (df['low'] < df['prev_low']) & 
+                               (df['close'] < df['open']) & 
+                               (df['open'] >= df['prev_close'])).astype(int)
+    
+    df['momentum_reversal_score'] += df['bullish_engulfing'] - df['bearish_engulfing']
+    
+    # Apply Technical Indicators
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    
+    df['sma_signal'] = 0
+    df.loc[df['close'] > df[['sma_10', 'sma_20']].max(axis=1), 'sma_signal'] = 1
+    df.loc[df['close'] < df[['sma_10', 'sma_20']].min(axis=1), 'sma_signal'] = -1
+    
+    df['momentum_reversal_score'] += df['sma_signal']
+    
+    return df['momentum_reversal_score'].dropna()
+```

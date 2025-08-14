@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+from arch import arch_model
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    combined_factor = intraday_return * high_low_range
+    ema_period = 14
+    smoothed_factor = combined_factor.ewm(span=ema_period).mean()
+    
+    # Apply Volume Weighting
+    volume_weighted_smoothed_factor = smoothed_factor * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    previous_day_close_gap = df['open'] - df['close'].shift(1)
+    volume_weighted_smoothed_factor_with_gap = volume_weighted_smoothed_factor + previous_day_close_gap
+    
+    # Integrate Long-Term Momentum
+    long_term_return = df['close'] - df['close'].shift(50)
+    normalized_long_term_return = long_term_return / high_low_range
+    
+    # Include Dynamic Volatility Component
+    rolling_std = intraday_return.rolling(window=20).std()
+    atr = df[['high' - 'low', (df['close'].shift(1) - df['high']).abs(), (df['close'].shift(1) - df['low']).abs()]].max(axis=1).rolling(window=14).mean()
+    combined_volatility = (rolling_std + atr) / 2
+    volume_adjusted_volatility = combined_volatility * df['volume']
+    
+    # Analyze Volume Trends
+    volume_50_day_ma = df['volume'].rolling(window=50).mean()
+    volume_deviation = df['volume'] - volume_50_day_ma
+    
+    # Incorporate GARCH Volatility
+    garch_model = arch_model(intraday_return, vol='Garch', p=1, q=1, dist='Normal')
+    garch_results = garch_model.fit(update_freq=5)
+    garch_estimated_volatility = garch_results.conditional_volatility
+    
+    # Final Factor Calculation
+    final_factor = (
+        volume_weighted_smoothed_factor_with_gap +
+        normalized_long_term_return +
+        volume_adjusted_volatility +
+        volume_deviation +
+        garch_estimated_volatility
+    )
+    
+    # Apply Non-Linear Transformation
+    final_factor_transformed = np.log(1 + final_factor)
+    
+    return final_factor_transformed

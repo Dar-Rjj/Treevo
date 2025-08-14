@@ -1,0 +1,76 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    import numpy as np
+
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices with adaptive window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Adaptive RSI window based on volatility
+    adaptive_rsi_window = 14
+    if df['close'].std() > df['close'].mean():
+        adaptive_rsi_window = 10
+    else:
+        adaptive_rsi_window = 20
+    gain = (delta.where(delta > 0, 0)).rolling(window=adaptive_rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=adaptive_rsi_window).mean()
+    rs = gain / loss
+    rsi_adaptive = 100 - (100 / (1 + rs))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Calculate the money flow index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Calculate the directional movement index (ADX)
+    up_move = df['high'].diff()
+    down_move = df['low'].shift(1) - df['low']
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0)
+    tr = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), abs(df['low'] - df['close'].shift(1)))
+    tr_14 = tr.rolling(window=14).sum()
+    plus_di = 100 * (plus_dm.rolling(window=14).sum() / tr_14)
+    minus_di = 100 * (minus_dm.rolling(window=14).sum() / tr_14)
+    adx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).rolling(window=14).mean()
+
+    # Dynamic weighting based on volatility
+    volatility = df['close'].pct_change().rolling(window=14).std()
+    weight_volatility = 1 / (1 + np.exp(-volatility))
+    weight_stability = 1 - weight_volatility
+
+    # Calculate the weighted average of the key factors
+    factor = (ema_price_movement * df['amount'] * weight_volatility + 
+              rsi_adaptive * df['volume'] * weight_stability +
+              volume_trend * avg_price * weight_volatility +
+              dynamic_indicator * (df['amount'] + df['volume']) * weight_volatility +
+              seasonal_adj_price_movement * (df['amount'] + df['volume']) * weight_stability +
+              mfi * (df['amount'] + df['volume']) * weight_volatility +
+              adx * (df['amount'] + df['volume']) * weight_stability)
+
+    return

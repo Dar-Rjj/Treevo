@@ -1,0 +1,87 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Intraday Momentum Component
+    df['intraday_momentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    
+    # Historical Momentum Component
+    df['historical_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Add Intraday and Historical Momentum Components
+    df['combined_momentum'] = df['intraday_momentum'] + df['historical_momentum']
+    
+    # Apply Exponential Moving Average (EMA) over 5 days
+    df['smoothed_momentum'] = df['combined_momentum'].ewm(span=5).mean()
+    
+    # 20-Day Volume Volatility
+    df['volume_volatility_20'] = df['volume'].rolling(window=20).std()
+    
+    # Average Volume
+    df['average_volume_10'] = df['volume'].rolling(window=10).mean()
+    
+    # Adjust Momentum
+    df['adjusted_momentum'] = (df['smoothed_momentum'] / df['volume_volatility_20']) * df['average_volume_10']
+    
+    # Relative Strength
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Average High-Low Range for past 5 days
+    df['avg_high_low_range_5'] = df['high_low_range'].rolling(window=5).mean()
+    
+    # High-Low Range Over Average
+    df['high_low_over_avg'] = df['high_low_range'] / df['avg_high_low_range_5']
+    
+    # Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Open-to-Close Return
+    df['open_close_return'] = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_return'] = df['intraday_return'] + df['open_close_return']
+    
+    # Identify Volume Spikes
+    vol_std = df['volume'].rolling(window=20).std()
+    vol_mean = df['volume'].rolling(window=20).mean()
+    df['vol_spike_indicator'] = (df['volume'] > (vol_mean + 2 * vol_std)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['spiked_combined_return'] = df['combined_return'] * df['vol_spike_indicator']
+    
+    # Volume Difference
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    
+    # VWAP
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    
+    # Volume-to-VWAP Ratio
+    df['volume_to_vwap_ratio'] = df['volume'] / df['vwap']
+    
+    # Integrate Volume and Price Information
+    df['integrated_info'] = 0.6 * df['volume_diff'] + 0.4 * df['avg_high_low_range_5'] + (df['close'] - df['close'].shift(1))
+    
+    # Combine Indicators
+    df['factor'] = (df['high_low_over_avg'] * df['volume_diff'] * df['volume_to_vwap_ratio'] * (df['close'] - df['close'].shift(1)))
+    
+    # Volume Average
+    df['volume_avg_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Volatility
+    df['volatility_20'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Weight by Volume and Volatility
+    df['final_factor'] = df['relative_strength'] * (df['volume_avg_5'] * df['volatility_20'])
+    
+    return df['final_factor']
+```

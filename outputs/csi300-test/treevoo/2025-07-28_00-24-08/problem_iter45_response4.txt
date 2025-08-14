@@ -1,0 +1,89 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum-based Factors
+    def ema_close(df, period=20):
+        return df['close'].ewm(span=period, adjust=False).mean()
+    
+    def roc_close(df, period=14):
+        return df['close'].pct_change(period).ewm(span=period, adjust=False).mean()
+    
+    # Volatility-based Factors
+    def daily_price_range(df):
+        return df['high'] - df['low']
+    
+    def true_range(df, period=14):
+        tr = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), abs(df['low'] - df['close'].shift(1)))
+        return tr.rolling(window=period).mean()
+    
+    # Trend Strength Indicators
+    def directional_movement(df, period=14):
+        dm_pos = (df['high'] - df['high'].shift(1)).clip(lower=0)
+        dm_neg = (df['low'].shift(1) - df['low']).clip(lower=0)
+        dm_pos = dm_pos.rolling(window=period).sum()
+        dm_neg = dm_neg.rolling(window=period).sum()
+        return dm_pos, dm_neg
+    
+    def adx(df, period=14):
+        dm_pos, dm_neg = directional_movement(df, period)
+        tr = true_range(df, period)
+        pos_di = 100 * (dm_pos / tr).ewm(span=period, adjust=False).mean()
+        neg_di = 100 * (dm_neg / tr).ewm(span=period, adjust=False).mean()
+        adx = 100 * (abs(pos_di - neg_di) / (pos_di + neg_di)).ewm(span=period, adjust=False).mean()
+        return adx
+    
+    # Volume-related Factors
+    def volume_relative_to_wma(df, period=14):
+        wma_volume = df['volume'].ewm(span=period, adjust=False).mean()
+        return df['volume'] / wma_volume
+    
+    def cumulative_volume_changes(df, period=14):
+        cvc = df['volume'].pct_change().rolling(window=period).sum() * 0.9**(np.arange(period)[::-1])
+        return cvc.sum()
+    
+    # Amount and Price Interaction
+    def vwap(df):
+        return (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    def chaikin_money_flow(df, period=20):
+        mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+        mf_volume = mf_multiplier * df['volume']
+        cmf = mf_volume.rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+        return cmf
+    
+    # Cross-Period Analysis
+    def long_term_vs_short_term_momentum(df, short_period=50, long_period=200):
+        ema_short = ema_close(df, short_period)
+        ema_long = ema_close(df, long_period)
+        return ema_short - ema_long
+    
+    def comparative_volatility(df, short_period=10, long_period=50):
+        tr_short = true_range(df, short_period)
+        tr_long = true_range(df, long_period)
+        return tr_short / tr_long
+    
+    # Inter-day and Intra-day Analysis Integration
+    def overnight_gap(df):
+        return df['open'] - df['close'].shift(1)
+    
+    def intraday_momentum_shifts(df):
+        midday_high = df['high'].rolling(window=12).max()
+        midday_low = df['low'].rolling(window=12).min()
+        return (midday_high - df['open']).clip(lower=0) - (df['close'] - midday_low).clip(lower=0)
+    
+    # Advanced Statistical Models
+    def conditional_probability_positive_return(df):
+        condition = (df['close'] > df['open']) & (df['volume'] > df['volume'].shift(1))
+        return condition.rolling(window=30).mean()
+    
+    def composite_score(df):
+        score = (ema_close(df, 20) + roc_close(df, 14) + adx(df, 14) + vwap(df) + chaikin_money_flow(df, 20)) / 5
+        return score
+    
+    # Generate all factors
+    factors = pd.DataFrame({
+        'EMA_Close': ema_close(df),
+        'ROC_Close': roc_close(df),
+        'Daily_Price_Range': daily_price_range

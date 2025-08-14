@@ -1,0 +1,55 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    lookback_sma = 50
+    df['SMA'] = df['close'].rolling(window=lookback_sma).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    lookback_volatility = 30
+    df['high_low_diff'] = df['high'] - df['low']
+    df['volume_adjusted_volatility'] = df['high_low_diff'] * df['volume']
+    df['volatility'] = df['volume_adjusted_volatility'].rolling(window=lookback_volatility).mean()
+    
+    # Compute Price Momentum
+    lookback_momentum = 20
+    df['momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=lookback_momentum).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    lookback_percent_change = 10
+    df['percent_change'] = df['close'].pct_change(lookback_percent_change)
+    
+    df['high_low_range'] = df['high'] - df['low']
+    lookback_std = 40
+    df['std_high_low'] = df['high_low_range'].rolling(window=lookback_std).std()
+    
+    # Calculate Dynamic Weights for Robustness
+    def dynamic_weighting(volatility, momentum, percent_change, std_high_low):
+        # Example dynamic weighting function based on volatility and trend
+        weights = {
+            'momentum': 0.4,
+            'volatility': 0.3,
+            'percent_change': 0.15,
+            'std_high_low': 0.15
+        }
+        
+        # Adjust weights based on market conditions
+        if volatility > 0.05:
+            weights['volatility'] *= 1.2
+            weights['momentum'] *= 0.8
+        if momentum > 0.1:
+            weights['momentum'] *= 1.2
+            weights['percent_change'] *= 0.8
+        
+        return weights
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        df['momentum'] * dynamic_weighting(df['volatility'], df['momentum'], df['percent_change'], df['std_high_low'])['momentum'] +
+        df['volatility'] * dynamic_weighting(df['volatility'], df['momentum'], df['percent_change'], df['std_high_low'])['volatility'] +
+        df['percent_change'] * dynamic_weighting(df['volatility'], df['momentum'], df['percent_change'], df['std_high_low'])['percent_change'] +
+        df['std_high_low'] * dynamic_weighting(df['volatility'], df['momentum'], df['percent_change'], df['std_high_low'])['std_high_low']
+    )
+    
+    return alpha_factor

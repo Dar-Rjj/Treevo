@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate short-term momentum (today's close - yesterday's close)
+    df['short_momentum'] = df['close'].diff()
+    
+    # Compute the average close price over a trailing window (e.g., 5 days)
+    df['avg_close_5d'] = df['close'].rolling(window=5).mean()
+    
+    # Calculate 5-day moving average of close price
+    df['ma_close_5d'] = df['close'].rolling(window=5).mean()
+    
+    # Calculate 5-day momentum indicator
+    df['momentum_5d'] = (df['close'] - df['ma_close_5d']) / (df['close'].rolling(window=5).max() - df['close'].rolling(window=5).min())
+    
+    # Calculate 10-day exponential moving average of close price
+    df['ema_close_10d'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate 10-day momentum indicator
+    df['momentum_10d'] = (df['close'] - df['ema_close_10d']) / (df['close'].rolling(window=10).max() - df['close'].rolling(window=10).min())
+    
+    # Integrate momentum indicators
+    df['integrated_momentum'] = (df['momentum_5d'] + df['momentum_10d']) / 2
+    
+    # Determine upper and lower shadow lengths
+    df['upper_shadow'] = df['high'] - df['close']
+    df['lower_shadow'] = df['open'] - df['low']
+    
+    # Assess candle body size
+    df['body_size'] = df['close'] - df['open']
+    
+    # Evaluate open-to-close movement
+    df['open_to_close'] = df['close'] - df['open']
+    
+    # Integrate intraday volatility and open-to-close movement
+    df['intraday_volatility_ratio'] = (df['upper_shadow'] + df['lower_shadow']) / df['open_to_close']
+    
+    # Measure the change in volume from the previous day
+    df['volume_change'] = df['volume'].diff()
+    
+    # Incorporate advanced volume impact
+    df['volume_impact'] = df['intraday_volatility_ratio'] * (df['volume'] ** (1/3))
+    
+    # Factor in adjusted price range as a stability measure
+    df['stability_measure'] = df['volume_impact'] / ((df['high'] - df['low']) / (df['open'] + df['close']))
+    
+    # Calculate volume-weighted prices
+    df['vwap_close'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_open'] = (df['open'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Synthesize VWAPCHL into the model
+    df['vwapchl'] = (df['vwap_close'] - df['vwap_open']) / (df['high'] - df['low'])
+    
+    # Combine all factors to create the final alpha factor
+    df['alpha_factor'] = df['integrated_momentum'] + df['stability_measure'] + df['vwapchl']
+    
+    return df['alpha_factor']
+```

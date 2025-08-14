@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['volume_adjustment'] = df['volume'] / (df['volume'].rolling(window=5).mean() + 1)
+    
+    # Combine Intraday Range and Volume Adjustment
+    df['combined_factor'] = df['intraday_range'] * df['volume_adjustment']
+    
+    # Smoothing with EMA
+    df['smoothed_factor'] = df['combined_factor'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate EMA Cross Signal
+    df['ema_short'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_long'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    df['momentum'] = np.where(df['ema_short'] > df['ema_long'], 1, -1)
+    
+    # Calculate Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = (df['close'] - df['open']) / df['open']
+    df['intraday_momentum'] = (df['high_low_diff'] + df['open_close_return']) / 2
+    
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Weight OBV by Difference between Short and Long EMA
+    df['weight'] = np.abs(df['ema_short'] - df['ema_long'])
+    df['weighted_obv'] = df['obv'] * df['weight']
+    
+    # Apply Volume Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['filtered_smoothed_momentum'] = np.where(df['volume_ratio'] > 1.5, df['smoothed_factor'], 0)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['filtered_smoothed_momentum'] * df['weighted_obv']
+    
+    return df['final_alpha_factor']
+```

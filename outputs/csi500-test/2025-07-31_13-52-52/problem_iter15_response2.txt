@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    df['Price_Movement_Ratio'] = df['close'] / df['open']
+    
+    # Generate Momentum Indicator
+    df['5d_Price_Movement_Ratio_Sum'] = df['Price_Movement_Ratio'].rolling(window=5).sum()
+    df['5d_High_Low_Range_Sum'] = df['High_Low_Range'].rolling(window=5).sum()
+    df['Momentum_Indicator'] = df['5d_Price_Movement_Ratio_Sum'] * df['5d_High_Low_Range_Sum']
+    
+    # Integrate Volume into Momentum
+    df['Volume_Adjusted_Momentum'] = df['Momentum_Indicator'] * df['volume']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+    
+    # Calculate Daily Volatility
+    df['Daily_Volatility'] = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    df['Combined_Factor'] = (df['Close_to_Open_Return'] * df['volume']) / df['Daily_Volatility']
+    
+    # Adjust for Opening Gap
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Adjusted_High_Low_Range'] = df['High_Low_Range'] - (df['open'] - df['Prev_Close'])
+    
+    # Incorporate Volume Momentum
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Adjusted_Range'] = df['Adjusted_High_Low_Range'] * df['Volume_Change']
+    
+    # Apply Time Series Momentum
+    df['Alpha_Factor_MA'] = df['Volume_Adjusted_Range'].rolling(window=10).mean()
+    df['Time_Series_Momentum'] = df['Volume_Adjusted_Range'] - df['Alpha_Factor_MA']
+    
+    # Calculate High-Low Spread Change
+    df['High_Low_Spread_Change'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+    
+    # Calculate Momentum of High-Low Spread Change
+    df['High_Low_Spread_Momentum'] = df['High_Low_Spread_Change'].rolling(window=5).sum()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    df['VWAP'] = (df['Typical_Price'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate Volume Momentum
+    df['Volume_Momentum'] = df['Volume_Change'].rolling(window=5).sum()
+    
+    # Combine VWAP, High-Low Spread Momentum, and Volume Momentum
+    df['Combined_Factor_VWAP'] = df['VWAP'] * df['High_Low_Spread_Momentum'] * df['Volume_Momentum']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Time_Series_Momentum'] + df['Combined_Factor_VWAP']
+    
+    # Final Adjustment for Volume
+    df['Final_Alpha_Factor_Adjusted'] = df['Final_Alpha_Factor'] * df['volume']
+    
+    return df['Final_Alpha_Factor_Adjusted'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

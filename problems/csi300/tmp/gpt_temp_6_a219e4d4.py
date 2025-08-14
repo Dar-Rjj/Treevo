@@ -1,0 +1,27 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['previous_close'] = df['close'].shift(1)
+    df['close_to_open_return'] = (df['close'] - df['previous_close']) / df['previous_close']
+    
+    # Calculate Volume Impact
+    df['avg_volume_20_days'] = df['volume'].rolling(window=20).mean()
+    df['volume_impact'] = df['volume'] / df['avg_volume_20_days']
+    
+    # Assign adaptive weights
+    recent_weights = [0.5, 0.3, 0.2]
+    older_weights = [0.4, 0.4, 0.2]
+    df['weights'] = df.index.to_series().apply(lambda x: recent_weights if x > df.index[-1] - pd.Timedelta(days=30) else older_weights)
+    
+    # Combine Intraday Range, Close-to-Open Return, and Volume Impact
+    factors = [df['intraday_range'], df['close_to_open_return'], df['volume_impact']]
+    df['alpha_factor'] = (
+        df['weights'].apply(lambda w: sum(f * wi for f, wi in zip(factors, w)))
+    )
+    
+    return df['alpha_factor']

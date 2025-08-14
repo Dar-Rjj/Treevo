@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Adjust for Opening Gap
+    df['open_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Incorporate Volume Momentum
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['adjusted_range'] = df['high_low_range'] * df['volume_change']
+    
+    # Apply Time Series Momentum
+    lookback_period = 10
+    df['moving_avg'] = df['adjusted_range'].rolling(window=lookback_period).mean()
+    df['momentum_diff'] = df['adjusted_range'] - df['moving_avg']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Compute Volume Change Indicator
+    df['volume_change_indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Combine Intraday Return and Volume Change
+    df['combined_return'] = df['intraday_return'] * df['volume_change_indicator']
+    df['smoothed_return'] = df['combined_return'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Daily Volatility
+    df['daily_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Volume Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'].diff().rolling(window=5).sum()) * (df['volume'].rolling(window=5).mean())
+    
+    # Calculate 5-Day Momentum
+    df['5_day_momentum'] = df['close'].diff().rolling(window=5).sum()
+    
+    # Calculate Averaged High-to-Low Momentum
+    lookback_period = 20
+    df['high_to_low_pct_change'] = (df['high'] - df['low']) / df['low']
+    df['averaged_high_to_low_momentum'] = df['high_to_low_pct_change'].rolling(window=lookback_period).mean()
+    
+    # Combine and Adjust Factors
+    df['adjusted_close_to_open_return'] = df['close_to_open_return'] * df['volume'] / df['daily_volatility']
+    df['final_alpha_factor'] = (df['smoothed_return'] + df['adjusted_close_to_open_return'] - df['5_day_momentum']) / 3
+    
+    return df['final_alpha_factor']
+```

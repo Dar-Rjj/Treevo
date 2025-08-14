@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Basic Factors
+    df['close_pct_change_5d'] = df['close'].pct_change(5)
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['volume_surge'] = df['volume'] / df['avg_volume_20d']
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility_20d'] = df['log_returns'].rolling(window=20).std()
+
+    # Complex Factors
+    df['price_vol_trend_alignment'] = df['close_pct_change_5d'] * (df['volume'] - df['volume'].shift(1))
+    df['high_10d'] = df['high'].rolling(window=10).max()
+    df['low_10d'] = df['low'].rolling(window=10).min()
+    df['trading_range_breakout'] = (df['close'] > df['high_10d']) | (df['close'] < df['low_10d'])
+    
+    vwap = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    df['vwap_deviation'] = df['close'] - vwap
+
+    # Pattern Recognition
+    def is_bullish_engulfing(open, close, open_prev, close_prev):
+        return open < close and open_prev > close_prev and open <= close_prev and close >= open_prev
+    
+    def is_bearish_engulfing(open, close, open_prev, close_prev):
+        return open > close and open_prev < close_prev and open >= close_prev and close <= open_prev
+    
+    def is_hammer(open, high, low, close):
+        return (high - low) > 3 * (open - close) and (close - low) / (high - low) > 0.6
+    
+    def is_doji(open, close):
+        return abs(open - close) / (open + close) < 0.005
+    
+    df['bullish_engulfing'] = (df['open'] < df['close']) & (df['open'].shift(1) > df['close'].shift(1)) & (df['open'] <= df['close'].shift(1)) & (df['close'] >= df['open'].shift(1))
+    df['bearish_engulfing'] = (df['open'] > df['close']) & (df['open'].shift(1) < df['close'].shift(1)) & (df['open'] >= df['close'].shift(1)) & (df['close'] <= df['open'].shift(1))
+    df['hammer'] = (df['high'] - df['low']) > 3 * (df['open'] - df['close']) & ((df['close'] - df['low']) / (df['high'] - df['low'])) > 0.6
+    df['doji'] = abs(df['open'] - df['close']) / (df['open'] + df['close']) < 0.005
+    df['breakaway_gap'] = (df['open'] - df['close'].shift(1)).abs() > 0.005 * df['close'].shift(1)
+
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['close_pct_change_5d'] + 
+                          df['volume_surge'] + 
+                          df['price_vol_trend_alignment'] + 
+                          df['vwap_deviation'] + 
+                          df['trading_range_breakout'].astype(int) + 
+                          df['bullish_engulfing'].astype(int) - 
+                          df['bearish_engulfing'].astype(int) + 
+                          df['hammer'].astype(int) + 
+                          df['doji'].astype(int) + 
+                          df['breakaway_gap'].astype(int))
+
+    return df['alpha_factor']
+```

@@ -1,0 +1,45 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low prices (price range)
+    price_range = df['high'] - df['low']
+    
+    # Calculate the volume-weighted average of (high - close) and (close - low)
+    vol_weighted_diff = (df['volume'] * ((df['high'] - df['close']) + (df['close'] - df['low'])) / 2)
+    
+    # Adaptive smoothing for the volume-weighted difference
+    smooth_vol_weighted_diff = vol_weighted_diff.ewm(com=0.5, adjust=False).mean().fillna(0)
+    
+    # Calculate the amount-weighted average of (high - open) and (open - low)
+    amount_weighted_diff = (df['amount'] * ((df['high'] - df['open']) + (df['open'] - df['low'])) / 2)
+    
+    # Adaptive smoothing for the amount-weighted difference
+    smooth_amount_weighted_diff = amount_weighted_diff.ewm(com=0.5, adjust=False).mean().fillna(0)
+    
+    # Calculate the typical price
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Volume-weighted typical price with adaptive smoothing
+    vol_weighted_typical_price = (df['volume'] * typical_price).ewm(com=0.5, adjust=False).mean().fillna(0)
+    
+    # Amount-weighted typical price with adaptive smoothing
+    amount_weighted_typical_price = (df['amount'] * typical_price).ewm(com=0.5, adjust=False).mean().fillna(0)
+    
+    # Relative Strength Index (RSI) for closing prices
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=14, adjust=False).mean()
+    rsi = 100 - (100 / (1 + (gain / loss)))
+    
+    # Additional features: Momentum, Volatility, and Liquidity
+    momentum = df['close'].pct_change().ewm(com=0.5, adjust=False).mean().fillna(0)
+    volatility = df['close'].rolling(window=14).std().ewm(com=0.5, adjust=False).mean().fillna(0)
+    liquidity = (df['volume'] / (df['high'] - df['low'])).ewm(com=0.5, adjust=False).mean().fillna(0)
+    
+    # Final alpha factor: combine the smoothed volume-weighted and amount-weighted differences,
+    # the volume-weighted and amount-weighted typical prices, RSI, momentum, volatility, and liquidity
+    alpha_factor = (smooth_vol_weighted_diff + smooth_amount_weighted_diff + 
+                    vol_weighted_typical_price + amount_weighted_typical_price + 
+                    rsi + momentum + volatility + liquidity) / (price_range + 1e-7)
+    
+    return alpha_factor
+```

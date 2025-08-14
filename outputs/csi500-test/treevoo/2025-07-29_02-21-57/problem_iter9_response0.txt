@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume-Weighted Close Price Return
+    df['5D_Close_Return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['5D_Volume_Ratio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5*21).mean()
+    df['5D_Volume_Weighted_Close_Return'] = df['5D_Close_Return'] * df['5D_Volume_Ratio']
+
+    # Calculate High-Low Price Oscillation with Exponential Smoothing
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Smoothed_High_Low_Range'] = df['High_Low_Range'].ewm(alpha=0.2, adjust=False).mean()
+    df['High_Low_Price_Oscillation'] = df['High_Low_Range'] - df['Smoothed_High_Low_Range']
+
+    # Calculate True Range
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['Prev_Close']).abs()
+    df['TR3'] = (df['low'] - df['Prev_Close']).abs()
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+
+    # Calculate Price Momentum
+    df['Momentum_14D'] = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    df['Volume_Weighted_Momentum'] = df['volume'] * df['Momentum_14D']
+
+    # Normalize by ATR
+    df['Normalized_Momentum'] = df['Volume_Weighted_Momentum'] / df['ATR_14']
+
+    # Generate Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Normalized_Momentum'] + 
+        df['5D_Volume_Weighted_Close_Return'] + 
+        df['High_Low_Price_Oscillation']
+    )
+
+    return df['Alpha_Factor']
+```

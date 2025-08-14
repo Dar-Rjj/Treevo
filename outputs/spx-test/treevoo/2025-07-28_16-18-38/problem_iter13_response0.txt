@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Synthesized Intraday Measure
+    intraday_return = df['close'] / df['open'] - 1
+    high_low_range = df['high'] - df['low']
+    weighted_intraday_return = intraday_return * high_low_range
+    
+    moving_avg_volume = df['volume'].rolling(window=20).mean()
+    volume_impact = df['volume'] / moving_avg_volume
+    synthesized_intraday_measure = weighted_intraday_return * volume_impact
+
+    # Integrate Price and Volume Momentum
+    avg_daily_return = df['close'] - df['close'].shift(1)
+    price_momentum = avg_daily_return.rolling(window=20).mean()
+
+    avg_daily_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_momentum = avg_daily_volume_change.rolling(window=20).mean()
+
+    momentum_adjustment = price_momentum / volume_momentum
+    if volume_momentum > 0:
+        adjusted_synthesized_intraday = synthesized_intraday_measure * momentum_adjustment
+    else:
+        adjusted_synthesized_intraday = -synthesized_intraday_measure * momentum_adjustment
+
+    # Calculate Dynamic Momentum
+    high_low_diff = df['high'] - df['low']
+    sma_high_low_diff = high_low_diff.rolling(window=14).mean()
+    raw_momentum = high_low_diff - sma_high_low_diff
+    dynamic_momentum = raw_momentum.ewm(alpha=0.2).mean()
+
+    # Combine with Volume-Weighted Price
+    vwap = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    combined_factor = dynamic_momentum * vwap * 0.5
+
+    return combined_factor
+```

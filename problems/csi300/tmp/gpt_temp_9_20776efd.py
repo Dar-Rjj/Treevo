@@ -1,0 +1,55 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=20, m_days=10, momentum_weight=0.4, volume_weight=0.3, volatility_weight=0.2, economic_weight=0.1):
+    # Calculate Log Returns
+    close_prices = df['close']
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Momentum
+    cumulative_log_returns = log_returns.rolling(window=n_days).sum()
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    clipped_cumulative_log_returns = cumulative_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=n_days).mean()
+    volume_adjustment = (volumes / mean_volume)
+    volume_adjusted_momentum = clipped_cumulative_log_returns * volume_adjustment
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=m_days).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=m_days).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=m_days).quantile(0.75) - abs_price_changes.rolling(window=m_days).quantile(0.25)
+    
+    # Integrate Key Economic Indicators (Assume interest_rates and gdp_growth are provided as Series)
+    economic_component = (interest_rates + gdp_growth) / 2
+    
+    # Final Factor Calculation
+    factor = (
+        momentum_weight * volume_adjusted_momentum +
+        volume_weight * volume_adjustment +
+        volatility_weight * (std_abs_price_changes + ema_abs_price_changes + iqr_abs_price_changes) / 3 +
+        economic_weight * economic_component
+    )
+    
+    return factor.dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# }, index=pd.to_datetime([...]))  # Fill with actual data
+# interest_rates = pd.Series([...], index=pd.to_datetime([...]))  # Fill with actual data
+# gdp_growth = pd.Series([...], index=pd.to_datetime([...]))  # Fill with actual data
+# factor_values = heuristics_v2(df)

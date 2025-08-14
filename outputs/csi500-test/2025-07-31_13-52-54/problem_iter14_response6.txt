@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, n_days=5, long_window=10, rsi_period=14):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    volume_weighted_high_low_spread = high_low_spread * df['volume']
+    volume_weighted_high_low_spread_sum = volume_weighted_high_low_spread.rolling(window=lookback_period).sum()
+    
+    # Calculate Momentum Component
+    current_value = volume_weighted_high_low_spread
+    past_average = volume_weighted_high_low_spread.rolling(window=n_days).mean()
+    momentum = current_value - past_average
+    
+    # Generate Final Factor
+    factor = (volume_weighted_high_low_spread + momentum) / df['close']
+    
+    # Incorporate Price Trend
+    moving_avg_close = df['close'].rolling(window=n_days).mean()
+    price_trend = df['close'] - moving_avg_close
+    factor *= price_trend
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['close']
+    
+    # Compute Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = intraday_return * df['volume']
+    short_window_sum = volume_weighted_intraday_return.rolling(window=n_days).sum()
+    
+    # Volume-Weighted Intraday Momentum Factor
+    intraday_momentum_factor = short_window_sum
+    
+    # Volume-Weighted Intraday Reversal
+    long_window_sum = (-volume_weighted_intraday_return).rolling(window=long_window).sum()
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate High-Close to Open-High Ratio
+    high_close_diff = df['high'] - df['close']
+    open_high_diff = df['open'] - df['high']
+    high_close_ratio = high_close_diff / open_high_diff.replace(0, 1e-6)
+    
+    # Combine Spread and Ratio
+    combined_spread_ratio = intraday_high_low_spread * df['volume'] + high_close_ratio
+    
+    # Volume-Weighted Intraday Momentum Intensity
+    intraday_momentum_intensity = (combined_spread_ratio * df['volume']).rolling(window=n_days).sum()
+    
+    # Calculate Volume-Weighted Average Price
+    vw_price = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Daily Change in Volume-Weighted Price
+    daily_change_vw_price = vw_price - vw_price.shift(1)
+    
+    # Separate Positive and Negative Changes
+    positive_changes = daily_change_vw_price.clip(lower=0)
+    negative_changes = -daily_change_vw_price.clip(upper=0)
+    
+    # Compute 14-Day Average of Positive and Negative Changes
+    avg_positive_changes = positive_changes.rolling(window=rsi_period).mean()
+    avg_negative_changes = negative_changes.rolling(window=rsi_period).mean()
+    
+    # Calculate RSI
+    relative_strength = avg_positive_changes / avg_negative_changes.replace(0, 1e-6)
+    rsi = 100 - (100 / (1 + relative_strength))
+    
+    # Final Alpha Factor
+    final_factor = (factor * rsi) + intraday_momentum_factor + long_window_sum + intraday_momentum_intensity
+    
+    return final_factor
+```

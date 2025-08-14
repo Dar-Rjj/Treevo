@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Weighted Daily Return
+    N = 20
+    df['Volume_Weighted_Return'] = (df['Daily_Price_Change'] * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Introduce Enhanced Price Directional Component
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Price_Direction_Sign'] = df['Close_Open_Diff'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Incorporate Dynamic Volume Spike Indicator
+    df['Volume_Rolling_Mean'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Rolling_Std'] = df['volume'].rolling(window=20).std()
+    df['Volume_Spike'] = (df['volume'] > (df['Volume_Rolling_Mean'] + 2 * df['Volume_Rolling_Std'])).astype(int)
+    df['Dynamic_Volume_Factor'] = 1 + (df['volume'] - df['Volume_Rolling_Mean']) / df['Volume_Rolling_Std']
+    df['Volume_Adjusted_Return'] = df['Volume_Weighted_Return'] * (1 + df['Volume_Spike'] * (df['Dynamic_Volume_Factor'] - 1))
+    
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Adjusted Volume
+    df['Adjusted_Volume'] = df['volume'] / df['High_Low_Spread']
+    
+    # Calculate Log Return
+    df['Log_Return'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    
+    # Combine Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Combined_Adjusted_Component'] = df['Log_Return'] * df['Adjusted_Volume'] * df['Price_Direction_Sign']
+    
+    # Smooth the Combined Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Smoothed_Combined_Component'] = df['Combined_Adjusted_Component'].ewm(span=5).mean()
+    
+    # Incorporate Intraday Price Reversal
+    df['Intraday_Price_Reversal'] = (df['high'] - df['close']) / (df['close'] - df['low'])
+    df['Intraday_Price_Reversal_Sign'] = df['Intraday_Price_Reversal'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Combine Components into Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Volume_Adjusted_Return'] + df['Smoothed_Combined_Component']
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Intraday_Price_Reversal_Sign']
+    
+    return df['Final_Alpha_Factor']
+```

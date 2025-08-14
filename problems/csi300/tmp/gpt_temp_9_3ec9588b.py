@@ -1,0 +1,45 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    df['volume_adjusted_momentum'] = df['volume'] * (df['high_low_range'] + df['close_open_diff'])
+    
+    # Adaptive Smoothing via Moving Average
+    def dynamic_ema_period(volatility, base_period=10):
+        return int(base_period * (1 + 0.5 * volatility))
+    
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=30).std()
+    ema_periods = [dynamic_ema_period(v) for v in volatility]
+    df['smoothed_volume_adjusted_momentum'] = df['volume_adjusted_momentum'].ewm(span=ema_periods, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    absolute_daily_returns = daily_returns.abs()
+    robust_volatility = absolute_daily_returns.rolling(window=30).median()
+    df['volatility_adjusted_momentum'] = df['smoothed_volume_adjusted_momentum'] / robust_volatility
+    
+    # Incorporate Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_points = np.sign(momentum_reversal)
+    
+    # Integrate Non-Linear Transformation
+    df['sqrt_transformed_momentum'] = np.sqrt(df['volatility_adjusted_momentum'])
+    df['log_transformed_momentum'] = np.log(df['volatility_adjusted_momentum'])
+    
+    # Enhance Reversal Signal with Adaptive Smoothing
+    smoothed_reversal_signal = momentum_reversal.ewm(span=ema_periods, adjust=False).mean()
+    df['interim_alpha_factor'] = (df['sqrt_transformed_momentum'] + df['log_transformed_momentum']) + smoothed_reversal_signal
+    
+    # Final Adaptive Smoothing
+    final_alpha_factor = df['interim_alpha_factor'].ewm(span=ema_periods, adjust=False).mean()
+    
+    return final_alpha_factor

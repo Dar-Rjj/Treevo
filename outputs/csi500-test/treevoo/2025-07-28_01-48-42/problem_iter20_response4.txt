@@ -1,0 +1,84 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['low']
+    intraday_reversal = 1 / (1 + intraday_return)
+    
+    # Adjust for Volume and Amount
+    volume_amount_adjusted_range = high_low_range * df['volume'] * df['amount']
+    
+    # Integrate Momentum and Reversal
+    high_low_range_diff = high_low_range - high_low_range.shift(1)
+    integrated_momentum_reversal = high_low_range_diff * intraday_reversal
+    
+    # Integrate Volume-Amount-Adjusted Range with Weighted Price Change
+    combined_factor_1 = integrated_momentum_reversal + volume_amount_adjusted_range
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Price Change Momentum
+    price_change_momentum = df['close'] - df['open'].shift(1)
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Price Momentum and Volume Delta
+    integrated_price_volume_momentum = price_change_momentum * volume_delta
+    
+    # Confirm with Volume, Amount, and Close-to-Open Movement
+    close_open_diff = df['close'] - df['open']
+    integrated_factor_2 = integrated_price_volume_momentum * close_open_diff
+    
+    # Adjust Momentum by Open-Close Spread
+    open_close_spread = df['close'] - df['open']
+    adjusted_momentum = integrated_momentum_reversal * np.abs(open_close_spread)
+    
+    # Incorporate Simple Moving Averages
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    momentum_indicator = sma_5 / sma_20
+    
+    sum_vol_5 = df['volume'].rolling(window=5).sum()
+    sum_vol_20 = df['volume'].rolling(window=20).sum()
+    volume_momentum = sum_vol_5 / sum_vol_20
+    
+    sum_amt_5 = df['amount'].rolling(window=5).sum()
+    sum_amt_20 = df['amount'].rolling(window=20).sum()
+    amount_momentum = sum_amt_5 / sum_amt_20
+    
+    # Calculate True Range
+    true_range = pd.concat([(df['high'] - df['low']),
+                            (df['high'] - df['close'].shift(1)).abs(),
+                            (df['low'] - df['close'].shift(1)).abs()], axis=1).max(axis=1)
+    atr_14 = true_range.rolling(window=14).mean()
+    
+    # Explore Daily Return and Volatility
+    daily_return = (df['close'] - df['open']) / df['open']
+    ret_mean_5 = daily_return.rolling(window=5).mean()
+    ret_std_20 = daily_return.rolling(window=20).std()
+    
+    # Combine Factors into Composite Score
+    composite_score = (
+        0.2 * combined_factor_1 +
+        0.2 * integrated_factor_2 +
+        0.1 * adjusted_momentum +
+        0.1 * momentum_indicator +
+        0.1 * volume_momentum +
+        0.1 * amount_momentum +
+        0.1 * atr_14 +
+        0.1 * ret_mean_5 -
+        0.1 * ret_std_20
+    )
+    
+    # Apply a Smoothing Filter to the Combined Signal
+    final_alpha_factor = composite_score.ewm(span=5, adjust=False).mean()
+    
+    return final_alpha_factor
+```

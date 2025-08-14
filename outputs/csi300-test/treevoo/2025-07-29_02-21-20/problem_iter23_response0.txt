@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Adjusted Price Momentum
+    df['Daily_Change'] = df['close'] - df['close'].shift(1)
+    df['3d_Avg_Daily_Change'] = df['Daily_Change'].rolling(window=3).mean()
+    df['7d_Avg_Daily_Change'] = df['Daily_Change'].rolling(window=7).mean()
+    df['21d_Avg_Daily_Change'] = df['Daily_Change'].rolling(window=21).mean()
+
+    # Volume-Adjusted Momentum and Liquidity
+    n = 21
+    df['Long_Term_Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(n)
+    df['Volume_Adjusted_Momentum'] = df['Long_Term_Momentum'] * df['Volume_Ratio']
+
+    df['3d_Avg_Volume_Change'] = df['volume'].diff().rolling(window=3).mean()
+    df['7d_Avg_Volume_Change'] = df['volume'].diff().rolling(window=7).mean()
+    df['21d_Avg_Volume_Change'] = df['volume'].diff().rolling(window=21).mean()
+
+    # Enhanced Intraday Momentum
+    df['High_Indicator'] = df['high'] - df['open']
+    df['Low_Indicator'] = df['open'] - df['low']
+    df['Avg_High_Low_Indicator'] = (df['High_Indicator'] + df['Low_Indicator']) / 2
+    df['Volume_MA'] = df['volume'].rolling(window=21).mean()
+    df['Normalized_Volume'] = df['volume'] / df['Volume_MA']
+    df['Intraday_Momentum_Adjusted'] = df['Avg_High_Low_Indicator'] * df['Normalized_Volume']
+
+    # Gaps and Breaks
+    df['Up_Gap'] = (df['open'] - df['close'].shift(1) > 0).astype(int)
+    df['Down_Gap'] = (df['open'] - df['close'].shift(1) < 0).astype(int)
+    df['Up_Gap_Size'] = df['open'] - df['close'].shift(1)
+    df['Down_Gap_Size'] = df['open'] - df['close'].shift(1)
+
+    df['Upper_Breakout'] = (df['high'] > df['high'].rolling(window=21).max()).astype(int)
+    df['Lower_Breakout'] = (df['low'] < df['low'].rolling(window=21).min()).astype(int)
+    df['Upper_Breakout_Size'] = df['high'] - df['high'].rolling(window=21).max()
+    df['Lower_Breakout_Size'] = df['low'].rolling(window=21).min() - df['low']
+
+    # Intraday Patterns
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Momentum'] = df['close'] - df['open']
+    df['Intraday_Strength'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['Intraday_Volatility'] = df[['high', 'low']].std(axis=1, ddof=0).rolling(window=21).mean()
+
+    # Add Volume Spike Filter
+    df['Volume_Spike'] = df['volume'] / df['volume'].shift(1)
+    spike_threshold = 2.0
+    df['Volume_Spike_Filter'] = (df['Volume_Spike'] < spike_threshold).astype(int)
+
+    # Consolidate All Factors
+    df['Factor'] = (
+        df['3d_Avg_Daily_Change'] +
+        df['7d_Avg_Daily_Change'] +
+        df['21d_Avg_Daily_Change'] +
+        df['Volume_Adjusted_Momentum'] +
+        df['Intraday_Momentum_Adjusted']
+    ) / df['open']
+    
+    return df['Factor']
+```

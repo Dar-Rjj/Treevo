@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # 20-day Return
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Intraday High-to-Low Momentum
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Adjust by Intraday Volume Change
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    df['vol_adjusted_intraday_momentum'] = df['intraday_momentum'] * df['volume_change']
+    
+    # Apply Moving Averages to Volume-Adjusted Intraday Momentum
+    df['fast_ema'] = df['vol_adjusted_intraday_momentum'].ewm(span=12, adjust=False).mean()
+    df['slow_ema'] = df['vol_adjusted_intraday_momentum'].ewm(span=26, adjust=False).mean()
+    
+    # 20-day Moving Average of Daily Log Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['20_day_log_returns_ma'] = df['log_returns'].rolling(window=20).mean()
+    
+    # 5-day Moving Average of Daily Close Price
+    df['5_day_sma_close'] = df['close'].rolling(window=5).mean()
+    
+    # 20-day Exponential Moving Average of Amount
+    df['20_day_ema_amount'] = df['amount'].ewm(alpha=0.1, adjust=False).mean()
+    
+    # Volume Confirmation and Long-Term Volume Trend
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = np.where(df['volume'] > df['avg_volume_20'], 1, 
+                                  np.where(df['volume'] < df['avg_volume_20'], -1, 0))
+    df['20_day_ema_volume'] = df['volume'].ewm(alpha=0.1, adjust=False).mean()
+    
+    # Adjust Fast and Slow Exponential Moving Averages
+    df['adjusted_fast_ema'] = (df['fast_ema'] * df['20_day_log_returns_ma']) / df['20_day_ema_amount']
+    df['adjusted_slow_ema'] = df['slow_ema'] + df['5_day_sma_close']
+    
+    # Smooth the Adjusted Combined Momentum
+    df['smoothed_momentum'] = (df['adjusted_fast_ema'] - df['adjusted_slow_ema']).rolling(window=5).mean()
+    
+    # Combine Momentum Indicators with MACD
+    df['daily_range'] = df['high'] - df['low']
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(21)) / df['daily_range'].rolling(window=21).mean()
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(6)) / df['daily_range'].rolling(window=7).mean()
+    df['weighted_momentum_sum'] = 0.55 * df['long_term_momentum'] + 0.45 * df['short_term_momentum']
+    df['macd'] = df['fast_ema'] - df['slow_ema']
+    df['final_indicator'] = df['weighted_momentum_sum'] + df['macd']
+    
+    # Incorporate Volume Spike
+    df['volume_spike'] = df['volume'] / df['volume'].shift(1)
+    df['market_volatility'] = df['log_returns'].rolling(window=21).std()
+    df['final_alpha_factor'] = df['final_indicator'] + df['volume_spike'] * df['market_volatility']
+    
+    return df['final_alpha_factor']
+```

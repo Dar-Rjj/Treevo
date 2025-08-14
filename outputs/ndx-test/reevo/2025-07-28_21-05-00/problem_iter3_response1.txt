@@ -1,0 +1,31 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility as the standard deviation of the daily returns over a 10-day window
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=10).std()
+
+    # Integrate multiple indicators to create a robust factor
+    # Multiply the factors together to consider interaction effects
+    factor = (price_change * volume_change + diff_close_avg + momentum_5d + rsi) * (1 / volatility)
+    factor = factor.ewm(span=5, adjust=False).mean()
+    
+    return factor
+```

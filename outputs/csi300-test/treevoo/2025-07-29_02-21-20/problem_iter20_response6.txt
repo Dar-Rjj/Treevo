@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    # Define Weights for High and Low
+    weight_high = 0.6
+    weight_low = 0.4
+    df['enhanced_intraday_momentum'] = (weight_high * high_price_indicator + weight_low * low_price_indicator)
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    lookback_period_volume_ema = 10
+    df['volume_ema'] = df['volume'].ewm(span=lookback_period_volume_ema, adjust=False).mean()
+    df['normalized_volume'] = df['volume'] / df['volume_ema']
+    df['adjusted_intraday_momentum'] = df['enhanced_intraday_momentum'] * df['normalized_volume']
+    
+    # Calculate Weighted Intraday Momentum
+    df['weighted_intraday_momentum'] = (df['intraday_return'] * df['volume']).ewm(span=12, adjust=False).mean()
+    df['recent_volume_weight'] = df['volume'].rolling(window=7).mean()
+    df['weighted_intraday_momentum'] = df['weighted_intraday_momentum'] * df['recent_volume_weight']
+    
+    # Calculate Adjusted High-Low Breakout Potential
+    df['adjusted_high_low_breakout_potential'] = (df['high_low_range'] * df['volume']).ewm(span=25, adjust=False).mean()
+    df['recent_volume_weight_long'] = df['volume'].rolling(window=15).mean()
+    df['adjusted_high_low_breakout_potential'] = df['adjusted_high_low_breakout_potential'] * df['recent_volume_weight_long']
+    
+    # Calculate Momentum Reversal Indicator
+    df['momentum_reversal_indicator'] = (df['intraday_return'] - df['weighted_intraday_momentum']) / df['adjusted_high_low_breakout_potential']
+    
+    # Incorporate Longer-Term Volume-Adjusted Momentum
+    long_term_lookback = 20
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(long_term_lookback)) / df['close'].shift(long_term_lookback)
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(long_term_lookback)
+    df['final_long_term_factor'] = df['long_term_momentum'] * df['volume_ratio'] + df['long_term_momentum']
+    
+    # Calculate Daily Price Return
+    df['daily_price_return'] = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01
+    df['significant_price_increase'] = (df['daily_price_return'] > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    df['volume_spike_indicator'] = (df['volume'] > df['volume'].rolling(window=7).mean()).astype(int)
+    
+    # Compute Weighted Price Momentum
+    df['weighted_price_momentum'] = df['daily_price_return'] * df['significant_price_increase']
+    df['accumulated_momentum'] = df['weighted_price_momentum'].cumsum()
+    
+    # Apply Volume Spike Filter
+    df['filtered_accumulated_momentum'] = df['accumulated_momentum'] * df['volume_spike_indicator']
+    
+    # Final Alpha Factor Synthesis
+    df['alpha_factor'] = df['momentum_reversal_indicator'] + df['final_long_term_factor'] + df['filtered_accumulated_momentum']
+    df['alpha_factor'] = df['alpha_factor'] * df['volume_spike_indicator']
+    
+    # Adjust for Open Price
+    df['alpha_factor'] = df['alpha_factor'] / df['open']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,37 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df, market_index):
+    # Calculate Volume-Adjusted Multi-Day Price Momentum
+    df['5D_Return'] = (df['close'].shift(4) - df['close']) / df['close'].shift(4)
+    df['10D_Return'] = (df['close'].shift(9) - df['close']) / df['close'].shift(9)
+    var_5D = df['5D_Return'].rolling(window=20).var()
+    var_10D = df['10D_Return'].rolling(window=20).var()
+    df['Weighted_Return'] = (df['5D_Return'] * var_5D / (var_5D + var_10D)) + (df['10D_Return'] * var_10D / (var_5D + var_10D))
+    df['Volume_Adjusted_Momentum'] = df['Weighted_Return'] * df['volume']
+
+    # Calculate Open-High-Low Volatility Index
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Open_Close_Spread'] = (df['open'] - df['close']).abs()
+    df['Mean_Price'] = (df['open'] + df['close']) / 2
+    df['OHLC_Volatility_Index'] = (df['High_Low_Spread'] + df['Open_Close_Spread']) / df['Mean_Price']
+
+    # Integrate Market Sentiment
+    df['Daily_Change_Amount'] = df['amount'] - df['amount'].shift(1)
+    df['Adjusted_Daily_Change_Amount'] = df['Daily_Change_Amount'] / df['amount']
+    df['Momentum_with_Sentiment'] = df['Volume_Adjusted_Momentum'] + df['Adjusted_Daily_Change_Amount']
+
+    # Consider Intraday Volatility
+    df['5D_Intraday_Range'] = (df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()) / df['close']
+    df['10D_Intraday_Range'] = (df['high'].rolling(window=10).max() - df['low'].rolling(window=10).min()) / df['close']
+    df['Intraday_Volatility'] = (df['5D_Intraday_Range'] * 0.7) + (df['10D_Intraday_Range'] * 0.3)
+
+    # Incorporate Broader Market Data
+    market_index['5D_Broad_Return'] = (market_index.shift(4) - market_index) / market_index.shift(4)
+    market_index['10D_Broad_Return'] = (market_index.shift(9) - market_index) / market_index.shift(9)
+    market_index['Broad_Market_Sentiment'] = (market_index['5D_Broad_Return'] * 0.7) + (market_index['10D_Broad_Return'] * 0.3)
+
+    # Final Factor Calculation
+    df['Factor'] = df['Momentum_with_Sentiment'] - df['OHLC_Volatility_Index'] - df['Intraday_Volatility'] + market_index['Broad_Market_Sentiment']
+
+    return df['Factor']

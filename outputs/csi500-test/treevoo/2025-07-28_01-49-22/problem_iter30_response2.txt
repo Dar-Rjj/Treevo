@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    abs_close_return = (df['close'] - df['close'].shift(1)).abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_value = high_low_range - abs_close_return
+    
+    # Calculate Volume Adjusted Intraday Range
+    volume_adjusted_range = high_low_range * df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_low_range.rolling(window=10).mean()
+    
+    # Calculate Combined Value Momentum
+    combined_value_momentum = combined_value - combined_value.shift(1)
+    
+    # Calculate Close Price Momentum
+    close_price_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = (
+        volume_adjusted_range +
+        combined_value_momentum +
+        (high_low_range / (df['high'] + df['low'])) -
+        (df['open'] - df['close'].shift(1))
+    )
+    
+    # Introduce Dynamic Threshold Adjustment
+    hlr_ratio_10d_ma = (high_low_range / (df['high'] + df['low'])).rolling(window=10).mean()
+    dynamic_threshold = (high_low_range / (df['high'] + df['low'])).gt(hlr_ratio_10d_ma).astype(int) * 2 - 1
+    
+    # Adjust Intermediate Alpha Factor by High-Low Range Ratio
+    adjustment_factor = (high_low_range / (df['high'] + df['low'])).apply(lambda x: 1.5 if x > 1.0 else 0.5)
+    adjusted_intermediate_alpha_factor = intermediate_alpha_factor * adjustment_factor * dynamic_threshold
+    
+    # Introduce Volume Momentum
+    average_volume_10d = df['volume'].rolling(window=10).mean()
+    volume_momentum = (df['volume'] / average_volume_10d).apply(lambda x: 1.2 if x > 1 else 0.8)
+    final_alpha_factor = (adjusted_intermediate_alpha_factor + close_price_momentum) * volume_momentum
+    
+    # Adjust Final Alpha Factor by Volume
+    n_period_average_volume = df['volume'].rolling(window=20).mean()
+    final_alpha_factor = final_alpha_factor * n_period_average_volume
+    
+    return final_alpha_factor
+```

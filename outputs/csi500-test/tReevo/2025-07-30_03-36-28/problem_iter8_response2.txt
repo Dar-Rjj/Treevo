@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short_period = 20
+    volatility_lookback = 10
+    n_days_average = 5
+    percentage_change_lookback = 1
+    sma_long_period = 50
+
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['High_Low_Diff'] * df['volume']
+    df['Volatility_Rolling_Avg'] = df['Volume_Adjusted_Volatility'].rolling(window=volatility_lookback).mean()
+
+    # Compute Price Momentum
+    df['Close_Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=n_days_average).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(periods=percentage_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+
+    # Final Alpha Factor
+    def combine_factors(row):
+        if row['Trend_Indicator'] == 1:  # Bullish trend
+            weight_momentum = 0.5
+            weight_volatility = 0.25
+            weight_metrics = 0.15
+            weight_trend = 0.1
+        else:  # Bearish trend
+            weight_momentum = 0.3
+            weight_volatility = 0.4
+            weight_metrics = 0.2
+            weight_trend = 0.1
+
+        return (
+            weight_momentum * row['Close_Price_Momentum'] +
+            weight_volatility * row['Volatility_Rolling_Avg'] +
+            weight_metrics * (row['Percentage_Change'] + row['High_Low_Range']) +
+            weight_trend * row['Trend_Indicator']
+        )
+
+    df['Alpha_Factor'] = df.apply(combine_factors, axis=1)
+
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    long_term_days = 100
+    df['long_term_vol_weighted_return'] = (df['daily_returns'].rolling(window=long_term_days).apply(
+        lambda x: (x * df.loc[x.index, 'volume']).sum() / df.loc[x.index, 'volume'].sum(), raw=False))
+    
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    short_term_days = 5
+    df['short_term_vol_weighted_return'] = (df['daily_returns'].rolling(window=short_term_days).apply(
+        lambda x: (x * df.loc[x.index, 'volume']).sum() / df.loc[x.index, 'volume'].sum(), raw=False))
+    
+    # Integrate High-Low Range into Volume-Weighted Returns
+    df['high_low_range'] = df['high'] - df['low']
+    df['vol_weighted_high_low_range'] = df['high_low_range'] * df['volume']
+    df['adjusted_vol_weighted_high_low_range'] = (df['vol_weighted_high_low_range'] / 
+                                                  df['volume'].rolling(window=short_term_days).sum())
+    
+    # Combine Momentum, Reversal, and High-Low Range Components
+    df['intermediate_alpha_factor'] = (df['long_term_vol_weighted_return'] - 
+                                       df['short_term_vol_weighted_return'] + 
+                                       df['adjusted_vol_weighted_high_low_range'])
+    
+    # Calculate Price Momentum
+    N = 50
+    M = 20
+    df['price_momentum'] = (df['close'] - df['close'].shift(N)) + (df['close'] - df['close'].shift(M))
+    
+    # Calculate Intraday Range Growth
+    df['daily_high_low_range'] = df['high'] - df['low']
+    df['prev_day_high_low_range'] = df['daily_high_low_range'].shift(1)
+    df['intraday_range_growth'] = (df['daily_high_low_range'] - df['prev_day_high_low_range']) / df['prev_day_high_low_range']
+    
+    # Calculate Volume Surge
+    df['volume_surge'] = (df['volume'] - df['volume'].shift(N)) + (df['volume'] - df['volume'].shift(M))
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['intermediate_alpha_factor'] * df['price_momentum'] * df['intraday_range_growth']
+    df['final_alpha_factor'] = df.apply(lambda row: row['final_alpha_factor'] * 0.8 if row['volume_surge'] < 0 else row['final_alpha_factor'], axis=1)
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate N-day Close Price Percent Change
+    N = 5
+    df['close_pct_change'] = df['close'].pct_change(N)
+    
+    # Compute Exponential Weighted Momentum
+    decay_factor = 0.97
+    df['ewm_momentum'] = (df['close'] / df['close'].shift(30)).pow(decay_factor)
+    
+    # Combine to get Enhanced Raw Momentum
+    df['enhanced_momentum'] = df['close_pct_change'] * df['ewm_momentum']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Weight by Log of Volume
+    df['log_volume'] = np.log(df['volume'])
+    df['volume_adjusted_volatility'] = df['intraday_volatility'] / df['log_volume']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Combine Enhanced Raw Momentum, Volume-Adjusted Intraday Volatility, and High-Low Range
+    df['combined_factor'] = df['enhanced_momentum'] * df['volume_adjusted_volatility'] * df['high_low_range']
+    
+    # Integrate with Trend Continuity and Filter
+    df['trend_continuity'] = np.sign(df['close'] - df['close'].shift(1))
+    df['filtered_combined_factor'] = df['combined_factor'] * df['trend_continuity']
+    
+    # Apply threshold to filter out low signal-to-noise ratio
+    threshold = 0.7
+    df['filtered_combined_factor'] = df['filtered_combined_factor'].apply(lambda x: x if abs(x) >= threshold else 0)
+    
+    # Confirm with Volume Delta
+    df['volume_delta'] = df['volume'] - df['volume'].shift(30)
+    df['final_alpha_factor'] = df['filtered_combined_factor'] * np.abs(df['volume_delta'])
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute 10-Day Moving Average of Daily Price Changes
+    df['10_day_ma_price_change'] = df['daily_price_change'].rolling(window=10).mean()
+    
+    # Calculate Volume-Weighted Daily Returns
+    df['volume_weighted_returns'] = (df['close'] / df['open']) * df['volume']
+    
+    # Compute 20-Day Moving Average of Volume-Weighted Returns
+    df['20_day_ma_vol_weighted_returns'] = df['volume_weighted_returns'].rolling(window=20).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Weigh by Intraday Volume Activity
+    df['20_day_ma_volume'] = df['volume'].rolling(window=20).mean()
+    df['intraday_high_low_weight'] = df['intraday_high_low_spread'] * (df['volume'] / df['20_day_ma_volume'])
+    
+    # Incorporate Intraday Price Trend
+    df['intraday_return'] = df['close'] - df['open']
+    df['5_day_mean_intraday_return'] = df['intraday_return'].rolling(window=5).mean()
+    df['intraday_trend'] = df['intraday_return'] - df['5_day_mean_intraday_return']
+    
+    # Combine Intraday and Interday Momentum
+    df['combined_momentum'] = df['10_day_ma_price_change'] + df['intraday_trend'] - df['20_day_ma_vol_weighted_returns']
+    
+    # Calculate Logarithmic Volume Difference
+    df['log_volume'] = np.log(df['volume'])
+    df['log_volume_prev'] = df['log_volume'].shift(1)
+    df['log_volume_diff'] = df['log_volume'] - df['log_volume_prev']
+    df['smoothed_log_volume_diff'] = df['log_volume_diff'].ewm(alpha=0.2).mean()
+    
+    # Adjust for Price Volatility
+    df['daily_price_range'] = df['high'] - df['low']
+    df['30_day_ma_daily_price_range'] = df['daily_price_range'].rolling(window=30).mean()
+    df['adjusted_momentum'] = df['combined_momentum'] / df['30_day_ma_daily_price_range']
+    
+    # Integrate Volume Change and Intraday Volatility
+    df['adjusted_weights'] = df['smoothed_log_volume_diff'] * df['intraday_high_low_weight']
+    df['weighted_momentum'] = df['volume_weighted_returns'] * df['adjusted_weights']
+    
+    # Combine Volume-Weighted Momentum with Price Range
+    df['raw_momentum'] = df['close'] - df['close'].shift(20)
+    df['cumulative_volume'] = df['volume'].rolling(window=20).sum()
+    df['volume_weighted_momentum'] = df['raw_momentum'] / df['cumulative_volume']
+    df['price_range'] = df['high'] - df['low']
+    df['final_momentum'] = df['volume_weighted_momentum'] + df['price_range']
+    
+    # Weigh Combined Momentum by Intraday Volume Activity
+    df['volume_ratio'] = df['volume'] / df['20_day_ma_volume']
+    df['weighted_combined_momentum'] = df['final_momentum'] * df['volume_ratio']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['5_day_ema'] = df['weighted_combined_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Final Factor Calculation
+    df['factor'] = df['weighted_momentum'].ewm(span=5, adjust=False).mean() + df['5_day_ema']
+    
+    return df['factor']
+```

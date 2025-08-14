@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / intraday_range
+    
+    # Intraday Volume Intensity
+    volume_10_day_sum = df['volume'].rolling(window=10).sum()
+    volume_intensity = df['volume'] / volume_10_day_sum
+    
+    # Intraday Price Change
+    intraday_price_change = (df['close'] - df['open']) / intraday_range
+    
+    # Close-to-Open Momentum Shift
+    close_to_open_momentum_shift = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Components
+    combined_intraday = (volume_intensity * closing_position) + intraday_price_change + close_to_open_momentum_shift
+    
+    # Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_trend = ema_20 - df['close']
+    
+    # Daily Return Volatility
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    daily_volatility = daily_return.rolling(window=20).std()
+    normalized_daily_return = daily_return / daily_volatility
+    
+    # Adjust Combined Intraday Components
+    adjusted_intraday = combined_intraday * normalized_daily_return + recent_trend
+    
+    # Trend Reversal Potential
+    rsi = 100 - (100 / (1 + (df['close'].diff().clip(lower=0).rolling(window=14).mean() / -df['close'].diff().clip(upper=0).rolling(window=14).mean())))
+    overbought_flag = (rsi > 70).astype(int)
+    oversold_flag = (rsi < 30).astype(int)
+    roc_14 = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    trend_reversal_potential = ((overbought_flag & (roc_14 < 0)).astype(int) - (oversold_flag & (roc_14 > 0)).astype(int))
+    
+    # Momentum Reversal Factor
+    sma_5 = df['close'].rolling(window=5).mean()
+    momentum_reversal = (df['close'] - sma_5) / sma_5
+    
+    # Final Alpha Factor
+    final_alpha_factor = 0.6 * adjusted_intraday + 0.2 * trend_reversal_potential + 0.2 * momentum_reversal
+    
+    return final_alpha_factor
+```

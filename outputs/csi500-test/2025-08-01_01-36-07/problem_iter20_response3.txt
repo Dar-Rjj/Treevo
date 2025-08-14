@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5):
+    # Calculate Daily Price Movement
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['daily_momentum'] = df['price_range'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    df['vwap'] = vwap
+    
+    # Incorporate Market Depth
+    df['market_depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum
+    df['adjusted_momentum'] = df['daily_momentum'] * (df['vwap'] + df['market_depth']) / df['intraday_volatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].mean()
+    total_avg_volume = df['volume'].expanding().mean()
+    df['final_volume_adjusted_momentum'] = df['adjusted_momentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5_day_return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10_day_return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['multi_day_momentum'] = (df['5_day_return'] + df['10_day_return']) / 2
+    df['final_volume_adjusted_momentum'] += df['multi_day_momentum']
+    
+    # Enhance with Dynamic Price and Volume Ratios
+    df['price_to_volume_ratio'] = df['close'] / df['volume']
+    df['moving_avg_price_to_volume_ratio'] = df['price_to_volume_ratio'].rolling(window=n).mean()
+    avg_price_to_volume_ratio = df['price_to_volume_ratio'].expanding().mean()
+    df['final_volume_adjusted_momentum'] *= df['moving_avg_price_to_volume_ratio'] / avg_price_to_volume_ratio
+    
+    # Consider Volatility Clustering
+    df['ema_intraday_volatility'] = df['intraday_volatility'].ewm(span=n, adjust=False).mean()
+    avg_intraday_volatility = df['intraday_volatility'].expanding().mean()
+    df['final_volume_adjusted_momentum'] *= df['ema_intraday_volatility'] / avg_intraday_volatility
+    
+    # Final Alpha Factor
+    alpha_factor = df['final_volume_adjusted_momentum']
+    
+    return alpha_factor
+```

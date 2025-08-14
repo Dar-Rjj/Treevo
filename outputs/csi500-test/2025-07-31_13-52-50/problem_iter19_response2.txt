@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['close_volume'] = df['close'] * df['volume']
+    df['vwap'] = df['close_volume'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['prev_deviation'] = df['deviation_from_vwap'].shift(1)
+    df['trend_reversal'] = (df['deviation_from_vwap'] > df['prev_deviation']) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Calculate Price Breakout Ratio
+    df['breakout_ratio'] = (df['high'] - df['open']) / df['price_range']
+    
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    df['exp_smoothed_ma'] = df['daily_return'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Volume-Weighted Breakout Indicator
+    df['vw_breakout_indicator'] = (df['close'] - df['open']) * df['volume'] * df['breakout_ratio']
+    
+    # Aggregate Volume-Weighted Breakout Indicators
+    df['aggregated_vw_breakout'] = df['vw_breakout_indicator'].rolling(window=20).sum()
+    
+    # Calculate Volume-Weighted Momentum
+    df['volume_weighted_momentum'] = df['exp_smoothed_ma'] * df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Adjust Momentum for Volume Volatility
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma_20']
+    df['adjusted_momentum'] = df['volume_weighted_momentum'] / (df['volume_deviation'] + 1e-6)  # Small constant to avoid division by zero
+    
+    # Final Score Calculation
+    df['score'] = df['aggregated_vw_breakout'] + df['adjusted_momentum']
+    df.loc[df['trend_reversal'], 'score'] *= 1.5  # Assign higher score for stronger indication of trend reversal and volume increase
+    
+    return df['score'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 102, 101, 103, 104],
+#     'high': [105, 107, 106, 108, 109],
+#     'low': [95, 97, 96, 98, 99],
+#     'close': [103, 105, 104, 106, 107],
+#     'amount': [1000, 1050, 1020, 1080, 1090],
+#     'volume': [10000, 10500, 10200, 10800, 10900]
+# })
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

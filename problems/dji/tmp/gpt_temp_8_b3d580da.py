@@ -1,0 +1,82 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Delta
+    close_to_open_delta = df['close'] - df['open']
+    
+    # Volume-Weighted Intraday Reversal Score
+    intraday_reversal_score = (df['close'] - df['open']) / (df['high'] - df['low'])
+    volume_weighted_intraday_reversal = intraday_reversal_score * df['volume']
+    
+    # Intraday Momentum Adjusted Reversal Score
+    prev_close = df['close'].shift(1)
+    intraday_momentum_adjusted_reversal = (df['close'] - df['open']) / (df['high'] - df['low'])
+    intraday_momentum_adjusted_reversal *= (df['volume'] * (df['close'] - prev_close))
+    intraday_momentum_adjusted_reversal += (df['close'] - df['open']).where((df['close'] - df['open']) > 0, - (df['open'] - df['close']))
+    
+    # Calculate Daily High-Low Range
+    daily_high_low_range = df['high'] - df['low']
+    
+    # Calculate 21-Day Rolling Sum of High-Low Range and Volume
+    rolling_sum_high_low = daily_high_low_range.rolling(window=21).sum()
+    rolling_sum_volume = df['volume'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    breakout_strength = daily_high_low_range / rolling_sum_high_low
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Combine Breakout Strength with Volume Weighted Momentum
+    volume_weighted_momentum = breakout_strength * (price_change * df['volume'])
+    
+    # Identify High-Low Range Ratio
+    recent_avg_high_low_range = rolling_sum_high_low / rolling_sum_volume
+    
+    # Calculate Volume Weighted Momentum
+    volume_weighted_momentum *= df['volume']
+    
+    # Calculate Price Momentum
+    seven_day_return = df['close'].pct_change(7)
+    twenty_one_day_return = df['close'].pct_change(21)
+    combined_returns = seven_day_return + twenty_one_day_return
+    
+    # Calculate Volume Activity
+    seven_day_avg_volume = df['volume'].rolling(window=7).mean()
+    twenty_one_day_avg_volume = df['volume'].rolling(window=21).mean()
+    volume_activity_ratio = seven_day_avg_volume / twenty_one_day_avg_volume
+    
+    # Calculate Momentum Indicators
+    sma_7 = df['close'].rolling(window=7).mean()
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    roc_7 = df['close'].pct_change(7)
+    
+    # Determine Volume Impact
+    volume_ratio = df['volume'] / df['volume'].mean()
+    weighted_sma = sma_7 * volume_ratio
+    weighted_ema = ema_7 * volume_ratio
+    weighted_roc = roc_7 * volume_ratio
+    
+    # Introduce Trend Indicator
+    from talib import DMI
+    high = df['high'].values
+    low = df['low'].values
+    close = df['close'].values
+    plus_di, minus_di = DMI(high, low, close, timeperiod=14)
+    adx = (plus_di - minus_di) / (plus_di + minus_di)
+    
+    # Combine Adjusted Momentum Indicators with Trend Indicator
+    combined_momentum_trend = (weighted_sma + weighted_ema + weighted_roc) * adx
+    
+    # Final Synthesized Alpha Factor
+    final_alpha_factor = (
+        volume_weighted_intraday_reversal +
+        intraday_momentum_adjusted_reversal +
+        volume_weighted_momentum
+    ) * combined_momentum_trend * (combined_returns + volume_activity_ratio)
+    
+    return final_alpha_factor

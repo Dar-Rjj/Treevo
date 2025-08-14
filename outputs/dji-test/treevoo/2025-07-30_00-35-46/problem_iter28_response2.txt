@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Base Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = (df['close'] / df['open']) - 1
+    df['daily_volatility'] = (df['high'] - df['low']) + abs(df['close'] - df['open'])
+    df['weighted_momentum'] = (df['high_low_diff'] + df['open_close_return']) / df['daily_volatility']
+
+    # Apply Volume and Price Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['price_shock'] = abs(df['close'] - df['close'].shift(1))
+    df['historical_price_range'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    df['price_shock_ratio'] = df['price_shock'] / df['historical_price_range']
+    
+    df['filtered_momentum'] = df['weighted_momentum'].where((df['volume_ratio'] > 1.5) & 
+                                                            (df['amount_ratio'] > 1.5) & 
+                                                            (df['price_shock_ratio'] > 0.05), 
+                                                            np.nan)
+
+    # Adjust for Volume
+    df['volume_adjusted_momentum'] = df['filtered_momentum'] / df['volume']
+
+    # Synchronize Volume Dynamics
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['sync_volume'] = df['volume_change'] * df['price_change']
+    df['sync_sign'] = np.sign(df['sync_volume'])
+
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = 0
+    df['obv'] = df['obv'].add(df['volume'], fill_value=0).where(df['close'] > df['close'].shift(1), 
+                                                                df['obv'] - df['volume']).fillna(df['obv'])
+
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+
+    # Measure Close Position in Range
+    df['close_position_in_range'] = (df['close'] - df['low']) / (df['high'] - df['low']).where(df['high'] != df['low'], 0)
+
+    # Integrate Volume-Weighted Intraday Momentum with OBV Factor
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['obv_weight'] = abs(df['macd_line'] - df['signal_line'])
+    df['obv_momentum'] = df['obv'] * df['obv_weight']
+
+    # Synthesize Final Alpha Factor
+    factors = [df['volume_adjusted_momentum'], df['sync_sign'], df['obv_momentum'], 
+               df['intraday_range'], df['close_position_in_range']]
+    factor_stds = [factor.std() for factor in factors]
+    weights = [1/std for std in factor_stds]
+    total_weight = sum(weights)
+    normalized_weights = [w / total_weight for w in weights]
+
+    df['alpha_factor'] = sum(factor * weight for factor, weight in zip(factors, normalized_weights))
+
+    # Smoothing
+    df['final_alpha_factor'] = df['alpha_factor'].ewm(span=5, adjust=False).mean()
+
+    return df['final_alpha_factor']
+```

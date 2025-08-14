@@ -1,0 +1,36 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Volume Delta
+    df['volume_delta'] = df['volume'] - df['volume'].shift(20)
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1)
+    
+    # Calculate Price Volatility
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['price_volatility'] = df['log_returns'].rolling(window=20).apply(lambda x: (x**2).sum())
+    
+    # Calculate Volume Trend
+    df['volume_trend'] = df['volume'].rolling(window=5).mean() / df['volume'].rolling(window=20).mean()
+    
+    # Combine Components
+    df['combined_factor'] = (df['raw_momentum'] 
+                             * df['true_range'] 
+                             * df['volume_delta'].abs() 
+                             * np.sqrt(df['price_volatility']) 
+                             * df['volume_trend'])
+    
+    # Apply 5-day Exponential Moving Average
+    df['factor_ema'] = df['combined_factor'].ewm(span=5, adjust=False).mean()
+    
+    return df['factor_ema']

@@ -1,0 +1,72 @@
+import pandas as pd
+import numpy as np
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    sentiment_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the volatility using the close price
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    volatility = df['log_returns'].rolling(window=20).std() * np.sqrt(252)
+
+    # Calculate the VWAP
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+
+    # Exponential smoothing on the VWAP
+    df['vwap_smoothed'] = df['vwap'].ewm(span=20, adjust=False).mean()
+
+    # Momentum factor
+    momentum = df['close'].pct_change(periods=20)
+
+    # Mean reversion factor
+    mean_reversion = -df['close'].pct_change(periods=5)
+
+    # Trend strength factor: difference between 20-day and 5-day exponential moving averages
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    trend_strength = df['ema_5'] - df['ema_20']
+
+    # Liquidity factor: average volume over a window
+    liquidity = df['volume'].rolling(window=20).mean()
+
+    # Leverage dynamic windows based on volatility
+    adaptive_window = (volatility * 10).astype(int).clip(lower=5, upper=20)
+    adaptive_sma = df['close'].rolling(window=adaptive_window).mean()
+
+    # Machine learning factor synthesis
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+
+    X = df[['vwap', 'vwap_smoothed', 'sentiment_factor', 'momentum', 'mean_reversion', 'trend_strength', 'liquidity']].dropna()
+    y = df['close'].pct_change().shift(-1).loc[X.index]  # Future return as target
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train_scaled, y_train)
+    ml_factor = model.predict(scaler.transform(X))
+
+    # Combine factors with weights
+    alpha_factor = (0.3 * sentiment_factor + 
+                    0.1 * (1/volatility) + 
+                    0.1 * (df['vwap'] / df['vwap_smoothed']) + 
+                    0.1 * momentum + 
+                    0.1 * mean_reversion + 
+                    0.1 * trend_strength + 
+                    0.1 * liquidity +
+                    0.2 * ml_factor)
+
+    return alpha_factor

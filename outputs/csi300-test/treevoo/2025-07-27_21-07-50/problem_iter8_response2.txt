@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['open']
+
+    # Calculate Volume Adjusted Price Change
+    df['volume_adjusted_price_change'] = df['daily_price_change'] * df['volume']
+    df['sum_volume_adjusted_price_change'] = df['volume_adjusted_price_change'].rolling(window=20).sum()
+
+    # Calculate Intraday High-Low Difference
+    df['intraday_high_low_diff'] = df['high'] - df['low']
+
+    # Momentum Component
+    df['lagged_intraday_high_low_diff'] = df['intraday_high_low_diff'].shift(1)
+    df['current_intraday_high_low_diff'] = df['intraday_high_low_diff']
+    df['momentum_component'] = df['lagged_intraday_high_low_diff'] + df['current_intraday_high_low_diff']
+
+    # Reversal Component
+    df['lagged_close_to_open_return'] = (df['close'] - df['open']).shift(1)
+    df['current_close_to_open_return'] = (df['close'] - df['open'])
+    df['reversal_component'] = df['lagged_close_to_open_return'] + df['current_close_to_open_return']
+
+    # Momentum and Reversal Interaction
+    df['momentum_reversal_interaction'] = df['momentum_component'] * df['reversal_component']
+
+    # Volume and Price Adjusted Factor
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_price_adjusted_factor'] = df['volume'] / df['volume_ma_20']
+
+    # Final VPA-MRF
+    df['vpa_mrf'] = (df['sum_volume_adjusted_price_change'] * df['momentum_reversal_interaction']) / df['volume_price_adjusted_factor']
+
+    # Calculate Short-Term Momentum
+    lookback_short_term = 5
+    df['short_term_momentum'] = df['close'].pct_change(periods=lookback_short_term)
+
+    # Integrate Volume into Short-Term Momentum
+    df['volume_integrated_short_term_momentum'] = df['short_term_momentum'] * np.sqrt(df['volume'])
+
+    # Calculate Long-Term Momentum
+    lookback_long_term = 20
+    df['long_term_momentum'] = df['close'].pct_change(periods=lookback_long_term)
+
+    # Compute Price Momentum
+    df['price_momentum'] = df['short_term_momentum'] - df['long_term_momentum']
+
+    # Calculate Price Volatility
+    df['price_volatility'] = df['close'].pct_change().rolling(window=lookback_short_term).std()
+
+    # Combine Adjusted Momentum and Volatility
+    df['corrected_momentum'] = df['volume_integrated_short_term_momentum'] / df['price_volatility']
+
+    # Volume Weighted Average Price (VWAP) Oscillator
+    df['daily_vwap'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_sma_20'] = df['daily_vwap'].rolling(window=20).mean()
+    df['vwap_oscillator'] = df['daily_vwap'] - df['vwap_sma_20']
+
+    # Enhance VWAP Oscillator
+    df['vwap_ema_10'] = df['daily_vwap'].ewm(span=10, adjust=False).mean()
+    df['adjusted_vwap_oscillator'] = df['vwap_oscillator'] - (df['vwap_ema_10'] - df['vwap_sma_20'])
+
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['vpa_mrf'] * df['corrected_momentum'] * df['adjusted_vwap_oscillator']
+
+    return df['final_alpha_factor']
+```

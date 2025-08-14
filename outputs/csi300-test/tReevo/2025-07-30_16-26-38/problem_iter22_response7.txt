@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Market Depth Consideration
+    df['daily_range'] = df['high'] - df['low']
+    df['realized_volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    df['adjusted_return'] = (df['volume_weighted_return'] * df['daily_range']) / df['realized_volatility']
+    
+    # Adaptive Window Calculation
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    window_size = 20
+    df['adaptive_window'] = np.where(df['volatility'] > df['volatility'].mean(), window_size - 5, window_size + 5)
+    
+    # Rolling Statistics
+    def rolling_mean_std(x, window):
+        return x.rolling(window=window, min_periods=1).mean(), x.rolling(window=window, min_periods=1).std()
+    
+    # Apply rolling statistics with adaptive window
+    df['rolling_mean'], df['rolling_std'] = zip(*df.groupby('adaptive_window')['adjusted_return'].transform(lambda x: rolling_mean_std(x, int(x.name))))
+    
+    # Final factor: Standardized rolling mean
+    df['factor'] = df['rolling_mean'] / df['rolling_std']
+    
+    return df['factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 102, 101, 103, 104],
+#     'high': [105, 107, 106, 108, 109],
+#     'low': [98, 99, 100, 101, 102],
+#     'close': [103, 105, 104, 106, 107],
+#     'amount': [1000, 1200, 1100, 1300, 1400],
+#     'volume': [100, 120, 110, 130, 140]
+# })
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

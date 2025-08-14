@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['return'] = df['close'].pct_change()
+    
+    # Calculate historical volatility (standard deviation of returns over a 20-day window)
+    df['volatility'] = df['return'].rolling(window=20).std()
+    
+    # Define short- and long-term windows
+    short_window = 5
+    long_window = 20
+    
+    # Calculate short- and long-term momentum
+    df['short_momentum'] = df['return'].rolling(window=short_window).sum()
+    df['long_momentum'] = df['return'].rolling(window=long_window).sum()
+    
+    # Apply volume-weighted exponential smoothing
+    df['vwap'] = (df['volume'] * df['close']).ewm(span=short_window).mean() / df['volume'].ewm(span=short_window).mean()
+    df['short_momentum_smoothed'] = df['short_momentum'] * (df['vwap'] / df['close'])
+    df['long_momentum_smoothed'] = df['long_momentum'] * (df['vwap'] / df['close'])
+    
+    # Define sentiment score
+    df['sentiment'] = np.where(df['close'] > df['open'], 1, -1)
+    
+    # Weight momentum by the sentiment score
+    df['short_momentum_sentiment'] = df['short_momentum_smoothed'] * df['sentiment']
+    df['long_momentum_sentiment'] = df['long_momentum_smoothed'] * df['sentiment']
+    
+    # Scale the momentum factor by volatility
+    df['short_momentum_scaled'] = df['short_momentum_sentiment'] / df['volatility']
+    df['long_momentum_scaled'] = df['long_momentum_sentiment'] / df['volatility']
+    
+    # Combine short- and long-term momentum
+    df['momentum_combined'] = (df['short_momentum_scaled'] + df['long_momentum_scaled']) / 2
+    
+    # Prioritize recent, liquidity-adjusted data using EWMA for recent data
+    df['factor'] = df['momentum_combined'].ewm(span=short_window).mean()
+    
+    # Adjust for liquidity using volume
+    df['factor_liquidity_adjusted'] = df['factor'] * (df['volume'] / df['volume'].ewm(span=short_window).mean())
+    
+    return df['factor_liquidity_adjusted']
+```

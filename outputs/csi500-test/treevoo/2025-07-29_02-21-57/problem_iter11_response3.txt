@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5D_Close_Return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['5D_Volume_Ratio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['Volume_Adjusted_Momentum'] = df['5D_Close_Return'] * df['5D_Volume_Ratio']
+
+    # Calculate High-Low Price Oscillation
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['10D_HL_Std'] = df['High_Low_Range'].rolling(window=10).std()
+    df['10D_HL_Mean'] = df['High_Low_Range'].rolling(window=10).mean()
+    df['Price_Oscillation'] = (df['High_Low_Range'] - df['10D_HL_Mean']) / df['10D_HL_Std']
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] / df['open']) - 1
+
+    # Compute Moving Averages of Intraday Returns
+    df['Short_MA_Intraday_Return'] = df['Intraday_Return'].rolling(window=5).mean()
+    df['Long_MA_Intraday_Return'] = df['Intraday_Return'].rolling(window=20).mean()
+
+    # Compute Intraday Return Difference
+    df['Intraday_Return_Diff'] = df['Short_MA_Intraday_Return'] - df['Long_MA_Intraday_Return']
+
+    # Filter by Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Filtered_Intraday_Return'] = df.apply(lambda row: row['Intraday_Return_Diff'] if row['Volume_Change'] > 0 else 0, axis=1)
+
+    # Calculate Short-Term and Long-Term VWMA
+    df['Cumulative_Volume_Price'] = (df['close'] * df['volume']).rolling(window=5).sum()
+    df['Cumulative_Volume'] = df['volume'].rolling(window=5).sum()
+    df['Short_Term_VWMA'] = df['Cumulative_Volume_Price'] / df['Cumulative_Volume']
+    
+    df['Cumulative_Volume_Price_LT'] = (df['close'] * df['volume']).rolling(window=20).sum()
+    df['Cumulative_Volume_LT'] = df['volume'].rolling(window=20).sum()
+    df['Long_Term_VWMA'] = df['Cumulative_Volume_Price_LT'] / df['Cumulative_Volume_LT']
+
+    # Generate Combined Signal
+    def generate_signal(row):
+        vwma_signal = 'Buy' if row['Short_Term_VWMA'] > row['Long_Term_VWMA'] else 'Sell'
+        momentum_signal = 'Buy' if row['Volume_Adjusted_Momentum'] > 0 else 'Sell'
+
+        if vwma_signal == 'Buy' and momentum_signal == 'Buy':
+            return 'Strong Buy'
+        elif vwma_signal == 'Sell' and momentum_signal == 'Sell':
+            return 'Strong Sell'
+        elif vwma_signal == 'Buy' and momentum_signal == 'Sell':
+            return 'Moderate Buy'
+        elif vwma_signal == 'Sell' and momentum_signal == 'Buy':
+            return 'Moderate Sell'
+        else:
+            return 'Hold'
+
+    df['Signal'] = df.apply(generate_signal, axis=1)
+
+    # Final Alpha Factor
+    def final_factor(signal):
+        if signal == 'Strong Buy':
+            return 1
+        elif signal == 'Strong Sell':
+            return -1
+        elif signal == 'Moderate Buy':
+            return 0.5
+        elif signal == 'Moderate Sell':
+            return -0.5
+        elif signal == 'Hold':
+            return 0
+
+    df['Alpha_Factor'] = df['Signal'].apply(final_factor)
+
+    return df['Alpha_Factor']
+```

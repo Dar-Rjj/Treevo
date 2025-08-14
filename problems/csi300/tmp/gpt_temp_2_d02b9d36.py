@@ -1,0 +1,30 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the exponential moving average of the change in close price over the last 10 days
+    momentum = df['close'].pct_change(periods=10).ewm(span=10, adjust=False).mean()
+    
+    # Calculate the liquidity factor using the exponential moving average volume over the last 20 days
+    liquidity = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the market sentiment using the exponential moving average money flow ratio over the last 5 days
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.ewm(span=5, adjust=False).mean()
+    
+    # Calculate the volatility factor using the exponential moving average of the true range over the last 20 days
+    tr_20 = pd.concat([df['high'] - df['low'], abs(df['high'] - df['close'].shift()), abs(df['low'] - df['close'].shift())], axis=1).max(axis=1)
+    atr_20 = tr_20.ewm(span=20, adjust=False).mean()
+    volatility = atr_20
+    
+    # Integrate a macroeconomic indicator (e.g., VIX index) if available
+    # For this example, let's assume 'vix' is a column in the DataFrame representing the VIX index
+    # If not available, you can set it to 1 for simplicity
+    macro_indicator = df.get('vix', 1)
+    
+    # Create a combined factor by multiplying the momentum, liquidity, market sentiment, and inverse of volatility
+    # The idea is that stocks with positive momentum, high liquidity, strong market sentiment, and low volatility may outperform
+    factor = (momentum + 1) * (liquidity / liquidity.mean()) * (market_sentiment / market_sentiment.mean()) * (1 / volatility)
+    
+    # Incorporate the macroeconomic indicator to further refine the factor
+    factor = factor * (macro_indicator / macro_indicator.mean())
+    
+    return factor

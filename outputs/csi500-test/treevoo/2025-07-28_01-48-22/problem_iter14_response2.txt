@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Momentum Component
+    intraday_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = intraday_return * df['volume']
+
+    # Historical Momentum Component
+    historical_momentum = df['close'] - df['close'].shift(15)
+
+    # Combine Momentum Components
+    combined_momentum = intraday_momentum + historical_momentum
+
+    # Smooth Combined Momentum with 5-day SMA
+    smoothed_momentum = combined_momentum.rolling(window=5).mean()
+
+    # Calculate 20-Day Volume Volatility
+    volume_pct_change = df['volume'].pct_change()
+    volume_volatility = volume_pct_change.rolling(window=20).std()
+
+    # Calculate Weighted Average Volume over the last 15 days
+    weights = 1 / np.arange(1, 16)
+    weighted_volume = df['volume'].rolling(window=15).apply(lambda x: np.sum(x * weights) / np.sum(weights), raw=True)
+
+    # Adjust Momentum by Volume Influence
+    adjusted_momentum = (smoothed_momentum / (volume_volatility + 1e-6)) * weighted_volume
+
+    # Calculate Daily High-Low Range
+    daily_range = df['high'] - df['low']
+
+    # Calculate EMA of Daily Range
+    ema_daily_range = daily_range.ewm(span=10, adjust=False).mean()
+
+    # Calculate Volatility Multiplier
+    volatility_multiplier = 1 / (ema_daily_range + 1)
+
+    # Adjust Combined Momentum by Advanced Volatility
+    advanced_adjusted_momentum = adjusted_momentum * volatility_multiplier
+
+    # Calculate Price Range and Volatility
+    price_volatility = (df['high'] - df['low']) * (df['close'] - df['open']) / df['volume']
+
+    # Calculate Volume Difference
+    volume_diff = df['volume'] - df['volume'].shift(1)
+
+    # Calculate Average High-Low Range for past 5 days
+    avg_high_low_range = (df['high'] - df['low']).rolling(window=5).mean()
+
+    # Calculate Close Price Change
+    close_price_change = df['close'] - df['close'].shift(1)
+
+    # Integrate Hybrid Factors
+    hybrid_factors = 0.5 * volume_diff + 0.3 * avg_high_low_range + close_price_change
+
+    # Final Factor
+    final_factor = (price_volatility + hybrid_factors) * advanced_adjusted_momentum
+
+    return final_factor
+```

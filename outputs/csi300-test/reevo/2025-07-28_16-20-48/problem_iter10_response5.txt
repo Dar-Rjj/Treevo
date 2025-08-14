@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the exponential moving average of close prices for a 5-day window
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the difference between today's close and the 5-day EMA, then divide by today's volume
+    momentum_adjusted = (df['close'] - ema_5) / df['volume']
+    
+    # Calculate the weighted price using amount and volume to identify the money flow over a 3-day window
+    money_flow = (df['amount'] / df['volume']).rolling(window=3).mean()
+    
+    # Calculate the ratio of the current day's range to the 5-day average range
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=5).mean()
+    range_ratio = daily_range / avg_daily_range
+    
+    # Adaptive window for volatility: use the standard deviation of the last 10 days
+    volatility = df['close'].rolling(window=10).std()
+    
+    # Adaptive weights based on volatility
+    weight_momentum = 1 / (1 + volatility)
+    weight_money_flow = 0.5 / (1 + volatility)
+    weight_range_ratio = 0.3 / (1 + volatility)
+    
+    # Incorporate an additional factor: the ratio of today's close to the 5-day EMA
+    close_to_ema_ratio = df['close'] / ema_5
+    
+    # Adaptive weight for the new factor
+    weight_close_to_ema = 0.2 / (1 + volatility)
+    
+    # Combine all factors with a weighted sum
+    alpha_factor = (weight_momentum * momentum_adjusted + 
+                    weight_money_flow * money_flow + 
+                    weight_range_ratio * range_ratio + 
+                    weight_close_to_ema * close_to_ema_ratio)
+    
+    # Smooth the alpha factor using an exponential moving average with a span of 5
+    alpha_factor_smoothed = alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return alpha_factor_smoothed
+```

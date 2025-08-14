@@ -1,0 +1,37 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics(df, n=10):
+    # Volume Momentum
+    df['V_sum'] = df['volume'].rolling(window=n).sum()
+    df['V_change'] = df['V_sum'] - df['V_sum'].shift(n)
+    
+    # Evaluate Volume Trend
+    df['vol_moving_avg'] = df['volume'].rolling(window=n).mean()
+    df['volume_trend'] = (df['volume'] > df['vol_moving_avg']).astype(int) * 2 - 1
+    
+    # Measure High-Low Range
+    df['ATR'] = df[['high' - 'low', 
+                    abs(df['high'] - df['close'].shift(1)), 
+                    abs(df['low'] - df['close'].shift(1))]].max(axis=1).rolling(window=n).mean()
+    df['H/L'] = df['high'] / df['low']
+    
+    # Quantify High-Low Dynamics
+    df['adjusted_HL_ratio'] = df['H/L'] * df['volume_trend']
+    
+    # Price Volatility
+    df['price_volatility'] = df['close'].rolling(window=n).std()
+    
+    # Combined Alpha Factor
+    df['adjusted_volume_momentum'] = df['V_change'] * df['H/L']
+    df['inverted_volume_momentum'] = -1 * df['V_change']
+    df['composite_alpha'] = df['inverted_volume_momentum'] + df['price_volatility'] + df['adjusted_volume_momentum']
+    
+    # Weighted Combined Alpha
+    df['weighted_adjusted_volume_momentum'] = 0.4 * df['adjusted_volume_momentum']
+    df['weighted_inverted_volume_momentum'] = 0.3 * df['inverted_volume_momentum']
+    df['final_alpha'] = (df['weighted_adjusted_volume_momentum'] + 
+                         df['weighted_inverted_volume_momentum'] + 
+                         0.3 * df['price_volatility'])
+    
+    return df['final_alpha']

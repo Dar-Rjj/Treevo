@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    volume_adjusted_momentum = short_term_momentum * (df['volume'] / avg_volume_5)
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range_20 = daily_price_range.rolling(window=20).mean()
+    price_range_filter = (daily_price_range > 1.5 * avg_daily_price_range_20).astype(int)
+    volume_adjusted_momentum_filtered = volume_adjusted_momentum * (1 - price_range_filter)
+    
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    open_to_close_returns = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    volume_trend_classification = pd.cut(volume_ratio, 
+                                         bins=[-float('inf'), 0.3, 0.8, 1.5, float('inf')], 
+                                         labels=[-2, 0, 1, 2])
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend_classification
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Adjust for Volume
+    volume_adjustment = df['volume'] / df['volume'].shift(1)
+    
+    # Calculate Weighted High-Low Spread
+    weighted_high_low_spread = intraday_momentum * volume_adjustment
+    
+    # Integrate Volume with Intraday Dynamics
+    integrated_intraday_dynamics = (df['high'] - df['low']) * volume_adjustment
+    
+    # Compute Hybrid Factor
+    hybrid_factor = adjusted_combined_returns + weighted_high_low_spread + integrated_intraday_dynamics
+    
+    # Apply Cumulative Movement
+    cumulative_hybrid_factor = hybrid_factor.rolling(window=5).sum()
+    
+    return cumulative_hybrid_factor
+```

@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Volatility and Momentum Component
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Intraday_Open_Close_Spread'] = df['close'] - df['open']
+    df['Combined_Intraday_Spread'] = (df['high'] - df['low']) + (df['close'] - df['open'])
+    df['Volume_Weighted_Combined_Spread'] = df['Combined_Intraday_Spread'] * df['volume']
+
+    # Momentum Component
+    df['Lagged_Intraday_Return'] = (df['high'].shift(1) - df['low'].shift(1)) / df['low'].shift(1)
+    df['Current_Intraday_Return'] = (df['high'] - df['low']) / df['low']
+
+    # Reversal Component
+    df['Lagged_Close_to_Open_Return'] = (df['close'].shift(1) - df['open']) / df['open']
+    df['Current_Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate High-Low Spread Ratio
+    df['High_Low_Spread_Ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Volume-Weighted Close-Open Difference
+    df['Volume_Weighted_Close_Open_Diff'] = (df['close'] - df['open']) * df['volume']
+
+    # Integrate Both Factors
+    df['Integrated_Factor'] = df['High_Low_Spread_Ratio'] * df['Volume_Weighted_Close_Open_Diff']
+
+    # Calculate Integrated Momentum
+    lookback_period = 5
+    df['Integrated_Momentum'] = df['close'].pct_change(periods=lookback_period)
+
+    # Integrate Volume into Momentum
+    df['Volume_Adjusted_Momentum'] = df['Integrated_Momentum'] * df['volume']
+
+    # Momentum and Reversal Interaction
+    df['Momentum_Reversal_Interaction'] = (df['Lagged_Intraday_Return'] + df['Current_Intraday_Return']) * \
+                                          (df['Lagged_Close_to_Open_Return'] + df['Current_Close_to_Open_Return'])
+
+    # Volume Adjusted Factor
+    df['20_Day_Avg_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Adjusted_Factor'] = (df['Momentum_Reversal_Interaction'] + df['Volume_Weighted_Combined_Spread']) / \
+                                   (df['volume'] / df['20_Day_Avg_Volume'])
+
+    # Intraday Return and Range
+    df['Intraday_Return'] = df['close'] - df['open']
+    df['Intraday_Range'] = df['high'] - df['low']
+
+    # Intraday Volatility
+    df['Absolute_Daily_Return'] = abs(df['close'] - df['close'].shift(1))
+    df['Intraday_Volatility'] = df['Absolute_Daily_Return'].rolling(window=20).sum() / 20
+
+    # Combine Adjusted Momentum and Intraday Factors
+    df['Combined_Adjusted_Momentum_Intraday'] = df['Volume_Adjusted_Factor'] - df['Intraday_Volatility'] + \
+                                                df['Intraday_Return'] + df['Intraday_Range']
+
+    # Final Factor
+    df['Final_Factor'] = df['Combined_Adjusted_Momentum_Intraday'] * df['Integrated_Factor']
+
+    # Final Adjusted Factor
+    df['Volume_Thrust'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['Final_Adjusted_Factor'] = df['Final_Factor'] * df['Volume_Thrust']
+
+    return df['Final_Adjusted_Factor']
+```

@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_volatility=20, lookback_trend_long=100, lookback_trend_short=10, adjustment_factor=1.1):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Volume into Intraday Return
+    volume_adjusted_intraday_return = intraday_return * np.sqrt(df['volume'])
+    
+    # Enhance Volatility Correction
+    price_volatility = df['close'].pct_change().rolling(window=lookback_volatility).std()
+    volume_volatility = df['volume'].rolling(window=lookback_volatility).std()
+    corrected_intraday_momentum = volume_adjusted_intraday_return - price_volatility - volume_volatility
+    
+    # Incorporate Intraday Volatility Component
+    high_low_spread = df['high'] - df['low']
+    open_close_spread = df['close'] - df['open']
+    combined_spreads = (high_low_spread + open_close_spread) * np.sqrt(df['volume'])
+    
+    # Intraday Log-Return Scaled by Volatility
+    intraday_log_return = np.log(df['close'] / df['open'])
+    scaled_log_return = intraday_log_return / (df['high'] - df['low'])
+    
+    # Incorporate Trend Adjustment
+    long_term_trend = df['close'].rolling(window=lookback_trend_long).mean()
+    short_term_trend = df['close'].ewm(span=lookback_trend_short, adjust=False).mean()
+    trend_difference = long_term_trend - short_term_trend
+    
+    adjusted_factor = corrected_intraday_momentum.copy()
+    adjusted_factor[trend_difference > 0] *= adjustment_factor
+    adjusted_factor[trend_difference < 0] /= adjustment_factor
+    
+    # Incorporate Accumulation/Distribution Line
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    ad_line = money_flow_volume.cumsum()
+    
+    final_factor = adjusted_factor.copy()
+    final_factor[ad_line.diff() > 0] *= adjustment_factor
+    final_factor[ad_line.diff() < 0] /= adjustment_factor
+    
+    return final_factor
+```

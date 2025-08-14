@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import pandas as pd
+    import numpy as np
+    
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume'])
+    
+    # Calculate the multi-period momentum by considering the VWAP over different periods
+    df['mom_10'] = df['vwap'].pct_change(10)
+    df['mom_20'] = df['vwap'].pct_change(20)
+    df['mom_30'] = df['vwap'].pct_change(30)
+    
+    # Combine the multi-period momentum into a single factor
+    df['momentum_factor'] = (df['mom_10'] + df['mom_20'] + df['mom_30']) / 3
+    
+    # Apply exponential smoothing to the momentum factor
+    df['smooth_momentum'] = df['momentum_factor'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the price range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Normalize the smoothed momentum by the price range
+    df['normalized_momentum'] = df['smooth_momentum'] / df['price_range']
+    
+    # Integrate seasonality by adding a monthly and weekly component
+    df['month'] = df.index.month
+    df['week'] = df.index.week
+    df['seasonal_component'] = df.groupby(['month', 'week'])['normalized_momentum'].transform('mean')
+    
+    # Robust statistical method: use median instead of mean for stability
+    robust_factor = df.groupby('month')['seasonal_component'].transform('median')
+    
+    return robust_factor
+```

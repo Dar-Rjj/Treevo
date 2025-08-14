@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return and High-to-Low Price Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['High_to_Low_Price_Range'] = df['high'] - df['low']
+
+    # Calculate Intraday Momentum
+    df['Prev_Day_Close'] = df['close'].shift(1)
+    df['Intraday_Momentum'] = (df['Intraday_Range']) / df['Prev_Day_Close']
+
+    # Previous Day's High-to-Low Price Range
+    df['Prev_High_to_Low_Price_Range'] = df['High_to_Low_Price_Range'].shift(1)
+    df['Momentum_Factor'] = df['High_to_Low_Price_Range'] - df['Prev_High_to_Low_Price_Range']
+
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+
+    # Combine Factors
+    df['Adjusted_Intraday_Momentum'] = df['Intraday_Momentum'] * df['Volume_Change'] + df['Intraday_Momentum']
+    df['Weight_by_Amount'] = df['amount'] / df['amount'].rolling(window=5).mean()
+
+    # Adjust for Volume Impact
+    df['Volume_Shock'] = df['volume'] - df['volume'].rolling(window=5).mean()
+    df['Volume_Shock_Adjusted_Momentum'] = df['Momentum_Factor'].copy()
+    condition_positive_shock = (df['Volume_Shock'] > 0)
+    condition_negative_shock = (df['Volume_Shock'] < 0)
+    
+    df.loc[condition_positive_shock, 'Volume_Shock_Adjusted_Momentum'] *= (1 + df['Volume_Shock'][condition_positive_shock] / df['volume'].rolling(window=5).mean()[condition_positive_shock])
+    df.loc[condition_negative_shock, 'Volume_Shock_Adjusted_Momentum'] *= (1 - df['Volume_Shock'][condition_negative_shock] / df['volume'].rolling(window=5).mean()[condition_negative_shock])
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Adjusted_Intraday_Momentum'] * df['Volume_Ratio'] * df['Volume_Shock_Adjusted_Momentum']
+
+    return df['Alpha_Factor']
+```

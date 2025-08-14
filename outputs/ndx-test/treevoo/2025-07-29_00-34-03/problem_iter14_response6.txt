@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['weighted_close'] = df['volume'] * df['close']
+    df['sum_weighted_close'] = df['weighted_close'].rolling(window=20).sum()
+    df['sum_volume'] = df['volume'].rolling(window=20).sum()
+    df['vwp'] = df['sum_weighted_close'] / df['sum_volume']
+
+    # Calculate Simple Moving Average (SMA) of Volume-Weighted Prices
+    df['sma_vwp'] = df['vwp'].rolling(window=20).mean()
+
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    df['inv_intraday_range'] = 1 / df['intraday_range']
+
+    # Scale by Volume
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['scaled_volume'] = df['volume'] / df['avg_volume_20']
+
+    # Calculate Previous Day's Return
+    df['prev_day_return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Calculate Open-to-Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['open_to_close_momentum'] = df['open_to_close_return'].rolling(window=5).mean()
+
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Calculate Rolling Average Daily Return
+    df['rolling_avg_daily_return'] = df['daily_return'].rolling(window=21).mean()
+
+    # Calculate Rolling Volatility of Daily Returns
+    df['rolling_volatility'] = df['daily_return'].rolling(window=20).std()
+
+    # Adjust Momentum by Volatility
+    df['adjusted_momentum_by_volatility'] = df['rolling_avg_daily_return'] / df['rolling_volatility']
+
+    # Combine Factors
+    df['momentum_adjustment'] = df['prev_day_return'] * df['inv_intraday_range']
+    df['combined_factor'] = (df['open_to_close_momentum'] + 
+                             df['adjusted_momentum_by_volatility'] + 
+                             df['momentum_adjustment'])
+
+    # Final Volume and Volatility Adjustment
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['final_combined_factor'] = df['combined_factor'] * df['scaled_volume'] * df['volume_change']
+
+    # Volatility Adjustment Factor
+    df['realized_volatility'] = (df['high'] - df['low']).pct_change().rolling(window=20).std()
+    df['smooth_realized_volatility'] = df['realized_volatility'].ewm(span=20, adjust=False).mean()
+    df['sma_adjusted_with_volatility'] = df['sma_vwp'] - df['smooth_realized_volatility']
+
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Weight by Volume and Amount
+    df['weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume'] * df['amount']
+
+    # Adjust Momentum by Volatility
+    df['adjusted_close_to_open_momentum'] = df['close_to_open_return'] / df['realized_volatility']
+
+    # Combine Factors
+    df['combined_factor_final'] = (df['intraday_range'] * df['scaled_volume'] + 
+                                   df['weighted_close_to_open_return'] + 
+                                   df['open_to_close_momentum'] + 
+                                   df['adjusted_momentum_by_volatility'])
+
+    # Final Weighting
+    df['final_alpha_factor'] = df['combined_factor_final'] * df['volume']
+
+    return df['final_alpha_factor']
+```

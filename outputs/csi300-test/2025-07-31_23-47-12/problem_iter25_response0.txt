@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=10, volume_weight=0.5, volatility_weight=0.3, momentum_weight=0.2):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Compute Log Return over N Days
+    log_returns = np.log(close_prices).diff(N)
+    
+    # Calculate Cumulative Sum of Log Returns
+    cumulative_log_returns = log_returns.cumsum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = cumulative_log_returns.quantile(0.9)
+    lower_threshold = cumulative_log_returns.quantile(0.1)
+    
+    # Clip Log Returns to Thresholds
+    clipped_cumulative_log_returns = cumulative_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Retrieve Volumes
+    volumes = df['volume']
+    
+    # Calculate Volume Relative to Mean
+    mean_volume = volumes.mean()
+    volume_relative_to_mean = volumes / mean_volume
+    
+    # Multiply by Momentum
+    volume_adjusted_momentum = clipped_cumulative_log_returns * volume_relative_to_mean
+    
+    # Determine Absolute Price Changes
+    absolute_price_changes = close_prices.diff().abs()
+    
+    # Compute Standard Deviation of Absolute Price Changes Over M Days
+    std_dev_price_changes = absolute_price_changes.rolling(window=M).std()
+    
+    # Calculate Exponential Moving Average (EMA) of Absolute Price Changes
+    ema_price_changes = absolute_price_changes.ewm(span=M, adjust=False).mean()
+    
+    # Calculate Inter-Quartile Range (IQR) of Absolute Price Changes
+    iqr_price_changes = absolute_price_changes.rolling(window=M).quantile(0.75) - absolute_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine Volatility Measures
+    advanced_volatility = (std_dev_price_changes + ema_price_changes + iqr_price_changes) / 3
+    
+    # Final Factor Calculation
+    final_factor = (volume_weight * volume_adjusted_momentum +
+                    volatility_weight * advanced_volatility +
+                    momentum_weight * clipped_cumulative_log_returns)
+    
+    # Ensure Weights Sum to 1
+    if not np.isclose(volume_weight + volatility_weight + momentum_weight, 1.0):
+        raise ValueError("The weights must sum to 1.0")
+    
+    # Review and Validate Each Component
+    # Integrate Market Breadth and Economic Indicators (not implemented in this function)
+    
+    return final_factor
+```

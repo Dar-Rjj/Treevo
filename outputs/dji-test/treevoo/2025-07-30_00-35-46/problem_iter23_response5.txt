@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = df['close'] / df['open'] - 1
+    weighted_momentum = 0.6 * high_low_diff + 0.4 * open_close_return
+    intraday_momentum = weighted_momentum ** 2
+
+    # Analyze Price Trends and Momentum
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    sma_crossover_signal = (short_sma > long_sma).astype(int) * 2 - 1
+
+    roc = df['close'].pct_change(periods=5)
+    
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Apply Integrated Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    volume_amount_shock_filter = (volume_ratio > 1.5) & (amount_ratio > 1.5)
+
+    # Measure Synchronized Volume and Price Changes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_changes = (volume_change * price_change > 0).astype(int) * 2 - 1
+
+    # Investigate Trading Volume
+    short_avg_volume = df['volume'].rolling(window=5).mean()
+    long_avg_volume = df['volume'].rolling(window=20).mean()
+    volume_signal = (df['volume'] > long_avg_volume).astype(int) * 2 - 1
+
+    # Combine Multiple Factors
+    sma_crossover_weight = 0.3
+    roc_weight = 0.2
+    rsi_weight = 0.1
+    volume_signal_weight = 0.2
+    synchronized_changes_weight = 0.2
+
+    composite_alpha_factor = (
+        sma_crossover_signal * sma_crossover_weight +
+        roc * roc_weight +
+        rsi * rsi_weight +
+        volume_signal * volume_signal_weight +
+        synchronized_changes * synchronized_changes_weight
+    )
+
+    # Apply the volume and amount shock filter
+    composite_alpha_factor = composite_alpha_factor * volume_amount_shock_filter
+
+    return composite_alpha_factor
+```

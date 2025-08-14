@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['IntradayRange'] = df['high'] - df['low']
+    df['IntradayReturn'] = df['IntradayRange'] / df['close']
+
+    # Calculate Overnight Return
+    df['OvernightReturn'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    df['CombinedReturn'] = df['IntradayReturn'] + df['OvernightReturn']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['TypicalPrice'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VolumeWeightedPrice'] = df['TypicalPrice'] * df['volume']
+    total_volume = df['volume'].sum()
+    vwap = df['VolumeWeightedPrice'].sum() / total_volume
+
+    # Calculate VWAP Reversal Indicator
+    df['ReversalIndicator'] = (df['close'] < vwap).astype(int) * 2 - 1
+
+    # Integrate Reversal Indicator with Combined Return
+    df['IntegratedReversalReturn'] = df['CombinedReturn'] * df['ReversalIndicator']
+
+    # Calculate Volume-Weighted Return
+    df['VolumeWeightedReturn'] = ((df['close'] - df['open']) / df['open']) * df['volume']
+    total_volume_weighted_return = df['VolumeWeightedReturn'].sum() / total_volume
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['InitialAlphaFactor'] = df['IntegratedReversalReturn'] + total_volume_weighted_return
+
+    # Calculate Rolling Averages
+    df['Rolling5DayAvg'] = df['close'].rolling(window=5).mean()
+    df['Rolling20DayAvg'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Volatility
+    df['DailyReturns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility'] = df['DailyReturns'].rolling(window=20).std()
+
+    # Adjust for Volatility
+    df['VolatilityAdjustedAlphaFactor'] = df['InitialAlphaFactor'] / df['Volatility']
+
+    # Incorporate Transaction Amount
+    df['AmountWeightedReturn'] = ((df['close'] - df['open']) / df['open']) * df['amount']
+    total_amount = df['amount'].sum()
+    amount_weighted_return = df['AmountWeightedReturn'].sum() / total_amount
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    df['FinalAlphaFactor'] = df['VolatilityAdjustedAlphaFactor'] + amount_weighted_return
+
+    return df['FinalAlphaFactor']
+```

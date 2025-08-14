@@ -1,0 +1,40 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily momentum as the difference between today's close and yesterday's close
+    daily_momentum = df['close'].diff(1)
+    
+    # Calculate the 5-day moving average of volume to identify trading activity anomalies
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / avg_volume_5d
+    
+    # Calculate the true range (high - low) for normalization
+    true_range = df['high'] - df['low']
+    
+    # Calculate the 5-day rolling standard deviation of the daily returns to incorporate volatility
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=5).std()
+    
+    # Calculate the 20-day momentum to capture longer-term trends
+    long_term_momentum = df['close'].diff(20)
+    
+    # Calculate the 50-day and 200-day moving averages of the close price to capture medium and long-term trends
+    ma_50 = df['close'].rolling(window=50).mean()
+    ma_200 = df['close'].rolling(window=200).mean()
+    
+    # Calculate the adaptive weight by normalizing the 50-day and 200-day moving averages
+    adaptive_weight = (ma_50 - ma_200) / (true_range + 1e-7)
+    
+    # Calculate the 5-day and 20-day relative strength index (RSI) to capture short and medium-term overbought/oversold conditions
+    gain = df['close'].diff(1).clip(lower=0)
+    loss = df['close'].diff(1).clip(upper=0).abs()
+    rsi_5 = 100 - (100 / (1 + (gain.rolling(window=5).mean() / loss.rolling(window=5).mean())))
+    rsi_20 = 100 - (100 / (1 + (gain.rolling(window=20).mean() / loss.rolling(window=20).mean())))
+    
+    # Combine daily momentum, long-term momentum, volume anomaly, RSI, and normalize by the true range and volatility
+    factor = (daily_momentum + long_term_momentum) * volume_ratio * (1 + adaptive_weight)
+    factor = factor * (rsi_5 / 100) * (rsi_20 / 100)
+    factor = factor / (true_range + 1e-7)
+    factor = factor / (volatility + 1e-7)
+    
+    return factor
+```

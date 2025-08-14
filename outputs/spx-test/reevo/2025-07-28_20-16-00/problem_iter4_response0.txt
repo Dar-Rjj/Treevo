@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the change in closing prices
+    close_change = df['close'].pct_change()
+    
+    # Calculate the true range (high - low, high - previous close, or previous close - low)
+    true_range = (df['high'] - df['low']).abs().fillna(0)
+    prev_close = df['close'].shift(1)
+    true_range = true_range.where(true_range > (df['high'] - prev_close).abs(), (df['high'] - prev_close).abs())
+    true_range = true_range.where(true_range > (prev_close - df['low']).abs(), (prev_close - df['low']).abs())
+    
+    # Calculate the average true range over the last 10 days
+    avg_true_range = true_range.rolling(window=10).mean()
+    
+    # Calculate a weighted momentum factor, giving more weight to recent changes
+    weighted_momentum = (close_change.rolling(window=5).mean() * 2.0 + close_change.rolling(window=10).mean()) / 3.0
+    
+    # Incorporate volume by calculating the percentage change in volume
+    volume_change = df['volume'].pct_change()
+    
+    # Generate the seasonal component, using a simple sinusoidal function for monthly seasonality
+    seasonal_component = np.sin(2 * np.pi * df.index.dayofyear / 365)
+    
+    # Calculate the Exponential Moving Average (EMA) for the close price over 10 and 20 days
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine if today's close is above the 10-day EMA, indicating an upward momentum
+    ema_momentum = (df['close'] > ema_10).astype(int)
+    
+    # Generate the alpha factor, with an interaction between price momentum, volatility (measured by ATR), volume, and seasonality
+    alpha_factor = (weighted_momentum * (avg_true_range.mean() / avg_true_range) * volume_change * seasonal_component * ema_momentum)
+    
+    return alpha_factor
+```

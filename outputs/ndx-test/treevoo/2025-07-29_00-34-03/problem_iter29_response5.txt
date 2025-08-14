@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Close_to_Open_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Calculate Volume-Weighted Price
+    df['Volume_Weighted_Price'] = df['volume'] * df['close']
+    
+    # Calculate Exponential Moving Average (EMA) of Volume-Weighted Prices
+    ema_window = 10
+    df['EMA_Volume_Weighted_Price'] = df['Volume_Weighted_Price'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Intraday Volatility Adjustment Factor
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    df['Adjusted_EMA'] = df['EMA_Volume_Weighted_Price'] + df['Intraday_Volatility']
+    
+    # Volume Spike Indicator
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    volume_spike_threshold = 3 * df['Volume_Change'].std()
+    df['Volume_Spike'] = (df['Volume_Change'] > volume_spike_threshold).astype(int)
+    
+    # Adjust Final Alpha Factor with Volume Spike
+    df['Alpha_Factor'] = df['Adjusted_EMA']
+    df.loc[df['Volume_Spike'] == 1, 'Alpha_Factor'] += df['Intraday_Volatility']
+    
+    # Short-Term Momentum
+    short_term_days = 4
+    df['Short_Term_Momentum'] = df['close'] - df['close'].rolling(window=short_term_days).mean()
+    
+    # Long-Term Price Momentum
+    long_term_days = 20
+    df['Long_Term_Momentum'] = df['close'].ewm(span=long_term_days, adjust=False).mean()
+    
+    # Difference between Short and Long-Term Momentum
+    df['Momentum_Diff'] = df['Short_Term_Momentum'] - (df['close'] - df['Long_Term_Momentum'])
+    
+    # Calculate Price Range Volatility
+    n_days = 20
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Price_Range_Volatility'] = df['Daily_Price_Range'].rolling(window=n_days).std()
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate Rolling Average Daily Return
+    rolling_window = 21
+    df['Rolling_Avg_Daily_Return'] = df['Daily_Return'].rolling(window=rolling_window).mean()
+    
+    # Calculate Rolling Volatility of Close Prices
+    rolling_volatility_window = 20
+    df['Rolling_Volatility'] = df['close'].pct_change().rolling(window=rolling_volatility_window).std()
+    
+    # Adjust Momentum by Volatility
+    df['Momentum_by_Volatility'] = df['Rolling_Avg_Daily_Return'] / df['Rolling_Volatility']
+    
+    # Adjusted High-Low Range
+    df['Scaled_Volume'] = df['volume'] / df['volume'].rolling(window=20).sum()
+    df['Adjusted_High_Low_Range'] = (df['high'] - df['low']) * df['Scaled_Volume']
+    
+    # Previous Day's Return
+    df['Previous_Day_Return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Combine Factors
+    df['Combined_Factors'] = (df['Adjusted_High_Low_Range'] * df['Scaled_Volume']) + (1 / df['Intraday_Volatility']) + df['Previous_Day_Return']
+    df['Combined_Factors'] += df['Momentum_Diff'] + df['Momentum_by_Volatility']
+    
+    # Integrate with Combined Momentum and Volume Trends
+    n_volume_momentum = 5
+    df['Volume_Momentum'] = df['volume'] / df['volume'].shift(n_volume_momentum)
+    df['Adjusted_Volume_Momentum'] = df['Volume_Momentum'] / df['Rolling_Volatility']
+    
+    integration_weight = 0.5
+    df['Final_Alpha_Factor'] = df['Combined_Factors'] + (integration_weight * df['Adjusted_Volume_Momentum'])
+    
+    return df['Final_Alpha_Factor']
+```

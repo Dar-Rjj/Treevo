@@ -1,0 +1,41 @@
+def heuristics_v2(df):
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Bollinger Bands
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['std_20'] = df['close'].rolling(window=20).std()
+    df['upper_band'] = df['sma_20'] + 2 * df['std_20']
+    df['lower_band'] = df['sma_20'] - 2 * df['std_20']
+    df['bollinger_percentage'] = (df['close'] - df['lower_band']) / (df['upper_band'] - df['lower_band'])
+    
+    # Average True Range (ATR)
+    tr = pd.DataFrame({'high_low': df['high'] - df['low'],
+                       'high_close': abs(df['high'] - df['close'].shift(1)),
+                       'low_close': abs(df['low'] - df['close'].shift(1))}).max(axis=1)
+    df['atr'] = tr.rolling(window=14).mean()
+    
+    # Rate of Change (ROC)
+    df['roc'] = df['close'].pct_change(periods=10)
+    
+    # Rolling 30-day historical Sharpe ratios
+    sharpe_ratios_rsi = (df['rsi'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['rsi'].rolling(window=30).std()
+    sharpe_ratios_bollinger = (df['bollinger_percentage'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['bollinger_percentage'].rolling(window=30).std()
+    sharpe_ratios_atr = (df['atr'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['atr'].rolling(window=30).std()
+    sharpe_ratios_roc = (df['roc'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['roc'].rolling(window=30).std()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['rsi'] * sharpe_ratios_rsi +
+                         df['bollinger_percentage'] * sharpe_ratios_bollinger +
+                         df['atr'] * sharpe_ratios_atr +
+                         df['roc'] * sharpe_ratios_roc)
+    
+    return heuristics_matrix

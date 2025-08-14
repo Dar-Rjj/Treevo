@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['short_ema'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['price_momentum'] = df['short_ema'] - df['long_ema']
+
+    # Calculate Intraday Momentum Swing
+    df['intraday_return'] = df['close'] - df['open']
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['vol_weighted_adj_return'] = (df['volume'] * df['intraday_return']) / df['avg_volume_20']
+
+    # Calculate Proportional Movement Index
+    df['intraday_range'] = df['high'] - df['low']
+    df['proportional_movement_index'] = (df['intraday_range'] / df['close']) * df['intraday_return']
+
+    # Calculate Volume-Weighted Adjusted Return
+    df['vol_weighted_adj_return_20_sum'] = (df['volume'] * df['intraday_range']).rolling(window=20).sum()
+    df['vol_weighted_adj_return_final'] = ((df['volume'] * df['intraday_range']) * df['intraday_return']) / df['vol_weighted_adj_return_20_sum']
+
+    # Combine Momentum and Volatility
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['momentum_component'] = df['sma_5'] - df['sma_20']
+
+    df['daily_log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['daily_log_returns'].rolling(window=20).std()
+    df['combined_momentum_volatility'] = df['momentum_component'] / df['volatility']
+
+    # Calculate Volume-Adjusted High-Low Spread
+    df['vol_adj_high_low_spread'] = (df['high'] - df['low']) * df['volume']
+
+    # Calculate 10-Day Volume-Weighted Moving Average of Volume-Adjusted High-Low Spread
+    df['vol_adj_high_low_spread_10_days'] = df['vol_adj_high_low_spread'].rolling(window=10).apply(lambda x: (x * df.loc[x.index, 'volume']).sum() / df.loc[x.index, 'volume'].sum(), raw=False)
+
+    # Calculate Volume-Adjusted Daily Price Change
+    df['vol_adj_price_change'] = (df['close'] - df['close'].shift(1)) * df['volume']
+
+    # Calculate 10-Day Moving Average of Volume-Adjusted Daily Price Change
+    df['vol_adj_price_change_10_days'] = df['vol_adj_price_change'].rolling(window=10).mean()
+
+    # Incorporate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['price_momentum'] +
+        df['proportional_movement_index'] +
+        df['vol_weighted_adj_return_final'] +
+        df['combined_momentum_volatility'] +
+        df['vol_adj_high_low_spread_10_days'] +
+        df['vol_adj_price_change_10_days'] +
+        df['high_low_range'] +
+        df['vwap'] +
+        df['rsi']
+    )
+
+    return df['alpha_factor']
+```

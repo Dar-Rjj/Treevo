@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = df['amount'] / df['volume']
+    
+    # Calculate Short-Term Momentum
+    window = 5  # Define a short-term window
+    df['sma_close'] = df['close'].rolling(window=window).mean()
+    df['momentum_sma'] = df['close'] - df['sma_close']
+    df['rate_of_change'] = df['close'].pct_change(periods=window)
+    fast_window, slow_window, signal_window = 12, 26, 9
+    df['ema_fast'] = df['close'].ewm(span=fast_window, adjust=False).mean()
+    df['ema_slow'] = df['close'].ewm(span=slow_window, adjust=False).mean()
+    df['macd'] = df['ema_fast'] - df['ema_slow']
+    df['macd_signal'] = df['macd'].ewm(span=signal_window, adjust=False).mean()
+    df['macd_diff'] = df['macd'] - df['macd_signal']
+    
+    # Calculate True Range and Average True Range (ATR)
+    df['true_range'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=window).sum() / window
+    
+    # Measure Standard Deviation of Price Changes
+    df['std_dev'] = df['close'].rolling(window=window).std()
+    
+    # Combine Indicators for Enhanced Alpha Factors
+    df['close_to_next_open_return'] = df['vwap'].shift(-1) - df['open'].shift(-1)
+    df['weighted_sum_returns'] = df['close_to_next_open_return'] * df['volume']
+    
+    # Close-to-Open Envelope
+    envelope_period = 10
+    df['max_close'] = df['close'].rolling(window=envelope_period).max()
+    df['min_open'] = df['open'].rolling(window=envelope_period).min()
+    
+    # Adjusted Close-to-Open Envelope
+    df['adj_close'] = df['close'] * df['volume']
+    df['max_adj_close'] = df['adj_close'].rolling(window=envelope_period).max()
+    
+    # Introduce Volatility Factor
+    df['daily_volatility'] = (df['high'] - df['low']).rolling(window=window).std()
+    df['smoothed_volatility'] = df['daily_volatility'].ewm(span=window, adjust=False).mean()
+    
+    # On-Balance Volume (OBV) Calculation
+    df['obv'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['obv_trend'] = df['obv'].rolling(window=window).mean()
+    
+    # Final Factor Combination
+    df['alpha_factor'] = df['midpoint_to_open_ratio'] * df['weighted_sum_returns'] * (df['max_close'] - df['min_open']) / (df['max_adj_close'] - df['min_open'])
+    df['alpha_factor'] = df['alpha_factor'] * df['obv_trend'] * df['atr'] * df['smoothed_volatility']
+    
+    # Price-Volume Correlation
+    df['price_volume_corr'] = df['close'].rolling(window=window).corr(df['volume'])
+    
+    # Crossover Alpha Factors
+    df['crossover_alpha'] = df['momentum_sma'] * df['price_volume_corr'] * (df['max_close'] - df['min_open']) / df['smoothed_volatility']
+    
+    return df['crossover_alpha']
+```

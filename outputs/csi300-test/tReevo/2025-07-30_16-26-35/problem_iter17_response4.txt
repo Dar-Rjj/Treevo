@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df.shift(1)['close']) / df.shift(1)['close']
+    
+    # Assign dynamic weights based on recent market dynamics and trading volume
+    def adjust_weights(volume, recent=True):
+        if recent:
+            if volume > df['volume'].rolling(window=10).mean().iloc[-1]:
+                return 0.8, 0.2
+            else:
+                return 0.7, 0.3
+        else:
+            if volume > df['volume'].rolling(window=30).mean().iloc[-1]:
+                return 0.6, 0.4
+            else:
+                return 0.5, 0.5
+    
+    # Combine Intraday Range and Close-to-Open Return
+    df['factor_value'] = 0
+    for i in range(1, len(df)):
+        if i < 10:  # Recent Data
+            w1, w2 = adjust_weights(df.iloc[i]['volume'], recent=True)
+        else:  # Older Data
+            w1, w2 = adjust_weights(df.iloc[i]['volume'], recent=False)
+        
+        df.loc[df.index[i], 'factor_value'] = w1 * df.iloc[i]['intraday_range'] + w2 * df.iloc[i]['close_to_open_return']
+    
+    return df['factor_value']
+
+# Example usage:
+# df = pd.DataFrame(data, index=pd.to_datetime(dates), columns=['open', 'high', 'low', 'close', 'amount', 'volume'])
+# factor_values = heuristics_v2(df)
+```

@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Close Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Apply Exponential Moving Average (EMA) to Returns
+    ema_period = 20
+    df['ema_returns'] = df['daily_return'].ewm(span=ema_period, adjust=False).mean()
+
+    # Compute EMA of Squared Returns for Volatility
+    df['squared_returns'] = df['daily_return'] ** 2
+    df['ema_volatility'] = df['squared_returns'].ewm(span=ema_period, adjust=False).mean()
+
+    # Calculate Divergence between EMA of Returns and Volatility
+    df['divergence'] = np.abs(df['ema_returns'] - df['ema_volatility'])
+
+    # Weight Divergence by Volume and High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_divergence'] = (df['divergence'] * df['volume']) / df['high_low_range']
+
+    # Calculate Intraday Movement Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['prev_true_range'] = (df['high'].shift(1) - df['low'].shift(1)).fillna(0)
+    df['intraday_movement_factor'] = df['intraday_high_low_spread'] / df['prev_true_range']
+
+    # Calculate Close Price Direction
+    df['close_direction'] = (df['close'] - df['open']).fillna(0)
+
+    # Integrate Volume Impact
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)).fillna(0)
+    df['combined_factor'] = df['weighted_divergence'] + df['intraday_movement_factor']
+
+    # Calculate Weighted Momentum
+    df['10_day_moving_avg'] = df['daily_return'].rolling(window=9).sum().shift(1).fillna(0)
+    df['weighted_momentum'] = df['10_day_moving_avg'] * df['volume']
+
+    # Calculate Volatility
+    df['10_day_std'] = df['daily_return'].rolling(window=9).std().shift(1).fillna(0)
+    df['inverse_volatility'] = 1 / (df['10_day_std'] + 1e-6)
+
+    # Calculate Intraday Price Range Ratio
+    df['intraday_price_range_ratio'] = (df['high'] - df['low']) / df['low']
+
+    # Calculate Volume Adjusted Close
+    df['volume_adjusted_close'] = df['close'] * np.sqrt(df['volume'])
+
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['combined_factor'] +
+        df['weighted_momentum'] +
+        df['inverse_volatility'] +
+        df['intraday_price_range_ratio'] +
+        df['volume_adjusted_close'] +
+        df['intraday_return']
+    ) * df['volume_change']
+
+    return df['alpha_factor']
+```

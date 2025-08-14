@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Forward Close-to-Open Return
+    df['forward_close_to_open'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_forward_close_to_open'] = df['volume'] * df['forward_close_to_open']
+    
+    # Volatility Calculation
+    df['true_range'] = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), 
+                                  abs(df['low'] - df['close'].shift(1)))
+    df['volatility'] = df['true_range'].rolling(window=20).std()
+    
+    # Adaptive Window Size Determination
+    df['adaptive_window_size'] = np.where(df['volatility'] > df['volatility'].mean(), 10, 30)
+    
+    # Momentum Calculation
+    def rolling_mean_adaptive_window(group):
+        return group.rolling(window=int(group.name)).mean()
+    
+    df['returns'] = df['close'].pct_change()
+    df['momentum'] = df.groupby('adaptive_window_size')['returns'].transform(rolling_mean_adaptive_window)
+    
+    # Trend Calculation
+    high_low_diff = df['high'] - df['low']
+    df['up_move'] = np.where(high_low_diff > 0, high_low_diff, 0)
+    df['down_move'] = np.where(high_low_diff < 0, abs(high_low_diff), 0)
+    
+    def calculate_dmi(group):
+        up = group['up_move'].rolling(window=int(group.name)).mean()
+        down = group['down_move'].rolling(window=int(group.name)).mean()
+        return 100 * (up / (up + down))
+    
+    df['trend'] = df.groupby('adaptive_window_size').apply(calculate_dmi).reset_index(level=0, drop=True)
+    
+    # Combined Factor
+    df['combined_factor'] = 0.5 * df['volume_weighted_forward_close_to_open'] + 0.3 * df['momentum'] + 0.2 * df['trend']
+    
+    # Final Factor Output
+    return df['combined_factor'].dropna()
+
+# Example usage
+# data = pd.DataFrame({
+#     'open': [100, 105, 98, 102, 103],
+#     'high': [105, 110, 102, 107, 108],
+#     'low': [95, 100, 96, 99, 101],
+#     'close': [102, 108, 100, 105, 107],
+#     'amount': [1000, 1500, 1200, 1300, 1400],
+#     'volume': [100, 150, 120, 130, 140]
+# }, index=pd.date_range('2023-01-01', periods=5))
+
+# factor_values = heuristics_v2(data)
+# print(factor_values)
+```

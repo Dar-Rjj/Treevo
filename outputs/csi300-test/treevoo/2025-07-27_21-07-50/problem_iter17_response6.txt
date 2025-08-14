@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day SMA of Close Price
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    
+    # Calculate 20-day SMA of Close Price
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Determine the relationship between 5-day and 20-day SMA of Close Price
+    df['SMA_Crossover'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Calculate 5-day SMA of Volume
+    df['SMA_Volume_5'] = df['volume'].rolling(window=5).mean()
+    
+    # Evaluate the change in 5-day SMA of Volume
+    df['Volume_Change'] = df['SMA_Volume_5'].pct_change()
+    
+    # Calculate Daily Price Range (High - Low)
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Compute the Average Daily Price Range over the past 20 days
+    df['Avg_Daily_Range_20'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    # Calculate the ratio of today's Daily Price Range to the 20-day Average Daily Price Range
+    df['Range_Ratio'] = df['Daily_Range'] / df['Avg_Daily_Range_20']
+    
+    # Assess the gap between Open and Close Prices
+    df['Gap_Size'] = df['open'] - df['close']
+    
+    # Analyze the gap size and direction to predict future price movements
+    df['Gap_Direction'] = np.sign(df['Gap_Size'])
+    
+    # Track the net amount traded at the bid versus the ask
+    df['Bid_Ask_Imbalance'] = (df['amount'] - df['volume'] * df['close']) / (df['volume'] * df['close'])
+    
+    # Calculate the Volume-Weighted Average Price (VWAP) for each day
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compare VWAP trends with simple moving averages to highlight divergences
+    df['VWAP_SMA_Divergence'] = df['VWAP'] - df['SMA_20']
+    
+    # Compute the 14-day Relative Strength Index (RSI) based on close prices
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Evaluate overbought and oversold conditions using RSI
+    df['RSI_Signal'] = (df['RSI'] < 30) | (df['RSI'] > 70)
+    
+    # Integrate RSI with SMA signals to filter out potential false breakout signals
+    df['RSI_SMA_Signal'] = df['RSI_Signal'] & (df['SMA_Crossover'] == 1)
+    
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['open']
+    
+    # Volume Adjusted Price Change
+    df['Volume_Adjusted_Price_Change'] = df['Daily_Price_Change'] * df['volume']
+    
+    # 20-day Moving Average of Volume
+    df['SMA_Volume_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Divide Volume Adjusted Price Change by Moving Average
+    df['VAMI'] = df['Volume_Adjusted_Price_Change'] / df['SMA_Volume_20']
+    
+    # Multiply Close by Volume
+    df['Volume_Weighted_Close'] = df['close'] * df['volume']
+    
+    # Set SMA period (e.g., 21 days)
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+    
+    # Composite Alpha Factor
+    df['Composite_Alpha_Factor'] = (df['Volume_Weighted_Close'] - df['SMA_21']) + df['VAMI'] + df['close'].pct_change().rolling(window=5).sum()
+    
+    return df['Composite_Alpha_Factor']
+```

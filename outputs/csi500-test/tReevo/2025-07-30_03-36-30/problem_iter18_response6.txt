@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 3-Day, 5-Day, 10-Day, and 20-Day Rolling Returns
+    df['3D_Return'] = (df['close'] / df['close'].shift(2)) - 1
+    df['5D_Return'] = (df['close'] / df['close'].shift(4)) - 1
+    df['10D_Return'] = (df['close'] / df['close'].shift(9)) - 1
+    df['20D_Return'] = (df['close'] / df['close'].shift(19)) - 1
+
+    # Combine 3-Day, 5-Day, 10-Day, and 20-Day Returns with weights
+    df['Weighted_Returns'] = (df['3D_Return'] * 0.2 +
+                              df['5D_Return'] * 0.3 +
+                              df['10D_Return'] * 0.25 +
+                              df['20D_Return'] * 0.25)
+
+    # Multiply by Volume of day t
+    df['Volume_Adjusted_Momentum'] = df['Weighted_Returns'] * df['volume']
+
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Open-Close Spread
+    df['Open_Close_Spread'] = df['open'] - df['close']
+
+    # Calculate Mean Price of day t
+    df['Mean_Price'] = (df['high'] + df['low'] + df['open'] + df['close']) / 4
+
+    # Calculate High-Mean and Low-Mean Spreads
+    df['High_Mean_Spread'] = df['high'] - df['Mean_Price']
+    df['Low_Mean_Spread'] = df['Mean_Price'] - df['low']
+
+    # Compute Standard Deviation of Close Prices
+    df['Close_STD'] = df['close'].rolling(window=20).std()
+
+    # Combine Spreads and Standard Deviation
+    df['Comprehensive_Volatility'] = (df['High_Low_Spread'] + 
+                                      df['Open_Close_Spread'] + 
+                                      df['High_Mean_Spread'] + 
+                                      df['Low_Mean_Spread'] + 
+                                      df['Close_STD']) / df['Mean_Price']
+
+    # Integrate Market Sentiment
+    df['Daily_Change_Amount'] = df['amount'] - df['amount'].shift(1)
+    df['Daily_Change_Volume'] = df['volume'] - df['volume'].shift(1)
+
+    # Normalize Daily Change in Amount and Volume
+    df['Normalized_Change_Amount'] = df['Daily_Change_Amount'] / df['amount']
+    df['Normalized_Change_Volume'] = df['Daily_Change_Volume'] / df['volume']
+
+    # Add Normalized Changes to Volume-Adjusted Multi-Period Price Momentum
+    df['Adjusted_Momentum'] = (df['Volume_Adjusted_Momentum'] + 
+                               df['Normalized_Change_Amount'] + 
+                               df['Normalized_Change_Volume'])
+
+    # Final Factor Calculation: Subtract Comprehensive Volatility Index from Adjusted Momentum
+    df['Final_Factor'] = df['Adjusted_Momentum'] - df['Comprehensive_Volatility']
+
+    return df['Final_Factor']
+```

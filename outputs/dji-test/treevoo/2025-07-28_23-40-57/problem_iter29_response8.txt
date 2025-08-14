@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Daily Volatility
+    df['Daily_Volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Identify Volume Trend Changes
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Correlate Volume with Price Movement
+    df['Price_Volume_Correlation'] = (df['close'] - df['open']) / (df['volume'] / df['volume'].shift(1))
+    
+    # Calculate Intraday Volume Proportion
+    df['Intraday_Volume'] = df['volume'] - df['volume'].shift(1)
+    
+    # Generate Factor 1: Multiply Intraday Return by Volume Impact Score
+    df['Factor_1'] = df['Intraday_Return'] * (df['Volume_Change'] / df['Intraday_Volume'])
+    
+    # Calculate Price and Intraday Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(10)
+    df['Intraday_Momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Confirm with Volume Trend
+    df['Average_Volume_5D'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume_5D']
+    
+    # Compute Factor 2
+    df['Factor_2'] = 0
+    df.loc[df['Volume_Ratio'] > 1.2, 'Factor_2'] = df['Price_Momentum'] * df['Intraday_Momentum']
+    
+    # Adjust for Cumulative Volume and Enhanced Volume Trend
+    df['Average_Volume_15D'] = df['volume'].rolling(window=15).mean()
+    df['Enhanced_Volume_Ratio'] = df['volume'] / df['Average_Volume_15D']
+    
+    # Combine Momentum
+    df['Aggregate_Momentum'] = 0
+    df.loc[df['Enhanced_Volume_Ratio'] > 1.5, 'Aggregate_Momentum'] = df['Price_Momentum'] * df['Intraday_Momentum']
+    df.loc[df['Enhanced_Volume_Ratio'] <= 1.5, 'Aggregate_Momentum'] = 0.3 * (df['Price_Momentum'] + df['Intraday_Momentum'])
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Factor_1'] * df['Aggregate_Momentum'] + df['Factor_2']
+    
+    # Incorporating Financial Transaction Amounts for Depth
+    df['Transaction_Size_Efficiency'] = (df['close'] - (df['amount'] / df['volume'])) / df['close'].shift(1)
+    
+    return df['Alpha_Factor']
+```

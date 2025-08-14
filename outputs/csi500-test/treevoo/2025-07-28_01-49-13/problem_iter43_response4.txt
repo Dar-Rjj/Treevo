@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-based factors
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_diff'] = df['EMA_5'] - df['EMA_20']
+    df['ROC_5'] = df['close'].pct_change(5)
+    df['ROC_10'] = df['close'].pct_change(10)
+
+    # Volume-based factors
+    df['vol_ratio_5'] = df['volume'] / df['volume'].rolling(window=5).median()
+    df['vol_ratio_20'] = df['volume'] / df['volume'].rolling(window=20).median()
+    df['vol_mom'] = df['volume'].diff()
+    df['vol_ROC_5'] = df['volume'].pct_change(5)
+    df['vol_ROC_10'] = df['volume'].pct_change(10)
+
+    # Price and volume combined factors
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    df['VWAP_5'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['VWAP_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['VWAP_diff_5'] = df['close'] - df['VWAP_5']
+    df['VWAP_diff_20'] = df['close'] - df['VWAP_20']
+
+    # Volatility-based factors
+    df['MAD_5'] = df['close'].rolling(window=5).apply(lambda x: (x - x.mean()).abs().mean())
+    df['MAD_20'] = df['close'].rolling(window=20).apply(lambda x: (x - x.mean()).abs().mean())
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs().combine((df['high'] - df['close'].shift(1)).abs(), max).combine((df['low'] - df['close'].shift(1)).abs(), max)
+    df['ATR_5'] = df['true_range'].rolling(window=5).mean()
+    df['ATR_20'] = df['true_range'].rolling(window=20).mean()
+    delta = df['close'].diff()
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    roll_up = up.rolling(window=14).mean()
+    roll_down = down.abs().rolling(window=14).mean()
+    RS = roll_up / roll_down
+    df['RSI_14'] = 100.0 - (100.0 / (1.0 + RS))
+
+    # Pattern recognition factors
+    df['doji'] = (df['open'] == df['close']) & ((df['high'] - df['low']) > 0.005 * df['close'])
+    df['hammer'] = (df['close'] > df['open']) & (3 * (df['high'] - df['close']) <= (df['close'] - df['low'])) & (df['high'] - df['low'] > 0.005 * df['close'])
+    df['shooting_star'] = (df['open'] > df['close']) & (3 * (df['high'] - df['open']) >= (df['close'] - df['low'])) & (df['high'] - df['low'] > 0.005 * df['close'])
+    df['engulfing_bullish'] = (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open']) & (df['open'] <= df['close'].shift(1)) & (df['close'] > df['open'].shift(1))
+    df['engulfing_bearish'] = (df['close'].shift(1) > df['open'].shift(1)) & (df['close']

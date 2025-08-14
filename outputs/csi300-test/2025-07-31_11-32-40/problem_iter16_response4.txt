@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close to Midpoint Deviation
+    close_to_midpoint_deviation = df['close'] - (df['high'] + df['low']) / 2
+    
+    # Calculate Adjusted Intraday Reversal with Momentum Adjustment
+    adjusted_intraday_reversal = (2 * (df['high'] - df['low']) / (df['close'] + df['open'])) * (1 + (df['close'] - df['close'].shift(10)) / df['close'].shift(10))
+    
+    # Calculate Previous Day Return
+    previous_day_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = (intraday_range * close_to_midpoint_deviation) - previous_day_return
+    
+    # Calculate Daily Volume Surprise
+    daily_volume_surprise = df['volume'] - df['volume'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surprise
+    price_momentum_and_volume_surprise = (df['close'] - df['close'].shift(10)) * daily_volume_surprise
+    
+    # Calculate High-Low Price Difference
+    high_low_price_difference = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    volume_up = df[df['close'] > df['open']]['volume'].sum()
+    volume_down = df[df['close'] < df['open']]['volume'].sum()
+    volume_influence_ratio = volume_up / volume_down if volume_down != 0 else np.nan
+    
+    # Adjust Momentum by Volume and Amount
+    adjusted_momentum = (df['high'] - df['low']) * df['volume'] * volume_influence_ratio
+    
+    # Introduce Time Decay
+    decay_rate = 0.1  # Example decay rate, can be tuned
+    time = np.arange(len(df))  # Assuming the index is sequential days
+    time_decay = np.exp(-decay_rate * time)
+    adjusted_momentum_decay = adjusted_momentum * time_decay
+    
+    # Intermediate Alpha Factor Synthesis
+    intermediate_alpha_factor_synthesis = price_momentum_and_volume_surprise * high_low_price_difference
+    
+    # Final Alpha Factor
+    final_alpha_factor = (intermediate_alpha_factor_synthesis * volume_influence_ratio)
+    
+    return final_alpha_factor
+```

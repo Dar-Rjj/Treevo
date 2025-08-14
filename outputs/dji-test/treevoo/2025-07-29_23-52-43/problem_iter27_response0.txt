@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Open-Close Log Return Ratio
+    df['open_close_log_return_ratio'] = np.log(df['close'] / df['open'])
+    
+    # High-Low Log Return Difference
+    df['high_low_log_return_diff'] = np.log(df['high'] / df['low'])
+    
+    # Simple Moving Averages (SMA)
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Exponential Moving Averages (EMA)
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[1]) - min(x[0], x[1]), axis=1)
+    
+    # Average True Range (ATR)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    df['atr_21'] = df['true_range'].rolling(window=21).mean()
+    
+    # Historical Volatility
+    df['log_return_vol_30'] = df['log_return'].rolling(window=30).std() * np.sqrt(252)
+    df['log_return_vol_60'] = df['log_return'].rolling(window=60).std() * np.sqrt(252)
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Stochastic Oscillator
+    df['k_14'] = 100 * (df['close'] - df['low'].rolling(window=14).min()) / (df['high'].rolling(window=14).max() - df['low'].rolling(window=14).min())
+    df['d_14'] = df['k_14'].rolling(window=3).mean()
+    
+    # MACD (Moving Average Convergence Divergence)
+    df['macd_line'] = df['ema_12'] - df['ema_26']
+    df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    
+    # On-Balance Volume (OBV)
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Chaikin Money Flow (CMF)
+    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mf_volume = mf_multiplier * df['volume']
+    df['cmf_20'] = mf_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['cmf_50'] = mf_volume.rolling(window=50).sum() / df['volume'].rolling(window=50).sum()
+    
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    df['mfi_14'] = 100 - (100 / (1 + money_ratio))
+    df['mfi_28'] = 100 - (100 / (1

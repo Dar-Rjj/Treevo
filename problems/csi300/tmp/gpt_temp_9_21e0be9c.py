@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day simple moving average of closing prices to capture momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum factor: difference between 5-day and 20-day moving averages
+    df['momentum_factor'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day SMA
+    df['relative_strength'] = df['close'] / df['SMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Calculate the RSI (Relative Strength Index) for 14 days
+    delta = df['close'].diff(1)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Adaptive weights for the factors
+    df['momentum_weight'] = 1 / (df['volatility_factor'] + 1e-6)
+    df['liquidity_weight'] = df['liquidity_factor'] / df['liquidity_factor'].max()
+    df['relative_strength_weight'] = df['relative_strength'] / df['relative_strength'].max()
+    df['market_breadth_weight'] = df['market_breadth'] / df['market_breadth'].abs().max()
+    df['RSI_weight'] = (50 - np.abs(df['RSI'] - 50)) / 50
+
+    # Smoothing the momentum factor using a 5-day exponential moving average
+    df['EMA_momentum'] = df['momentum_factor'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the 5-day exponential moving average of the market breadth
+    df['EMA_market_breadth'] = df['market_breadth'].ewm(span=5, adjust=False).mean()
+
+    # Smooth the relative strength using a 5-day exponential moving average
+    df['EMA_relative_strength'] = df['relative_strength'].ewm(span=5, adjust=False).mean()
+
+    # Smooth the RSI using a 5-day exponential moving average
+    df['EMA_RSI'] = df['RSI'].ewm(span=5, adjust=False).mean()
+
+    # Incorporate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+    df['VWAP_deviation'] = (df['close'] - df['VWAP']) / df['VWAP']
+    df['VWAP_weight'] = (df['VWAP_deviation'].abs() + 1e-6).rank(pct=True)
+
+    # Calculate logarithmic returns

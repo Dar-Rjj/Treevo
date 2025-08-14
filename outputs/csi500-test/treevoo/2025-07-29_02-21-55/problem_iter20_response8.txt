@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_hl_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['combined_indicator'] = df['intraday_hl_pct_change'] * df['volume_ratio']
+    fixed_threshold = 1.5
+    df['significant_movement'] = df['combined_indicator'].apply(lambda x: x if abs(x) > fixed_threshold else 0)
+    
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    df['ma_log_return_20'] = df['log_return'].rolling(window=20).mean()
+    
+    # Adjust Moving Average Return by Volume
+    df['ema_volume_20'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['sma_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_ma_return'] = (df['ma_log_return_20'] * df['ema_volume_20']) / df['sma_volume_20']
+    
+    # Apply Weighted Moving Averages
+    df['fast_ema'] = df['adjusted_ma_return'].ewm(span=10, adjust=False).mean()  # Shorter period
+    df['slow_ema'] = df['adjusted_ma_return'].ewm(span=30, adjust=False).mean()  # Longer period
+    
+    # Integrate Intraday Volatility
+    df['intraday_range'] = df['high'] - df['low']
+    df['ma_intraday_range_20'] = df['intraday_range'].rolling(window=20).mean()
+    
+    # Combine Momentum Indicators with MACD
+    macd = df['fast_ema'] - df['slow_ema']
+    weighted_momentum = 0.45 * df['slow_ema'] + 0.55 * df['fast_ema']
+    df['macd_combined'] = weighted_momentum + macd
+    
+    # Incorporate Volume Confirmation and Long-Term Volume Trend
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    df['volume_ratio_long_term'] = df['volume'] / avg_volume_20
+    df['volume_trend'] = df['volume_ratio_long_term'].apply(lambda x: 1 if x >= 1 else (-1 if x < 1 else 0))
+    
+    # Integrate Combined Indicator with Momentum and Intraday Volatility
+    df['final_factor'] = (df['adjusted_ma_return'] * df['significant_movement']) / df['ma_intraday_range_20']
+    
+    return df['final_factor']
+```

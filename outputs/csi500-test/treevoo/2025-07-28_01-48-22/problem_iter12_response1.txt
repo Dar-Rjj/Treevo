@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Log Return
+    df['log_return'] = df['close'].apply(lambda x: np.log(x)) - df['close'].shift(1).apply(lambda x: np.log(x))
+    
+    # Compute 20-Day Momentum
+    df['20d_momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Intraday and Historical Momentum Components
+    intraday_movement = (df['high'] - df['low']) * (df['close'] - df['open']) / df['volume']
+    historical_momentum = df['close'] - df['close'].shift(10)
+    
+    # Combine Momentum Components
+    df['combined_momentum'] = intraday_movement + historical_momentum
+    
+    # Smooth Combined Momentum with 5-day SMA
+    df['smoothed_momentum'] = df['combined_momentum'].rolling(window=5).mean()
+    
+    # Volume Influence
+    df['volume_volatility'] = df['volume'].pct_change().rolling(window=20).std()
+    avg_volume = df['volume'].rolling(window=10).mean()
+    df['adjusted_momentum'] = df['20d_momentum'] / df['volume_volatility'] * avg_volume
+    
+    # Price Range and Volatility
+    price_range_volatility = (df['high'] - df['low']) * (df['close'] - df['open']) / df['volume']
+    
+    # Incorporate Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=10).mean()
+    volatility_multiplier = 1 / (avg_daily_range + 1)
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['smoothed_momentum'] * avg_volume) * volatility_multiplier
+    
+    return df['alpha_factor']
+```

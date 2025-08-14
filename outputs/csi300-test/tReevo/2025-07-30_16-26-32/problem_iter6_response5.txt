@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = df['high'] - df['low']
+    df['range_over_open'] = df['daily_range'] / df['open']
+
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['smoothed_open_to_close'] = df['open_to_close_return'].rolling(window=5).mean()
+
+    # Volume Adjusted Intraday Movement
+    avg_vol_20 = df['volume'].rolling(window=20).mean()
+    df['intraday_movement'] = df['close'] - df['open']
+    df['vol_adjusted_intraday'] = df['intraday_movement'] / avg_vol_20
+
+    # Price-Volume Trend Indicator
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    df['price_volume_trend'] = (df['daily_price_change'] * df['volume']).rolling(window=30).sum()
+
+    # Combined Momentum and Volatility Factor
+    df['combined_mom_vol'] = 0.5 * df['range_over_open'] + 0.5 * df['smoothed_open_to_close']
+    df['exp_smoothed_combined_mom_vol'] = df['combined_mom_vol'].ewm(alpha=0.1, adjust=False).mean()
+
+    # Volume-Sensitive Momentum Factor
+    df['volume_sensitive_mom'] = 0.5 * df['price_volume_trend'] + 0.5 * df['vol_adjusted_intraday']
+    df['exp_smoothed_volume_sensitive_mom'] = df['volume_sensitive_mom'].ewm(alpha=0.1, adjust=False).mean()
+
+    # Relative Strength Indicator
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+    df['relative_strength'] = df['sma_10'] / df['sma_50']
+
+    # Adaptive Volatility
+    df['std_dev_20'] = df['close'].rolling(window=20).std()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['adaptive_vol'] = df['std_dev_20'] / df['sma_20']
+
+    # Dynamic Volume Adjustment
+    df['avg_vol_20'] = avg_vol_20
+    df['volume_ratio'] = df['volume'] / df['avg_vol_20']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        0.25 * df['exp_smoothed_combined_mom_vol'] +
+        0.25 * df['exp_smoothed_volume_sensitive_mom'] +
+        0.25 * df['relative_strength'] +
+        0.25 * df['adaptive_vol']
+    )
+    df['final_alpha_factor'] *= df['volume_ratio']
+    df['final_exp_smoothed_alpha'] = df['final_alpha_factor'].ewm(alpha=0.1, adjust=False).mean()
+
+    return df['final_exp_smoothed_alpha']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 101, 102, 103, 104],
+#     'high': [105, 106, 107, 108, 109],
+#     'low': [95, 96, 97, 98, 99],
+#     'close': [100, 101, 102, 103, 104],
+#     'amount': [1000, 1000, 1000, 1000, 1000],
+#     'volume': [1000, 1000, 1000, 1000, 1000]
+# })
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

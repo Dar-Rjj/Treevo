@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Price Range
+    df['PriceRange'] = df['high'] - df['low']
+    
+    # Calculate 5-day Exponential Moving Average for Price
+    df['EMA_5_Price'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate 10-Day Price Momentum
+    df['PriceMomentum'] = df['close'] - df['close'].shift(10)
+    
+    # Adjust for Volume Trend
+    df['MA_10_Volume'] = df['volume'].rolling(window=10).mean()
+    df['VolumeTrend'] = df['volume'] - df['MA_10_Volume']
+    
+    # Combine Price Momentum and Volume Trend Adjustment
+    df['CombinedMomentum'] = df['PriceMomentum'] * df['VolumeTrend']
+    df['CombinedMomentum'] = df['CombinedMomentum'].apply(lambda x: max(x, 0))
+    
+    # Calculate Daily Log Return
+    df['LogReturn'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Identify Positive and Negative Returns
+    positive_returns = df[df['LogReturn'] > 0]
+    negative_returns = df[df['LogReturn'] <= 0]
+    
+    # Calculate Sum of Upward Volume
+    df['UpwardVolume'] = 0
+    df.loc[positive_returns.index, 'UpwardVolume'] = positive_returns['volume']
+    df['SumUpwardVolume'] = df['UpwardVolume'].rolling(window=10).sum()
+    
+    # Calculate Sum of Downward Volume
+    df['DownwardVolume'] = 0
+    df.loc[negative_returns.index, 'DownwardVolume'] = negative_returns['volume']
+    df['SumDownwardVolume'] = df['DownwardVolume'].rolling(window=10).sum()
+    
+    # Compute Trend Reversal Signal
+    total_volume = df['SumUpwardVolume'] + df['SumDownwardVolume']
+    df['UpwardVolumeRatio'] = df['SumUpwardVolume'] / total_volume
+    df['DownwardVolumeRatio'] = df['SumDownwardVolume'] / total_volume
+    df['TrendReversalSignal'] = (df['UpwardVolumeRatio'] > df['DownwardVolumeRatio']).astype(int) * df['LogReturn']
+    
+    # Calculate Daily Return
+    df['DailyReturn'] = df['close'].pct_change()
+    
+    # Calculate Price Gap
+    df['PriceGap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    df['AdjustedDailyReturn'] = df['DailyReturn']
+    df.loc[df['PriceGap'] > 0, 'AdjustedDailyReturn'] -= df['PriceGap']
+    df.loc[df['PriceGap'] < 0, 'AdjustedDailyReturn'] += df['PriceGap']
+    df['AdjustedDailyReturn'] = df['AdjustedDailyReturn'] * np.exp(-1/1)
+    
+    # Final Volume Weighted Momentum
+    df['FinalVolumeWeightedMomentum'] = df['CombinedMomentum'] * df['AdjustedDailyReturn']
+    
+    # Integrate Momentum, Volume, and Price Change
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    df['IntegratedMomentum'] = df['PriceRange'] * df['VolumeChange'] + df['PriceChange']
+    
+    # Calculate 5-day Exponential Moving Average for Volume
+    df['EMA_5_Volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Volume Acceleration
+    df['VolumeAcceleration'] = df['EMA_5_Volume'] - df['EMA_5_Volume'].shift(1)
+    
+    # Combine Factors
+    df['CombinedFactors'] = df['VolumeAcceleration'] * df['PriceMomentum'] + df['IntegratedMomentum']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = df['CombinedMomentum'] + df['TrendReversalSignal'] + df['FinalVolumeWeightedMomentum'] + df['CombinedFactors']
+    df['FinalAlphaFactor'] = df['FinalAlphaFactor'].apply(lambda x: max(x, 0))
+    
+    return df['FinalAlphaFactor']
+```

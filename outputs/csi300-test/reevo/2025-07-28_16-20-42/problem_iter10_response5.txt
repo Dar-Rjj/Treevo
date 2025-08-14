@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 30-day moving average of the close price for short and long term trends
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_30 = df['close'].rolling(window=30).mean()
+
+    # Price change rate over 5 days, 30 days, and 90 days
+    price_change_rate_5d = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    price_change_rate_30d = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    price_change_rate_90d = (df['close'] - df['close'].shift(90)) / df['close'].shift(90)
+
+    # Volume trend as a ratio of current volume to the 5-day and 30-day average volume
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    avg_volume_30d = df['volume'].rolling(window=30).mean()
+    volume_trend_5d = df['volume'] / (avg_volume_5d + 1e-7)
+    volume_trend_30d = df['volume'] / (avg_volume_30d + 1e-7)
+
+    # Weighted sum of open, high, low, and close prices
+    weighted_prices = (0.1 * df['open'] + 0.2 * df['high'] + 0.2 * df['low'] + 0.5 * df['close'])
+
+    # Volatility ratio using 5-day window
+    volatility_ratio = (df['high'] - df['low']) / (ma_5 + 1e-7)
+
+    # Adaptive weighting for combining factors
+    weight_price_change_rate_5d = np.clip(price_change_rate_5d, -1, 1).abs()
+    weight_price_change_rate_30d = np.clip(price_change_rate_30d, -1, 1).abs()
+    weight_price_change_rate_90d = np.clip(price_change_rate_90d, -1, 1).abs()
+    weight_volume_trend_5d = np.clip(volume_trend_5d, -1, 1).abs()
+    weight_volume_trend_30d = np.clip(volume_trend_30d, -1, 1).abs()
+
+    # Normalize weights
+    total_weight = (weight_price_change_rate_5d + weight_price_change_rate_30d + weight_price_change_rate_90d +
+                    weight_volume_trend_5d + weight_volume_trend_30d + 1)
+    weight_price_change_rate_5d /= total_weight
+    weight_price_change_rate_30d /= total_weight
+    weight_price_change_rate_90d /= total_weight
+    weight_volume_trend_5d /= total_weight
+    weight_volume_trend_30d /= total_weight
+    base_weight = 1 / total_weight
+
+    # Final alpha factor
+    alpha_factor = (weighted_prices - ma_5) / (volatility_ratio + 1e-7)
+    alpha_factor += (price_change_rate_5d * weight_price_change_rate_5d + 
+                     price_change_rate_30d * weight_price_change_rate_30d + 
+                     price_change_rate_90d * weight_price_change_rate_90d +
+                     volume_trend_5d * weight_volume_trend_5d + 
+                     volume_trend_30d * weight_volume_trend_30d) * base_weight
+
+    # Additional momentum factor
+    momentum_20d = df['close'] / df['close'].shift(20) - 1
+    alpha_factor += momentum_20d * (1 - (weight_price_change_rate_5d + weight_price_change_rate_30d + weight_price_change_rate_90d))
+
+    return alpha_factor
+```

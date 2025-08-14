@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Weighted Simple Moving Average (SMA) over 10 periods
+    df['Weighted_SMA_10'] = 0
+    for t in range(9, len(df)):
+        df.loc[df.index[t], 'Weighted_SMA_10'] = sum(df.loc[df.index[i], 'close'] * (i - t + 10) for i in range(t-9, t+1)) / 55
+    
+    # Exponential Moving Average (EMA) over 20 periods
+    df['EMA_20'] = 0
+    ema_multiplier = 2 / (1 + 20)
+    for t in range(19, len(df)):
+        if t == 19:
+            df.loc[df.index[t], 'EMA_20'] = df.loc[df.index[t], 'close'] * ema_multiplier + df.loc[df.index[t-1], 'close'] * (1 - ema_multiplier)
+        else:
+            df.loc[df.index[t], 'EMA_20'] = df.loc[df.index[t], 'close'] * ema_multiplier + df.loc[df.index[t-1], 'EMA_20'] * (1 - ema_multiplier)
+    
+    # True Range and Average True Range (ATR) over 28 periods
+    df['True_Range'] = 0
+    for t in range(1, len(df)):
+        df.loc[df.index[t], 'True_Range'] = max(df.loc[df.index[t], 'high'], df.loc[df.index[t-1], 'close']) - min(df.loc[df.index[t], 'low'], df.loc[df.index[t-1], 'close'])
+    df['ATR_28'] = df['True_Range'].rolling(window=28).mean()
+    
+    # New High and New Low with volume filter
+    df['New_High'] = False
+    df['New_Low'] = False
+    for t in range(10, len(df)):
+        if df.loc[df.index[t], 'high'] > max(df.loc[df.index[i], 'high'] for i in range(t-10, t)) and df.loc[df.index[t], 'volume'] > df.loc[df.index[t-1], 'volume']:
+            df.loc[df.index[t], 'New_High'] = True
+        if df.loc[df.index[t], 'low'] < min(df.loc[df.index[i], 'low'] for i in range(t-10, t)) and df.loc[df.index[t], 'volume'] > df.loc[df.index[t-1], 'volume']:
+            df.loc[df.index[t], 'New_Low'] = True
+    
+    # Rate of Change (ROC) over 24 periods
+    df['ROC_24'] = df['close'].pct_change(periods=24)
+    
+    # Relative Strength Index (RSI) over 28 periods
+    df['Change'] = df['close'].diff()
+    df['Gain'] = df['Change'].apply(lambda x: x if x > 0 else 0)
+    df['Loss'] = abs(df['Change'].apply(lambda x: x if x < 0 else 0))
+    df['Average_Gain'] = df['Gain'].rolling(window=28).mean()
+    df['Average_Loss'] = df['Loss'].rolling(window=28).mean()
+    df['RS'] = df['Average_Gain'] / df['Average_Loss']
+    df['RSI_28'] = 100 - (100 / (1 + df['RS']))
+    
+    # On-Balance Volume (OBV) and its Smoothed version (SMA over 10 periods)
+    df['OBV'] = 0
+    for t in range(1, len(df)):
+        if df.loc[df.index[t], 'close'] > df.loc[df.index[t-1], 'close']:
+            df.loc[df.index[t], 'OBV'] = df.loc[df.index[t-1], 'OBV'] + df.loc[df.index[t], 'volume']
+        elif df.loc[df.index[t], 'close'] < df.loc[df.index[t-1], 'close']:
+            df.loc[df.index[t], 'OBV'] = df.loc[df.index[t-1], 'OBV'] - df.loc[df.index[t], 'volume']
+        else:
+            df.loc[df.index[t], 'OBV'] = df.loc[df.index[t-1], 'OBV']
+    df['Smoothed_OBV'] = df['OBV'].rolling(window=10).mean()
+    
+    # Money Flow Index (MFI) over 28 periods
+    df['Typical_Price'] = (df['high'] + df['low'] + df

@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range and Adjust for Volume
+    df['range'] = df['high'] - df['low']
+    df['volume_adj'] = (df['volume'] / df['volume'].rolling(window=5).mean()) + 0.01
+    df['intraday_range_adj'] = df['range'] * df['volume_adj']
+
+    # Smoothing
+    df['sma_intraday_range_adj'] = df['intraday_range_adj'].rolling(window=5).mean()
+
+    # Calculate SMA Cross Signal
+    df['sma_close_short'] = df['close'].rolling(window=5).mean()
+    df['sma_close_long'] = df['close'].rolling(window=20).mean()
+
+    # Determine Momentum
+    df['momentum'] = (df['sma_close_short'] > df['sma_close_long']).astype(int) * 2 - 1
+
+    # Calculate Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = df['close'] - df['open']
+    df['intraday_momentum'] = (df['high_low_diff'] + df['open_close_return']) / 2
+
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = 0
+    obv_values = []
+    for i in range(len(df)):
+        if i == 0:
+            obv_values.append(0)
+        else:
+            if df['close'].iloc[i] > df['close'].iloc[i-1]:
+                obv_values.append(obv_values[-1] + df['volume'].iloc[i])
+            elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+                obv_values.append(obv_values[-1] - df['volume'].iloc[i])
+            else:
+                obv_values.append(obv_values[-1])
+    df['obv'] = obv_values
+
+    # Weight OBV by Difference between Short and Long SMA
+    df['final_obv_factor'] = df['obv'] * abs(df['sma_close_short'] - df['sma_close_long'])
+
+    # Apply Volume and Amount Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    df['shock_filter'] = (df['volume_ratio'] > 1.5) & (df['amount_ratio'] > 1.5)
+
+    # Measure Volume Synchronization
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['sync_product'] = df['volume_change'] * df['price_change']
+    df['sync_value'] = df['sync_product'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+
+    # Synthesize Combined Factor
+    df['combined_factor'] = df['sma_intraday_range_adj'] + df['sync_value']
+    df['combined_factor'] = df['combined_factor'].apply(lambda x: max(x, 0))
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['intraday_momentum'] * df['final_obv_factor'] * df['shock_filter']
+
+    return df['alpha_factor']
+```

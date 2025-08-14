@@ -1,0 +1,76 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=20, K=10, L=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Compute Log Returns over N Days
+    log_returns = np.log(close_prices).diff()
+    
+    # Calculate Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    rolling_mean = log_returns.rolling(window=N).mean()
+    rolling_std = log_returns.rolling(window=N).std()
+    upper_threshold = rolling_mean + 2 * rolling_std
+    lower_threshold = rolling_mean - 2 * rolling_std
+    
+    # Clip Log Returns to Thresholds
+    clipped_log_returns = log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    momentum = clipped_log_returns.rolling(window=N).sum()
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    volume_relative = volumes / volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = momentum * volume_relative
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_volatility = abs_price_changes.rolling(window=M).std()
+    ema_volatility = abs_price_changes.ewm(span=K).mean()
+    iqr_volatility = abs_price_changes.rolling(window=L).quantile(0.75) - abs_price_changes.rolling(window=L).quantile(0.25)
+    
+    # Final Factor Calculation
+    # Combine Weighted Components
+    weights = np.array([0.4, 0.3, 0.3])  # Weights for momentum, volume, and volatility
+    factor = (volume_adjusted_momentum * weights[0] + 
+              std_volatility * weights[1] + 
+              ema_volatility * weights[2])
+    
+    # Ensure Weights Sum to 1
+    factor = factor / weights.sum()
+    
+    # Integrate Market Breadth and Economic Indicators
+    advancing_issues = (df['close'] > df['open']).astype(int)
+    declining_issues = (df['close'] < df['open']).astype(int)
+    advance_decline_line = (advancing_issues - declining_issues).cumsum()
+    
+    new_highs = (df['high'] == df['high'].expanding().max()).astype(int)
+    new_lows = (df['low'] == df['low'].expanding().min()).astype(int)
+    net_new_highs_lows = new_highs - new_lows
+    
+    # Incorporate Key Economic Indicators
+    # Assuming we have daily interest rate data and quarterly GDP growth data
+    interest_rate = df['interest_rate']  # Placeholder for interest rate data
+    gdp_growth = df['gdp_growth']  # Placeholder for GDP growth data
+    
+    # Interpolate GDP Growth Data
+    gdp_growth_interpolated = gdp_growth.resample('D').interpolate()
+    
+    # Combine all components
+    factor += 0.1 * advance_decline_line
+    factor += 0.1 * net_new_highs_lows
+    factor += 0.1 * interest_rate
+    factor += 0.1 * gdp_growth_interpolated
+    
+    return factor.dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)

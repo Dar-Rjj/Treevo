@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close to Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Compute Intraday Momentum Score
+    df['sum_of_deltas'] = df['intraday_range'] + df['close_open_diff']
+    df['intraday_momentum_score'] = df['sum_of_deltas'] * df['volume']
+    
+    # Calculate Volume Weighted Price
+    df['close_volume_weighted'] = df['close'] * df['volume']
+    df['open_volume_weighted'] = df['open'] * df['volume']
+    df['volume_weighted_price'] = (df['close_volume_weighted'] + df['open_volume_weighted']) / df['volume']
+    df['volume_weighted_price_change'] = df['volume_weighted_price'].diff()
+    
+    # Compute Combined Intraday and Daily Momentum
+    df['combined_momentum'] = df['intraday_momentum_score'] + df['volume_weighted_price_change']
+    
+    # Apply Exponential Moving Average (EMA) to Combined Momentum
+    df['ema_combined_momentum'] = df['combined_momentum'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Intraday Volatility Score
+    df['high_close_delta'] = df['high'] - df['close']
+    df['low_close_delta'] = df['low'] - df['close']
+    df['avg_deltas'] = (df['high_close_delta'] + df['low_close_delta']) / 2
+    df['intraday_volatility_score'] = df['avg_deltas'] * df['amount']
+    
+    # Compute EMA of Squared Returns for Volatility
+    df['daily_returns'] = df['close'].pct_change()
+    df['squared_returns'] = df['daily_returns'] ** 2
+    df['ema_squared_returns'] = df['squared_returns'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Divergence between EMA of Returns and Volatility
+    df['divergence'] = np.abs(df['ema_combined_momentum'] - df['ema_squared_returns'])
+    
+    # Volume Trend
+    df['volume_difference'] = df['volume'].diff()
+    df['rolling_avg_volume_diff'] = df['volume_difference'].rolling(window=20).mean()
+    
+    # Integrate Composite Momentum, Volatility, and Volume Trends
+    df['ema_30d_combined_momentum'] = df['combined_momentum'].ewm(span=30, adjust=False).mean()
+    df['momentum_diff'] = df['combined_momentum'] - df['ema_30d_combined_momentum']
+    df['factor'] = (df['momentum_diff'] - df['intraday_volatility_score']) * df['divergence'] / df['intraday_range']
+    
+    return df['factor']
+```

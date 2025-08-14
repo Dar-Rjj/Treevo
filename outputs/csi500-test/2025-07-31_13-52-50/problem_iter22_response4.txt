@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation
+    df['daily_return_deviation'] = df['close'] - df['close'].shift(1)
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal_potential'] = (df['daily_return_deviation'] > df['daily_return_deviation'].shift(1))
+    
+    # Check for Volume Increase
+    df['volume_ma_14'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = df['volume'] > df['volume_ma_14']
+    
+    # Compute Price Momentum Factor
+    n = 5  # Number of days for price momentum
+    df['price_momentum'] = df['daily_return_deviation'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 5  # Number of days for volume momentum
+    df['volume_momentum'] = df['volume'].diff().rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.5  # Weight for price momentum
+    k2 = 0.5  # Weight for volume momentum
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma_20']
+    small_constant = 1e-6  # To avoid division by zero
+    df['volume_adjustment_factor'] = df['volume_deviation'] + small_constant
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['price_range']
+    
+    # Calculate Volume Breakout Indicator
+    df['volume_breakout_indicator'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Aggregate Breakout Indicators
+    df['aggregated_breakout_indicators'] = df['price_breakout_ratio'] * df['volume']
+    
+    # Incorporate Price Action Context
+    df['price_change'] = df['close'] - df['open']
+    df['price_change_sign'] = df['price_change'].apply(lambda x: 1 if x > 0 else -1)
+    df['adjusted_aggregated_breakout_indicators'] = df['aggregated_breakout_indicators'] * df['price_change_sign']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_ma_220'] = df['volume'].rolling(window=220).mean()
+    df['adjusted_intraday_return'] = (df['volume'] - df['volume_ma_220']) * df['intraday_return']
+    
+    # Generate Final Alpha Factor
+    smoothing_factor = 0.2
+    df['final_alpha_factor'] = df['adjusted_combined_momentum'] + df['adjusted_aggregated_breakout_indicators'] + df['adjusted_intraday_return']
+    df['final_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Assign higher score if conditions are met
+    df['final_alpha_factor'] = df.apply(
+        lambda row: row['final_alpha_factor'] * 1.5 
+        if row['trend_reversal_potential'] and row['volume_increase'] and row['final_alpha_factor'] > 0 and row['adjusted_intraday_return'] > 0 
+        else row['final_alpha_factor'], axis=1
+    )
+    
+    return df['final_alpha_factor']
+```

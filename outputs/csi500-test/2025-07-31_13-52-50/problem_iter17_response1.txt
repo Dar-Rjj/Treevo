@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = (df['return_deviation'] > df['return_deviation'].shift(1)) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Moving Average of Daily Returns
+    lookback_period = 20
+    df['ma_daily_return'] = df['daily_return'].rolling(window=lookback_period).mean()
+    
+    # Calculate Volume Weight
+    df['avg_volume'] = df['volume'].rolling(window=lookback_period).mean()
+    df['volume_weight'] = df['volume'] / df['avg_volume']
+    
+    # Combine Moving Average and Volume Weight
+    df['vol_weighted_ma_return'] = df['ma_daily_return'] * df['volume_weight']
+    
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / (df['high'] - df['low'])
+    
+    # Calculate Volume Breakout Indicator
+    df['volume_breakout_indicator'] = (df['close'] - df['open']) * df['volume']
+    
+    # Aggregate Breakout Indicators
+    df['agg_breakout_ind'] = df['price_breakout_ratio'] * df['volume']
+    df['agg_breakout_ind'] = df['agg_breakout_ind'].rolling(window=lookback_period).sum()
+    
+    # Smooth Aggregate Breakout Indicators
+    smoothing_factor = 0.5
+    df['smooth_agg_breakout_ind'] = df['agg_breakout_ind'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_adj'] = (df['volume'] - df['volume'].rolling(window=10).mean()) * df['intraday_return']
+    
+    # Incorporate Price Volatility
+    df['std_close'] = df['close'].rolling(window=10).std()
+    df['volatility_adjustment'] = df['std_close'].apply(lambda x: 1.5 if x > df['std_close'].mean() else 0.7)
+    
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = (df['vol_weighted_ma_return'] + df['smooth_agg_breakout_ind'] + df['volume_adj']) / 3
+    
+    # Apply Moving Average to Final Alpha Factor
+    final_window_size = 10
+    df['final_alpha_factor'] = df['alpha_factor'].rolling(window=final_window_size).mean() * df['volatility_adjustment']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

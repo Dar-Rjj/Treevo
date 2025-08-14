@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Spread
+    df['vol_weighted_high_low'] = (df['high'] - df['low']) * df['volume']
+    
+    # Exponential Moving Average (EMA) of Weighted High-Low Spread
+    ema_window = 10
+    df['ema_vol_weighted_high_low'] = df['vol_weighted_high_low'].ewm(span=ema_window, adjust=False).mean()
+    df['diff_ema'] = df['ema_vol_weighted_high_low'] - df['ema_vol_weighted_high_low'].shift(5)
+    
+    # Identify Volume Spike
+    m_days = 30
+    df['volume_moving_avg'] = df['volume'].rolling(window=m_days).mean()
+    df['volume_std'] = df['volume'].rolling(window=m_days).std()
+    df['volume_spike'] = df['volume'] > (df['volume_moving_avg'] + 2 * df['volume_std'])
+    
+    # Calculate N-day Price Momentum
+    n_days = 10
+    df['n_day_return'] = df['close'] / df['close'].shift(n_days) - 1
+    
+    # Adjust for Volume Spike
+    k = 1.5  # Constant to amplify the return
+    df['adjusted_n_day_return'] = df['n_day_return'] * df['volume_spike'].apply(lambda x: k if x else 1)
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday High-Low Range and Close-Open Return
+    df['range_adjustment_factor'] = 1 + df['intraday_range']
+    df['close_open_adjustment_factor'] = 1 + df['close_open_return']
+    df['combined_return'] = df['adjusted_n_day_return'] * df['range_adjustment_factor'] * df['close_open_adjustment_factor']
+    
+    # Calculate Volume Weighted Adjusted Return
+    df['volume_weighted_adj_return'] = df['combined_return'] * df['volume']
+    
+    # Calculate Moving Average of Volume Weighted Adjusted Return
+    lookback_period = 20
+    df['ma_volume_weighted_adj_return'] = df['volume_weighted_adj_return'].rolling(window=lookback_period).mean()
+    
+    # Introduce Trend Reversal Signal
+    df['10_day_ma'] = df['close'].rolling(window=10).mean()
+    df['30_day_ma'] = df['close'].rolling(window=30).mean()
+    df['trend_reversal_signal'] = 0
+    df.loc[df['10_day_ma'] > df['30_day_ma'], 'trend_reversal_signal'] = 1
+    df.loc[df['10_day_ma'] < df['30_day_ma'], 'trend_reversal_signal'] = -1
+    
+    # Incorporate Trend Reversal into Final Alpha Factor
+    bullish_trend_constant = 0.05
+    bearish_trend_constant = -0.05
+    df['final_alpha_factor'] = (df['ema_vol_weighted_high_low'] + df['volume_weighted_adj_return']) / df['ma_volume_weighted_adj_return']
+    df['final_alpha_factor'] += df['trend_reversal_signal'].apply(lambda x: bullish_trend_constant if x == 1 else (bearish_trend_constant if x == -1 else 0))
+    
+    return df['final_alpha_factor'].dropna()
+```

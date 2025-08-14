@@ -1,0 +1,59 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log return of close prices to capture momentum
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate the 50-day and 200-day exponential moving averages (EMA) of the close price to capture longer-term trends
+    df['ema_close_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['ema_close_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the 14-day relative strength index (RSI) to incorporate mean reversion
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 10-day average true range (ATR) to incorporate volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['tr'].rolling(window=10).mean()
+    
+    # Calculate the 30-day rolling standard deviation of log returns to capture volatility
+    df['volatility'] = df['log_return'].rolling(window=30).std()
+    
+    # Calculate the volume-weighted average price (VWAP) to incorporate volume
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Calculate the Chaikin Money Flow (CMF) to incorporate money flow
+    df['mf_multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['mf_volume'] = df['mf_multiplier'] * df['volume']
+    df['cmf'] = df['mf_volume'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Calculate the On-Balance Volume (OBV) to incorporate cumulative trading volume
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Integrate adaptive, dynamic weights for each feature using a weighted sum approach
+    df['log_return_weight'] = df['volatility'].rolling(window=30).mean()  # Weight based on recent volatility
+    df['ema_50_weight'] = (df['close'] - df['ema_close_50']).abs()  # Weight based on distance from EMA
+    df['ema_200_weight'] = (df['close'] - df['ema_close_200']).abs()  # Weight based on distance from EMA
+    df['rsi_weight'] = 1 - (df['rsi'] / 100)  # Weight based on RSI value
+    df['atr_weight'] = df['atr'] / df['close']  # Weight based on ATR normalized by close
+    df['vwap_weight'] = (df['close'] - df['vwap']).abs()  # Weight based on distance from VWAP
+    df['cmf_weight'] = df['cmf'].abs()  # Weight based on CMF
+    df['obv_weight'] = df['obv'].pct_change().abs()  # Weight based on OBV change
+    
+    # Normalize the weights
+    total_weight = (df['log_return_weight'] + df['ema_50_weight'] + df['ema_200_weight'] + 
+                    df['rsi_weight'] + df['atr_weight'] + df['vwap_weight'] + df['cmf_weight'] + df['obv_weight'])
+    df['log_return_weight'] /= total_weight
+    df['ema_50_weight'] /= total_weight
+    df['ema_200_weight'] /= total_weight
+    df['rsi_weight'] /= total_weight
+    df['atr_weight'] /= total_weight
+    df['vwap_weight'] /= total_weight
+    df['cmf_weight'] /= total_weight
+    df['obv_weight'] /= total_weight
+    
+    # Combine the features into a single alpha factor with dynamic weights
+    factor = (
+        (df['log_return'] * df['log

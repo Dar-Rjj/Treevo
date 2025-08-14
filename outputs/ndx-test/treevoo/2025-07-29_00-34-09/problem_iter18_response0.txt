@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['open']
+    
+    # Compute 5-Day and 10-Day Exponential Moving Average of Price Change
+    df['ema_5_price_change'] = df['price_change'].ewm(span=5, adjust=False).mean()
+    df['ema_10_price_change'] = df['price_change'].ewm(span=10, adjust=False).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = np.where(df['ema_5_price_change'] > df['ema_10_price_change'], 1, -1)
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].mean() * 1.5
+    df['reversal_signal'] = np.where(df['volume'] > volume_threshold, df['reversal_signal'], 0)
+    
+    # Calculate Volume Adjusted Price (VAP)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['vap'] = df['typical_price'] * df['volume']
+    
+    # Calculate Volume Adjusted Momentum
+    df['ema_20_vap'] = df['vap'].ewm(span=20, adjust=False).mean()
+    df['vap_momentum'] = df['vap'] - df['ema_20_vap']
+    
+    # Incorporate Recent Volatility
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility_10'] = df['daily_returns'].rolling(window=10).std()
+    df['inverse_volatility'] = 1 / df['volatility_10']
+    df['vap_momentum_adjusted'] = df['vap_momentum'] * df['inverse_volatility']
+    
+    # Calculate High-Low Range Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['hl_volatility_20'] = df['high_low_range'].rolling(window=20).std()
+    
+    # Calculate Open-Close Range Volatility
+    df['open_close_range'] = df['open'] - df['close']
+    df['oc_volatility_20'] = df['open_close_range'].rolling(window=20).std()
+    
+    # Enhance with Additional Volatility Measure
+    df['high_low_range_30'] = df['high'] - df['low']
+    df['hl_volatility_30'] = df['high_low_range_30'].rolling(window=30).std()
+    df['avg_hl_volatility'] = (df['hl_volatility_20'] + df['hl_volatility_30']) / 2
+    
+    # Calculate 5-Day Price Range
+    df['5_day_high'] = df['high'].rolling(window=5).max()
+    df['5_day_low'] = df['low'].rolling(window=5).min()
+    df['5_day_range'] = df['5_day_high'] - df['5_day_low']
+    df['5_day_range_normalized'] = df['5_day_range'] / ((df['5_day_high'] + df['5_day_low']) / 2)
+    df['vap_momentum_5_day_range'] = df['vap_momentum'] * df['5_day_range_normalized']
+    
+    # Calculate 10-Day Price Range
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['10_day_range'] = df['10_day_high'] - df['10_day_low']
+    df['10_day_range_normalized'] = df['10_day_range'] / ((df['10_day_high'] + df['10_day_low']) / 2)
+    df['vap_momentum_10_day_range'] = df['vap_momentum'] * df['10_day_range_normalized']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['vap_momentum_adjusted'] + df['vap_momentum_5_day_range'] + df['vap_momentum_10_day_range']) - df['avg_hl_volatility']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,58 @@
+```python
+def heuristics_v2(df: pd.DataFrame, sector_data: pd.DataFrame, macro_data: pd.DataFrame) -> pd.Series:
+    # Merge sector and macroeconomic data with the market features
+    df = df.merge(sector_data, left_index=True, right_index=True)
+    df = df.merge(macro_data, left_index=True, right_index=True)
+
+    # Momentum - Calculate the 10-day and 30-day exponential moving averages of the close price
+    df['ema_10d'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_30d'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['momentum'] = df['ema_10d'] - df['ema_30d']
+
+    # Volatility - Calculate the standard deviation of the daily close price over the last 30 days
+    df['volatility'] = df['close'].pct_change().rolling(window=30).std()
+
+    # Liquidity - Calculate the average volume over the last 20 days
+    df['avg_vol_20d'] = df['volume'].rolling(window=20).mean()
+
+    # Price-Volume Relationship - Calculate the 10-day change in volume
+    df['volume_change_10d'] = df['volume'].pct_change(periods=10)
+
+    # Relative Strength - Calculate the ratio of the daily close difference to the average volume
+    df['close_diff'] = df['close'].diff()
+    df['relative_strength'] = df['close_diff'] / (df['avg_vol_20d'] + 1e-7)
+
+    # Market Sentiment - Calculate the 10-day exponential moving average of the high and low prices
+    df['ema_high_10d'] = df['high'].ewm(span=10, adjust=False).mean()
+    df['ema_low_10d'] = df['low'].ewm(span=10, adjust=False).mean()
+    df['market_sentiment'] = df['ema_high_10d'] - df['ema_low_10d']
+
+    # Adaptive Weights - Use a simple moving average cross-over to determine the trend direction
+    df['trend_direction'] = (df['ema_10d'] > df['ema_30d']).astype(int)
+
+    # Dynamic Price-Volume Interaction - Adjust relative strength based on the trend direction
+    df['dynamic_relative_strength'] = df['relative_strength'] * (1 + 0.5 * (df['trend_direction'] - 0.5))
+
+    # Regime-Based Adjustments - Apply different weights based on the volatility regime
+    df['vol_regime'] = (df['volatility'] > df['volatility'].quantile(0.5)).astype(int)
+
+    # Define dynamic weights using machine learning
+    from sklearn.ensemble import RandomForestRegressor
+    X = df[['momentum', 'volatility', 'dynamic_relative_strength', 'volume_change_10d', 'market_sentiment']].fillna(0)
+    y = df['close'].shift(-1).fillna(0)
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    df['weight_momentum'], df['weight_volatility'], df['weight_dynamic_relative_strength'], df['weight_volume_change'], df['weight_market_sentiment'] = model.predict(X).T
+
+    # Composite Factor - Combine momentum, volatility, dynamic relative strength, and market sentiment with adaptive weights
+    df['composite_factor'] = (
+        df['momentum'] * df['weight_momentum'] -
+        df['volatility'] * df['weight_volatility'] +
+        df['dynamic_relative_strength'] * df['weight_dynamic_relative_strength'] +
+        df['volume_change_10d'] * df['weight_volume_change'] +
+        df['market_sentiment'] * df['weight_market_sentiment']
+    )
+
+    # Return the composite factor
+    return df['composite_factor']
+```

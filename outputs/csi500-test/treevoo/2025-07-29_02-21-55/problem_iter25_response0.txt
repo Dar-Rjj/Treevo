@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # 5-day rolling sum of daily returns
+    df['5_day_rolling_sum'] = df['daily_return'].rolling(window=5).sum()
+    
+    # 20-day simple moving average of the 5-day rolling sum
+    df['20_day_sma'] = df['5_day_rolling_sum'].rolling(window=20).mean()
+    
+    # 50-day simple moving average of the 20-day sma
+    df['50_day_sma_of_20_day_sma'] = df['20_day_sma'].rolling(window=50).mean()
+    
+    # Adjusted factor for recent trend strength
+    df['adjusted_trend_factor'] = df['20_day_sma'] - df['20_day_sma'].shift(10) - df['50_day_sma_of_20_day_sma']
+    
+    # Volume ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Price trend and volume combined factor
+    df['combined_factor'] = df['adjusted_trend_factor'] * df['volume_ratio']
+    
+    # Upper and lower shadow lengths
+    df['upper_shadow_length'] = df.apply(lambda row: row['high'] - row['close'] if row['close'] > row['open'] else row['high'] - row['open'], axis=1)
+    df['lower_shadow_length'] = df.apply(lambda row: row['close'] - row['low'] if row['close'] > row['open'] else row['open'] - row['low'], axis=1)
+    
+    # Shadow difference factor
+    df['shadow_difference_factor'] = df['upper_shadow_length'] - df['lower_shadow_length']
+    
+    # Average True Amount over the past 14 days
+    df['prev_close_amount'] = df['amount'].shift(1)
+    df['true_amount'] = df.apply(
+        lambda row: max(row['high'] - row['low'], abs(row['high'] - row['prev_close_amount']), abs(row['low'] - row['prev_close_amount'])), 
+        axis=1
+    )
+    df['avg_true_amount'] = df['true_amount'].rolling(window=14).mean()
+    
+    # Normalized trading value factor
+    df['normalized_trading_value_factor'] = df['amount'] / df['avg_true_amount']
+    
+    # Final alpha factor
+    df['alpha_factor'] = df['combined_factor'] * df['normalized_trading_value_factor'] + df['shadow_difference_factor']
+    
+    # Return the alpha factor
+    return df['alpha_factor']
+```

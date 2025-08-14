@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_change = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    combined_intraday_vol = intraday_change * volume_ratio
+    
+    # Apply Threshold to Identify Significant Movements
+    threshold = 1.5
+    std_dev_20 = df['close'].rolling(window=20).std()
+    combined_intraday_vol_adjusted = combined_intraday_vol.where(combined_intraday_vol > threshold, other=0) / std_dev_20
+    
+    # Confirm with Price Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(21)) / (df['high'] - df['low']).rolling(window=21).mean()
+    short_term_momentum = (df['close'] - df['close'].shift(6)) / (df['high'] - df['low']).rolling(window=7).mean()
+    momentum_score = 0.45 * long_term_momentum + 0.55 * short_term_momentum
+    
+    # Calculate Daily Log Return
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    ma_log_return = log_return.rolling(window=20).sum() / 20
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    adjusted_ma_return = ma_log_return * (ema_volume / df['volume'].rolling(window=20).mean())
+    
+    # Fast and Slow Exponential Moving Averages
+    fast_ema = adjusted_ma_return.ewm(span=12, adjust=False).mean()
+    slow_ema = adjusted_ma_return.ewm(span=26, adjust=False).mean()
+    
+    # Combine Momentum Indicators with MACD
+    macd = fast_ema - slow_ema
+    combined_momentum_macd = 0.4 * long_term_momentum + 0.6 * short_term_momentum + macd
+    
+    # Incorporate Volume Confirmation and Long-Term Volume Trend
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    volume_ratio_long_term = df['volume'] / avg_volume_20
+    volume_ratio_long_term = volume_ratio_long_term.where(volume_ratio_long_term > 1.5, other=0).where(volume_ratio_long_term < 0.5, other=-0.5)
+    
+    # Smooth the Adjusted Combined Momentum
+    smoothed_combined_momentum = combined_momentum_macd.rolling(window=5).mean()
+    
+    # Synthesize Final Indicator
+    final_indicator = 0.6 * combined_intraday_vol_adjusted + 0.4 * smoothed_combined_momentum
+    
+    # Apply a Weighted Sum
+    final_indicator_weighted = 0.7 * final_indicator + 0.3 * volume_ratio_long_term
+    
+    # Apply Threshold to Identify Significant Movements
+    std_dev_30 = df['close'].rolling(window=30).std()
+    final_indicator_threshold = final_indicator_weighted / std_dev_30
+    
+    return final_indicator_threshold
+```

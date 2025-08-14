@@ -1,0 +1,28 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Incorporate a 7-day simple moving average of the close price for longer-term trend
+    sma_7 = df['close'].rolling(window=7).mean()
+    
+    # Adaptive weights for open, high, low, and close prices based on relative changes
+    adaptive_weights = (df['open'] - df['close']).abs() + (df['high'] - df['low']) / 2
+    total_weights = adaptive_weights + (df['high'] - df['close']).abs() + (df['low'] - df['close']).abs()
+    
+    weighted_prices = (adaptive_weights * df['open'] + (df['high'] - df['close']).abs() * df['high'] + (df['low'] - df['close']).abs() * df['low'] + adaptive_weights * df['close']) / total_weights
+    
+    # Calculate the ratio of (high - low) to the 7-day simple moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (sma_7 + 1e-7)
+    
+    # Calculate the 7-day exponential moving average of the close price
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Calculate the 7-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=7).std()
+    
+    # Incorporate momentum by considering the 7-day change in the close price
+    momentum = df['close'] - df['close'].shift(7)
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (weighted_prices - sma_7) / (volatility_ratio + 1e-7) + (ema_7 - df['close']) / (realized_volatility + 1e-7) + momentum
+    return alpha_factor
+```

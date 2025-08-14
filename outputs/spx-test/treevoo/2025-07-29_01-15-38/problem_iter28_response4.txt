@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Trend
+    daily_trend = (df['close'] - df['open'])
+    daily_trend_ema = daily_trend.ewm(span=10).mean()
+    adjusted_daily_trend = daily_trend / daily_trend_ema
+
+    # Incorporate Volatility
+    volatility = df['high'] - df['low']
+    trend_volatility_ratio = adjusted_daily_trend / volatility
+
+    # Integrate Volume-Adjusted Momentum over 5 days
+    volume_adjusted_momentum = (df['volume'] * trend_volatility_ratio).rolling(window=5).sum()
+
+    # Long-Term Trend Adjustment
+    sma_20 = df['close'].rolling(window=20).mean()
+    sma_50 = df['close'].rolling(window=50).mean()
+    long_term_trend = sma_20 - sma_50
+    long_term_trend_adjusted = volume_adjusted_momentum * long_term_trend
+
+    # Conditional Trend Sensitivity
+    sensitivity = np.where(sma_20 > sma_50, 1.5, -1.5)
+    conditional_trend_adjustment = long_term_trend_adjusted * sensitivity
+
+    # Volume Classification
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    volume_classification = np.select(
+        condlist=[
+            volume_ratio > 1.5,
+            (volume_ratio >= 0.8) & (volume_ratio <= 1.5),
+            (volume_ratio >= 0.3) & (volume_ratio < 0.8),
+            volume_ratio < 0.3
+        ],
+        choicelist=[2, 1, 0, -2],
+        default=0
+    )
+
+    # Final Factor Calculation
+    final_factor = conditional_trend_adjustment * volume_classification
+
+    return final_factor
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-Day Momentum
+    df['5DayMomentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread over past N days (N=10 for example)
+    N = 10
+    df['AvgIntradayHighLowSpread'] = df['IntradayHighLowSpread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['HighLowMomentumScore'] = np.where(
+        df['IntradayHighLowSpread'] > df['AvgIntradayHighLowSpread'], 1, -1)
+    
+    # Adjust High-Low Momentum Score by 5-Day Momentum
+    df['AdjustedHighLowMomentum'] = df['HighLowMomentumScore'] * df['5DayMomentum']
+    
+    # Calculate 20-Day Volume Moving Average
+    df['20DayVolumeMA'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Deviation from MA
+    df['VolumeDeviation'] = df['volume'] - df['20DayVolumeMA']
+    
+    # Adjust by Volume
+    df['AdjustedByVolume'] = df['AdjustedHighLowMomentum'] * df['VolumeDeviation']
+    
+    # Calculate 5-Day Close Price Standard Deviation
+    df['5DayCloseStd'] = df['close'].rolling(window=5).std()
+    
+    # Adjust by Price Volatility
+    df['FinalAdjustedScore'] = df['AdjustedByVolume'] / df['5DayCloseStd']
+    
+    # Apply Exponential Smoothing
+    alpha = 0.2  # smoothing factor
+    df['ExponentiallySmoothedScore'] = df['FinalAdjustedScore'].ewm(alpha=alpha).mean()
+    
+    return df['ExponentiallySmoothedScore']
+```

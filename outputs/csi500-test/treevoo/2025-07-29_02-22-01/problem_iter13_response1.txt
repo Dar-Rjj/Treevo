@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Short-Term and Long-Term EMA of Close Prices
+    short_ema_span = 10
+    long_ema_span = 50
+    df['short_ema'] = df['close'].ewm(span=short_ema_span, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=long_ema_span, adjust=False).mean()
+
+    # Subtract Short-Term EMA from Long-Term EMA
+    df['price_momentum'] = df['long_ema'] - df['short_ema']
+
+    # Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+
+    # Momentum Calculation: Sum of Daily Price Changes over the last N days
+    N = 10
+    df['momentum_calculation'] = df['daily_price_change'].rolling(window=N).sum()
+
+    # Volume Confirmation
+    df['volume_change'] = df['volume'].diff()
+    M = 5
+    positive_volume_diff = df['volume_change'].apply(lambda x: max(0, x))
+    df['average_volume_increase'] = positive_volume_diff.rolling(window=M).sum() / (df['volume_change'] > 0).rolling(window=M).sum().replace(0, np.nan)
+
+    # Calculate Volume Reversal Indicator
+    df['volume_rate_of_change'] = df['volume'].pct_change()
+    volume_sma_span = 5
+    df['smoothed_volume_roc'] = df['volume_rate_of_change'].rolling(window=volume_sma_span).mean()
+
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+
+    # Combine Factors
+    df['alpha_factor'] = (
+        df['price_momentum'] + 
+        df['momentum_calculation'] + 
+        df['smoothed_volume_roc'] * df['average_volume_increase'] + 
+        df['intraday_return']
+    )
+
+    # Return the alpha factor as a Series
+    return df['alpha_factor'].dropna()
+```

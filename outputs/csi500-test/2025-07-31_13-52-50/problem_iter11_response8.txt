@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['previous_deviation'] = df['deviation_from_vwap'].shift(1)
+    df['trend_reversal_potential'] = (df['deviation_from_vwap'] > df['previous_deviation']).astype(int)
+    
+    # Check for Volume Increase
+    df['volume_14_ma'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = (df['volume'] > df['volume_14_ma']).astype(int)
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute Price Momentum Factor
+    n = 10  # Number of days for price momentum
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 10  # Number of days for volume momentum
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_momentum'] = df['volume_change'].rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.5  # Constant for price momentum
+    k2 = 0.5  # Constant for volume momentum
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Momentum for Volume Volatility
+    df['volume_20_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_20_ma']
+    df['volume_adjustment_factor'] = (df['volume_deviation'] + 1e-6)  # Add a small constant to avoid division by zero
+    df['adjusted_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Calculate Momentum Score
+    df['momentum_score'] = df['close'].diff(periods=20).rolling(window=20).sum()
+    
+    # Final Composite Factor Calculation
+    df['final_factor'] = df['trend_reversal_potential'] * df['volume_increase'] * df['adjusted_momentum']
+    
+    return df['final_factor']
+```

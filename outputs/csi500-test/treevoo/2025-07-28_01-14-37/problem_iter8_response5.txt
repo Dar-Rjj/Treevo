@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Close Price Difference
+    n = 10  # lag period for momentum
+    close_diff = df['close'] - df['close'].shift(n)
+    
+    # Smoothing the Momentum
+    m = 5  # smoothing period
+    smoothed_momentum = close_diff.rolling(window=m).mean()
+    
+    # Volume Weighing Process
+    mean_volume = df['volume'].rolling(window=n).mean()
+    volume_ratio = df['volume'] / mean_volume
+    adjusted_momentum = smoothed_momentum * volume_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Logarithmic Return
+    log_return = np.log(intraday_return + 1e-8)  # Add small constant to avoid log(0)
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Combine Intraday Momentum and Volatility
+    weighted_intraday_return = intraday_return * df['volume']
+    weighted_intraday_range = intraday_range * df['volume']
+    combined_factor = (weighted_intraday_return + weighted_intraday_range) / df['volume'].sum()
+    
+    # Adjust for Skewness and Kurtosis
+    skewness = combined_factor.skew()
+    kurtosis = combined_factor.kurt()
+    rescaled_combined_factor = (combined_factor - combined_factor.mean()) / combined_factor.std()
+    rescaled_combined_factor = rescaled_combined_factor * (1 - 0.5 * (skewness + kurtosis))
+    
+    # Integrate Volume Adjusted Momentum
+    integrated_momentum = rescaled_combined_factor + adjusted_momentum
+    
+    # Calculate Volume-Weighted Price Movement
+    weighted_price = (df['high'] + df['low'] + df['close']) / 3 * np.sqrt(df['volume'])
+    total_volume = df['volume'].sum()
+    volume_weighted_price = weighted_price.sum() / total_volume
+    
+    # Calculate Momentum
+    momentum = df['close'] - df['close'].shift(n)
+    
+    # Calculate 50-day Exponential Moving Average (EMA)
+    ema = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Calculate Final Alpha Factor
+    final_alpha = (momentum - (ema - df['close'])) + volume_weighted_price
+    final_alpha_rescaled = (final_alpha - final_alpha.mean()) / final_alpha.std()
+    final_alpha_rescaled = final_alpha_rescaled * (1 - 0.5 * (skewness + kurtosis))
+    
+    return final_alpha_rescaled
+```

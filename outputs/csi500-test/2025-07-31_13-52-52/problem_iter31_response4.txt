@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['open'] / df['close'].shift(1) - 1
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    combined_factors = (close_to_open_return * df['volume']) / daily_volatility
+    
+    # Adjust for Momentum
+    momentum = (df['close'].diff().rolling(window=5).sum()) * df['volume'].rolling(window=5).mean()
+    
+    # Compute 10-Day Price Momentum
+    price_momentum_10_days = df['close'] - df['close'].shift(10)
+    
+    # Compute Volume Change Indicator
+    volume_change_indicator = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    
+    # Calculate Price Trend Indicator
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    price_trend_indicator = (short_sma > long_sma).astype(int) * 2 - 1
+    
+    # Apply Volume Confirmation
+    result = combined_factors * volume_change_indicator
+    result = result.where(volume_change_indicator > 0, 0)
+    
+    # Integrate Both Metrics
+    integrated_metrics = 0.6 * momentum + 0.4 * result
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = 0.7 * integrated_metrics + 0.3 * price_momentum_10_days * price_trend_indicator
+    
+    # Smooth the Result
+    final_alpha_factor = final_alpha_factor.ewm(span=10, adjust=False).mean()
+    
+    return final_alpha_factor
+```

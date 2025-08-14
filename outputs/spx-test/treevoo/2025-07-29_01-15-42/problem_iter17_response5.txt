@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    df['Close_to_Open_Change'] = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    df['Volume_Adjusted_Spread'] = df['Intraday_High_Low_Spread'] * df['volume']
+    df['Volume_Adjusted_Close_Open'] = df['Close_to_Open_Change'] * df['volume']
+    
+    # Analyze Volume Trends
+    df['Moving_Average_Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    df['Sum_Volume_Adjusted_Spreads'] = df['Volume_Adjusted_Spread'] + df['Volume_Adjusted_Close_Open']
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    threshold = 0.01 * df['close'].iloc[-1]  # Example threshold, can be adjusted
+    df['Price_Volume_Imbalance'] = (df['Sum_Volume_Adjusted_Spreads'] / df['Moving_Average_Volume'])
+    df['Preliminary_Alpha'] = 0
+    df.loc[df['Price_Volume_Imbalance'] > threshold, 'Preliminary_Alpha'] = 1
+    df.loc[df['Price_Volume_Imbalance'] < -threshold, 'Preliminary_Alpha'] = -1
+    
+    # Calculate Daily Close-to-Close Return
+    df['Close_to_Close_Return'] = df['close'].diff()
+    
+    # Smooth with Exponential Moving Average (EMA)
+    ema_window = 5  # Example EMA window, can be adjusted
+    df['EMA_Smoothed_Return'] = df['Close_to_Close_Return'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    df['Total_Volume_EMA'] = df['volume'].rolling(window=ema_window).sum()
+    df['Total_Amount_EMA'] = df['amount'].rolling(window=ema_window).sum()
+    df['Combined_Volume_Amount'] = df['Total_Volume_EMA'] + df['Total_Amount_EMA']
+    df['Momentum_Score'] = df['EMA_Smoothed_Return'] / df['Combined_Volume_Amount']
+    
+    # Calculate Momentum Score
+    df['Adjusted_Momentum_Score'] = df['Momentum_Score'].diff()
+    
+    # Generate Adjusted Price-Volume Signal
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Price_Range_Ratio'] = df['Daily_Price_Range'] / df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility_window = 20  # Example realized volatility window, can be adjusted
+    df['Realized_Volatility'] = df['close'].rolling(window=realized_volatility_window).std()
+    
+    # Calculate Intraday Volatility (ATR)
+    atr_period = 14  # Example ATR period, can be adjusted
+    df['True_Range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['Average_True_Range'] = df['True_Range'].rolling(window=atr_period).mean()
+    
+    # Combine Factors
+    df['RTSI'] = df['Price_Range_Ratio'] * df['True_Range']  # Example RTSI calculation
+    df['Combined_Result'] = df['RTSI'] + df['Adjusted_Momentum_Score']
+    df['Final_Combined_Result'] = df['Combined_Result'] * df['Momentum_Score'] * df['Average_True_Range']
+    
+    # Apply Volatility Filter
+    median_volatility = df['Realized_Volatility'].median()
+    df['Filtered_Final_Combined_Result'] = df['Final_Combined_Result']
+    df.loc[df['Realized_Volatility'] >= median_volatility, 'Filtered_Final_Combined_Result'] = 0
+    
+    # Generate Final Alpha Signal
+    df['Final_Alpha_Signal'] = df['Preliminary_Alpha']
+    df.loc[df['Preliminary_Alpha'] == 1, 'Final_Alpha_Signal'] += df['Filtered_Final_Combined_Result']
+    df.loc[df['Preliminary_Alpha'] == -1, 'Final_Alpha_Signal'] -= df['Filtered_Final_Combined_Result']
+    df.loc[df['Preliminary_Alpha'] == 0, 'Final_Alpha_Signal'] = df['

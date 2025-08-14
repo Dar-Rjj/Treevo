@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['price_spike'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['combined_spike'] = df['volume_spike'] + df['price_spike']
+    
+    # Introduce Volatility Adjustment
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['log_returns'].rolling(window=20).std()
+    df['vol_adj_intraday_momentum'] = df['intraday_range'] / df['volatility']
+    
+    # Scale Intraday Momentum
+    df['scaled_intraday_momentum'] = df['vol_adj_intraday_momentum'] / df['combined_spike']
+    df['scaled_intraday_momentum'] = df['scaled_intraday_momentum'].clip(lower=0, upper=5)  # Cap at a threshold
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Combined Intraday Features
+    df['combined_intraday_features'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Enhanced Intraday Factor
+    n = 20
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=n).mean()
+    df['enhanced_intraday_factor'] = df['avg_intraday_range'] * (df['close_to_open_return'] + df['price_change']) + df['combined_intraday_features']
+    
+    # Enhance with Recent Volatility
+    m = 20
+    df['abs_price_change'] = abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=m).mean()
+    df['enhanced_intraday_factor'] *= df['avg_abs_price_change']
+    
+    # Weight by Volume
+    k = 20
+    df['avg_volume'] = df['volume'].rolling(window=k).mean()
+    df['volume_weight'] = df['volume'] / df['avg_volume']
+    df['volume_weight'] = df['volume_weight'].apply(lambda x: 1 if x > 1 else 0.5)
+    df['enhanced_intraday_factor'] *= df['volume_weight']
+    
+    # Adjust for Volume Spikes
+    df['volume_spike_factor'] = (df['volume'] / df['volume'].shift(1)).clip(lower=1, upper=3)
+    df['final_factor'] = df['enhanced_intraday_factor'] * df['volume_spike_factor']
+    df['final_factor'] = df['final_factor'].clip(lower=-10, upper=10)  # Cap at a threshold
+    
+    return df['final_factor']
+```

@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    df['Close_Difference'] = df['close'] - df['close'].shift(1)
+    df['Weighted_Intraday_Price_Movement'] = df['Intraday_Price_Movement'] * df['volume'] * df['Close_Difference']
+    
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['Daily_Range'].ewm(span=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * df['Reversal_Signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Weighted_Intraday_Return_and_Reversal'] = (df['amount'] * df['Weighted_Intraday_Price_Movement']) + (df['volume'] * df['Reversal_Signal'])
+    
+    # Combine Enhanced Factors
+    df['Combined_Factor'] = df['Weighted_Intraday_Price_Movement'] + df['Intraday_Volatility'] + df['Volume_Weighted_Return']
+    
+    # Adjust by Relative Volume
+    df['Relative_Volume'] = df['volume'] / df['volume'].ewm(span=20).mean()
+    df['Adjusted_Combined_Factor'] = df['Combined_Factor'] / df['Relative_Volume']
+    
+    # Incorporate Close Price Momentum
+    df['Momentum'] = df['close'].rolling(window=10).mean()
+    
+    # Adjust Momentum by Intraday Volatility
+    df['Adjusted_Momentum'] = df['Momentum'] / df['Intraday_Volatility']
+    
+    # Integrate Volume-Weighted Momentum
+    df['Volume_EMA'] = df['volume'].ewm(span=10).mean()
+    df['Volume_Weighted_Momentum'] = df['Momentum'] * df['Volume_EMA']
+    df['Adjusted_Volume_Weighted_Momentum'] = df['Adjusted_Momentum'] * df['Volume_Weighted_Momentum']
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = (0.6 * (0.3 * df['Adjusted_Intraday_Price_Movement'] + 0.4 * df['Intraday_Volatility'] + 0.3 * df['Adjusted_Volume_Weighted_Momentum'])) + (0.4 * df['Weighted_Intraday_Return_and_Reversal'])
+    
+    return df['Final_Factor']
+```

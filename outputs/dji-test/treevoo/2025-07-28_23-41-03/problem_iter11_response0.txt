@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    # Subtract Longer SMA from Shorter SMA
+    sma_diff_100_200 = sma_100 - sma_200
+    sma_diff_50_100 = sma_50 - sma_100
+    
+    # Calculate Intraday Momentum
+    intraday_returns = ((df['high'] - df['open']) / df['open'], 
+                        (df['low'] - df['open']) / df['open'], 
+                        (df['close'] - df['open']) / df['open'])
+    intraday_momentum = pd.Series(intraday_returns).mean(axis=0)
+    
+    # Calculate Daily Volatility
+    log_returns = df['close'].pct_change().apply(lambda x: np.log(1 + x))
+    daily_volatility = log_returns.rolling(window=20).std()
+    
+    # Combine Intraday Momentum and Daily Volatility
+    combined_factor = intraday_momentum * daily_volatility
+    combined_factor_adjusted = combined_factor / df['volume']
+    
+    # Adjust Combined Factor by Volume Moving Average
+    volume_ma = df['volume'].rolling(window=20).mean()
+    combined_factor_final = combined_factor_adjusted / volume_ma
+    
+    # Calculate Price Momentum Over 5 Days
+    price_momentum_5d = df['close'] - df['close'].shift(5)
+    
+    # Calculate Volume Surge Over 5 Days
+    volume_surge_5d = df['volume'] - df['volume'].shift(5)
+    
+    # Combine Momentum and Volume Indicators
+    weighted_price_momentum = price_momentum_5d * 0.5
+    weighted_volume_surge = volume_surge_5d * 0.5
+    
+    # Sum All Weighted Indicators
+    alpha_factor = (weighted_price_momentum +
+                    weighted_volume_surge +
+                    sma_diff_100_200 +
+                    sma_diff_50_100 +
+                    combined_factor_final)
+    
+    # Intraday Reversal Momentum Component
+    intraday_return = (df['close'] - df['open']) / df['open']
+    reversal_signal = intraday_return.apply(lambda x: -1 if x > 0 else 1)
+    
+    atr = (df['high'] - df['low']).abs() + (df['high'] - df['close'].shift(1)).abs() + (df['low'] - df['close'].shift(1)).abs()
+    atr = atr.rolling(window=14).mean()  # Use 14-day ATR for this example
+    reversal_momentum = atr * reversal_signal
+    reversal_momentum_ema = reversal_momentum.ewm(span=7, adjust=False).mean()  # Use 7-day EMA for this example
+    
+    # Final Alpha Factor
+    alpha_factor += reversal_momentum_ema
+    
+    return alpha_factor
+```

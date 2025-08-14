@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Price_Momentum'] = df['Log_Return'].rolling(window=5).sum()
+
+    # Apply Enhanced Combined Volume and Amount Shock Filter
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)).abs()
+    df['Amount_Change'] = (df['amount'] - df['amount'].shift(1)).abs()
+    volume_threshold = df['Volume_Change'].quantile(0.80)
+    amount_threshold = df['Amount_Change'].quantile(0.80)
+    df = df[(df['Volume_Change'] < volume_threshold) & (df['Amount_Change'] < amount_threshold)]
+
+    # Calculate Intraday High-Low Difference
+    df['Intraday_High_Low_Diff'] = df['high'] - df['low']
+
+    # Average Intraday High-Low Difference Over Period
+    df['Avg_Intraday_High_Low_Diff'] = df['Intraday_High_Low_Diff'].rolling(window=5).mean()
+
+    # Adjust by Volume Volatility
+    df['Volume_Change_Volatility'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Volatility'] = df['Volume_Change_Volatility'].rolling(window=10).std()
+    df['Intraday_High_Low_Adjusted'] = df['Avg_Intraday_High_Low_Diff'] / df['Volume_Volatility']
+
+    # Calculate Volume-Weighted Momentum
+    df['Volume_Weighted_Momentum'] = (df['close'] - df['close'].shift(1)) * df['volume']
+
+    # Compute 20-Day Rolling Sum of Volume-Weighted Momentum
+    df['Rolling_Sum_Volume_Weighted_Momentum'] = df['Volume_Weighted_Momentum'].rolling(window=20).sum()
+
+    # Calculate Daily Price Volatility
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Price_Volatility'] = df['Daily_Price_Change'].rolling(window=20).std()
+
+    # Adjust Volume-Weighted Momentum by Price Volatility
+    df['Adjusted_Volume_Weighted_Momentum'] = df['Rolling_Sum_Volume_Weighted_Momentum'] / df['Price_Volatility']
+
+    # Subtract 60-Day Moving Average of Adjusted Volume-Weighted Momentum from 20-Day Adjusted Rolling Sum
+    df['MA_60_Adjusted_Volume_Weighted_Momentum'] = df['Adjusted_Volume_Weighted_Momentum'].rolling(window=60).mean()
+    df['Adjusted_Momentum_Factor'] = df['Adjusted_Volume_Weighted_Momentum'] - df['MA_60_Adjusted_Volume_Weighted_Momentum']
+
+    # Combine Intraday and Open-Close Price Movements
+    df['Intraday_Percent_Movement'] = (df['high'] - df['low']) / df['open']
+    df['Open_Close_Percent_Movement'] = (df['close'] - df['open']) / df['open']
+    df['Average_Percent_Movement'] = (df['Intraday_Percent_Movement'] + df['Open_Close_Percent_Movement']) / 2
+    df['Smoothed_Average_Percent_Movement'] = df['Average_Percent_Movement'].ewm(span=3).mean()
+
+    # Introduce Open-Close Price Difference
+    df['Open_Close_Diff'] = df['close'] - df['open']
+
+    # Calculate Intraday Price Range Ratio
+    df['Intraday_Price_Range_Ratio'] = df['Open_Close_Diff'] / (df['high'] - df['low'])
+
+    # Adjust Intraday High-Low Difference by Price Range Ratio
+    df['Intraday_High_Low_Adjusted_Range'] = df['Intraday_High_Low_Diff'] * df['Intraday_Price_Range_Ratio']
+
+    # Calculate Final Momentum Factor
+    df['Final_Momentum_Factor'] = df['Intraday_High_Low_Adjusted_Range'] + df['Adjusted_Momentum_Factor']
+
+    # Compute Rolling Sum of Final Momentum
+    df['Rolling_Sum_Final_Momentum'] = df['Final_Momentum_Factor'].rolling(window=20).sum()
+
+    # Compute Dynamic Momentum Oscillator
+    df['Dynamic_Momentum_Oscillator'] = df['Rolling_Sum_Final_Momentum'] - df['Rolling_Sum

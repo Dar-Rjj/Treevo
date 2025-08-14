@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log return of close prices to capture momentum
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate the 50-day and 200-day exponential moving averages (EMA) of the close price to capture longer-term trends
+    df['ema_close_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['ema_close_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the 14-day relative strength index (RSI) to incorporate mean reversion
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 10-day average true range (ATR) to incorporate volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['tr'].rolling(window=10).mean()
+    
+    # Calculate the 30-day rolling standard deviation of log returns to capture volatility
+    df['volatility'] = df['log_return'].rolling(window=30).std()
+    
+    # Calculate the volume-weighted average price (VWAP) to incorporate volume
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Integrate adaptive, dynamic weights for each feature based on recent performance
+    df['log_return_perf'] = (df['log_return'] > 0).rolling(window=30).mean()
+    df['ema_50_perf'] = ((df['close'] - df['ema_close_50']) > 0).rolling(window=30).mean()
+    df['ema_200_perf'] = ((df['close'] - df['ema_close_200']) > 0).rolling(window=30).mean()
+    df['rsi_perf'] = ((50 - df['rsi']) > 0).rolling(window=30).mean()
+    df['atr_perf'] = ((df['atr'] / df['close']) < 0.02).rolling(window=30).mean()
+    df['volatility_perf'] = (df['volatility'] < df['volatility'].quantile(0.5)).rolling(window=30).mean()
+    df['vwap_perf'] = ((df['close'] - df['vwap']) > 0).rolling(window=30).mean()
+    
+    # Normalize the performance metrics to sum to 1
+    total_perf = (df['log_return_perf'] + df['ema_50_perf'] + df['ema_200_perf'] + 
+                  df['rsi_perf'] + df['atr_perf'] + df['volatility_perf'] + df['vwap_perf'])
+    df['log_return_weight'] = df['log_return_perf'] / total_perf
+    df['ema_50_weight'] = df['ema_50_perf'] / total_perf
+    df['ema_200_weight'] = df['ema_200_perf'] / total_perf
+    df['rsi_weight'] = df['rsi_perf'] / total_perf
+    df['atr_weight'] = df['atr_perf'] / total_perf
+    df['volatility_weight'] = df['volatility_perf'] / total_perf
+    df['vwap_weight'] = df['vwap_perf'] / total_perf
+    
+    # Combine the features into a single alpha factor with dynamic weights
+    factor = (
+        (df['log_return'] * df['log_return_weight']) +
+        ((df['close'] - df['ema_close_50']) * df['ema_50_weight']) +
+        ((df['close'] - df['ema_close_200']) * df['ema_200_weight']) +
+        ((50 - df['rsi']) * df['rsi_weight']) +
+        ((df['atr'] / df['close']) * df['atr_weight']) +
+        (df['volatility'] * df['volatility_weight']) +
+        ((df['close'] - df['vwap']) * df

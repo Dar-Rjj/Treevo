@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].pct_change()
+
+    # Identify Trends in Daily Returns
+    df['Sum_Daily_Returns_5D'] = df['Daily_Return'].rolling(window=5).sum()
+
+    # Analyze Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']) / df['close']
+
+    # Explore Trading Volume Patterns
+    df['Avg_Volume_10D'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume_10D']
+
+    # Consider Price Momentum
+    df['Price_Momentum'] = df['close'] - df['low'].rolling(window=30).min()
+
+    # Investigate the Relationship Between Price Change and Volume
+    df['Return_Volume_Correlation_60D'] = df[['Daily_Return', 'volume']].rolling(window=60).corr().unstack().iloc[::2, :]['Daily_Return']
+
+    # Examine Market Strength
+    df['Market_Strength_10D'] = (df['close'] > df['open']).rolling(window=10).sum()
+
+    # Look for Buying or Selling Pressure
+    df['Close_in_Top_Third'] = (df['close'] > (df['high'] + 2 * df['low']) / 3).rolling(window=7).mean() > 0.5
+
+    # Short-Term Price Momentum
+    df['Short_Term_Price_Momentum'] = df['close'] - df['close'].shift(5)
+
+    # Long-Term Price Momentum
+    df['Long_Term_Price_Momentum'] = df['close'] - df['close'].shift(20)
+
+    # Price Momentum Ratio
+    df['Price_Momentum_Ratio'] = df['Short_Term_Price_Momentum'] / df['Long_Term_Price_Momentum']
+
+    # Volume-Weighted High-Low Volatility
+    df['Volume_Weighted_HL_Volatility'] = (df['high'] - df['low']) * df['volume'] / df['Avg_Volume_10D']
+
+    # Integrate Factors
+    df['Adjusted_Volume_Factor'] = np.where(df['Volume_Ratio'] > 1, 1.5, 0.5)
+    df['Combined_Return'] = df['Daily_Return'] * (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Smoothed Moving Average
+    df['SMA_Adjusted_Returns_5D'] = df['Combined_Return'] * df['Adjusted_Volume_Factor'].rolling(window=5).mean()
+    df['EMA_Smoothed'] = df['SMA_Adjusted_Returns_5D'].ewm(span=5, adjust=False).mean()
+
+    # Integrate Intraday and Previous Day's Returns
+    df['Integrated_Return'] = df['Daily_Return'] * (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Combine Price Momentum and Intraday Reversal
+    df['Price_Momentum_Reversal'] = df['Price_Momentum_Ratio'] * df['Integrated_Return']
+
+    # Conditionally Adjust by Volume Surge
+    df['7D_Avg_Volume'] = df['volume'].rolling(window=7).mean()
+    df['Volume_Surge_Factor'] = np.where(df['volume'] > df['7D_Avg_Volume'], 1.8, 0.7)
+    df['Adjusted_Price_Momentum_Reversal'] = df['Price_Momentum_Reversal'] * df['Volume_Surge_Factor']
+
+    # Incorporate High-Low Volatility into Final Factor
+    df['Final_Factor'] = df['EMA_Smoothed'] + df['Intraday_Volatility'] * (df['high'] - df['low'])
+
+    return df['Final_Factor']
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Calculate Volume-Weighted Close-Open Difference
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+
+    # Calculate Exponential Moving Average (EMA) of Close prices
+    ema_period = 21
+    ema = df['close'].ewm(span=ema_period, adjust=False).mean()
+
+    # Calculate Volume-Weighted Close Price
+    volume_weighted_close = df['close'] * df['volume']
+
+    # Composite Alpha Factor
+    composite_alpha_factor = (volume_weighted_close - ema)
+
+    # Add medium-term reversal
+    daily_returns = df['close'].pct_change()
+    m_day_reversal = daily_returns.rolling(window=10).sum()
+
+    # Generate Adjusted Return
+    intraday_log_return = np.log(df['close'] / df['open'])
+    true_range = pd.concat([df['high'] - df['low'],
+                            (df['high'] - df['close'].shift(1)).abs(),
+                            (df['low'] - df['close'].shift(1)).abs()], axis=1).max(axis=1)
+    adjusted_return = intraday_log_return / true_range
+
+    # Incorporate Volume Impact
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_impact_adjusted_return = adjusted_return * volume_change
+
+    # Final Integration
+    factor = high_low_spread_ratio + volume_weighted_close_open_diff + composite_alpha_factor + m_day_reversal + volume_impact_adjusted_return
+
+    return factor
+```

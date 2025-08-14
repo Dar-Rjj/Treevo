@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Change (Price Velocity)
+    df['Close_Price_Change'] = df['close'].diff()
+
+    # Calculate Short-Term EMA (12-day span) and Long-Term EMA (26-day span)
+    df['Short_Term_EMA'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['Long_Term_EMA'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Calculate EMA Difference
+    df['EMA_Difference'] = df['Short_Term_EMA'] - df['Long_Term_EMA']
+
+    # Generate Composite Momentum Signal
+    df['Composite_Momentum'] = df['EMA_Difference'] * df['volume'] + df['Close_Price_Change'].diff()
+
+    # Adjust Momentum by Volume Shock
+    df['Volume_Shock'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Adjusted_Momentum'] = df['Composite_Momentum'] * df['Volume_Shock']
+
+    # Introduce Volume Weighted Price Momentum
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    df['VWAP_Sum_7D'] = df['VWAP'].rolling(window=7).sum()
+
+    # Incorporate High-Low Range Volatility
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Avg_High_Low_Range_7D'] = df['High_Low_Range'].rolling(window=7).mean()
+
+    # Synthesize Intermediate Alpha Factor
+    df['Intermediate_Alpha_Factor'] = df['Adjusted_Momentum'] + df['VWAP_Sum_7D'] + df['Avg_High_Low_Range_7D']
+
+    # Apply Volume Filter
+    df['Volume_Rolling_Mean'] = df['volume'].rolling(window=7).mean()
+    high_volume_threshold = df['volume'].quantile(0.9)
+    df['Filtered_Intermediate_Alpha_Factor'] = df['Intermediate_Alpha_Factor'].where(df['volume'] > high_volume_threshold, 0)
+
+    # Calculate High-Low Volatility
+    df['Volatility'] = df['high'] - df['low']
+
+    # Adjust Momentum by Volatility
+    df['Adjusted_Alpha_Factor'] = df['Filtered_Intermediate_Alpha_Factor'] / df['Volatility']
+
+    # Incorporate Amount in the Alpha Factor
+    df['Average_Amount'] = df['amount'].rolling(window=7).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Average_Amount']
+
+    # Finalize Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_Alpha_Factor'] * df['Amount_Ratio']
+
+    # Incorporate Price and Volume Correlation
+    df['Price_Volume_Correlation'] = df['close'].rolling(window=10).corr(df['volume'])
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Price_Volume_Correlation']
+
+    return df['Final_Alpha_Factor']
+```

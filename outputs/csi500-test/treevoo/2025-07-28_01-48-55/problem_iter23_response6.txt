@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) with a 10-day window
+    n = 10
+    ema_10 = df['close'].ewm(span=n, adjust=False).mean()
+    
+    # Calculate High-Low Price Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted High-Low Range
+    volume_adjusted_high_low_range = high_low_range * np.sqrt(np.log(df['volume']))
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] - ema_10
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] / df['volume'].shift(1)
+    
+    # Integrate Log Return with Volume Change
+    integrated_momentum = (daily_log_return * np.sqrt(volume_change)).rolling(window=10).sum()
+    
+    # Enhance with Moving Average Crossover
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    ema_28 = df['close'].ewm(span=28, adjust=False).mean()
+    
+    crossover_signal = np.where(ema_7 > ema_28, 1, np.where(ema_7 < ema_28, -1, 0))
+    integrated_momentum += crossover_signal
+    
+    # Incorporate High-Low Range
+    high_low_range_t = df['high'] - df['low']
+    integrated_momentum *= high_low_range_t
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Enhanced Volume Thrust
+    upward_thrust = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    downward_thrust = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    enhanced_volume_thrust = (upward_thrust - downward_thrust) + (df['high'] - df['low']) / df['close']
+    
+    # Calculate Volume Adjusted Spread
+    spread = df['high'] - df['low']
+    relative_volume = df['volume'] / df['volume'].rolling(window=20).mean()
+    volume_adjusted_spread = spread * np.sqrt(relative_volume)
+    
+    # Calculate Enhanced Momentum Factor
+    weights = np.arange(1, 6)
+    rolling_window = volume_adjusted_high_low_range.rolling(window=5)
+    enhanced_momentum_factor = rolling_window.apply(lambda x: np.dot(x, weights), raw=True)
+    
+    # Final Integration
+    final_integration = (integrated_momentum + intraday_momentum + enhanced_volume_thrust) \
+                       - (daily_log_return.rolling(window=10).mean() - volume_adjusted_high_low_range.rolling(window=10).mean()) \
+                       + crossover_signal
+    
+    # Final Alpha Factor
+    alpha_factor = price_momentum - volume_adjusted_spread + enhanced_momentum_factor + final_integration
+    
+    return alpha_factor
+```

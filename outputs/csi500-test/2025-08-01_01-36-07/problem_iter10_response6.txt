@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10):
+    # Calculate Daily Price Movement
+    df['Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Raw Momentum (Sum of Daily Price Movements over n days)
+    df['Raw_Momentum'] = df['Price_Range'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Incorporate Market Depth
+    df['Market_Depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * (df['VWAP'] + df['Market_Depth']) / df['Intraday_Volatility']
+    
+    # Weight Adjusted Momentum by Volume
+    avg_volume = df['volume'].mean()
+    total_avg_volume = df['volume'].expanding().mean()
+    df['Weighted_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5_Day_Return'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['10_Day_Return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Multi_Day_Momentum'] = (df['5_Day_Return'] + df['10_Day_Return']) / 2
+    
+    # Combine Multi-Day Momentum with Weighted Adjusted Momentum
+    df['Combined_Momentum'] = df['Weighted_Adjusted_Momentum'] + df['Multi_Day_Momentum']
+    
+    # Incorporate Liquidity
+    average_volume = df['volume'].rolling(window=n).mean()
+    total_average_volume = df['volume'].expanding().mean()
+    df['Final_Alpha_Factor'] = df['Combined_Momentum'] * (average_volume / total_average_volume)
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

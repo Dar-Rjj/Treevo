@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Base Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute High-Low Momentum Component
+    high_low_momentum = (df['high'] - df['low']) / df['open']
+    
+    # Combine Intraday and High-Low Momentum
+    combined_momentum = (intraday_return + high_low_momentum) / 2
+    
+    # Apply Volume-Weighted Adjustments for Trading Activity
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    
+    # Adjust Combined Momentum by Volume and Amount Ratios
+    adjusted_momentum = combined_momentum * volume_ratio * amount_ratio
+    
+    # Apply Volume Shock Filter
+    volume_shock_threshold = 1.5
+    volume_ratio = df['volume'] / df['volume'].shift(1).fillna(1)
+    volume_shock_filter = (volume_ratio > volume_shock_threshold)
+    adjusted_momentum = adjusted_momentum * volume_shock_filter
+    
+    # Smoothing with EMA
+    smoothed_momentum = adjusted_momentum.ewm(span=5, min_periods=1).mean()
+    
+    # Synchronize Volume Dynamics
+    price_change = df['close'] - df['close'].shift(1)
+    volume_change = df['volume'] - df['volume'].shift(1)
+    sync_volume = volume_change * price_change
+    sync_sign = np.sign(sync_volume)
+    
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5, min_periods=1).mean()
+    long_ema = df['close'].ewm(span=20, min_periods=1).mean()
+    macd_line = short_ema - long_ema
+    signal_line = macd_line.ewm(span=9, min_periods=1).mean()
+    
+    # Determine Momentum
+    momentum_signal = np.where(macd_line > signal_line, 1, -1)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Weight OBV by the Difference between MACD Line and Signal Line
+    weight = np.abs(macd_line - signal_line)
+    weighted_obv = obv * weight
+    
+    # Integrate Volume-Weighted Intraday Momentum with OBV Factor
+    final_alpha_factor = smoothed_momentum * weighted_obv * momentum_signal
+    
+    return final_alpha_factor
+```

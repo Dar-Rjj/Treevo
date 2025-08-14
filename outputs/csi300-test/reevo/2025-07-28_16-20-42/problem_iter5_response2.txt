@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day moving averages of the close price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices with adaptive weights
+    weighted_prices = (0.1 * df['open'] + 0.3 * df['high'] + 0.3 * df['low'] + 0.3 * df['close'])
+    
+    # Calculate the ratio of volume to the moving amount
+    volatility_ratio = (df['high'] - df['low']) / (ma_5 + 1e-7)
+    
+    # Calculate the 5-day and 20-day exponential moving average of the close price
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the 5-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=5).std()
+    
+    # Calculate the 5-day average trading amount and volume
+    avg_amount = df['amount'].rolling(window=5).mean()
+    avg_volume = df['volume'].rolling(window=5).mean()
+    
+    # Trend strength factor
+    trend_strength = (ema_5 - ema_20) / (realized_volatility + 1e-7)
+    
+    # Liquidity factor
+    liquidity = (avg_amount / avg_volume) * (volatility_ratio + 1e-7)
+    
+    # Volume trend factor
+    volume_trend = (df['volume'] / avg_volume) - 1
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (weighted_prices - ma_5) / (volatility_ratio + 1e-7) + \
+                   trend_strength + liquidity + volume_trend
+    
+    return alpha_factor
+```

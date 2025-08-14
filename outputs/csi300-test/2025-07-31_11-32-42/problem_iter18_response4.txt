@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between close and open prices
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Calculate the sign of the difference (1 for positive, -1 for negative, 0 for no change)
+    df['close_open_sign'] = df['close_open_diff'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Sum the signs over a rolling window to assess the trend
+    df['trend_score'] = df['close_open_sign'].rolling(window=5).sum()
+    
+    # Compute the range (high - low) as an indicator of intraday volatility
+    df['price_range'] = df['high'] - df['low']
+    
+    # Average the range over a fixed period to smooth out short-term fluctuations
+    df['avg_price_range'] = df['price_range'].rolling(window=10).mean()
+    
+    # Compare the current day's range with the average range to identify unusually volatile days
+    df['volatility_ratio'] = df['price_range'] / df['avg_price_range']
+    
+    # Analyze the ratio of today's volume to the average volume over a recent period
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate the Pearson correlation coefficient between daily returns and volume
+    df['volume_return_corr'] = df['daily_return'].rolling(window=10).corr(df['volume'])
+    
+    # Combine the volume ratio with price movements to determine if large volume is accompanied by a significant price change
+    df['volume_price_signal'] = (df['volume_ratio'] > 1.5) & (df['daily_return'].abs() > 0.05)
+    df['volume_price_signal'] = df['volume_price_signal'].astype(int)
+    
+    # Final alpha factor: a combination of the trend score, volatility ratio, and volume-price signal
+    df['alpha_factor'] = (df['trend_score'] + df['volatility_ratio'] + df['volume_price_signal']) / 3
+    
+    return df['alpha_factor']
+```

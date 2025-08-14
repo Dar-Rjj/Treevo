@@ -1,0 +1,39 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_avg = df['close'].rolling(window=10).mean()
+    short_term_momentum = short_term_avg - df['close']
+    
+    # Calculate Long-Term Price Momentum
+    long_term_avg = df['close'].rolling(window=50).mean()
+    long_term_momentum = long_term_avg - df['close']
+    
+    # Adjust by Volume-Weighted Average Return
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Integrate Short-Term and Long-Term Momentum
+    combined_momentum = (short_term_momentum + long_term_momentum) * volume_weighted_returns
+    
+    # Incorporate Volatility
+    historical_volatility = df['close'].pct_change().rolling(window=20).std()
+    adjusted_momentum = combined_momentum / historical_volatility
+    
+    # Assess Trend Following Potential
+    moving_sum_close = df['close'].rolling(window=50).sum()
+    adaptive_weight = (moving_sum_close - df['close']) / moving_sum_close
+    trend_following_component = adjusted_momentum * adaptive_weight
+    
+    # Integrate Market Sentiment
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    positive_flow = np.where(typical_price > typical_price.shift(1), typical_price * df['volume'], 0)
+    negative_flow = np.where(typical_price < typical_price.shift(1), typical_price * df['volume'], 0)
+    mfi = 100 - (100 / (1 + (positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum())))
+    
+    # Final Alpha Factor
+    final_factor = trend_following_component * mfi
+    return final_factor

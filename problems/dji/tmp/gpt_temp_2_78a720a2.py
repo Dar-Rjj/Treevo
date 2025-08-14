@@ -1,0 +1,53 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Price Momentum Component
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    price_momentum = (sma_50 - sma_100) + (sma_100 - sma_200)
+    
+    # Intraday Reversal Momentum Component
+    intraday_return = df['open'] / df['close'] - 1
+    reversal_signal = np.sign(intraday_return)
+    reversal_signal[reversal_signal == 1] = -1
+    reversal_signal[reversal_signal == -1] = 1
+    
+    true_range = df[['high', 'low']].apply(lambda x: np.maximum(x['high'] - x['low'], 
+                                                               np.abs(x['high'] - df['close'].shift(1)),
+                                                               np.abs(x['low'] - df['close'].shift(1))), axis=1)
+    atr = true_range.rolling(window=14).mean()
+    atr_reversal_signal = atr * reversal_signal
+    ema_atr_reversal_signal = atr_reversal_signal.ewm(span=5, min_periods=5).mean()
+    
+    # High-Low Range Momentum with Volume-Amount Adjustment
+    high_low_range = df['high'] - df['low']
+    high_low_range_momentum = high_low_range - high_low_range.shift(1)
+    
+    avg_volume = df['volume'].rolling(window=20).mean()
+    avg_amount = df['amount'].rolling(window=20).mean()
+    combined_volume_amount = avg_volume + avg_amount
+    
+    high_low_adjusted = high_low_range_momentum / combined_volume_amount
+    
+    # Daily Price Return Component
+    daily_price_return = df['close'].pct_change()
+    
+    weighted_return = (daily_price_return * df['volume']).rolling(window=22).sum() / df['volume'].rolling(window=22).sum()
+    
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range = daily_price_range.rolling(window=20).mean()
+    
+    final_adjusted_factor_value = weighted_return - avg_daily_price_range
+    
+    # Final Alpha Factor Combination
+    w1, w2, w3 = 0.4, 0.3, 0.3
+    alpha_factor = (price_momentum + ema_atr_reversal_signal) * w1 + \
+                   high_low_adjusted * w2 + \
+                   final_adjusted_factor_value * w3
+    
+    return alpha_factor

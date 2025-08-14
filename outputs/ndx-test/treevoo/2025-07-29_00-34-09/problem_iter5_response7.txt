@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate Rolling Average of High-to-Low Range (14-day window)
+    df['range_rolling_avg'] = df['daily_range'].rolling(window=14).mean()
+    
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['open']
+    
+    # Compute 5-Day Moving Average of Price Change
+    df['ma_5'] = df['price_change'].rolling(window=5).mean()
+    
+    # Compute 10-Day Moving Average of Price Change
+    df['ma_10'] = df['price_change'].rolling(window=10).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = 0
+    df.loc[df['ma_5'] > df['ma_10'], 'reversal_signal'] = 1
+    df.loc[df['ma_5'] < df['ma_10'], 'reversal_signal'] = -1
+    
+    # Amplify or Dampen the Reversal Signal based on 14-day Rolling Average of High-to-Low Range
+    df['reversal_signal'] *= (df['range_rolling_avg'] / df['range_rolling_avg'].mean())
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)  # Use 75th percentile as threshold
+    df['reversal_signal'] *= (df['volume'] > volume_threshold).astype(int)
+    
+    # Calculate Momentum Based on Close Price (20-day MA)
+    df['momentum'] = df['close'].rolling(window=20).mean()
+    
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    df['price_reversal'] = (df['high'] - df['low']) / df['open']
+    df['price_reversal'] = df['price_reversal'].rolling(window=20).sum()
+    
+    # Assess Volume Impact on Price Movement (20-day EMA of Volume-Weighted Close)
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    df['volume_impact'] = df['volume_weighted_close'].ewm(span=20).mean()
+    
+    # Combine Factors for Final Alpha
+    df['alpha'] = 0.4 * df['momentum'] + 0.3 * df['price_reversal'] + 0.3 * df['volume_impact'] + 0.2 * df['reversal_signal']
+    
+    return df['alpha']
+```

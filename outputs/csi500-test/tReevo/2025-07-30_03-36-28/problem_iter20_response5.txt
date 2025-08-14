@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_sma_period=50, long_sma_period=200, vol_lookback=20, momentum_lookback=10, pct_change_lookback=5, turnover_lookback=30, recent_performance_period=10):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=short_sma_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_high_low'] = df['high_low_diff'] * df['volume']
+    df['vol_adjusted_volatility'] = df['vol_weighted_high_low'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['avg_close'] = df['close'].rolling(window=momentum_lookback).mean()
+    df['price_momentum'] = (df['close'] - df['SMA']) / df['avg_close']
+    
+    # Incorporate Additional Price Change Metrics
+    df['pct_change_close'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['long_term_SMA'] = df['close'].rolling(window=long_sma_period).mean()
+    df['trend_indicator'] = (df['SMA'] > df['long_term_SMA']).astype(int)
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['rolling_avg_turnover'] = df['daily_turnover'].rolling(window=turnover_lookback).mean()
+    df['liquidity_weight'] = df['rolling_avg_turnover'] / df['rolling_avg_turnover'].max()
+    
+    # Evaluate Recent Performance
+    df['recent_price_momentum_return'] = df['price_momentum'].pct_change(periods=recent_performance_period)
+    df['recent_vol_adjusted_volatility_return'] = df['vol_adjusted_volatility'].pct_change(periods=recent_performance_period)
+    df['recent_pct_change_close_return'] = df['pct_change_close'].pct_change(periods=recent_performance_period)
+    df['recent_high_low_range_return'] = df['high_low_range'].pct_change(periods=recent_performance_period)
+    df['recent_trend_indicator_return'] = df['trend_indicator'].pct_change(periods=recent_performance_period)
+    df['recent_liquidity_return'] = df['liquidity_weight'].pct_change(periods=recent_performance_period)
+    
+    # Combine Components with Initial Weights
+    initial_weights = {
+        'price_momentum': 0.3,
+        'vol_adjusted_volatility': 0.2,
+        'pct_change_close': 0.1,
+        'high_low_range': 0.1,
+        'trend_indicator': 0.2,
+        'liquidity_weight': 0.1
+    }
+    
+    # Calculate the weighted sum of the components
+    df['alpha_factor'] = (
+        initial_weights['price_momentum'] * df['price_momentum'] +
+        initial_weights['vol_adjusted_volatility'] * df['vol_adjusted_volatility'] +
+        initial_weights['pct_change_close'] * df['pct_change_close'] +
+        initial_weights['high_low_range'] * df['high_low_range'] +
+        initial_weights['trend_indicator'] * df['trend_indicator'] +
+        initial_weights['liquidity_weight'] * df['liquidity_weight']
+    )
+    
+    # Dynamically Adjust Weights
+    df['adjusted_weights'] = df[['recent_price_momentum_return', 'recent_vol_adjusted_volatility_return', 'recent_pct_change_close_return', 'recent_high_low_range_return', 'recent_trend_indicator_return', 'recent_liquidity_return']].apply(lambda x: x / x.sum(), axis=1)
+    
+    df['dynamic_alpha_factor'] = (
+        df['adjusted_weights']['recent_price_momentum_return'] * df['price_momentum'] +
+        df['adjusted_weights']['recent_vol_adjusted_volatility_return'] * df['vol_adjusted_volatility'] +
+        df['adjusted_weights']['recent_pct_change_close_return'] * df['pct_change_close'] +
+        df['adjusted_weights']['recent_high_low_range_return'] * df['high_low_range'] +
+        df['adjusted_weights']['recent_trend_indicator_return'] * df['trend_indicator'] +
+        df['adjusted_weights']['recent_liquidity_return'] * df['liquidity_weight']
+    )
+    
+    return df['dynamic_alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Your DataFrame
+

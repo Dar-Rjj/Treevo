@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+
+    # Adaptive Lookback Periods
+    short_term = 5
+    mid_term = 10
+    long_term = 20
+
+    # Short-Term Lookback
+    df['SMA_5_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=short_term).mean()
+    df['STD_5_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=short_term).std()
+
+    # Mid-Term Lookback
+    df['SMA_10_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=mid_term).mean()
+    df['STD_10_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=mid_term).std()
+
+    # Long-Term Lookback
+    df['SMA_20_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=long_term).mean()
+    df['STD_20_Volume_Weighted_Return'] = df['Close_to_Open_Return'].rolling(window=long_term).std()
+
+    # Combine Multi-Period Volatilities with Dynamic Weights
+    recent_volatility_trend = df['Close_to_Open_Return'].rolling(window=short_term).std().pct_change()
+    df['Short_Term_Volatility_Weight'] = recent_volatility_trend.where(recent_volatility_trend > 0, 0.5)
+    df['Mid_Term_Volatility_Weight'] = recent_volatility_trend.where(recent_volatility_trend > 0, 0.3)
+    df['Long_Term_Volatility_Weight'] = recent_volatility_trend.where(recent_volatility_trend > 0, 0.2)
+
+    df['Combined_Volatility'] = (
+        df['STD_5_Volume_Weighted_Return'] * df['Short_Term_Volatility_Weight'] +
+        df['STD_10_Volume_Weighted_Return'] * df['Mid_Term_Volatility_Weight'] +
+        df['STD_20_Volume_Weighted_Return'] * df['Long_Term_Volatility_Weight']
+    )
+
+    # Incorporate Dynamic Market Trend Adjustments
+    df['SMA_5_Close'] = df['close'].rolling(window=short_term).mean()
+    df['SMA_20_Close'] = df['close'].rolling(window=long_term).mean()
+    df['Price_Trend_Indicator'] = np.where(df['SMA_5_Close'] > df['SMA_20_Close'], 'Up', 'Down')
+
+    combined_factor = df['SMA_5_Volume_Weighted_Return'] + df['SMA_10_Volume_Weighted_Return'] + df['SMA_20_Volume_Weighted_Return']
+    df['Adjusted_Combined_Factor'] = np.where(
+        df['Price_Trend_Indicator'] == 'Up',
+        1.2 * combined_factor,
+        0.8 * combined_factor
+    )
+
+    # Integrate High-Low Price Ratio
+    df['High_Low_Price_Ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Incorporate Additional Market Indicators
+    df['Daily_Price_Change'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_Day_Avg_Daily_Price_Change'] = df['Daily_Price_Change'].rolling(window=short_term).mean()
+
+    df['Final_Adjusted_Combined_Factor'] = np.where(
+        df['5_Day_Avg_Daily_Price_Change'] > 0,
+        1.1 * df['Adjusted_Combined_Factor'],
+        0.9 * df['Adjusted_Combined_Factor']
+    )
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        (df['SMA_5_Volume_Weighted_Return'] + df['SMA_10_Volume_Weighted_Return'] + df['SMA_20_Volume_Weighted_Return']) /
+        df['Combined_Volatility'] *
+        df['High_Low_Price_Ratio'] *
+        df['Final_Adjusted_Combined_Factor']
+    )
+
+    return df['Alpha_Factor']
+```

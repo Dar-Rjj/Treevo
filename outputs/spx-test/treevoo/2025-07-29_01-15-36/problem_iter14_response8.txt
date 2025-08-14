@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate N-Day Exponential Moving Average of Price Range
+    n = 14  # Set the window size for EMA
+    df['ema_price_range'] = df['price_range'].ewm(span=n, adjust=False).mean()
+    
+    # Calculate Close-to-Range Ratio
+    df['close_to_range_ratio'] = df['close'] / df['price_range']
+    
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    df['volume_weighted_close_to_range_momentum'] = df['volume'] * df['close_to_range_ratio']
+    
+    # Summarize Volume-Weighted Close-to-Range Momentum over a Window
+    window_size = 5
+    df['sum_volume_weighted_momentum'] = df['volume_weighted_close_to_range_momentum'].rolling(window=window_size).sum()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=n, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=n, adjust=False).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate Volume-Adjusted Momentum
+    df['volume_adjusted_ema_price_range'] = df['ema_price_range'] * df['volume']
+    df['volume_adjusted_rsi'] = df['rsi'] * df['volume']
+    df['volume_adjusted_momentum'] = df['volume_adjusted_ema_price_range'] + df['volume_adjusted_rsi']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Intraday Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    intraday_volatility_mean = df['high_low_diff'].rolling(window=n).mean()
+    intraday_volatility_std = df['high_low_diff'].rolling(window=n).std()
+    df['intraday_volatility'] = intraday_volatility_mean + intraday_volatility_std
+    
+    # Adjust Intraday Return by Intraday Volatility
+    df['adjusted_intraday_return'] = df['intraday_return'] / df['intraday_volatility']
+    
+    # Weight by Volume
+    df['weighted_adjusted_return'] = df['volume'] * df['adjusted_intraday_return']
+    
+    # Incorporate Momentum
+    df['5_day_ema_intraday_return'] = df['intraday_return'].ewm(span=5, adjust=False).mean()
+    df['20_day_ema_intraday_return'] = df['intraday_return'].ewm(span=20, adjust=False).mean()
+    df['momentum_factor'] = df['5_day_ema_intraday_return'] - df['20_day_ema_intraday_return']
+    
+    # Integrate Price Trend
+    df['10_day_ma_close'] = df['close'].rolling(window=10).mean()
+    df['30_day_ma_close'] = df['close'].rolling(window=30).mean()
+    df['price_trend_factor'] = df['10_day_ma_close'] - df['30_day_ma_close']
+    
+    # Combine Momentum and Price Trend
+    df['combined_momentum_price_trend'] = df['momentum_factor'] * df['price_trend_factor']
+    
+    # Final Combination
+    df['final_combination'] = (df['weighted_adjusted_return'] * df['sum_volume_weighted_momentum']) + df['combined_momentum_price_trend']
+    
+    # Adjust for Volume Impact
+    df['volume_trend'] = df['volume'] - df['volume'].shift(1)
+    df['alpha_factor'] = df['final_combination'] * df['volume_trend']
+    
+    return df['alpha_factor']
+```

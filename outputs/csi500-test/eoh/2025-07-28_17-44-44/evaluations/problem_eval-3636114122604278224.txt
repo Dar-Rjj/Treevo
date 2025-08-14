@@ -1,0 +1,30 @@
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def heuristics_v2(df):
+    # Calculate 14-day and 30-day EMAs of close prices
+    ema_14_close = df['close'].ewm(span=14, adjust=False).mean()
+    ema_30_close = df['close'].ewm(span=30, adjust=False).mean()
+
+    # Prepare data for calculating the coefficients of the quadratic regression
+    x = np.array([ema_14_close.values[-10:], ema_30_close.values[-10:]]).T
+    y = np.arange(10)
+    X = np.column_stack([x, x**2])
+    model = LinearRegression().fit(X, y)
+    coef = model.coef_
+
+    # Quadratic term calculation
+    quadratic_term = coef[0] * x[:, 0] + coef[1] * x[:, 1] + coef[2] * (x[:, 0]**2) + coef[3] * (x[:, 1]**2)
+
+    # Calculate 21-day EMA of volume
+    ema_21_volume = df['volume'].ewm(span=21, adjust=False).mean()
+
+    # Calculate 21-day Average True Range
+    tr = df['high'] - df['low']
+    atr = tr.rolling(window=21).mean()
+
+    # Heuristic score calculation
+    heuristics_matrix = pd.Series(quadratic_term.mean() - (ema_21_volume * atr ** 0.5), index=df.index)
+
+    return heuristics_matrix

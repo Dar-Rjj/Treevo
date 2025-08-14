@@ -1,0 +1,65 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Calculate the N-day moving average of the close to gauge recent performance against a short-term trend.
+    N = 5
+    df['short_term_ma'] = df['close'].rolling(window=N).mean()
+    df['short_term_trend'] = df['close'] - df['short_term_ma']
+    
+    # Evaluate the slope of the M-day linear regression line of the closing prices to quantify the direction and strength of a medium-term trend.
+    M = 30
+    def calculate_slope(arr):
+        x = np.arange(len(arr))
+        y = np.array(arr)
+        slope, _, _, _, _ = linregress(x, y)
+        return slope
+    df['medium_term_slope'] = df['close'].rolling(window=M).apply(calculate_slope, raw=False)
+    
+    # Compute the percentage change from open to close, observing if the stock ends higher or lower than it started.
+    df['open_to_close_pct_change'] = (df['close'] - df['open']) / df['open'] * 100
+    
+    # Assess the range (high - low) relative to the daily average true range over the past K days to understand current day's volatility compared to recent history.
+    K = 14
+    df['daily_range'] = df['high'] - df['low']
+    df['average_true_range'] = df['daily_range'].rolling(window=K).mean()
+    df['relative_volatility'] = df['daily_range'] / df['average_true_range']
+    
+    # Determine the ratio of today's volume to the L-day simple moving average volume, highlighting significant deviations that may signal strong market activity.
+    L = 10
+    df['volume_sma'] = df['volume'].rolling(window=L).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_sma']
+    
+    # Examine the correlation between the sign of the return (positive or negative) and the change in volume to see if there is a pattern of rising/falling volumes accompanying up/down moves.
+    df['return_sign'] = np.sign(df['close'].pct_change())
+    df['volume_change'] = df['volume'].pct_change()
+    df['return_volume_corr'] = df[['return_sign', 'volume_change']].rolling(window=L).corr().iloc[::2, 1].reset_index(drop=True)
+    
+    # Check if the latest closing price is near the H-day high/low to assess proximity to possible resistance/support areas.
+    H = 10
+    df['near_high'] = df['close'] > df['high'].rolling(window=H).max() * 0.99
+    df['near_low'] = df['close'] < df['low'].rolling(window=H).min() * 1.01
+    
+    # Measure how frequently the stock hits new highs/lows over I days as an indicator of the underlying trend's strength.
+    I = 5
+    df['new_highs'] = df['high'].rolling(window=I).max() == df['high']
+    df['new_lows'] = df['low'].rolling(window=I).min() == df['low']
+    
+    # Combine all the sub-factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['short_term_trend'] + 
+        df['medium_term_slope'] + 
+        df['open_to_close_pct_change'] + 
+        df['relative_volatility'] + 
+        df['volume_ratio'] + 
+        df['return_volume_corr'] + 
+        df['near_high'].astype(int) - 
+        df['near_low'].astype(int) + 
+        df['new_highs'].astype(int) - 
+        df['new_lows'].astype(int)
+    )
+    
+    return df['alpha_factor']

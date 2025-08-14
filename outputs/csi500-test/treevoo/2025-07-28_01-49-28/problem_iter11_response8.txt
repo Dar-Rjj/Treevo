@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    n = 20  # Lookback period
+    
+    # Volume-Adjusted Momentum with Breakout Indicator
+    momentum = df['close'] - df['close'].shift(n)
+    avg_volume = df['volume'].rolling(window=n).mean()
+    volume_factor = (df['volume'] / avg_volume).shift(1)  # Lagged to avoid look-ahead bias
+    adjusted_momentum = momentum * volume_factor
+    open_close_movement = (df['close'] - df['open']) / df['open']
+    combined_indicator = (adjusted_momentum + open_close_movement) / 2  # Simple average for combination
+    strong_move = (combined_indicator > 0.05).astype(int)  # Threshold for strong moves, can be adjusted
+    
+    # High-Low Return with Spread Momentum
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    daily_high_low_spread = high_low_range.rolling(window=20).sum()
+    spread_momentum = daily_high_low_spread - daily_high_low_spread.shift(1)
+    
+    # Integrated Momentum and High-Low Return
+    integrated_momentum_high_low = adjusted_momentum + high_low_return
+    
+    # Open-High-Low Volatility with Volume-Weighted Momentum
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff * df['volume'] + open_low_diff * df['volume']) / (2 * df['volume'])
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_volatility = weighted_avg_volatility * (1 + volume_change)
+    vol_weighted_close = df['close'] * df['volume']
+    moving_avg_vol_weighted_close = vol_weighted_close.rolling(window=20).mean()
+    vol_weighted_momentum = vol_weighted_close - moving_avg_vol_weighted_close
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    amount_per_close = df['amount'].rolling(window=n).sum() / df['close']
+    prev_amount_per_close = df['amount'].shift(n).rolling(window=n).sum() / df['close'].shift(n)
+    amount_per_close_roc = (amount_per_close - prev_amount_per_close) / prev_amount_per_close
+    
+    # Final factor: Summarize all components
+    final_factor = strong_move + spread_momentum + integrated_momentum_high_low + vol_weighted_momentum + amount_per_close_roc
+    return final_factor
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Adjusted Daily Range
+    adj_daily_range = (df['high'] - df['low']) * df['volume']
+    
+    # Dynamic Price Reversion
+    rolling_high = df['high'].rolling(window=10).max()
+    rolling_low = df['low'].rolling(window=10).min()
+    proximity_high = (df['close'] - rolling_low) / (rolling_high - rolling_low)
+    proximity_low = (rolling_high - df['close']) / (rolling_high - rolling_low)
+    min_proximity = pd.Series(np.minimum(proximity_high, proximity_low), index=df.index)
+    dynamic_price_reversion = (1 - min_proximity) / df['close'].pct_change().rolling(window=20).std()
+    
+    # Weighted Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_volatility = (open_high_diff + open_low_diff) * np.sqrt(df['volume'])
+    
+    # Sum of Exponential Weights on High-Low Spreads
+    exp_weighted_sum = (df['high'] - df['low']).ewm(span=20, adjust=False).mean()
+    
+    # Spread Momentum
+    spread_momentum = exp_weighted_sum - exp_weighted_sum.shift(1)
+    
+    # Volume-Adjusted Intraday Movement
+    volume_adjusted_movement = (df['close'] - df['open']) * np.sqrt(df['volume'])
+    
+    # Simple Momentum
+    simple_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        adj_daily_range * dynamic_price_reversion * weighted_volatility * spread_momentum +
+        volume_adjusted_movement + simple_momentum
+    )
+    
+    # Filter for Strong Moves
+    dynamic_threshold = final_alpha_factor.rolling(window=20).quantile(0.75)
+    strong_moves = (final_alpha_factor > dynamic_threshold).astype(int)
+    
+    # Enhanced Volume-Adjusted Breakout Strength
+    high_adjusted_volume = (df['high'] - df['close']) * df['volume']
+    low_adjusted_volume = (df['close'] - df['low']) * df['volume']
+    breakout_strength = high_adjusted_volume - low_adjusted_volume
+    
+    # Integrated Volume-Adjusted Breakout Indicator
+    integrated_breakout = pd.Series(np.maximum(breakout_strength, 0), index=df.index) - pd.Series(np.minimum(breakout_strength, 0), index=df.index)
+    
+    # Combined Momentum Indicator
+    short_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    long_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    combined_momentum = short_momentum + long_momentum
+    
+    # Final Enhanced Alpha Factor
+    final_enhanced_alpha_factor = (
+        final_alpha_factor * integrated_breakout + combined_momentum
+    )
+    
+    # Filter for Strong Moves
+    enhanced_dynamic_threshold = final_enhanced_alpha_factor.rolling(window=20).quantile(0.75)
+    final_strong_moves = (final_enhanced_alpha_factor > enhanced_dynamic_threshold).astype(int)
+    
+    return final_strong_moves
+```

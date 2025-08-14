@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    df['close_to_range_ratio'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Spread
+    df['spread'] = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Spread
+    df['volume_adjusted_spread'] = df['spread'] * df['volume']
+    
+    # Calculate Average Intraday Return over N days (N=10 for example)
+    N = 10
+    df['avg_intraday_return'] = df['intraday_return'].rolling(window=N).mean()
+    
+    # Combine Initial Signals
+    df['initial_signal'] = df['avg_intraday_return'] + df['volume_adjusted_spread']
+    
+    # Calculate Price Momentum
+    df['high_low_spread'] = df['high'] - df['low']
+    df['avg_high_low_spread'] = df['high_low_spread'].rolling(window=10).mean()
+    df['relative_high_low_spread'] = df['high_low_spread'] / df['high_low_spread'].shift(1)
+    
+    # Introduce Opening Impact Factor
+    df['opening_impact_factor'] = df['close'] - df['open']
+    
+    # Calculate Volume Trend Score
+    df['avg_volume_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_change_rate'] = df['volume'] / df['avg_volume_10']
+    df['volume_trend_score'] = df['volume_change_rate'].apply(lambda x: 1.5 if x > 1 else -1.2 if x < 1 else 0)
+    
+    # Combine Momentum and Close-to-Range Ratio
+    df['sum_returns'] = df['close'].pct_change().rolling(window=N).sum()
+    df['momentum_close_to_range'] = df['sum_returns'] * df['close_to_range_ratio']
+    
+    # Adjust for Volume Activity
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean().shift(1)
+    df['short_term_volume_change'] = df['volume'] - df['volume'].shift(5)
+    df['volume_trend_indicator'] = df['short_term_volume_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Output as Final Alpha Factor
+    df['final_alpha_factor'] = (
+        (df['momentum_close_to_range'] * df['volume_trend_score'])
+        / df['avg_volume_20']
+        * (df['volume_trend_score'] * df['relative_high_low_spread'])
+        * df['opening_impact_factor']
+    )
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=20):
+    # Calculate Intraday Volatility
+    df['High-Low'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['High-Low'].rolling(window=n).mean()
+
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].pct_change()
+
+    # Calculate Cumulative Return
+    df['Cumulative_Return'] = df['Daily_Return'].rolling(window=n).sum()
+
+    # Adjust by Volume
+    df['Avg_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Vol_Adjusted_Cumulative_Return'] = df['Cumulative_Return'] * df['Avg_Volume']
+
+    # Adjust by Price Volatility
+    df['Price_Volatility'] = df['close'].rolling(window=n).std()
+    df['Final_Adjusted_Return'] = (df['Vol_Adjusted_Cumulative_Return'] / df['Price_Volatility']) + 1
+
+    # Calculate Momentum
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(m))
+    df['Momentum'] = df['Log_Return'].rolling(window=m).sum()
+
+    # Adjust by Intraday Volatility and Volume
+    df['Weighted_Momentum'] = (df['Momentum'] * df['Avg_Volume']) / df['Intraday_Volatility']
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['Momentum_50SMA'] = df['Momentum'] - df['Momentum'].rolling(window=50).mean()
+    df['Integrated_Factor'] = df['Final_Adjusted_Return'] + df['Momentum_50SMA']
+
+    # Calculate Intraday Movement
+    df['Intraday_Movement'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Factors
+    df['Combined_Factors'] = df['Intraday_Movement'] + df['Close_to_Open_Return']
+    df['Price_Range_Ratio'] = (df['high'] - df['low']) / df['close']
+    df['Weighted_Combined_Factors'] = df['Combined_Factors'] * df['Price_Range_Ratio']
+
+    # Calculate Short-Term and Long-Term Moving Averages
+    df['Short_Term_MA'] = df['close'].rolling(window=5).mean()
+    df['Long_Term_MA'] = df['close'].rolling(window=20).mean()
+
+    # Determine Trend Direction
+    df['Trend_Direction'] = np.where(df['Short_Term_MA'] > df['Long_Term_MA'], 1, -1)
+
+    # Confirm with Volume
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Adjusted_Momentum'] = df['Trend_Direction'] * df['Volume_Change']
+
+    # Calculate Relative Strength
+    df['Relative_Strength'] = (df['Momentum'] - df['Long_Term_MA']) / (df['high']*df['volume'] + df['low']*df['volume'] + df['close']*df['volume']).sum() / df['volume'].sum()
+
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Relative_Strength'] + df['Weighted_Combined_Factors']
+
+    return df['Final_Alpha_Factor']
+```

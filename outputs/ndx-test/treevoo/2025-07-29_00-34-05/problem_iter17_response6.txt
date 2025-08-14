@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_difference = short_term_ema - long_term_ema
+    
+    # Assess Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    average_range_volatility = daily_range.rolling(window=30).sum() / 30
+    
+    # Incorporate Volume Influence
+    positive_volume_days = (df['volume'] > df['volume'].shift(1)).rolling(window=20).sum()
+    negative_volume_days = (df['volume'] < df['volume'].shift(1)).rolling(window=20).sum()
+    average_30_day_volume = df['volume'].rolling(window=30).mean()
+    volume_deviation_score = df['volume'] - average_30_day_volume
+    volume_acceleration = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    # Combine Momentum and Volume Indicators
+    adjusted_momentum = (
+        (short_term_ema * positive_volume_days) 
+        + (long_term_ema * negative_volume_days)
+    )
+    adjusted_momentum *= momentum_difference / average_range_volatility
+    adjusted_momentum *= volume_acceleration
+    
+    # Calculate Volume Adjusted Range
+    volume_adjusted_range = (
+        (df['high'] - df['low']) 
+        / ((df['high'] + df['low'] + df['close']) / 3)
+    ) * df['volume']
+    
+    # Calculate Short-Term and Long-Term Rolling Average of Volume Adjusted Range
+    short_term_var = volume_adjusted_range.rolling(window=10).mean()
+    long_term_var = volume_adjusted_range.rolling(window=20).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        adjusted_momentum
+        + short_term_var
+        - long_term_var
+        + volume_deviation_score
+    )
+    
+    return final_alpha_factor
+```

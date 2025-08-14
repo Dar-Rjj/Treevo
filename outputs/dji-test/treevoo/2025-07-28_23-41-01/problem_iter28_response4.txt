@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate short-term (5-day) and long-term (20-day) simple moving averages
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    
+    # Determine the position of the short-term MA relative to the long-term MA
+    df['trend_direction'] = df['sma_5'] - df['sma_20']
+    
+    # Compute true range from high, low, and previous close
+    df['true_range'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs() + \
+                      (df['close'].shift(1) - df['high']).abs() + \
+                      (df['close'].shift(1) - df['low']).abs()
+    df['true_range'] = df['true_range'].max(axis=1)
+    
+    # Use average true range over a period (e.g., 14 days) to gauge volatility
+    df['avg_true_range_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Measure the ratio of current day's volume to the average volume over past n days
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Evaluate the relationship between volume and price changes
+    df['volume_price_relation'] = df['volume_ratio'] * df['daily_return'].abs()
+    
+    # Calculate the percentage difference between the high and low price of the day
+    df['trading_range_percent'] = (df['high'] - df['low']) / df['low'] * 100
+    
+    # Analyze the frequency and magnitude of days where the trading range is exceptionally large
+    df['large_trading_range'] = (df['trading_range_percent'] > 5).astype(int)
+    
+    # Combine factors into a single alpha factor
+    alpha_factor = (
+        df['daily_return'].shift(1) +
+        df['trend_direction'] +
+        df['avg_true_range_14'] +
+        df['volume_price_relation'] +
+        df['trading_range_percent'] * df['large_trading_range']
+    )
+    
+    return alpha_factor
+```

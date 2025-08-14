@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Close-Open Change
+    close_open_change = df['close'] - df['open']
+    
+    # Sum of High-Low Ranges over a Period (e.g., 20 days)
+    sum_high_low_range = high_low_range.rolling(window=20).sum()
+    
+    # Sum of Close-Open Changes over a Period (e.g., 20 days)
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+    
+    # Smooth High-Low Range with EMA (e.g., 20-day)
+    smooth_high_low_range = high_low_range.ewm(span=20, adjust=False).mean()
+    
+    # Compute Momentum of High-Low Ranges (e.g., 20-day - 5-day)
+    short_term_smooth_high_low_range = high_low_range.ewm(span=5, adjust=False).mean()
+    momentum_high_low_range = smooth_high_low_range - short_term_smooth_high_low_range
+    
+    # Calculate True Range
+    prev_close = df['close'].shift(1)
+    true_range = pd.concat([df['high'] - df['low'], 
+                            (df['high'] - prev_close).abs(), 
+                            (prev_close - df['low']).abs()], axis=1).max(axis=1)
+    
+    # Calculate Rolling Average True Range (e.g., 14-day)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Adjust Price Momentum by ATR
+    adjusted_momentum_score = (sum_high_low_range + sum_close_open_change) / atr
+    
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = df['volume'] > avg_volume * 1.5
+    volume_spike = df['volume'] > df['volume'].rolling(window=5).mean() * 2
+    
+    # Adjust Momentum Based on Volume
+    adjusted_momentum_score[volume_spike] *= 0.7
+    
+    # Calculate Integrated Momentum Score
+    recent_volatility = df['close'].rolling(window=20).std()
+    weighted_high_low_diff = (high_low_range / recent_volatility).fillna(0)
+    weighted_close_open_diff = (close_open_change / recent_volatility).fillna(0)
+    integrated_momentum_score = weighted_high_low_diff + weighted_close_open_diff
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    combined_momentum = (adjusted_momentum_score * 0.5) + (integrated_momentum_score * 0.5)
+    
+    # Dynamic Momentum Indicator
+    yesterday_combined_momentum = combined_momentum.shift(1)
+    today_combined_momentum = combined_momentum
+    dynamic_momentum_indicator = (today_combined_momentum - yesterday_combined_momentum) / recent_volatility
+    
+    # Integrate Combined Factors
+    volume_ratio = df['volume'] / avg_volume
+    final_alpha_factor = combined_momentum * volume_ratio * (1 + dynamic_momentum_indicator)
+    
+    return final_alpha_factor
+```

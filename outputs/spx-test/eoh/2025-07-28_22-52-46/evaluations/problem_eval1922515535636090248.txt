@@ -1,0 +1,31 @@
+import pandas as pd
+import talib
+
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate 10-day ATR
+    df['atr_10'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=10)
+    
+    # Calculate 20-day RSI
+    df['rsi_20'] = talib.RSI(df['close'], timeperiod=20)
+    
+    # Calculate 14-day EMA and 50-day SMA
+    df['ema_14'] = talib.EMA(df['close'], timeperiod=14)
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate the EMA/SMA ratio
+    df['ema_sma_ratio'] = df['ema_14'] / df['sma_50']
+    
+    # Calculate 90-day rolling correlations
+    corr_atr = (df['atr_10'] * df['daily_return'].shift(-1)).rolling(window=90).corr(df['daily_return'].shift(-1))
+    corr_rsi = (df['rsi_20'] * df['daily_return'].shift(-1)).rolling(window=90).corr(df['daily_return'].shift(-1))
+    corr_ema_sma_ratio = (df['ema_sma_ratio'] * df['daily_return'].shift(-1)).rolling(window=90).corr(df['daily_return'].shift(-1))
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['atr_10'] * corr_atr + 
+                         df['rsi_20'] * corr_rsi + 
+                         df['ema_sma_ratio'] * corr_ema_sma_ratio)
+    
+    return heuristics_matrix

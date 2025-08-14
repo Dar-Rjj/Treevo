@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Moving Averages
+    df['short_ma'] = df['close'].rolling(window=5).mean()
+    df['long_ma'] = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    df['trend_direction'] = np.where(df['short_ma'] > df['long_ma'], 1, -1)
+    
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    df['close_change'] = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    df['weighted_sum'] = (df['high'] + df['low'] + 2 * df['close']) / 4
+    df['weighted_momentum'] = df['close_change'] / (df['weighted_sum'] * np.sqrt(df['volume']))
+    
+    # Adjust for Volatility
+    df['vol_adjusted_momentum'] = df['weighted_momentum'] / df['high_low_range']
+    
+    # Confirm with Volume
+    df['volume_change'] = df['volume'].diff()
+    df['confirmed_momentum'] = df['trend_direction'] * df['volume_change']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high_low_range'].rolling(window=5).mean()
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Cumulative Return
+    df['cumulative_return'] = df['daily_return'].rolling(window=5).sum()
+    
+    # Adjust by Volume
+    df['average_volume'] = df['volume'].rolling(window=5).mean()
+    df['adjusted_cumulative_return'] = df['cumulative_return'] * df['average_volume']
+    
+    # Calculate Momentum
+    df['log_return'] = np.log(df['close']).diff()
+    df['momentum'] = df['log_return'].rolling(window=20).sum()
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['relative_strength'] = df['momentum'] - df['close'].rolling(window=50).mean()
+    df['combined_factor'] = df['relative_strength'] + df['adjusted_cumulative_return']
+    
+    # Calculate Intraday Movement
+    df['intraday_movement'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Factors
+    df['price_range_ratio'] = df['high_low_range'].rolling(window=5).mean() / df['high_low_range']
+    df['combined_factors'] = (df['intraday_movement'] + df['close_to_open_return']) * df['price_range_ratio']
+    
+    # Incorporate Open-to-Close Price Movement
+    df['open_close_movement'] = df['close'] - df['open']
+    df['avg_open_close_movement'] = df['open_close_movement'].rolling(window=5).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = (df['vol_adjusted_momentum'] + df['combined_factor'] + df['combined_factors']) * df['relative_strength'] + df['avg_open_close_movement']
+    
+    return df['final_alpha_factor']
+```

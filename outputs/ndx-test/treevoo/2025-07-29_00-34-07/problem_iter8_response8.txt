@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Gap Between High and Low
+    price_gap = df['high'] - df['low']
+    
+    # Calculate 5-day Moving Average of Volumes
+    volume_5d_ma = df['volume'].rolling(window=5).mean()
+    
+    # Compute Current Day Volume Growth
+    volume_growth = df['volume'] / df['volume'].shift(1)
+    
+    # Multiply 5-day Moving Average by Volume Growth
+    volume_trend = volume_5d_ma * volume_growth
+    
+    # Weight the Price Gaps
+    weighted_price_gaps = (price_gap * volume_trend).sum()
+    
+    # Calculate High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine High-to-Low Range with Weighted Price Gaps
+    combined_value = high_low_range * 100 + weighted_price_gaps
+    
+    # Smoothing and Momentum Calculation
+    combined_sma_5d = combined_value.rolling(window=5).mean()
+    range_momentum = combined_sma_5d - combined_sma_5d.shift(5)
+    
+    # Calculate Price Momentum
+    price_return_1d = (df['close'] / df['close'].shift(1)) - 1
+    price_return_5d = (df['close'] / df['close'].shift(5)) - 1
+    price_return_20d = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Average the Momentum
+    avg_momentum = (price_return_1d + price_return_5d + price_return_20d) / 3
+    
+    # Adjust for Volume
+    volume_pct_change = (df['volume'] / df['volume'].shift(1)) - 1
+    adjusted_momentum = avg_momentum * volume_pct_change
+    
+    # Incorporate High-Low Momentum with Volume Filter
+    daily_price_range = df['high'] - df['low']
+    relative_volume = df['volume'] > df['volume'].rolling(window=5).mean()
+    filtered_days = daily_price_range[relative_volume]
+    cumulative_high_low_momentum = filtered_days.sum()
+    
+    # Combine with Adjusted Momentum
+    alpha_factor_part1 = cumulative_high_low_momentum + adjusted_momentum
+    
+    # Calculate Rolling High-Low Range
+    rolling_high = df['high'].rolling(window=30).max()
+    rolling_low = df['low'].rolling(window=30).min()
+    rolling_high_low_range = rolling_high - rolling_low
+    
+    # Weight by Volume Trend
+    volume_10d_ma = df['volume'].rolling(window=10).mean()
+    volume_trend_weight = df['volume'] - volume_10d_ma
+    
+    # Final Alpha Factor
+    alpha_factor = (weighted_price_gaps 
+                    + range_momentum 
+                    + rolling_high_low_range * volume_trend_weight 
+                    - adjusted_momentum 
+                    + alpha_factor_part1)
+    
+    return alpha_factor
+```

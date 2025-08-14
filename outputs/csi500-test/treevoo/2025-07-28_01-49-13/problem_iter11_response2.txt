@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_return = close_to_open_return * intraday_range
+    
+    # Volume-Weighted Volatility
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_weighted_volatility = intraday_range / avg_volume
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    combined_adjusted_return = adjusted_return * volume_weighted_volatility
+    
+    # Calculate Volume-Weighted High-Low Spread
+    weighted_high_low_spread = (df['high'] - df['low']) * df['volume']
+    
+    # EMA of Weighted High-Low Spread
+    ema_window = 10
+    ema_high_low_spread = weighted_high_low_spread.ewm(span=ema_window, adjust=False).mean()
+    ema_change = ema_high_low_spread - ema_high_low_spread.shift(5)
+    
+    # Identify Volume Spike
+    m_days = 20
+    moving_avg_volume = df['volume'].rolling(window=m_days).mean()
+    std_dev_volume = df['volume'].rolling(window=m_days).std()
+    volume_spike = df['volume'] > (moving_avg_volume + 2 * std_dev_volume)
+    
+    # Calculate N-day Price Momentum
+    n_days = 5
+    price_momentum = df['close'] - df['close'].shift(n_days)
+    
+    # Combine Intraday High-Low Range and Close-Open Return
+    high_low_range_ratio = (df['high'] - df['low']) / df['close']
+    close_open_return_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Combine Price Momentum, Volume Spike, and Intraday Volatility
+    k = 1.5  # Constant factor to amplify return on volume spike days
+    combined_momentum = price_momentum.where(~volume_spike, price_momentum * k)
+    combined_momentum *= high_low_range_ratio
+    combined_momentum *= close_open_return_ratio
+    
+    # Volume-Weighted Adjusted Return
+    volume_weighted_adjusted_return = combined_momentum * df['volume']
+    
+    # Moving Average of Volume-Weighted Adjusted Return
+    lookback_period = 20
+    ma_volume_weighted_adjusted_return = volume_weighted_adjusted_return.rolling(window=lookback_period).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = (ema_high_low_spread + volume_weighted_adjusted_return) / ma_volume_weighted_adjusted_return
+    
+    return final_alpha_factor
+```

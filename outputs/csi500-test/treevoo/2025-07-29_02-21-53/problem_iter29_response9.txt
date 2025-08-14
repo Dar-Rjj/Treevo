@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicator Development
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Crossover_Signal'] = df['SMA_5'] - df['SMA_20']
+    
+    # Compute Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Change'] = df['close'] - df['open']
+    df['Smoothed_HL_Range'] = df['High_Low_Range'].ewm(span=20, adjust=False).mean()
+    df['Momentum_HL_Ranges'] = df['Smoothed_HL_Range'] - df['Smoothed_HL_Range'].shift(20)
+    
+    # Volume Trend Analysis
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Positive_Volume_Sum'] = (df['Volume_Change'] > 0) * df['Volume_Change'].rolling(window=20).sum()
+    df['Negative_Volume_Sum'] = (df['Volume_Change'] < 0) * df['Volume_Change'].rolling(window=20).sum()
+    df['Volume_Accumulation_Oscillator'] = df['Positive_Volume_Sum'] - df['Negative_Volume_Sum']
+    
+    # Evaluate Volume Activity
+    df['Average_Volume'] = df['volume'].rolling(window=20).mean()
+    df['High_Volume'] = (df['volume'] > df['Average_Volume']).astype(int)
+    df['Adjusted_Volume_Impact'] = df['High_Low_Range'] * df['volume']
+    
+    # Price Action Strength
+    df['True_Range'] = df[['high' - 'low', 'high' - df['close'].shift(1), df['close'].shift(1) - 'low']].max(axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['Price_Strength_Indicator'] = df['True_Range'] / df['ATR_14']
+    
+    # Market Sentiment Factors
+    df['Open_Close_Spread'] = df['open'] - df['close']
+    df['Daily_High_Low_Range_Percentage'] = (df['high'] - df['low']) / df['low'] * 100
+    df['Combined_Sentiment_Score'] = df['Open_Close_Spread'] + df['Daily_High_Low_Range_Percentage']
+    
+    # Integrate Combined Factors
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume']
+    df['Integrated_Momentum_Score'] = df['Crossover_Signal'] * df['Volume_Ratio']
+    df['Order_Imbalance_Score'] = df['High_Volume'] * df['Close_Open_Change']
+    
+    # Synthetic Alpha Factor
+    df['Synthetic_Alpha_Factor'] = (df['Crossover_Signal'] + df['Volume_Accumulation_Oscillator'] + 
+                                    df['Combined_Sentiment_Score']) * df['Volume_Ratio']
+    df['Dynamic_Momentum_Indicator'] = df['Synthetic_Alpha_Factor'].shift(1) * df['Synthetic_Alpha_Factor']
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['ATR_14'] + df['Price_Strength_Indicator'] + 
+                                df['Dynamic_Momentum_Indicator'])
+    
+    return df['Final_Alpha_Factor']
+```

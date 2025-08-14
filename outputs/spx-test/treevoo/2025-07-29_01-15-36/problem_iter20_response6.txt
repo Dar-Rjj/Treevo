@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    open_to_close_momentum = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    combined_intraday_indicators = (intraday_high_low_spread * open_to_close_momentum) + open_to_close_momentum
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = df['close'] / high_low_range
+    
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    volume_weighted_close_to_range_momentum = combined_intraday_indicators * close_to_range_ratio * df['volume']
+    
+    # Final Intraday Combination
+    final_intraday_combination = combined_intraday_indicators * volume_weighted_close_to_range_momentum
+    
+    # Adjust for Volume Impact and Enhanced Price Volatility
+    volume_trend = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Average True Range Over 20 Days
+    true_range = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs() + \
+                 (df['high'] - df['close'].shift(1)).abs() + \
+                 (df['low'] - df['close'].shift(1)).abs()
+    atr_20 = true_range.rolling(window=20).mean()
+    
+    # Calculate Average Volume Over 20 Days
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average High-Low Range Over 20 Days
+    avg_high_low_range_20 = (df['high'] - df['low']).rolling(window=20).mean()
+    
+    # Weight by Combined Volume & Enhanced Price Volatility
+    volume_volatility_weight = avg_volume_20 * avg_high_low_range_20
+    
+    # Final Adjustment
+    final_adjustment = final_intraday_combination * volume_trend * volume_volatility_weight
+    
+    # Calculate Simple Moving Average (SMA) of Close prices
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate SMA Momentum
+    sma_momentum = df['close'] - sma_20
+    
+    # Integrate RSI and SMA Momentum
+    n = 14  # RSI period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=n).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=n).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Volume-Adjusted Momentum
+    price_range_20 = (df['high'] - df['low']).rolling(window=20).mean()
+    volume_adjusted_momentum = price_range_20 * df['volume'] + rsi * df['volume']
+    
+    # Final Momentum Combination
+    final_momentum_combination = final_adjustment * volume_adjusted_momentum + sma_momentum
+    
+    return final_momentum_combination
+```

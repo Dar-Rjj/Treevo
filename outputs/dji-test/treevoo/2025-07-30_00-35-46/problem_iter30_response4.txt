@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Open-Close Return
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Low and Open-Close Returns with weights
+    high_low_weight = 0.6
+    open_close_weight = 0.4
+    combined_return = (high_low_weight * high_low_diff + open_close_weight * open_close_return)
+    
+    # Apply non-linear transformation
+    intraday_momentum = combined_return ** 3
+    
+    # Apply Synchronized Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    
+    volume_threshold = 1.7
+    amount_threshold = 1.7
+    
+    # Include Intraday Momentum if both volume and amount ratios are above their thresholds
+    intraday_momentum_filtered = intraday_momentum.where((volume_ratio > volume_threshold) & (amount_ratio > amount_threshold), 0)
+    
+    # Introduce Smoothing Factor with EMA
+    ema_alpha = 0.3
+    volume_ratio_ema = df['volume'].ewm(alpha=ema_alpha, adjust=False).mean() / df['volume'].shift(1).ewm(alpha=ema_alpha, adjust=False).mean()
+    amount_ratio_ema = df['amount'].ewm(alpha=ema_alpha, adjust=False).mean() / df['amount'].shift(1).ewm(alpha=ema_alpha, adjust=False).mean()
+    
+    # Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Synchronize Volume and Price Change
+    synchronized_volume_price = volume_ratio * price_change
+    
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    momentum_signal = np.where(short_ema > long_ema, 1, -1)
+    
+    # On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    obv = pd.Series(obv, index=df.index)
+    
+    # Combined Alpha Factor
+    alpha_factor = (intraday_momentum_filtered + synchronized_volume_price * momentum_signal) + obv
+    
+    return alpha_factor
+```

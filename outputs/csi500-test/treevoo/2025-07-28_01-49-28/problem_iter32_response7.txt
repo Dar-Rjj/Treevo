@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['10_day_SMA'] = df['close'].rolling(window=10).mean()
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+    df['20_day_pct_change'] = df['close'].pct_change(periods=20)
+    df['SMA_diff'] = df['10_day_SMA'] - df['50_day_SMA']
+    df['14_day_ROC'] = df['close'].pct_change(periods=14)
+
+    # Volatility Measures
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['30_day_std'] = df['log_returns'].rolling(window=30).std()
+    df['high_low_range'] = df['high'] - df['low']
+    df['20_day_HL_MA'] = df['high_low_range'].rolling(window=20).mean()
+    df['ATR'] = df['high_low_range'].rolling(window=14).mean()
+    df['CV_30_days'] = (df['30_day_std'] / df['close'].rolling(window=30).mean())
+    df['adjusted_daily_range'] = (df['high'] - df['low']) * df['volume']
+
+    # Enhanced Price Reversion
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['proximity_to_10_day_range'] = np.minimum(df['10_day_high'] - df['close'], df['close'] - df['10_day_low'])
+    df['inverted_proximity'] = 1 / df['proximity_to_10_day_range']
+    df['reversion_adjusted'] = df['inverted_proximity'] / df['30_day_std']
+
+    # Open-High-Low Volatility
+    df['weighted_open_high_diff'] = (df['high'] - df['open']) * df['volume']
+    df['weighted_open_low_diff'] = (df['open'] - df['low']) * df['volume']
+    df['combined_weighted_volatility'] = (df['weighted_open_high_diff'] + df['weighted_open_low_diff']) / 2
+
+    # Trading Activity through Volume Analysis
+    df['20_day_vol_MA'] = df['volume'].rolling(window=20).mean()
+    df['vol_ratio'] = df['volume'] / df['20_day_vol_MA']
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    df['VWAP'] = (df['close'] * df['volume']).rolling(window=30).sum() / df['volume'].rolling(window=30).sum()
+
+    # OHLC Bar Information
+    df['daily_price_range'] = df['high'] - df['low']
+    df['open_close_relationship'] = (df['close'] - df['open']) / df['open']
+    df['RSI'] = 100 - (100 / (1 + df['close'].diff().apply(lambda x: max(x, 0)).rolling(window=14).mean() / df['close'].diff().apply(lambda x: -min(x, 0)).rolling(window=14).mean()))
+
+    # Composite Alpha Factors
+    df['composite_momentum'] = df['20_day_pct_change'] * df['20_day_vol_MA']
+    df['composite_score'] = (df['10_day_SMA'] + df['50_day_SMA'] + df['ATR']) / 3
+    df['spread_momentum'] = (df['high'] - df['low']).rolling(window=30).sum().diff()
+    df['trend_strength'] = (df['50_day_SMA'] - df['20_day_SMA']) / df['20_day_SMA']
+    df['momentum_factor'] = (df['close'] / df['close'].shift(10) - 1) + (df['close'] / df['close'].shift(30) - 1)
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['adjusted_daily_range'] * 
+        df['reversion_adjusted'] * 
+        df['combined_weighted_volatility'] * 
+        df['spread_momentum'] * 
+        df['trend_strength'] * 
+        df['momentum_factor']
+    )
+
+    return df['final_alpha_factor']
+```

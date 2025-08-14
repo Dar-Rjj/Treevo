@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Weight by Trade Intensity
+    df['trade_intensity'] = df['volume'] / df['amount']
+    df['weighted_intraday_return'] = df['intraday_return'] * df['trade_intensity']
+    
+    # Incorporate Close-to-PreviousClose Trend
+    df['prev_close'] = df['close'].shift(1)
+    df['close_to_prev_close_return'] = (df['close'] - df['prev_close']) / df['prev_close']
+    df['combined_returns'] = df['weighted_intraday_return'] + df['close_to_prev_close_return']
+    
+    # Integrate Volatility
+    df['daily_return'] = (df['close'] - df['prev_close']) / df['prev_close']
+    volatility_window = 20
+    df['volatility'] = df['daily_return'].rolling(window=volatility_window).std()
+    
+    # Leverage Trade Intensity with Volatility
+    df['leverage_trade_volatility'] = df['trade_intensity'] * df['volatility']
+    
+    # Consider Multi-Period Returns
+    short_term_window = 5
+    long_term_window = 20
+    df['short_term_ma'] = df['daily_return'].rolling(window=short_term_window).mean()
+    df['long_term_ma'] = df['daily_return'].rolling(window=long_term_window).mean()
+    df['multi_period_return_diff'] = df['long_term_ma'] - df['short_term_ma']
+    
+    # Final Factor Value
+    df['final_factor_value'] = (df['combined_returns'] + df['leverage_trade_volatility']) * df['multi_period_return_diff']
+    
+    return df['final_factor_value'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

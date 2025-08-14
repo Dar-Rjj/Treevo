@@ -1,0 +1,38 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day return as a momentum indicator
+    df['momentum_5d'] = df['close'].pct_change(periods=5)
+    
+    # Calculate the 20-day rolling standard deviation of log returns as a volatility factor
+    df['log_returns'] = np.log(df['close']).diff()
+    df['volatility_20d'] = df['log_returns'].rolling(window=20).std()
+    
+    # Smoothed volume using Exponential Moving Average (EMA) with a span of 10
+    df['smoothed_volume_ema_10'] = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the relative strength index (RSI) as a trend measure
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Integrate market sentiment using the ratio of high and low prices
+    df['market_sentiment'] = df['high'] / df['low']
+    
+    # Calculate the 10-day average trading volume to identify trading volume patterns
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the alpha factor as the product of momentum, the inverse of volatility,
+    # weighted by the smoothed volume, and adjusted by the RSI, market sentiment, and average trading volume
+    df['inv_volatility'] = 1 / (df['volatility_20d'] + 1e-7)
+    
+    # Dynamic weighting based on the difference between current and 10-day average volume
+    df['volume_weight'] = (df['volume'] - df['avg_volume_10d']) / (df['avg_volume_10d'] + 1e-7)
+    
+    # Adjust the alpha factor with dynamic weighting
+    alpha_factor = (df['momentum_5d'] * df['inv_volatility'] * df['smoothed_volume_ema_10'] *
+                    df['rsi_14'] * df['market_sentiment'] * df['volume_weight'])
+    
+    return alpha_factor
+```

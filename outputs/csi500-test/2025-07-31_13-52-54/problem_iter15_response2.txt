@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20):
+    # Calculate Intraday High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Adjusted High-Low Spread
+    volume_adjusted_high_low_spread = high_low_spread * df['volume']
+    
+    # Calculate High-Close to Open-High Ratio
+    high_close_diff = df['high'] - df['close']
+    open_high_diff = df['open'] - df['high']
+    high_close_to_open_high_ratio = high_close_diff / open_high_diff
+    
+    # Summarize Volume-Adjusted High-Low Spread Over Lookback Period
+    cumulative_volume_adjusted_high_low_spread = df['volume'].rolling(window=lookback_period).apply(
+        lambda x: (df.loc[x.index, 'high'] - df.loc[x.index, 'low']) * x, raw=False
+    )
+    total_volume = df['volume'].rolling(window=lookback_period).sum()
+    
+    # Calculate Momentum Component
+    current_day_volume_adjusted_high_low_spread = volume_adjusted_high_low_spread
+    past_average_volume_adjusted_high_low_spread = cumulative_volume_adjusted_high_low_spread / total_volume
+    momentum_component = current_day_volume_adjusted_high_low_spread - past_average_volume_adjusted_high_low_spread.shift(1)
+    
+    # Introduce Price-Volume Imbalance Factor
+    close_open_diff = df['close'] - df['open']
+    price_volume_imbalance = close_open_diff * df['volume']
+    summarized_price_volume_imbalance = price_volume_imbalance.rolling(window=lookback_period).sum()
+    
+    # Combine Adjusted Spread, Ratio, and Imbalance
+    combined_factors = volume_adjusted_high_low_spread + high_close_to_open_high_ratio + summarized_price_volume_imbalance
+    
+    # Introduce Price-Volume Volatility Factor
+    absolute_open_close_diff = (df['open'] - df['close']).abs()
+    price_volume_volatility = absolute_open_close_diff * df['volume']
+    summarized_price_volume_volatility = price_volume_volatility.rolling(window=lookback_period).sum()
+    
+    # Synthesize Final Factor
+    final_factor = momentum_component + combined_factors + summarized_price_volume_volatility
+    
+    return final_factor
+```

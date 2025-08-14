@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Return Volatility
+    intraday_returns_high = df['high'] - df['open']
+    intraday_returns_low = df['low'] - df['open']
+    intraday_return_volatility = (intraday_returns_high - intraday_returns_low).rolling(window=10).std()
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] + df['low']) / 2 - df['open']
+    intraday_reversal_score = -intraday_return
+    
+    # Adjust for Volume
+    volume_adjusted_range = high_low_range * df['volume']
+    
+    # Compute Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Momentum
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Adjust Momentum by Open-Close Spread
+    open_close_spread = df['close'] - df['open']
+    weighted_momentum = momentum * open_close_spread.abs()
+    
+    # Combine Momentum, Intraday Reversal, and Volume-Adjusted Range
+    high_low_range_diff = high_low_range - high_low_range.shift(1)
+    combined_signal = high_low_range_diff * intraday_reversal_score + weighted_momentum
+    
+    # Consider Close-to-Open Price Change
+    close_to_open_diff = df['close'] - df['open'].shift(-1)
+    integrated_factor = volume_adjusted_range * close_to_open_diff
+    
+    # Generate Factor Value
+    factor_value = momentum * df['volume'].rolling(window=10).mean() / df['close']
+    
+    # Enhance Combined Signal with Smoothing
+    enhanced_combined_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Combine All Factors
+    combined_factors = (intraday_return_volatility * 0.3 +
+                        factor_value * 0.4 +
+                        enhanced_combined_signal * 0.2 +
+                        integrated_factor * 0.1)
+    
+    # Integrate Volume-Amount-Adjusted Range with Weighted Price Change
+    final_combined_signal = combined_signal + integrated_factor
+    
+    # Final Alpha Factor
+    volume_spike = (df['volume'] - df['volume'].shift(1)) > 2 * df['volume'].rolling(window=20).std()
+    volume_spike_factor = volume_spike.astype(int)
+    
+    final_alpha_factor = final_combined_signal * enhanced_combined_signal * volume_spike_factor
+    
+    return final_alpha_factor
+```

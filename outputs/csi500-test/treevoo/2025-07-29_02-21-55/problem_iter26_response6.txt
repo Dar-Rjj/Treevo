@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday High-to-Low Percentage Change
+    df['intraday_pct_change'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Intraday and Volume Indicator
+    threshold = 1.5
+    df['moving_std_dev'] = df['close'].pct_change().rolling(window=30).std()
+    df['combined_intraday_vol'] = df['intraday_pct_change'] * df['volume_ratio']
+    df['combined_intraday_vol'] = df['combined_intraday_vol'].where(
+        (df['combined_intraday_vol'] > threshold) | (df['combined_intraday_vol'] < -threshold), 0)
+    
+    # Confirm with Price Momentum
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['daily_range'].rolling(window=220).mean()
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['daily_range'].rolling(window=5).mean()
+    df['combined_momentum'] = 0.6 * df['long_term_momentum'] + 0.4 * df['short_term_momentum']
+    
+    # Apply Moving Averages to Intraday Momentum
+    fast_ema = df['intraday_pct_change'].ewm(span=12, adjust=False).mean()
+    slow_ema = df['intraday_pct_change'].ewm(span=26, adjust=False).mean()
+    macd_line = fast_ema - slow_ema
+    
+    # Combine Momentum Indicators with MACD
+    weighted_momentum_sum = 0.45 * df['long_term_momentum'] + 0.55 * df['short_term_momentum']
+    df['momentum_macd'] = weighted_momentum_sum + macd_line
+    
+    # Incorporate Volume Confirmation
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    df['volume_ratio_20'] = df['volume'] / avg_volume_20
+    df['volume_ratio_20'] = df['volume_ratio_20'].where(
+        (df['volume_ratio_20'] == 1) | (df['volume_ratio_20'] < 1), 0)
+    
+    # Adjust Combined Momentum by Volume
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    ma_log_returns = log_returns.rolling(window=20).mean()
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+    df['adjusted_momentum'] = (fast_ema * ma_log_returns) / ema_volume - slow_ema
+    
+    # Smooth the Adjusted Combined Momentum
+    df['smoothed_momentum'] = df['adjusted_momentum'].rolling(window=5).mean()
+    
+    # Synthesize Final Indicator
+    df['final_indicator'] = 0.5 * df['combined_intraday_vol'] + 0.5 * df['combined_momentum']
+    
+    # Crossover Integration
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    rolling_open_to_close = df['open_to_close_return'].rolling(window=20).mean()
+    sma_50 = df['close'].rolling(window=50).mean()
+    trend_filter = df['close'] - sma_50
+    df['crossover_integrated'] = 0.5 * df['open_to_close_return'] + 0.5 * df['combined_momentum']
+    df['normalized_crossover'] = (df['crossover_integrated'] - df['crossover_integrated'].rolling(window=30).std()) / df['crossover_integrated'].rolling(window=30).std()
+    df['trend_filtered'] = df['normalized_crossover'].where(trend_filter > 0, 0)
+    
+    # Final Adjustment
+    df['final_adjusted'] = df['trend_filtered'].rolling(window=5).mean()
+    df['final_indicator'] += 0.5 * df['final_adjusted']
+    
+    return df['final_indicator']
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Open-to-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+
+    # Integrate Intraday and Open-to-Close Momentum
+    df['integrated_intraday_momentum'] = df['high_low_range'] + df['open_close_momentum']
+
+    # Apply Volume Filter
+    df['volume_rolling_mean'] = df['volume'].rolling(window=10).mean()
+    high_volume_threshold = df['volume_rolling_mean'].quantile(0.75)
+    df['high_volume'] = df['volume'] > high_volume_threshold
+
+    # Calculate Short-Term and Long-Term Momentum
+    df['short_term_momentum'] = df['close'].shift(1) - df['close'].shift(7)
+    df['long_term_momentum'] = df['close'].shift(1) - df['close'].shift(30)
+
+    # Adjust Price Momentum by Volume Shock
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['price_momentum_adjusted'] = (df['short_term_momentum'] - df['long_term_momentum']) * df['volume_change']
+
+    # Adjust Intraday Momentum by Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['intraday_momentum_adjusted'] = df['integrated_intraday_momentum'] * df['intraday_volatility']
+
+    # Calculate Price Velocity
+    df['price_velocity'] = df['close'] - df['close'].shift(1)
+
+    # Calculate Price Acceleration
+    df['price_acceleration'] = df['price_velocity'] - df['price_velocity'].shift(1)
+
+    # Calculate Short-Term and Long-Term EMA
+    df['ema_short'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_long'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Calculate EMA Difference
+    df['ema_difference'] = df['ema_short'] - df['ema_long']
+
+    # Adjust EMA Difference by Volume Shock
+    df['ema_difference_adjusted'] = df['ema_difference'] * df['volume_change']
+
+    # Calculate Intraday Price Reversal
+    df['intraday_price_reversal'] = df['close'] - df['close'].shift(1)
+
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['price_momentum_adjusted'] +
+        df['intraday_momentum_adjusted'] +
+        df['price_acceleration'] +
+        df['ema_difference_adjusted'] +
+        df['intraday_price_reversal']
+    )
+
+    # Apply Volume Filter to Final Factor
+    df['final_alpha_factor'] = df['final_alpha_factor'] * df['high_volume']
+
+    return df['final_alpha_factor']
+```

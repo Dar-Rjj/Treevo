@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Trend Following Alpha Factor using close prices
+    sma_period = 50
+    df['SMA'] = df['close'].rolling(window=sma_period).mean()
+    df['Trend_Signal'] = (df['close'] > df['SMA']).astype(int)
+
+    # Momentum in high and low prices
+    df['High_Diff'] = df['high'] - df['high'].shift(1)
+    df['Low_Diff'] = df['low'] - df['low'].shift(1)
+    df['Momentum_Score'] = df['High_Diff'] + df['Low_Diff']
+    df['Momentum_Signal'] = (df['Momentum_Score'] > 0).astype(int)
+
+    # Volume Patterns
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Volume_Signal'] = df['Volume_Change'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Intensity Factor
+    df['Return'] = df['close'].pct_change()
+    df['Intensity_Factor'] = df['Return'] * df['volume']
+
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    lt_days = 100
+    df['Daily_Return_Volume'] = df['Return'] * df['volume']
+    df['Long_Term_VW_Return'] = df['Daily_Return_Volume'].rolling(window=lt_days).sum() / df['volume'].rolling(window=lt_days).sum()
+
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    st_days = 5
+    df['Short_Term_VW_Return'] = df['Daily_Return_Volume'].rolling(window=st_days).sum() / df['volume'].rolling(window=st_days).sum()
+
+    # Intraday Return
+    df['Intraday_Return'] = df['high'] - df['low']
+
+    # Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']).abs()
+    df['Intraday_Volatility_20D'] = df['Intraday_Volatility'].rolling(window=20).sum()
+
+    # Intraday Momentum
+    df['Intraday_Momentum'] = df['Intraday_Return'] * df['volume']
+    df['Intraday_Momentum_5D'] = df['Intraday_Momentum'].rolling(window=5).sum()
+
+    # Volume-Weighted Intraday Reversal
+    df['Volume_Weighted_Intraday_Reversal'] = -(df['Intraday_Return'] * df['volume'])
+    df['Volume_Weighted_Intraday_Reversal_10D'] = df['Volume_Weighted_Intraday_Reversal'].rolling(window=10).sum()
+
+    # Price Momentum
+    n_day = 20
+    df['Price_Momentum_Close'] = df['close'].pct_change(periods=n_day)
+    df['Price_Momentum_Open'] = df['open'].pct_change(periods=n_day)
+
+    # Combined Alpha Factor
+    df['Combined_Alpha'] = (df['Long_Term_VW_Return'] - df['Short_Term_VW_Return']) + (df['Intraday_Momentum_5D'] + df['Volume_Weighted_Intraday_Reversal_10D'])
+    df['Combined_Alpha'] *= (df['Price_Momentum_Close'] + df['Price_Momentum_Open'])
+
+    # Enhanced Volume-Weighted Volatility
+    df['Volatility'] = df['Intraday_Volatility_20D']
+    df['Enhanced_VW_Volatility'] = df['Volatility'] * df['volume']
+
+    # Trade Frequency Adjusted Return
+    df['Trade_Count'] = (df['volume'] > 0).astype(int)
+    trade_frequency_days = 30
+    df['Trade_Frequency'] = df['Trade_Count'].rolling(window=trade_frequency_days).sum()
+    df['Adjusted_Return'] = df['close'].pct_change(periods=n_day) * (df['Trade_Frequency'] / trade_frequency_days)
+
+    # Final Alpha Factor
+    df['Final_Alpha'] = (df['Price_Momentum_Close'] * df['Enhanced_VW_Volatility']) + df['Adjusted_Return'] + df['Combined_Alpha']
+
+    return df['Final_Alpha']
+```

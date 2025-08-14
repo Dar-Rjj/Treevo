@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+
+    # Calculate Intraday Price Movement
+    intraday_movement = (df['high'] - df['low']) / df['open']
+
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+
+    # Compute Weighted Volume Trend
+    volume_ma = df['volume'].rolling(window=10).mean()
+    weighted_volume_trend = abs(volume_ma - df['volume'])
+
+    # Assess Intraday Volume Impact
+    avg_volume_10d = df['volume'].rolling(window=10).mean()
+    volume_impact = df['volume'] / avg_volume_10d
+
+    # Combine Metrics for Volatility
+    combined_volatility = (high_low_spread * weighted_volume_trend) + daily_return
+    sma_combined_volatility = combined_volatility.rolling(window=5).mean()
+
+    # Integrate Intraday and Historical Effects
+    integrated_effect = (intraday_movement * volume_impact) * sma_combined_volatility
+
+    # Measure Sequential Momentum
+    momentum_5d = integrated_effect.rolling(window=5).sum()
+    ema_momentum = momentum_5d.ewm(span=3, adjust=False).mean()
+
+    # Final Alpha Factor
+    price_momentum = (df['close'].diff() / df['close'].shift(1)).rolling(window=5).sum()
+    positive_volume_diff = (df['volume'].diff() > 0).rolling(window=5).sum()
+    volume_confirmation = (df['volume'].diff().clip(lower=0).rolling(window=5).sum()) / positive_volume_diff
+
+    final_alpha_factor = ema_momentum * price_momentum
+    final_alpha_factor[volume_confirmation <= 0] *= 0.9  # Adjust by Volume Confirmation
+
+    return final_alpha_factor
+```

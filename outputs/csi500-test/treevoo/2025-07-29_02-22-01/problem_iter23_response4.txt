@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Volume-Adjusted High-Low Spread
+    df['Vol_Adj_High_Low_Spread'] = df['High_Low_Spread'] * df['volume']
+
+    # Calculate 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    df['10D_Vol_Adj_High_Low_Sum'] = df['Vol_Adj_High_Low_Spread'].rolling(window=10).sum()
+
+    # Calculate Short-Term and Long-Term EMAs
+    df['Short_Term_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Price_Momentum'] = df['Short_Term_EMA'] - df['Long_Term_EMA']
+
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    df['Combined_Momentum'] = df['10D_Vol_Adj_High_Low_Sum'] + df['Price_Momentum']
+
+    # Daily Price Change
+    df['Daily_Price_Change'] = df['close'].pct_change()
+
+    # Momentum Calculation (Sum of Daily Price Changes over the last N days)
+    df['Momentum'] = df['Daily_Price_Change'].rolling(window=10).sum()
+
+    # Volume Confirmation
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Positive_Volume_Diff'] = df['Volume_Change'].apply(lambda x: x if x > 0 else 0)
+    df['Avg_Volume_Increase'] = df['Positive_Volume_Diff'].rolling(window=10).mean()
+
+    # Calculate Volume Reversal Indicator
+    df['Volume_Rate_of_Change'] = df['volume'].pct_change()
+    df['Smooth_Volume_RoC'] = df['Volume_Rate_of_Change'].rolling(window=3).mean()
+    df['Inverted_Smooth_Volume_RoC'] = 1 / df['Smooth_Volume_RoC']
+    df['Volume_Reversal_Indicator'] = df['Price_Momentum'] * df['Inverted_Smooth_Volume_RoC']
+
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['close'] - df['open']
+
+    # Volume Weighted Adjusted Return
+    df['Volume_Weighted_Adjusted_Return'] = df['volume'] * df['Intraday_Return']
+
+    # Proportional Movement Index
+    df['Proportional_Movement_Index'] = df['Intraday_Return'] / df['close'] * df['Intraday_Return']
+
+    # Calculate Volume-Adjusted Daily Price Change
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Volume_Adjusted_Daily_Price_Change'] = (df['close'] - df['Prev_Close']) * df['volume']
+
+    # Calculate 10-Day Moving Average of Volume-Adjusted Daily Price Change
+    df['10D_Vol_Adj_Price_Change_Mean'] = df['Volume_Adjusted_Daily_Price_Change'].rolling(window=10).mean()
+
+    # Combine Volume-Adjusted Price Change and Price Momentum
+    df['Combined_Vol_Adj_Momentum'] = df['10D_Vol_Adj_Price_Change_Mean'] + df['Price_Momentum']
+
+    # Calculate Average Volume
+    lookback_window = 10
+    df['Average_Volume'] = df['volume'].rolling(window=lookback_window).mean()
+
+    # Weighted Combined Momentum
+    df['Weighted_Combined_Momentum'] = df['Combined_Vol_Adj_Momentum'] * df['Average_Volume']
+
+    # Incorporate High-Low Range
+    df['Final_Alpha_Factor'] = df['Weighted_Combined_Momentum'] / df['High_Low_Spread']
+
+    # Calculate Intraday Volatility
+    df['True_Range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+
+    # Calculate 10-Day Moving Average of Intraday Volatility
+    df['10D_Intraday_Volatility'] = df['True_Range'].rolling(window=10).mean()
+
+    # Incorporate Intraday Volatility into Final Alpha Factor
+    df['Final_Adjusted_Alpha_Factor'] = df['Final_Alpha_Factor'] / df['10D_Intraday_Volatility']
+
+    return df['Final_Adjust

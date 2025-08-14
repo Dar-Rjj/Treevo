@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    df['Daily_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 1-Period Return using Close price
+    df['1_Period_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    df['5_MA_Price_Momentum'] = df['1_Period_Return'].rolling(window=5).mean()
+    
+    # Calculate 5-day Exponential Moving Average of 1-Period Returns
+    df['5_EMA_1_Period_Returns'] = df['1_Period_Return'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Generate Initial Alpha Factor
+    df['Initial_Alpha_Factor'] = df['High_Low_Range'] * df['5_MA_Price_Momentum']
+    
+    # Confirm with Volume
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Confirmed_Alpha'] = df['Initial_Alpha_Factor'] * np.log(df['Volume_Change'] + 1)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Calculate VWAP to Close Difference
+    df['VWAP_Close_Diff'] = df['close'] - df['VWAP']
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    df['Combined_Momentum'] = df['Daily_Momentum'] * df['VWAP_Close_Diff']
+    
+    # Integrate with Intraday and Trend Adjustments
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    df['Volume_Adjusted_Intraday_Return'] = df['Intraday_Return'] / df['volume']
+    df['Enhanced_Price_Momentum'] = df['Combined_Momentum'] * df['Volume_Adjusted_Intraday_Return']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Enhanced_Price_Momentum'] * np.sign(df['Volume_Change'])
+    
+    # Integrate with Trend Continuity and Filter
+    df['Trend_Sign'] = np.sign(df['close'] - df['close'].shift(1))
+    df['Filtered_Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['Trend_Sign']
+    df['Filtered_Final_Alpha_Factor'] = df['Filtered_Final_Alpha_Factor'].apply(lambda x: x if abs(x) > 0.5 else 0)
+    
+    return df['Filtered_Final_Alpha_Factor']
+```

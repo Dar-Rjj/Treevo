@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+    
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+    
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_Typical_Price'] = df['Typical_Price'] * df['volume']
+    total_volume = df['volume'].sum()
+    df['VWAP'] = df['Volume_Weighted_Typical_Price'].cumsum() / df['volume'].cumsum()
+    
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = (df['VWAP'] > df['close']).astype(int) * 2 - 1
+    
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+    
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Return'] = df['Return'] * df['volume']
+    df['Volume_Weighted_Return_Sum'] = df['Volume_Weighted_Return'].cumsum()
+    df['Volume_Sum'] = df['volume'].cumsum()
+    df['Volume_Weighted_Return'] = df['Volume_Weighted_Return_Sum'] / df['Volume_Sum']
+    
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Final_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+    
+    # Calculate Volatility
+    df['High_Low_Range'] = df['high'] - df['low']
+    rolling_volatility = df['High_Low_Range'].rolling(window=20).mean()
+    df['Average_Volatility'] = rolling_volatility / 20
+    
+    # Calculate Moving Averages
+    short_sma = df['close'].rolling(window=10).mean()
+    long_sma = df['close'].rolling(window=50).mean()
+    
+    # Calculate Moving Average Convergence Divergence (MACD)
+    df['MACD'] = short_sma - long_sma
+    
+    # Calculate Volume Trends
+    df['Daily_Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Volatility, MACD, and Volume Trends with Final Alpha Factor
+    df['Enhanced_Final_Alpha_Factor'] = df['Final_Alpha_Factor'] + df['Average_Volatility'] + df['MACD'] + df['Daily_Volume_Change']
+    
+    return df['Enhanced_Final_Alpha_Factor']
+```

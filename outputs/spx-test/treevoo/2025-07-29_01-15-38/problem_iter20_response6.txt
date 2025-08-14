@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Calculate Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Calculate Average Volume (window_size = 10)
+    window_size = 10
+    df['avg_volume'] = df['volume'].rolling(window=window_size).mean()
+    
+    # Create Price-Volume Factor
+    df['price_volume_factor'] = df['price_change'] * df['volume_change']
+    
+    # Create Price-Range to Volume Ratio
+    df['pricerange_volume_ratio'] = df['price_range'] / df['avg_volume']
+    
+    # Calculate N-Day Return (N = 5)
+    n = 5
+    df['n_day_return'] = (df['close'] / df['close'].shift(n)) - 1
+    
+    # Identify Short-Term Reversals
+    df['short_term_reversal'] = (df['close'].shift(1) / df['close'].shift(2)) - 1
+    
+    # Calculate Number of Positive and Negative Closes
+    df['positive_closes'] = df['price_change'].gt(0).rolling(window=window_size).sum()
+    df['negative_closes'] = df['price_change'].lt(0).rolling(window=window_size).sum()
+    
+    # Create Sentiment Score
+    df['sentiment_score'] = df['positive_closes'] - df['negative_closes']
+    
+    # Calculate Simple Moving Average (SMA) (window_size = 10)
+    df['sma'] = df['close'].rolling(window=window_size).mean()
+    
+    # Calculate Exponential Moving Average (EMA) (alpha = 0.2)
+    alpha = 0.2
+    df['ema'] = df['close'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Calculate Gains and Losses for RSI (window_size = 14)
+    window_size_rsi = 14
+    df['gains'] = df['price_change'].apply(lambda x: max(x, 0)).rolling(window=window_size_rsi).mean()
+    df['losses'] = df['price_change'].apply(lambda x: abs(min(x, 0))).rolling(window=window_size_rsi).mean()
+    
+    # Calculate RSI
+    df['rsi'] = 100 - (100 / (1 + (df['gains'] / df['losses'])))
+    
+    # Combine All Factors with weights
+    w1, w2, w3, w4, w5, w6, w7, w8 = 1, 1, 1, 1, 1, 1, 1, 1
+    df['alpha_factor'] = (w1 * df['price_volume_factor'] + 
+                          w2 * df['pricerange_volume_ratio'] + 
+                          w3 * df['n_day_return'] + 
+                          w4 * df['short_term_reversal'] + 
+                          w5 * df['sentiment_score'] + 
+                          w6 * (df['sma'] - df['close']) + 
+                          w7 * (df['ema'] - df['close']) + 
+                          w8 * df['rsi'])
+    
+    return df['alpha_factor']
+```

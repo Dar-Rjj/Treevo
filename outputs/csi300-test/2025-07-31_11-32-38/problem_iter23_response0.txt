@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute 10-Day Exponential Moving Average of Daily Price Changes
+    df['ema_10_daily_price_change'] = df['daily_price_change'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    df['intraday_return_mean_5'] = df['intraday_return'].rolling(window=5).mean()
+    df['adjusted_intraday_return'] = df['intraday_return'] - df['intraday_return_mean_5']
+    
+    # Calculate Volume Weighted Daily Return
+    df['volume_weighted_return'] = (df['close'] - df['open']) * df['volume']
+    
+    # Compute 20-Day Exponential Moving Average of Volume Weighted Returns
+    df['ema_20_volume_weighted_return'] = df['volume_weighted_return'].ewm(span=20, adjust=False).mean()
+    
+    # Weigh by Intraday Volume Activity
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['intraday_volume_weight'] = (df['high'] - df['low']) * (df['volume'] / df['volume_ma_20'])
+    
+    # Calculate True Range (TR)
+    df['tr_high_low'] = df['high'] - df['low']
+    df['tr_close_high'] = (df['high'] - df['close'].shift(1)).abs()
+    df['tr_close_low'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['tr_high_low', 'tr_close_high', 'tr_close_low']].max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Positive and Negative Directional Movement (+DM, -DM)
+    df['pdm'] = (df['high'] - df['high'].shift(1)).where((df['high'] > df['high'].shift(1)) & (df['low'] >= df['low'].shift(1)), 0)
+    df['ndm'] = (df['low'].shift(1) - df['low']).where((df['low'] < df['low'].shift(1)) & (df['high'] <= df['high'].shift(1)), 0)
+    
+    # Smooth +DM and -DM over 14 periods
+    df['sma_pdm_14'] = df['pdm'].rolling(window=14).mean()
+    df['sma_ndm_14'] = df['ndm'].rolling(window=14).mean()
+    
+    # Calculate +DI and -DI
+    df['di_pos'] = df['sma_pdm_14'] / df['atr']
+    df['di_neg'] = df['sma_ndm_14'] / df['atr']
+    
+    # Calculate ADMI
+    df['admi'] = (df['di_pos'] - df['di_neg']) / (df['di_pos'] + df['di_neg'])
+    
+    # Combine Intraday and Interday Momentum
+    df['combined_momentum'] = df['ema_10_daily_price_change'] + df['adjusted_intraday_return'] - df['ema_20_volume_weighted_return']
+    
+    # Adjust for Price Volatility
+    df['price_range'] = df['high'] - df['low']
+    df['price_range_ma_30'] = df['price_range'].rolling(window=30).mean()
+    df['volatility_adjusted_momentum'] = df['combined_momentum'] / df['price_range_ma_30']
+    
+    # Smooth the Result
+    df['smoothed_result'] = df['volatility_adjusted_momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['synthesized_factor'] = df['smoothed_result'] * df['admi'] + df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate 5-Day Moving Average of Synthesized Factor
+    df['synthesized_factor_ma_5'] = df['synthesized_factor'].rolling(window=5).mean()
+    
+    # Finalize Alpha Factor
+    df['final_alpha_factor'] = (df['ema_10_daily_price_change'].rolling(window=20).mean() - df['synthesized

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=5, hl_coeff=0.3, pm_coeff=0.4, idm_coeff=0.3):
+    # Calculate Intraday High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Intraday Price Movements and Directional Changes
+    df['Range'] = df['high'] - df['low']
+    df['Spread'] = df['close'] - df['open']
+    
+    # Compute Net Intraday and Directional Movements
+    df['Upward_Movement'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['Downward_Movement'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['Net_Movement'] = df[['Upward_Movement', 'Downward_Movement']].max(axis=1)
+    
+    # Adjust for Volume Activity
+    df['Volume_Change'] = df['volume'] / df['volume'].shift(1)
+    df['Combined_Momentum_Score'] = df['Net_Movement'] * df['Volume_Change']
+    
+    # Calculate Average Intraday High-Low Spread
+    df['Avg_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=n_days).mean()
+    
+    # Compute High-Low Momentum Score
+    df['High_Low_Momentum_Score'] = (df['High_Low_Spread'] - df['Avg_High_Low_Spread']) * df['volume']
+    
+    # Calculate Price Momentum
+    df['Price_Change'] = df['close'] - df['close'].shift(n_days)
+    df['Price_Momentum'] = df['Price_Change'].rolling(window=n_days).sum()
+    
+    # Combine High-Low Momentum, Price Momentum, and Net Intraday & Directional Movements
+    df['Market_Sentiment'] = (df['high'] - df['low']) / df['close']
+    df['Combined_Momentum'] = (hl_coeff * df['High_Low_Momentum_Score'] 
+                              + pm_coeff * df['Price_Momentum'] 
+                              + idm_coeff * df['Combined_Momentum_Score'])
+    
+    # Incorporate Open-Price Change
+    df['Open_Price_Change'] = df['open'] - df['open'].shift(n_days)
+    df['Open_Price_Momentum'] = df['Open_Price_Change'].rolling(window=n_days).sum()
+    
+    # Calculate Final Factor
+    df['Final_Factor'] = (df['Combined_Momentum'] 
+                          + df['Open_Price_Momentum'])
+    
+    return df['Final_Factor']
+```

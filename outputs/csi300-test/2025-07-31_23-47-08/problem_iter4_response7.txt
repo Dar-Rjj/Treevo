@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Previous_Close'] = df['close'].shift(1)
+    df['Overnight_Return'] = (df['open'] - df['Previous_Close']) / df['Previous_Close']
+
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+
+    # Compute Volume Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Typical_Price'] = df['Typical_Price'] * df['volume']
+    df['Total_Volume'] = df['volume'].rolling(window=5).sum()
+    df['VWAP'] = df['Volume_Typical_Price'].rolling(window=5).sum() / df['Total_Volume']
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = df.apply(lambda row: 1 if row['VWAP'] > row['close'] else -1, axis=1)
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Return'] = df['Return'] * df['volume']
+    df['Volume_Weighted_Return'] = df['Volume_Return'].rolling(window=5).sum() / df['Total_Volume']
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Final_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+
+    # Refine Reversal Signals
+    df['Short_Term_MA'] = df['close'].rolling(window=5).mean()
+    df['Long_Term_MA'] = df['close'].rolling(window=20).mean()
+    df['Confirmed_Reversal'] = df.apply(lambda row: 1 if row['Short_Term_MA'] > row['Long_Term_MA'] else -1, axis=1)
+
+    # Adjust Reversal Indicator based on Moving Averages
+    df['Refined_Reversal_Indicator'] = df['Confirmed_Reversal']
+
+    # Update Final Alpha Factor
+    df['Updated_Final_Alpha_Factor'] = df['Integrated_Reversal_Return'] * df['Refined_Reversal_Indicator']
+
+    return df['Updated_Final_Alpha_Factor'].dropna()
+```

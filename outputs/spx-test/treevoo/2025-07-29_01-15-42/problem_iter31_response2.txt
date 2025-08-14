@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(1) - df['open']
+    
+    # Smooth with EMA (10 days)
+    df['ema_close_to_open_return'] = df['close_to_open_return'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    df['total_volume_ema_period'] = df['volume'].rolling(window=10).sum()
+    df['total_amount_ema_period'] = df['amount'].rolling(window=10).sum()
+    df['adjusted_ema_return'] = df['ema_close_to_open_return'] / (df['total_volume_ema_period'] + df['total_amount_ema_period'])
+    
+    # Long-Term and Short-Term Momentum
+    df['long_term_momentum'] = df['close'] / df['close'].shift(28) - 1
+    df['short_term_momentum'] = df['close'] / df['close'].shift(10) - 1
+    df['combined_momentum'] = df['long_term_momentum'] + df['short_term_momentum']
+    
+    # Price Range Ratio
+    df['price_range_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Compute RTSI
+    gains = (df['close'].diff(1) > 0) * df['close'].diff(1)
+    losses = (df['close'].diff(1) < 0) * df['close'].diff(1).abs()
+    df['ema_gains'] = gains.ewm(span=14, adjust=False).mean()
+    df['ema_losses'] = losses.ewm(span=14, adjust=False).mean()
+    df['rtsi'] = (df['ema_gains'] / (df['ema_gains'] + df['ema_losses'])) * 100
+    
+    # Realized Volatility (20-day rolling window)
+    df['realized_volatility'] = df['close'].pct_change().rolling(window=20).std()
+    
+    # Weighted Average of Combined Components
+    df['weighted_average'] = (df['combined_momentum'] * 0.3 
+                              + df['price_range_ratio'] * 0.2 
+                              + df['rtsi'] * 0.1 
+                              + df['realized_volatility'] * 0.1)
+    
+    # Dynamic Adjustment Factor
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['dynamic_adjustment'] = df['ma_5'] - df['ma_20']
+    
+    # Final Factor
+    df['final_factor'] = (df['weighted_average'] * df['adjusted_ema_return'] * df['dynamic_adjustment'])
+    
+    return df['final_factor']
+```

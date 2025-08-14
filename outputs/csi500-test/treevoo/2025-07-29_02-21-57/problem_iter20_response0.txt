@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5D_Close_Return'] = df['close'].pct_change(periods=5)
+    df['5D_Volume_Sum'] = df['volume'].rolling(window=5).sum()
+    avg_5D_volume = df['volume'].rolling(window=5).mean()
+    df['5D_Volume_Ratio'] = df['5D_Volume_Sum'] / avg_5D_volume
+    df['Volume_Adjusted_Momentum'] = df['5D_Close_Return'] * df['5D_Volume_Ratio']
+    
+    # Calculate High-Low Price Oscillation
+    df['High_Low_Range'] = df['high'] - df['low']
+    mean_HL_range = df['High_Low_Range'].rolling(window=10).mean()
+    std_HL_range = df['High_Low_Range'].rolling(window=10).std()
+    df['Price_Oscillation'] = (df['High_Low_Range'] - mean_HL_range) / std_HL_range
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute Moving Averages of Intraday Returns
+    short_term_MA = df['Intraday_Return'].rolling(window=5).mean()
+    long_term_MA = df['Intraday_Return'].rolling(window=20).mean()
+    
+    # Compute Intraday Return Difference
+    df['Intraday_Return_Diff'] = short_term_MA - long_term_MA
+    
+    # Filter by Volume Change
+    df['Volume_Change'] = df['volume'].diff()
+    df['Filtered_Intraday_Return'] = df.apply(lambda x: x['Intraday_Return_Diff'] if x['Volume_Change'] > 0 else 0, axis=1)
+    
+    # Calculate Short-Term and Long-Term VWMA
+    df['VWMA_Short_Term'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['VWMA_Long_Term'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Generate Combined Signal
+    def generate_signal(row):
+        vwma_signal = 1 if row['VWMA_Short_Term'] > row['VWMA_Long_Term'] else -1
+        momentum_signal = 1 if row['Volume_Adjusted_Momentum'] > 0 else -1
+        price_oscillation_signal = 1 if row['Price_Oscillation'] > 0 else -1
+        
+        if vwma_signal == 1 and momentum_signal == 1 and price_oscillation_signal == 1:
+            return 1
+        elif vwma_signal == -1 and momentum_signal == -1 and price_oscillation_signal == -1:
+            return -1
+        elif (vwma_signal == 1 and momentum_signal == 1) or (vwma_signal == 1 and price_oscillation_signal == 1) or (momentum_signal == 1 and price_oscillation_signal == 1):
+            return 0.5
+        elif (vwma_signal == -1 and momentum_signal == -1) or (vwma_signal == -1 and price_oscillation_signal == -1) or (momentum_signal == -1 and price_oscillation_signal == -1):
+            return -0.5
+        else:
+            return 0
+    
+    df['Signal'] = df.apply(generate_signal, axis=1)
+    
+    return df['Signal']
+```

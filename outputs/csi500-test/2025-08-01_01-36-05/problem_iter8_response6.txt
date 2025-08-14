@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Adjust Intraday Return by Volume
+    df['volume_adjusted_return'] = df['intraday_return'] / df['volume']
+    
+    # Calculate Average Volume-Adjusted Intraday Return
+    average_volume_adjusted_return = df['volume_adjusted_return'].mean()
+    
+    # Calculate Intraday Volatility
+    df['squared_volume_adjusted_return'] = df['volume_adjusted_return'] ** 2
+    intraday_volatility = np.sqrt(df['squared_volume_adjusted_return'].sum())
+    
+    # Calculate Exponential Moving Average of Intraday Volatility
+    df['ema_intraday_volatility'] = df['squared_volume_adjusted_return'].ewm(span=20).mean().apply(np.sqrt)
+    
+    # Weight by Volume
+    df['volume_weighted_ema_volatility'] = df['ema_intraday_volatility'] * df['volume']
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    df['volume_weighted_momentum'] = df['volume_adjusted_return'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Momentum
+    df['ema_volume_weighted_momentum'] = df['volume_weighted_momentum'].ewm(span=20).mean()
+    
+    # Incorporate Short-Term Price Momentum
+    df['5_day_sma_close'] = df['close'].rolling(window=5).mean()
+    df['short_term_momentum'] = df['close'] - df['5_day_sma_close']
+    
+    # Adjust for Intraday Trend
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['intraday_trend'] = (df['10_day_high'] - df['10_day_low']) * df['volume_adjusted_return']
+    
+    # Combine Factors
+    df['alpha_factor'] = (df['ema_volume_weighted_momentum'] 
+                          + df['short_term_momentum'] 
+                          + df['intraday_trend'] 
+                          + df['volume_weighted_ema_volatility'])
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

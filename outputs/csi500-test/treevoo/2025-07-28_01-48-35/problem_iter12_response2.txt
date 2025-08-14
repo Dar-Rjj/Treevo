@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Spread
+    spread = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Spread
+    volume_adjusted_spread = spread * df['volume']
+    
+    # Calculate Momentum Component
+    momentum_component = (df['close'].pct_change().rolling(window=N).sum()) * close_to_range_ratio
+    
+    # Adjust for Volume Activity
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    short_term_vol_change = df['volume'] - df['volume'].shift(5)
+    volume_trend_indicator = (short_term_vol_change > 0).astype(int) * 2 - 1
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    volume_change_rate = df['volume'] / avg_volume_10
+    volume_trend_score = (volume_change_rate > 1) * 1.5 + (volume_change_rate < 1) * -1.2
+    
+    # Calculate Average Intraday Return
+    avg_intraday_return = intraday_return.rolling(window=N).mean()
+    
+    # Combine Initial Signals
+    combined_initial_signals = avg_intraday_return + volume_adjusted_spread
+    
+    # Calculate Price Momentum
+    high_low_spread = df['high'] - df['low']
+    avg_high_low_spread_10 = high_low_spread.rolling(window=10).mean()
+    relative_high_low_spread = high_low_spread / high_low_spread.shift(1)
+    
+    # Introduce Opening Impact Factor
+    open_close_return = df['close'] - df['open']
+    opening_impact_factor = combined_initial_signals - open_close_return
+    
+    # Final Combined Momentum, Volume, and Price Factor
+    final_factor = (momentum_component * volume_trend_score) / avg_volume_20 * (volume_trend_score * relative_high_low_spread)
+    final_factor = final_factor * opening_impact_factor
+    
+    return final_factor
+```

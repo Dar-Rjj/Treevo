@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20, n_days=50):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    volume_weighted_high_low_spread = (high_low_spread * df['volume']).rolling(window=lookback_period).sum()
+    
+    # Calculate Volume-Weighted Close Price
+    volume_weighted_close_price = (df['close'] * df['volume']).rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    ratio = volume_weighted_high_low_spread / volume_weighted_close_price
+    
+    # Calculate Momentum Component
+    current_day_volume_weighted_high_low_spread = (high_low_spread * df['volume'])
+    past_n_days_volume_weighted_high_low_spread = (high_low_spread * df['volume']).rolling(window=n_days).mean()
+    momentum_component = current_day_volume_weighted_high_low_spread - past_n_days_volume_weighted_high_low_spread
+    
+    # Generate Interim Factor
+    interim_factor = (volume_weighted_high_low_spread + momentum_component) / volume_weighted_close_price
+    
+    # Incorporate Price Trend
+    moving_average_close = df['close'].rolling(window=n_days).mean()
+    price_trend = (df['close'] - moving_average_close) * interim_factor
+    
+    # Calculate Price Momentum
+    close_log_return = np.log(df['close'] / df['close'].shift(n_days))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    volatility = df[['open', 'high', 'low', 'close']].std(axis=1, ddof=0).rolling(window=n_days).mean()
+    enhanced_volatility = volatility * np.log(df['volume'])
+    
+    # Calculate Trade Frequency Adjusted Return
+    trade_frequency = df['volume'].rolling(window=n_days).count()
+    adjusted_return = (df['close'] / df['close'].shift(n_days)) ** (np.sqrt(trade_frequency) / n_days)
+    
+    # Calculate 50-day Exponential Moving Average (EMA) of closing prices
+    ema_50 = df['close'].ewm(span=n_days, adjust=False).mean()
+    
+    # Generate a binary trend signal; 1 if the current close is above the EMA, 0 otherwise
+    trend_signal = (df['close'] > ema_50).astype(int)
+    
+    # Calculate the difference between today’s high and the previous day's high
+    high_diff = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day's low
+    low_diff = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    combined_momentum_score = high_diff + low_diff
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    momentum_classification = (combined_momentum_score > 0).astype(int)
+    
+    # Calculate the daily volume percentage change from the previous day
+    volume_change = (df['volume'] / df['volume'].shift(1) - 1) * 100
+    
+    # Combine Factors
+    combined_factor = (close_log_return * enhanced_volatility) + adjusted_return
+    nonlinear_transformed_value = combined_factor ** 2
+    
+    # Final Alpha Factor
+    composite_alpha_factor = (
+        price_trend * 
+        nonlinear_transformed_value * 
+        trend_signal * 
+        combined_momentum_score * 
+        volume_change
+    )
+    
+    return composite_alpha_factor
+```

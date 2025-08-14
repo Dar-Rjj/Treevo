@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5):
+    # Compute Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Compute Combined Intraday Features
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    opening_gap = df['open'] - df['close'].shift(1)
+    combined_intraday_features = (df['open'] - intraday_midpoint) - opening_gap
+    
+    # Compute Enhanced Intraday Factor
+    avg_intraday_range = (df['high'] - df['low']).rolling(window=n).mean()
+    enhanced_intraday_factor = (avg_intraday_range * (df['close'] - df['open'] + df['close'] - df['close'].shift(1))) + combined_intraday_features
+    
+    # Compute Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=m).mean()
+    recent_volatility = enhanced_intraday_factor * avg_abs_price_change
+    
+    # Compute Volume Spike Factor
+    volume_spike_factor = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Price Spike Factor
+    price_spike_factor = (df['close'] - df['close'].shift(1)).abs() / (df['close'].shift(1) - df['close'].shift(2)).abs()
+    
+    # Final Adjusted Momentum
+    final_adjusted_momentum = intraday_momentum * pd.concat([volume_spike_factor, price_spike_factor], axis=1).min(axis=1)
+    
+    # Adjusted Recent Volatility
+    adjusted_recent_volatility = recent_volatility * pd.concat([volume_spike_factor, price_spike_factor], axis=1).min(axis=1)
+    
+    # Volume Weight
+    avg_volume = df['volume'].rolling(window=n).mean()
+    volume_weight = df['volume'] / avg_volume
+    
+    # Final Factor
+    final_factor = enhanced_intraday_factor * (final_adjusted_momentum * volume_weight)
+    
+    return final_factor
+```

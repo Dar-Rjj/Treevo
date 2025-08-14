@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price and Intraday Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['intraday_momentum'] = df['log_return'].rolling(window=5).sum()
+    
+    # Compute High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    df['avg_high_low_diff'] = df['high_low_diff'].rolling(window=5).mean()
+    
+    # Adjust by Volume Volatility
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_volatility'] = df['volume_change'].rolling(window=5).std()
+    df['adjusted_intraday_momentum'] = df['intraday_momentum'] / (df['volume_volatility'] + 1e-6)
+    
+    # Apply Combined Volume and Amount Shock Filter
+    volume_threshold = df['volume_change'].abs().quantile(0.80)
+    amount_threshold = df['amount'].diff().abs().quantile(0.80)
+    df['shock_filter'] = (df['volume_change'].abs() < volume_threshold) & (df['amount'].diff().abs() < amount_threshold)
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['vol_weighted_intraday_volatility'] = (df['intraday_volatility'] * df['volume']).rolling(window=15).mean()
+    
+    # Calculate Intraday Reversal Score
+    df['reversal_score'] = df['close_to_open_return'] / (df['vol_weighted_intraday_volatility'] + 1e-6)
+    
+    # Apply Exponential Decay to Reversal Score
+    decay_factor = 0.5 ** (1/7)
+    df['exp_decay_reversal_score'] = df['reversal_score'].ewm(halflife=7, adjust=False).mean()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Volume-Weighted Moving Average of Intraday Range
+    df['vol_weighted_intraday_range'] = (df['intraday_range'] * df['volume']).rolling(window=15).mean()
+    
+    # Combine Reversal Score and Intraday Range
+    df['combined_score'] = df['exp_decay_reversal_score'] + df['intraday_range']
+    df['exp_decay_combined_score'] = df['combined_score'].ewm(halflife=7, adjust=False).mean()
+    
+    # Calculate Intraday Price Movement
+    df['price_movement_1'] = (df['high'] - df['low']) / df['open']
+    df['price_movement_2'] = (df['close'] - df['open']) / df['open']
+    df['avg_price_movement'] = (df['price_movement_1'] + df['price_movement_2']) / 2
+    df['smoothed_price_movement'] = df['avg_price_movement'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Volume-Weighted Momentum
+    df['volume_weighted_momentum'] = df['daily_price_change'] * df['volume']
+    
+    # Compute 25-Day Rolling Sum of Volume-Weighted Momentum
+    df['rolling_volume_weighted_momentum'] = df['volume_weighted_momentum'].rolling(window=25).sum()
+    
+    # Adjust by Intraday High-Low Momentum
+    df['final_adjustment'] = df['adjusted_intraday_momentum']
+    df['intraday_adjusted_momentum'] = df['rolling_volume_weighted_momentum'] * df['final_adjustment']
+    
+    # Incorporate Price Trend
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['trend_adjusted_momentum'] = df['intraday_adjusted_momentum'] * df['price_change']
+    
+    # Weighted Final Alpha Factor
+    df['final_alpha_factor'] = df['smoothed_price_movement'] * (df['volume_change'] / df['volume'].shift(1))
+    
+

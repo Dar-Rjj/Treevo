@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Impact Score
+    df['volume_10_sum'] = df['volume'].rolling(window=10).sum()
+    df['high_10_avg'] = df['high'].rolling(window=10).mean()
+    df['low_10_avg'] = df['low'].rolling(window=10).mean()
+    df['volume_impact_score'] = (df['high_10_avg'] - df['low_10_avg']) / df['volume_10_sum']
+    
+    # Generate Factor 1
+    df['factor_1'] = df['intraday_return'] * df['volume_impact_score']
+    
+    # Calculate Price and Intraday Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(10)
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Confirm with Volume Trend
+    df['volume_5_avg'] = df['volume'].rolling(window=5).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_5_avg']
+    df['factor_2'] = df['price_momentum'] * df['intraday_momentum'] * (df['volume_ratio'] > 1)
+    
+    # Adjust by Volume
+    N = 10
+    df['volume_N_sum'] = df['volume'].rolling(window=N).sum()
+    df['adjusted_momentum'] = (df['high'] - df['low']) / df['close'].shift(1) / df['volume_N_sum']
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    M = 20
+    df['cumulative_volume_weighted_momentum'] = (df['adjusted_momentum'] * df['volume']).rolling(window=M).sum()
+    
+    # Confirm with Enhanced Volume Trend
+    df['volume_15_avg'] = df['volume'].rolling(window=15).mean()
+    df['enhanced_volume_ratio'] = df['volume'] / df['volume_15_avg']
+    
+    def enhanced_trend(row):
+        if row['enhanced_volume_ratio'] > 1.5:
+            return (row['price_momentum'] * row['intraday_momentum'] * row['cumulative_volume_weighted_momentum'])
+        else:
+            return 0.3 * (row['price_momentum'] + row['intraday_momentum'])
+    
+    df['aggregate_momentum'] = df.apply(enhanced_trend, axis=1)
+    
+    # Final Factor
+    df['final_factor'] = df['factor_1'] * df['aggregate_momentum']
+    
+    return df['final_factor']
+```

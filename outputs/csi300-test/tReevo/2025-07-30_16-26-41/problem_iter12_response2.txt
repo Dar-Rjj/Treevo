@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic Long-Term (10-day) Metrics
+    df['HLV'] = (df['high'] - df['low']) * df['volume']
+    long_term_hlv_sum = df['HLV'].rolling(window=10).sum()
+    long_term_volume_sum = df['volume'].rolling(window=10).sum()
+    long_term_weighted_price_diff = long_term_hlv_sum / long_term_volume_sum
+    long_term_momentum = df['close'] - df['open'].shift(10)
+    long_term_cumulative_weighted_avg = long_term_weighted_price_diff
+    long_term_avg_daily_return = (df['close'] - df['close'].shift(1)).rolling(window=10).sum() / 10
+    daily_returns = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    long_term_volatility = daily_returns.rolling(window=10).std()
+    final_10_day_alpha = (long_term_cumulative_weighted_avg - long_term_avg_daily_return) / long_term_volatility
+
+    # Calculate Dynamic Short-Term (5-day) Metrics
+    short_term_hlv_sum = df['HLV'].rolling(window=5).sum()
+    short_term_volume_sum = df['volume'].rolling(window=5).sum()
+    short_term_weighted_price_diff = short_term_hlv_sum / short_term_volume_sum
+    short_term_momentum = df['close'] - df['open'].shift(5)
+    short_term_cumulative_weighted_avg = short_term_weighted_price_diff
+    short_term_avg_daily_return = (df['close'] - df['close'].shift(1)).rolling(window=5).sum() / 5
+    short_term_volatility = daily_returns.rolling(window=5).std()
+    final_5_day_alpha = (short_term_cumulative_weighted_avg - short_term_avg_daily_return) / short_term_volatility
+
+    # Combine 10-Day and 5-Day Metrics
+    combined_alpha = 0.6 * final_10_day_alpha + 0.4 * final_5_day_alpha
+
+    # Integrate Trading Volume Effectively
+    avg_volume_5_day = df['volume'].rolling(window=5).mean()
+    combined_alpha *= avg_volume_5_day
+
+    # Incorporate Price and Volume Trends
+    ma_price_10_day = df['close'].rolling(window=10).mean()
+    ma_volume_10_day = df['volume'].rolling(window=10).mean()
+    ma_price_5_day = df['close'].rolling(window=5).mean()
+    ma_volume_5_day = df['volume'].rolling(window=5).mean()
+
+    price_trend_indicator = np.where(ma_price_10_day > ma_price_5_day, 1, -1)
+    volume_trend_indicator = np.where(ma_volume_10_day > ma_volume_5_day, 1, -1)
+
+    combined_alpha *= price_trend_indicator * volume_trend_indicator
+
+    # Adjust for Market Sentiment
+    sentiment_10_day = (df['close'] - df['open']).rolling(window=10).sum()
+    sentiment_5_day = (df['close'] - df['open']).rolling(window=5).sum()
+    sentiment_indicator = np.where(sentiment_10_day > sentiment_5_day, 1, -1)
+
+    final_alpha = combined_alpha * sentiment_indicator
+
+    return final_alpha.dropna()
+```

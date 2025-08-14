@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Close Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Apply Exponential Moving Average (EMA) to Returns
+    lookback_period = 20
+    df['ema_returns'] = df['daily_return'].ewm(span=lookback_period, adjust=False).mean()
+    
+    # Compute EMA of Squared Returns for Volatility
+    df['squared_returns'] = df['daily_return'] ** 2
+    df['ema_volatility'] = df['squared_returns'].ewm(span=lookback_period, adjust=False).mean()
+    
+    # Calculate Divergence between EMA of Returns and Volatility
+    df['divergence'] = (df['ema_returns'] - df['ema_volatility']).abs()
+    
+    # Weight by Volume and High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_divergence'] = (df['divergence'] * df['volume']) / df['high_low_range']
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close to Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Compute Intraday Momentum
+    df['intraday_momentum'] = df['intraday_high_low_range'] / df['close_open_diff']
+    
+    # Calculate Volume Weighted Price
+    df['volume_weighted_price'] = (df['close'] * df['volume'] + df['open'] * df['volume']) / (2 * df['volume'])
+    
+    # Calculate Volume Weighted Price Change
+    df['volume_weighted_price_change'] = df['volume_weighted_price'].diff()
+    
+    # Compute Combined Intraday and Daily Momentum
+    df['combined_momentum'] = df['intraday_momentum'] + df['volume_weighted_price_change']
+    
+    # Integrate Momentum and Reversal
+    df['integrated_momentum'] = df['combined_momentum'] - df['combined_momentum'].ewm(span=30, adjust=False).mean()
+    
+    # Combine Weighted Divergence and Integrated Momentum
+    df['alpha_factor'] = df['weighted_divergence'] + df['integrated_momentum']
+    
+    # Volume Trend
+    df['volume_difference'] = df['volume'].diff()
+    df['rolling_avg_volume_difference'] = df['volume_difference'].rolling(window=lookback_period).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['alpha_factor'] + df['rolling_avg_volume_difference']
+    
+    return df['final_alpha_factor']
+```

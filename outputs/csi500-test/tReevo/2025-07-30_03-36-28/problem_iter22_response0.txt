@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_lookback = 20
+    vol_adj_vol_lookback = 20
+    momentum_lookback = 10
+    long_term_sma_lookback = 50
+    turnover_lookback = 20
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Vol'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adj_Vol_Rolling'] = df['Volume_Adjusted_Vol'].rolling(window=vol_adj_vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Consider Market Trend Alignment
+    df['Long_Term_SMA'] = df['close'].rolling(window=long_term_sma_lookback).mean()
+    df['Trend_Indicator'] = np.where(df['SMA'] > df['Long_Term_SMA'], 1, 0)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Turnover_Rolling'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    
+    # Adjust Weights Based on Liquidity
+    df['Liquidity_Weight'] = df['Turnover_Rolling'] / df['Turnover_Rolling'].max()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        0.5 * df['Price_Momentum'] + 
+        0.3 * df['Vol_Adj_Vol_Rolling'] + 
+        0.2 * df['Trend_Indicator']
+    )
+    
+    # Dynamically Adjust Weights Based on Market Trends
+    df['Alpha_Factor'] = df['Alpha_Factor'] * (1 + df['Trend_Indicator'] * 0.1)
+    
+    # Output the Result as the Alpha Factor
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 101, 102, 103, 104],
+#     'high': [105, 106, 107, 108, 109],
+#     'low': [95, 96, 97, 98, 99],
+#     'close': [102, 103, 104, 105, 106],
+#     'amount': [1000, 1000, 1000, 1000, 1000],
+#     'volume': [100, 100, 100, 100, 100]
+# })
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the daily return and its relationship with trading volume
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    N = 10  # Number of days for SMA
+    df['sma_volume'] = df['volume'].rolling(window=N).mean()
+    df['volume_above_sma'] = df['volume'] > df['sma_volume']
+
+    # Explore the relationship between high/low prices and close/open prices
+    df['intraday_range'] = df['high'] - df['low']
+    df['close_to_intraday_ratio'] = df['close'] / df['intraday_range']
+    
+    # Calculate the gap between the open and previous close
+    df['gap'] = df['open'] - df['close'].shift(1)
+    
+    # Examine patterns in the sequence of daily highs and lows
+    df['consecutive_highs'] = (df['high'] > df['high'].shift(1)).astype(int).rolling(window=5, min_periods=1).sum()
+    df['consecutive_lows'] = (df['low'] < df['low'].shift(1)).astype(int).rolling(window=5, min_periods=1).sum()
+    
+    # Develop alpha factors based on price and volume trend consistency
+    M = 5  # Number of days for the linear fit slope
+    from scipy.stats import linregress
+    df['price_slope'] = df['close'].rolling(window=M).apply(lambda x: linregress(range(M), x)[0], raw=False)
+    
+    L = 5  # Number of days for the correlation
+    df['return_vol_corr'] = df[['daily_return', 'volume']].rolling(window=L).corr().unstack().iloc[::2, :]['daily_return'].values
+    
+    # Combine all subthoughts into a single alpha factor
+    df['alpha_factor'] = (
+        df['daily_return'] * df['volume_above_sma'] +
+        df['close_to_intraday_ratio'] * df['gap'] +
+        df['consecutive_highs'] - df['consecutive_lows'] +
+        df['price_slope'] * df['return_vol_corr']
+    )
+    
+    return df['alpha_factor']
+```

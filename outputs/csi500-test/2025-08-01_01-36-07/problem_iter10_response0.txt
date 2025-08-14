@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=50):
+    # Calculate Daily Price Movement
+    df['Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['Price_Range'].rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Incorporate Market Depth
+    df['Market_Depth'] = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+    
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * (df['VWAP'] + df['Market_Depth']) / df['Intraday_Volatility']
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=n).mean()
+    total_avg_volume = avg_volume.mean()
+    df['Volume_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    df['5D_Return'] = (df['close'] / df['close'].shift(5) - 1)
+    df['10D_Return'] = (df['close'] / df['close'].shift(10) - 1)
+    df['Multi_Day_Momentum'] = (df['5D_Return'] + df['10D_Return']) / 2
+    df['Final_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'] + df['Multi_Day_Momentum']
+    
+    # Incorporate Liquidity
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Final_Volume_Adjusted_Momentum'] *= (df['Average_Volume'] / total_avg_volume)
+    
+    # Enhance Long-Term Price Trends
+    df['20D_Return'] = (df['close'] / df['close'].shift(20) - 1)
+    df['50D_Return'] = (df['close'] / df['close'].shift(50) - 1)
+    df['Long_Term_Momentum'] = (df['20D_Return'] + df['50D_Return']) / 2
+    df['Final_Volume_Adjusted_Momentum'] += df['Long_Term_Momentum']
+    
+    # Incorporate Long-Term Volatility
+    df['20D_Intraday_Volatility'] = df['Intraday_Volatility'].rolling(window=20).mean()
+    df['50D_Intraday_Volatility'] = df['Intraday_Volatility'].rolling(window=50).mean()
+    df['Final_Volume_Adjusted_Momentum'] *= 1 / (df['20D_Intraday_Volatility'] + df['50D_Intraday_Volatility'])
+    
+    return df['Final_Volume_Adjusted_Momentum']
+```

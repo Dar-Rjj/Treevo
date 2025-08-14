@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute True Range using High, Low, and Previous Close
+    df['True_Range'] = df[['High', 'Low', 'Close']].apply(
+        lambda x: max(x['High'] - x['Low'], abs(x['High'] - df['Close'].shift(1)), abs(x['Low'] - df['Close'].shift(1))),
+        axis=1
+    )
+    
+    # Compute Intraday Price Movement using High, Low, Open, and Close
+    df['Intraday_Price_Movement'] = (df['Close'] - df['Open']) / df['Open']
+    
+    # Adjust for Volume Impact on Price
+    df['Volume_Adjusted_TR'] = df['True_Range'] * df['Volume']
+    df['Volume_Adjusted_IPM'] = df['Intraday_Price_Movement'] * df['Volume']
+    
+    # Smooth High-Low Ranges and Price Movements
+    df['EMA_High_Low_20'] = df['High'] - df['Low'].ewm(span=20).mean()
+    df['EMA_Close_Open_10'] = (df['Close'] - df['Open']).ewm(span=10).mean()
+    
+    # Calculate Combined Price and High-Low Range Momentum
+    df['Combined_Momentum'] = df['EMA_High_Low_20'] - df['EMA_Close_Open_10']
+    
+    # Evaluate Volume Activity
+    df['EMA_Volume_20'] = df['Volume'].ewm(span=20).mean()
+    df['High_Volume'] = df['Volume'] > df['EMA_Volume_20']
+    
+    # Introduce a Short-Term Momentum Indicator
+    df['EMA_Intraday_Price_Movement_5'] = df['Intraday_Price_Movement'].ewm(span=5).mean()
+    
+    # Integrate Short-Term Momentum with Long-Term Indicators
+    df['Short_Term_Momentum'] = df['EMA_Intraday_Price_Movement_5'] - df['Intraday_Price_Movement'].ewm(span=20).mean()
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Combined_Momentum'] * 
+        df['High_Volume'].astype(int) + 
+        (df['Combined_Momentum'] * 
+         (df['Close'] - df['Open']) * 
+         df['Volume'] * 
+         df['Short_Term_Momentum'])
+    )
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'Date': ...,
+#     'Open': ...,
+#     'High': ...,
+#     'Low': ...,
+#     'Close': ...,
+#     'Amount': ...,
+#     'Volume': ...
+# })
+# df.set_index('Date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+```

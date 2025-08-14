@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (df['volume'] * typical_price).cumsum() / df['volume'].cumsum()
+    
+    # VWAP Deviation from Close
+    vwap_deviation = vwap - df['close']
+    
+    # Weighted Ratio of High-Low to Open-Close
+    weighted_ratio = high_low_range / abs(open_close_movement)
+    
+    # Identify Trend Strength and Reversal Signals
+    positive_momentum = (high_low_range > 1.5 * abs(open_close_movement)).astype(int)
+    potential_reversal = (abs(open_close_movement) > 0.8 * high_low_range).astype(int)
+    strong_reversal = ((vwap_deviation < 0) & (open_close_movement < 0)).astype(int)
+    
+    # Momentum Continuation and Reversal Confirmation
+    momentum_continuation = ((high_low_range > 2 * abs(open_close_movement)) & (vwap > df['close'])).astype(int)
+    reversal_confirmation = ((open_close_movement < -0.5 * high_low_range) & (vwap < df['close'])).astype(int)
+    
+    # Calculate Intraday Range Percentage
+    intraday_range_percentage = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Integrate Volume Activity Ratio
+    volume_trend = df['volume'].rolling(window=20).sum()
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_activity_ratio = volume_trend / avg_volume
+    
+    # Intraday Volume Intensity
+    intraday_volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_price_trend = df['close'] - ema_20
+    
+    # Incorporate Recent Volatility
+    recent_volatility = df['close'].rolling(window=20).std()
+    ema_adjustment = recent_price_trend / recent_volatility
+    
+    # Daily Return Volatility
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    daily_return_volatility = daily_return / daily_return.rolling(window=20).std()
+    
+    # Trend Reversal Potential
+    rsi = df['close'].diff().apply(lambda x: 1 if x > 0 else 0).rolling(window=14).mean() * 100
+    overbought = (rsi > 70).astype(int)
+    oversold = (rsi < 30).astype(int)
+    roc_14 = df['close'].pct_change(periods=14)
+    trend_reversal_potential = (overbought * (roc_14 < 0).astype(int) - oversold * (roc_14 > 0).astype(int))
+    
+    # Momentum Reversal Factor
+    sma_5 = df['close'].rolling(window=5).mean()
+    momentum_reversal_factor = (df['close'] - sma_5) / sma_5
+    
+    # Final Alpha Factor
+    weighted_sum = (weighted_ratio * 0.3 + vwap_deviation * 0.3 + 
+                    intraday_volume_intensity * 0.2 + closing_position * 0.2)
+    
+    trend_adjustment = ema_adjustment
+    combined_intraday_components = weighted_sum + trend_reversal_potential + momentum_reversal_factor
+    final_alpha = (combined_intraday_components * daily_return_volatility + 
+                   recent_price_trend + trend_reversal_potential + momentum_reversal_factor)
+    
+    return final_alpha
+```

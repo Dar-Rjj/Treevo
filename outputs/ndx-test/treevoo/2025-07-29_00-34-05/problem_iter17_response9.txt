@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    
+    # Combine Intraday Measures and Multiply by Volume
+    combined_intraday_measure = (intraday_high_low_spread + close_open_diff) * df['volume']
+    
+    # Calculate Short-Term Price Momentum
+    daily_price_change = df['close'].diff()
+    short_term_momentum = daily_price_change.rolling(window=5).mean()
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = daily_price_change.rolling(window=20).mean()
+    
+    # Calculate Volume Indicator
+    volume_change = df['volume'].diff()
+    positive_volume_days = (volume_change > 0).rolling(window=20).sum()
+    negative_volume_days = (volume_change < 0).rolling(window=20).sum()
+    
+    # Combine Short-Term Price Momentum and Volume Indicator
+    short_term_vol_adj_momentum = short_term_momentum * positive_volume_days
+    
+    # Combine Long-Term Price Momentum and Volume Indicator
+    long_term_vol_adj_momentum = long_term_momentum * negative_volume_days
+    
+    # Calculate Volume Adjusted Range
+    volume_adjusted_range = ((df['high'] - df['low']) / ((df['high'] + df['low'] + df['close']) / 3)) * df['volume']
+    
+    # Calculate Short-Term Rolling Sum of Volume Adjusted Range
+    short_term_volume_range_sum = volume_adjusted_range.rolling(window=10).sum()
+    
+    # Calculate Long-Term Rolling Sum of Volume Adjusted Range
+    long_term_volume_range_sum = volume_adjusted_range.rolling(window=20).sum()
+    
+    # Compute Momentum Difference
+    momentum_difference = long_term_momentum - short_term_momentum
+    
+    # Calculate Volume Acceleration
+    volume_acceleration = (df['volume'].diff() / df['volume'].shift(1)) * momentum_difference
+    
+    # Adjust Combined Measure by Momentum
+    volume_5ema = df['volume'].ewm(span=5, adjust=False).mean()
+    volume_10ema = df['volume'].ewm(span=10, adjust=False).mean()
+    volume_momentum = volume_5ema - volume_10ema
+    final_factor_adjustment = (short_term_momentum * volume_momentum) / combined_intraday_measure
+    
+    # Combine Short-Term Price Momentum and Volume Indicator
+    combined_short_term_factor = short_term_vol_adj_momentum * volume_momentum
+    
+    # Combine Long-Term Price Momentum and Volume Indicator
+    combined_long_term_factor = long_term_vol_adj_momentum * volume_momentum
+    
+    # Combine Combined Momentum and Volume Factors
+    combined_factors = combined_short_term_factor + combined_long_term_factor
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_factors + 
+                          short_term_volume_range_sum - 
+                          long_term_volume_range_sum + 
+                          volume_acceleration)
+    
+    return final_alpha_factor
+```

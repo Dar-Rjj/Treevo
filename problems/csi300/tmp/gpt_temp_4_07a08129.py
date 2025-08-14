@@ -1,0 +1,63 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute 10-Day Exponential Moving Average of Daily Price Changes
+    df['10D_EMA_Daily_Price_Change'] = df['Daily_Price_Change'].ewm(span=10).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['Preliminary_Factor'] = (
+        df['Intraday_Return'] * np.abs(df['Intraday_Return']) +
+        df['Close_to_Open_Return'] * np.abs(df['Close_to_Open_Return'])
+    )
+    
+    # Integrate Volume Change
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Preliminary_Factor'] = df['Preliminary_Factor'] * (1 + df['Volume_Change'])
+    
+    # Calculate True Range (TR)
+    df['TR'] = df[['high' - 'low', 'high' - df['close'].shift(1), df['close'].shift(1) - 'low']].abs().max(axis=1)
+    
+    # Calculate Positive Directional Movement (+DM)
+    df['+DM'] = np.where((df['high'] > df['high'].shift(1)) & ((df['high'] - df['high'].shift(1)) > (df['low'].shift(1) - df['low'])), 
+                         df['high'] - df['high'].shift(1), 0)
+    
+    # Calculate Negative Directional Movement (-DM)
+    df['-DM'] = np.where((df['low'].shift(1) > df['low']) & ((df['low'].shift(1) - df['low']) > (df['high'] - df['high'].shift(1))), 
+                         df['low'].shift(1) - df['low'], 0)
+    
+    # Smooth +DM and -DM
+    df['+DM_Smoothed'] = df['+DM'].ewm(span=14).mean()
+    df['-DM_Smoothed'] = df['-DM'].ewm(span=14).mean()
+    df['TR_Smoothed'] = df['TR'].ewm(span=14).mean()
+    
+    # Calculate +DI and -DI
+    df['+DI'] = 100 * (df['+DM_Smoothed'] / df['TR_Smoothed'])
+    df['-DI'] = 100 * (df['-DM_Smoothed'] / df['TR_Smoothed'])
+    
+    # Calculate ADMI
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+    
+    # Incorporate Volume Weighted Returns
+    df['Volume_Weighted_Intraday_Return'] = df['Intraday_Return'] * df['volume']
+    df['Volume_Weighted_Close_to_Open_Return'] = df['Close_to_Open_Return'] * df['volume']
+    df['Volume_Weighted_Return'] = df['Volume_Weighted_Intraday_Return'] + df['Volume_Weighted_Close_to_Open_Return']
+    df['20D_EMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].ewm(span=20).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['Difference'] = df['10D_EMA_Daily_Price_Change'] - df['20D_EMA_Volume_Weighted_Return']
+    df['5D_EMA_Difference'] = df['Difference'].ewm(span=5).mean()
+    df['Final_Alpha_Factor'] = df['Preliminary_Factor'] * df['ADMI'] + df['5D_EMA_Difference']
+    
+    return df['Final_Alpha_Factor']

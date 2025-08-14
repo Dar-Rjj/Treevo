@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range and Daily Range
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1).fillna(df['close']))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1).fillna(df['close']))
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['DailyRange'] = df['high'] - df['low']
+
+    # Calculate 14-Period Average True Range (ATR) and 20-Day Moving Average of Daily Range
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+    df['AvgDailyRange'] = df['DailyRange'].rolling(window=20).mean()
+
+    # Identify Breakouts
+    df['UpwardBreakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['DownwardBreakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+
+    # Calculate Breakout Strength
+    df['UpwardStrength'] = (df['close'] - df['high'].shift(1)) / df['AvgDailyRange']
+    df['DownwardStrength'] = (df['low'].shift(1) - df['close']) / df['AvgDailyRange']
+    df['BreakoutStrength'] = df['UpwardStrength'] * df['UpwardBreakout'] + df['DownwardStrength'] * df['DownwardBreakout']
+
+    # Cumulate Breakout Strength over the past 10 days
+    df['PositiveStrengthSum'] = df['BreakoutStrength'].apply(lambda x: max(x, 0)).rolling(window=10).sum()
+    df['NegativeStrengthSum'] = df['BreakoutStrength'].apply(lambda x: min(x, 0)).rolling(window=10).sum()
+    df['CumulatedBreakoutStrength'] = df['PositiveStrengthSum'] - (-df['NegativeStrengthSum'])
+
+    # Calculate Intraday High-Low Spread
+    df['IntradaySpread'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = (df['close'] - df['open']) / df['open']
+
+    # Adjust Breakout Strength by Volume Impact
+    df['VolumeRatio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['AdjustedBreakoutStrength'] = np.where(df['VolumeRatio'] > 1.5, df['BreakoutStrength'] * 1.5, df['BreakoutStrength'])
+
+    # Calculate Price Momentum
+    df['PriceMomentum'] = df['close'] - df['close'].shift(14)
+
+    # Adjust Momentum by ATR
+    df['ATRAdjustedMomentum'] = df['PriceMomentum'] / df['ATR']
+
+    # Generate Alpha Factor
+    df['AlphaFactor'] = (df['IntradaySpread'] + df['CloseToOpenReturn'] + 
+                         df['CumulatedBreakoutStrength'] + df['ATRAdjustedMomentum'])
+    
+    return df['AlphaFactor']
+```

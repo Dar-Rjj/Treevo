@@ -1,0 +1,40 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(data):
+    # Calculate Daily VWAP
+    data['TotalVolume'] = data['volume']
+    data['TotalDollarValue'] = data['close'] * data['volume']
+    data['VWAP'] = data.groupby(data.index.date)['TotalDollarValue'].cumsum() / data.groupby(data.index.date)['TotalVolume'].cumsum()
+    
+    # Calculate VWAP Deviation
+    data['VWAPDeviation'] = data['close'] - data['VWAP']
+    
+    # Calculate Cumulative VWAP Deviation
+    data['CumulativeVWAPDeviation'] = data['VWAPDeviation'].cumsum()
+    
+    # Integrate Short-Term Momentum (5 days)
+    data['ShortTermMomentum'] = data['VWAPDeviation'].rolling(window=5).sum()
+    data['CumulativeVWAPDeviation'] += data['ShortTermMomentum']
+    
+    # Integrate Medium-Term Momentum (10 days)
+    data['MediumTermMomentum'] = data['VWAPDeviation'].rolling(window=10).sum()
+    data['CumulativeVWAPDeviation'] += data['MediumTermMomentum']
+    
+    # Integrate Long-Term Momentum (20 days)
+    data['LongTermMomentum'] = data['VWAPDeviation'].rolling(window=20).sum()
+    data['CumulativeVWAPDeviation'] += data['LongTermMomentum']
+    
+    # Calculate Intraday Volatility
+    data['HighLowRange'] = data['high'] - data['low']
+    data['AbsoluteVWAPDeviation'] = abs(data['close'] - data['VWAP'])
+    data['IntradayVolatility'] = data['HighLowRange'] + data['AbsoluteVWAPDeviation']
+    
+    # Final Alpha Factor
+    data['AlphaFactor'] = data['CumulativeVWAPDeviation'] + data['IntradayVolatility']
+    
+    return data['AlphaFactor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)

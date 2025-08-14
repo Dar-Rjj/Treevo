@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['prev_close']).abs()
+    df['tr3'] = (df['low'] - df['prev_close']).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    n_days = 14
+    df['atr'] = df['true_range'].rolling(window=n_days).mean()
+
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Calculate Short-term and Long-term EMA of Returns
+    short_ema = 12
+    long_ema = 26
+    df['short_ema'] = df['daily_return'].ewm(span=short_ema, adjust=False).mean()
+    df['long_ema'] = df['daily_return'].ewm(span=long_ema, adjust=False).mean()
+
+    # Calculate MACD
+    df['macd'] = df['short_ema'] - df['long_ema']
+
+    # Calculate Volume Adjusted Momentum
+    momentum_period = 10
+    df['raw_momentum'] = (df['close'] - df['close'].shift(momentum_period)) / df['close'].shift(momentum_period)
+    df['volume_adjusted_momentum'] = df['raw_momentum'] * df['volume']
+
+    # Normalize Volume Adjusted Momentum by ATR
+    df['normalized_momentum'] = df['volume_adjusted_momentum'] / df['atr']
+
+    # Calculate Intraday Price Movement
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+
+    # Aggregate Price Movements over a Period
+    aggregate_period = 5
+    df['sum_high_low'] = df['high_low_diff'].rolling(window=aggregate_period).sum()
+    df['sum_close_open'] = df['close_open_diff'].rolling(window=aggregate_period).sum()
+
+    # Calculate Price Momentum Score
+    df['price_volatility'] = df['close'].rolling(window=aggregate_period).std()
+    df['price_momentum_score'] = (df['sum_high_low'] + df['sum_close_open']) * (df['price_volatility'] / df['price_volatility'].max())
+
+    # Evaluate Volume Activity
+    volume_ma_period = 20
+    df['avg_volume'] = df['volume'].rolling(window=volume_ma_period).mean()
+    df['high_volume'] = (df['volume'] > df['avg_volume']).astype(int)
+
+    # Integrate Combined Factors
+    macd_normalized = df['macd'] / df['macd'].rolling(window=50).max()
+    df['integrated_factor'] = (df['normalized_momentum'] + macd_normalized) * df['high_volume']
+
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = df['integrated_factor'] + df['price_momentum_score']
+
+    return df['alpha_factor']
+```

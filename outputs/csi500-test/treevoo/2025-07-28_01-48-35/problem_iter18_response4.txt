@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Intraday_Return'] = df['Intraday_Return'] * df['volume']
+    
+    # Calculate Short-Term Price Change
+    df['15D_Price_Change'] = df['close'] - df['close'].shift(15)
+    
+    # Adjust for Volume Activity
+    df['30D_Average_Volume'] = df['volume'].rolling(window=30).mean().shift(1)
+    df['15D_Volume_Change'] = df['volume'] - df['volume'].shift(15)
+    df['Volume_Trend_Indicator'] = df['15D_Volume_Change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    df['15D_Average_Volume_Last15'] = df['volume'].rolling(window=15).mean()
+    df['Scaled_Volume'] = df['volume'] / df['15D_Average_Volume_Last15']
+    df['Volume_Adjusted_High_Low_Spread'] = df['High_Low_Spread'] * df['Scaled_Volume']
+    
+    # Combine Intraday Signals with Price Momentum and High-Low Spread
+    df['Combined_Signal'] = df['Volume_Weighted_Intraday_Return'] + df['15D_Price_Change'] + df['Volume_Adjusted_High_Low_Spread']
+    
+    # Volume-Weighted Factor
+    df['Volume_Scaled_Combined_Signal'] = df['Combined_Signal'] * df['Scaled_Volume']
+    
+    # Final Factor Adjustment
+    df['Final_Factor_Adjusted'] = df['Volume_Scaled_Combined_Signal'] * df['Volume_Trend_Indicator']
+    
+    # Composite & Smoothing
+    df['30D_EMA_Close'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['Price_Momentum'] = df['close'] - df['30D_EMA_Close']
+    df['Composite_Factor'] = df['Final_Factor_Adjusted'] * df['Price_Momentum'] * df['Volume_Trend_Indicator']
+    
+    # 7-Day Simple Moving Average (SMA) of Composite Factor
+    df['SMA_Composite_Factor'] = df['Composite_Factor'].rolling(window=7).mean()
+    
+    return df['SMA_Composite_Factor']
+```

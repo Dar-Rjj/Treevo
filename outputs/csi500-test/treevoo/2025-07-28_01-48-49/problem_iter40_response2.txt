@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) of closing prices over a 50-day period
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Relative Strength Indicator (RSI) based on closing prices over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Daily price movement
+    df['Daily_Price_Movement'] = df['close'].diff()
+    
+    # Volume ratio to SMA of volume over a 20-day period
+    df['SMA_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['SMA_Volume_20']
+    
+    # True range
+    df['True_Range'] = df[['high', 'low', 'close']].shift().apply(lambda x: max(df['high'] - df['low'], 
+                                                                                abs(df['high'] - x['close']), 
+                                                                                abs(df['low'] - x['close'])), axis=1)
+    
+    # Averaging the true range over the last 14 days
+    df['Average_True_Range_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Price gaps
+    df['Price_Gap'] = df['open'] - df['close'].shift()
+    
+    # Volume spikes
+    df['SMA_Volume_30'] = df['volume'].rolling(window=30).mean()
+    df['Volume_STD_30'] = df['volume'].rolling(window=30).std()
+    df['Volume_Spike'] = df['volume'] > (df['SMA_Volume_30'] + 2 * df['Volume_STD_30'])
+    
+    # Rate of change (ROC) between the current close and the close from 10 days ago
+    df['ROC_10'] = (df['close'] / df['close'].shift(10)) - 1
+    
+    # Modified Accumulation/Distribution Line
+    median_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow_multiplier = (df['close'] - df['low']) - (df['high'] - df['close']) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['A/D_Line'] = money_flow_volume.cumsum()
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['SMA_50'] + 
+        df['RSI'] + 
+        df['Daily_Price_Movement'] + 
+        df['Volume_Ratio'] + 
+        df['Average_True_Range_14'] + 
+        df['Price_Gap'] + 
+        df['Volume_Spike'] + 
+        df['ROC_10'] + 
+        df['A/D_Line']
+    )
+    
+    return df['Alpha_Factor']
+```

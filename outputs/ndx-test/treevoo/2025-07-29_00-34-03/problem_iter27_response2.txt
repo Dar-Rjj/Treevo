@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Previous Day's Return
+    prev_close = df['close'].shift(1)
+    prev_day_return = (df['close'] - prev_close) / prev_close
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Rolling Average Daily Return (21 days)
+    rolling_avg_return = daily_return.rolling(window=21).mean()
+    
+    # Calculate Rolling Volatility of Daily Returns (20 days)
+    rolling_volatility = daily_return.rolling(window=20).std()
+    
+    # Adjust Momentum by Volatility
+    momentum_adjustment = rolling_avg_return / rolling_volatility
+    
+    # Combine Factors
+    inverse_intraday_range = 1 / intraday_range
+    combined_factor = prev_day_return * inverse_intraday_range * momentum_adjustment
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Final Factor Calculation
+    final_factor = combined_factor * volume_change * close_to_open_return * df['amount']
+    
+    # Calculate Volume-Weighted Price
+    volume_weighted_price = (df['volume'] * df['close']).sum()
+    
+    # Scale by Volume
+    avg_volume_20_days = df['volume'].rolling(window=20).mean()
+    scaled_volume = df['volume'] / avg_volume_20_days
+    
+    # Calculate Volume Momentum
+    volume_momentum = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    
+    # Adjust Volume Momentum by Volatility
+    adjusted_volume_momentum = volume_momentum / rolling_volatility
+    
+    # Integrate Volume Momentum
+    integration_weight = 0.5
+    final_factor += adjusted_volume_momentum * integration_weight
+    
+    # Incorporate High and Low Prices
+    high_low_spread = df['high'] - df['low']
+    weighted_return = final_factor + high_low_spread
+    
+    # Integrate Momentum
+    sma_10 = df['close'].rolling(window=10).mean()
+    momentum_adjustment = df['close'] - sma_10
+    weighted_return += momentum_adjustment
+    
+    # Incorporate Volatility
+    std_20 = df['close'].rolling(window=20).std()
+    final_alpha_factor = weighted_return / std_20
+    
+    # Final Volume and Volatility Adjustment
+    final_alpha_factor *= scaled_volume * volume_change
+    
+    # Detect Significant Volume Surge
+    significant_volume_surge = (volume_change > 0) & (volume_change > volume_change.quantile(0.9))
+    final_alpha_factor[significant_volume_surge] *= 1.5  # Further Increase if Significant Volume Surge
+    
+    return final_alpha_factor
+```

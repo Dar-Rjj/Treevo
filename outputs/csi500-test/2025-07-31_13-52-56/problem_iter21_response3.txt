@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, n=5):
+    # Compute High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Volume Adjusted High-Low Range
+    df['Volume_Adjusted_High_Low_Range'] = (df['high'] - df['low']) * np.sqrt(df['volume'])
+    
+    # Calculate Cumulative High-Low Range over N days
+    df['Cumulative_High_Low_Range'] = df['Volume_Adjusted_High_Low_Range'].rolling(window=N).sum()
+    
+    # Calculate High-to-Low Price Ratio
+    df['High_to_Low_Price_Ratio'] = df['high'] / df['low']
+    
+    # Compute Volume Moving Average with a 10-day window
+    df['Volume_Moving_Average'] = df['volume'].rolling(window=10).mean()
+    
+    # Determine Volume Trend: +1 if Current Volume > Moving Average, 0 otherwise
+    df['Volume_Trend'] = np.where(df['volume'] > df['Volume_Moving_Average'], 1, 0)
+    
+    # Measure Volume Momentum: Change in Aggregated Volume (Sum of past n days' volume)
+    df['Aggregated_Volume_t1'] = df['volume'].shift(1)
+    df['Aggregated_Volume_tn'] = df['volume'].shift(n)
+    df['Volume_Momentum'] = df['volume'] - df['Aggregated_Volume_tn']
+    
+    # Calculate Open-to-Close Price Change
+    df['Open_Close_Price_Change'] = df['close'] - df['open']
+    
+    # Compute 10-day Exponential Moving Average (EMA) of Close price
+    smoothing_factor = 2 / (10 + 1)
+    df['Close_EMA_10'] = df['close'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Combine Volume Trend with High-Low Price Ratio
+    df['Combined_VolTrend_HighLow_Ratio'] = df['High_to_Low_Price_Ratio'] * df['Volume_Trend']
+    
+    # Incorporate Volume Momentum and Adjusted High-Low Range
+    df['Adjusted_High_Low_Range_VolMomentum'] = df['Volume_Adjusted_High_Low_Range'] * df['Volume_Momentum']
+    
+    # Integrate Open-Close Momentum with Volume-Adjusted High-Low Range
+    df['Integrated_Open_Close_VolAdj_High_Low'] = df['Open_Close_Price_Change'] * df['Volume_Adjusted_High_Low_Range']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Combined_VolTrend_HighLow_Ratio'] +
+        df['Adjusted_High_Low_Range_VolMomentum'] +
+        df['Integrated_Open_Close_VolAdj_High_Low']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

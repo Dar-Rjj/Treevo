@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Price Movement
+    high_low_diff = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+
+    # Aggregate and Smooth Price Movements
+    sum_high_low = high_low_diff.rolling(window=20).sum()
+    sum_close_open = close_open_change.rolling(window=20).sum()
+    smooth_high_low = high_low_diff.ewm(span=20, adjust=False).mean()
+    long_term_high_low_range = df[['high', 'low']].rolling(window=50).max().diff(periods=-1).dropna()
+
+    # Compute Momentum of High-Low Ranges
+    high_low_momentum = long_term_high_low_range['high'] - smooth_high_low
+
+    # Calculate True Range
+    true_range = pd.DataFrame({
+        'h_l': df['high'] - df['low'],
+        'h_pc': abs(df['high'] - df['close'].shift(1)),
+        'l_pc': abs(df['low'] - df['close'].shift(1))
+    }).max(axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    atr = true_range.rolling(window=14).mean()
+
+    # Adjust Price Momentum by ATR
+    adjusted_momentum = (sum_high_low + sum_close_open) / atr
+
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume = df['volume'] > avg_volume * 1.5
+    volume_spike = df['volume'] > 2 * df['volume'].rolling(window=5).mean()
+
+    # Adjust Momentum Based on Volume
+    adjusted_momentum[volume_spike] *= 0.8
+
+    # Integrate Combined Factors
+    interim_alpha_factor = adjusted_momentum * high_volume
+
+    # Combine ATR and Price Momentum
+    final_alpha_factor = interim_alpha_factor + high_low_momentum
+
+    # Incorporate Recent Price Trend
+    recent_trend = df['close'].rolling(window=10).mean()
+    trend_multiplier = recent_trend.diff().apply(lambda x: 1 if x > 0 else (0.5 if x < 0 else 1))
+    final_alpha_factor *= trend_multiplier
+
+    return final_alpha_factor
+```

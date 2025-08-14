@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum Components
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Weighted Average of High-Low Difference and Open-Close Return
+    # Assign weights based on historical performance
+    weight_high_low = 0.6
+    weight_open_close = 0.4
+    intraday_momentum = (weight_high_low * high_low_diff) + (weight_open_close * open_close_return)
+    
+    # Apply Volume and Amount Adjustment
+    high_low_spread = df['high'] - df['low']
+    change_high_low_spread = high_low_spread - high_low_spread.shift(1)
+    
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    
+    volume_adjustment = volume_ratio * change_high_low_spread
+    amount_adjustment = amount_ratio * change_high_low_spread
+    
+    adjusted_momentum = intraday_momentum * (volume_adjustment + amount_adjustment)
+    
+    # Apply Volume Shock Filter
+    volume_change_ratio = df['volume'] / df['volume'].shift(1)
+    volume_shock_threshold = 1.5
+    adjusted_momentum_filtered = adjusted_momentum.where(volume_change_ratio > volume_shock_threshold, 0)
+    
+    # Smoothing
+    ema_span = 5
+    ema_adjusted_momentum = adjusted_momentum_filtered.ewm(span=ema_span, min_periods=ema_span).mean()
+    
+    # Additional Filtering
+    rolling_window = 10
+    rolling_median = ema_adjusted_momentum.rolling(window=rolling_window, min_periods=rolling_window).median()
+    mean = rolling_median.mean()
+    std = rolling_median.std()
+    outlier_threshold = 3
+    filtered_momentum = rolling_median.where((rolling_median > mean - outlier_threshold * std) & (rolling_median < mean + outlier_threshold * std), 0)
+    
+    return filtered_momentum
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Intraday Momentum Indicators
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    intraday_momentum = high_price_indicator * low_price_indicator
+    
+    # Volume Adjusted Factors
+    volume_adjusted_intraday_return = intraday_return * df['volume']
+    volume_adjusted_high_low_range = high_low_range * df['volume']
+    
+    # Smoothed Intraday Momentum
+    smoothed_intraday_momentum = (volume_adjusted_intraday_return.ewm(span=10).mean() 
+                                  * df['volume'].rolling(window=5).mean())
+    
+    # High-Low Breakout Potential
+    breakout_potential = (volume_adjusted_high_low_range.ewm(span=20).mean() 
+                          * df['volume'].rolling(window=10).mean())
+    
+    # Momentum Reversal Indicator
+    momentum_reversal = (intraday_return - smoothed_intraday_momentum) / breakout_potential
+    
+    # Trading Activity Intensity
+    trading_activity_intensity = df['volume'].rolling(window=5).mean() / df['volume']
+    
+    # Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    significant_price_increase = (daily_price_return > 0).astype(int)
+    
+    # Volume Spike Indicator
+    volume_spike = (df['volume'] > df['volume'].rolling(window=7).mean()).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_price_momentum = daily_price_return * significant_price_increase
+    accumulated_momentum = weighted_price_momentum.cumsum()
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = accumulated_momentum * volume_spike
+    
+    # Consolidate Factors
+    consolidated_factors = (smoothed_intraday_momentum + intraday_momentum + trading_activity_intensity) / df['open']
+    
+    # Final Alpha Factor Synthesis
+    final_alpha_factor = (consolidated_factors + filtered_momentum + trading_activity_intensity) * volume_spike
+    
+    # Adjust for Open Price
+    final_alpha_factor /= df['open']
+    
+    return final_alpha_factor
+```

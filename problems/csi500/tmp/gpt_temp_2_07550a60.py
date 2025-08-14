@@ -1,0 +1,31 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the volume-weighted average price (VWAP) with an adaptive window
+    vwap_window = 7 + (df['volume'] / df['volume'].rolling(window=30).mean()).astype(int)
+    vwap = (df['amount'] / df['volume']).rolling(window=vwap_window, min_periods=1).mean()
+
+    # Calculate the exponential moving average (EMA) of the close price with an adaptive window
+    ema_close_window = 7 + (df['close'] / df['close'].ewm(span=30, adjust=False).mean()).astype(int)
+    ema_close = df['close'].ewm(span=ema_close_window, adjust=False).mean()
+
+    # Calculate the relative strength index (RSI) with a window of 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over a 20-day period
+    dynamic_volatility = log_returns.rolling(window=20).std()
+
+    # Incorporate sentiment (assuming we have a 'sentiment' column or a similar indicator)
+    sentiment = df.get('sentiment', 1)  # Use 1 as neutral if no sentiment data
+
+    # Factor combining EMA, RSI, VWAP, and dynamic volatility, scaled by sentiment
+    factor = ((df['close'] - ema_close) * rsi * log_returns * dynamic_volatility * vwap) * sentiment
+
+    return factor

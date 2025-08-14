@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_sma_period=20, long_sma_period=200, vol_lookback=30, price_momentum_period=5, pct_change_period=10, turnover_lookback=30):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=short_sma_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_high_low'] = df['high_low_diff'] * df['volume']
+    df['vol_adj_volatility'] = df['vol_weighted_high_low'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['avg_close'] = df['close'].rolling(window=price_momentum_period).mean()
+    df['price_momentum'] = (df['close'] - df['SMA']) / df['avg_close']
+    
+    # Incorporate Additional Price Change Metrics
+    df['pct_change'] = df['close'].pct_change(periods=pct_change_period)
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['long_term_SMA'] = df['close'].rolling(window=long_sma_period).mean()
+    df['market_trend'] = df.apply(lambda row: 'Bullish' if row['SMA'] > row['long_term_SMA'] else 'Bearish', axis=1)
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['turnover_rolling_avg'] = df['daily_turnover'].rolling(window=turnover_lookback).mean()
+    df['liquidity_adjustment'] = df['turnover_rolling_avg'] / df['turnover_rolling_avg'].max()
+    
+    # Final Alpha Factor
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adj_volatility': -0.3,
+        'pct_change': 0.2,
+        'high_low_range': 0.1
+    }
+    
+    df['alpha_factor'] = (weights['price_momentum'] * df['price_momentum']
+                          + weights['vol_adj_volatility'] * df['vol_adj_volatility']
+                          + weights['pct_change'] * df['pct_change']
+                          + weights['high_low_range'] * df['high_low_range'])
+    
+    # Dynamically Adjust Weights Based on Market Trend
+    df['alpha_factor'] = df.apply(lambda row: row['alpha_factor'] * 1.1 if row['market_trend'] == 'Bullish' else row['alpha_factor'] * 0.9, axis=1)
+    
+    # Apply Liquidity Adjustment
+    df['alpha_factor'] = df['alpha_factor'] * df['liquidity_adjustment']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

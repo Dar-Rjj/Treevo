@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+    
+    # Weight by Intraday Volatility
+    weighted_returns = intraday_volatility * volume_adjusted_returns
+    
+    # Smoothed Moving Average
+    sma_5 = weighted_returns.rolling(window=5).mean()
+    smoothed_returns = sma_5.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Daily Log Return
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Compute Price Momentum
+    price_momentum = log_return.rolling(window=20).sum()
+    
+    # Apply Volume Confirmation
+    volume_confirmation = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Generate Final Momentum Factor
+    final_momentum_factor = price_momentum * volume_confirmation
+    
+    # Combine All Factors
+    high_low_weighted = high_low_range * df['volume']
+    combined_factor = 0.3 * smoothed_returns + 0.4 * final_momentum_factor + 0.3 * high_low_weighted
+    
+    return combined_factor
+```

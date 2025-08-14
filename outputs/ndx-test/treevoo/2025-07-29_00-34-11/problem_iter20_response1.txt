@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Logarithmic Return
+    df['short_term_log_return'] = np.log(df['close'] / df['close'].shift(5))
+    
+    # Calculate Long-Term Logarithmic Return
+    df['long_term_log_return'] = np.log(df['close'] / df['close'].shift(20))
+    
+    # Calculate Volume-Weighted Intraday Ratios
+    df['high_low_ratio'] = df['high'] / df['low']
+    df['open_close_ratio'] = df['open'] / df['close']
+    df['avg_ratios'] = (df['high_low_ratio'] + df['open_close_ratio']) / 2
+    df['volume_weighted_ratios'] = df['avg_ratios'] * df['volume']
+
+    # Adjust for Volatility with Intraday Sentiment
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['intraday_movement_ratio'] = (df['close'] - df['open']) / df['open']
+    df['sentiment'] = np.where(df['intraday_movement_ratio'] * df['intraday_volatility'] > 0, 1, -1)
+    df['volatility_adjusted_short_term'] = (df['short_term_log_return'] * df['volume']) / df['intraday_volatility']
+    df['volatility_adjusted_long_term'] = df['long_term_log_return'] * df['volume']
+    df['volatility_adjusted_factor'] = df['volatility_adjusted_short_term'] - df['volatility_adjusted_long_term']
+    
+    # Combine Intraday Volatility, Close-to-Close Return, and Momentum
+    df['close_to_close_return'] = df['close'] / df['close'].shift(1) - 1
+    df['intraday_momentum'] = df['close'] / df['open'] - 1
+    df['combined_factor'] = df['intraday_volatility'] * df['close_to_close_return'] + df['intraday_momentum']
+    
+    # Incorporate Enhanced Momentum into Adjusted Ratios
+    df['enhanced_ratios'] = df['volume_weighted_ratios'] * df['close_to_close_return']
+    df['enhanced_ratios'] = df['enhanced_ratios'].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    # Aggregate Volume Changes
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['aggregated_volume_changes'] = df['daily_volume_change'].rolling(window=5).sum()
+    
+    # Final Adjustment
+    df['final_factor'] = (df['volatility_adjusted_factor'] + 
+                          df['combined_factor'] * 
+                          df['aggregated_volume_changes'] + 
+                          df['enhanced_ratios'])
+    
+    return df['final_factor']
+```

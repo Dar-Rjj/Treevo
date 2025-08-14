@@ -1,0 +1,87 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+
+    # Adjust Daily Return by Price Gap
+    half_life = 1
+    decay_factor = np.exp(-np.log(2) / half_life)
+    
+    df['adjusted_daily_return'] = df['daily_return']
+    df.loc[df['price_gap'] > 0, 'adjusted_daily_return'] -= df['price_gap'] * decay_factor
+    df.loc[df['price_gap'] < 0, 'adjusted_daily_return'] += df['price_gap'] * decay_factor
+
+    # Evaluate Momentum Over Time
+    momentum_window = 10
+    df['momentum'] = df['adjusted_daily_return'].rolling(window=momentum_window).sum()
+
+    # Compute Volume Weighted Momentum
+    df['volume_weighted_momentum'] = df['momentum'] * df['volume'] / df['volume'].rolling(window=momentum_window).mean()
+
+    # Adjust for Volume Spike Indicator
+    volume_spike_threshold = 1.5
+    volume_multiplier = 1.2
+    df['volume_moving_avg'] = df['volume'].rolling(window=momentum_window).mean()
+    df['volume_spike_indicator'] = (df['volume'] > df['volume_moving_avg'] * volume_spike_threshold).astype(int)
+    df['volume_weighted_momentum'] *= (1 + (df['volume_spike_indicator'] * (volume_multiplier - 1)))
+
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+
+    # Confirm with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    average_volume = df['volume'].rolling(window=momentum_window).mean()
+    df['adjusted_high_low_spread'] = df['high_low_spread'] * (df['volume_change'] / average_volume).clip(lower=0)
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price Range Momentum
+    df['price_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(momentum_window)
+
+    # Calculate Close Price Momentum
+    df['close_price_momentum'] = df['close'] - df['close'].shift(momentum_window)
+
+    # Integrate Momentum, Volume, and Volume-Weighted Price Change
+    df['integrated_momentum'] = df['price_range_momentum'] * df['volume_change'] + df['volume_weighted_momentum']
+
+    # Combine Integrated Factor with Volume Change
+    df['combined_integrated_factor'] = df['integrated_momentum'] * df['volume_change'].clip(lower=0)
+
+    # Smoothing Filter
+    df['smoothed_factor'] = df['combined_integrated_factor'].rolling(window=5).mean()
+
+    # Calculate 5-day Exponential Moving Average for Price
+    df['ema_5_price'] = df['close'].ewm(span=5, adjust=False).mean()
+
+    # Calculate Price Momentum
+    df['price_momentum'] = df['ema_5_price'] - df['ema_5_price'].shift(momentum_window)
+
+    # Calculate 5-day Exponential Moving Average for Volume
+    df['ema_5_volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+
+    # Calculate Volume Acceleration
+    df['volume_acceleration'] = df['ema_5_volume'] - df['ema_5_volume'].shift(momentum_window)
+
+    # Combine Factors
+    df['final_combined_factor'] = df['volume_acceleration'] * df['price_momentum'] + df['integrated_momentum'] + df['close_price_momentum']
+
+    # Final Alpha Factor with Volume Weighting
+    df['alpha_factor'] = df['final_combined_factor'] / df['volume'].rolling(window=5).sum()
+    df['alpha_factor'] = df['alpha_factor'].clip(lower=0)
+
+    # Incorporate Trading Volume Volatility
+    df['volume_volatility'] = df['volume'].rolling(window=5).std()
+    df['alpha_factor'] /= df['volume_volatility']
+
+    # Introduce Price Trend Indicator
+    df['ema_20_price'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_trend'] = df['ema_20_price'] - df['ema_20_price'].shift(momentum_window)
+    df['alpha_factor'] *= df['price_trend']
+    df['alpha_factor'] = df['alpha_factor'].

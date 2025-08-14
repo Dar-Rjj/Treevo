@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    decay_factor = 0.5
+    df['adjusted_daily_return'] = df['daily_return']
+    df.loc[df['price_gap'] > 0, 'adjusted_daily_return'] -= df['price_gap'] * np.exp(-1 / decay_factor)
+    df.loc[df['price_gap'] < 0, 'adjusted_daily_return'] += df['price_gap'] * np.exp(-1 / decay_factor)
+    
+    # Evaluate Momentum Over Time (e.g., 10 days)
+    momentum_window = 10
+    df['momentum'] = df['adjusted_daily_return'].rolling(window=momentum_window).sum()
+    
+    # Compute Volume Weighted Momentum
+    df['volume_weighted_momentum'] = df['momentum'] * df['volume'] / df['volume'].rolling(window=momentum_window).mean()
+    
+    # Adjust for Volume Spike Indicator
+    volume_spike_threshold = 1.5
+    volume_multiplier = 1.2
+    volume_ma = df['volume'].rolling(window=momentum_window).mean()
+    df['volume_weighted_momentum'] *= np.where(df['volume'] > volume_spike_threshold * volume_ma, volume_multiplier, 1)
+    
+    # Adjust for Volatility
+    volatility_window = 10
+    df['historical_volatility'] = df['daily_return'].rolling(window=volatility_window).std()
+    price_change_threshold = 2
+    volatility_multiplier = 1.3
+    df['absolute_price_change'] = (df['close'] - df['close'].shift(1)).abs()
+    df['volume_weighted_momentum'] *= np.where(df['absolute_price_change'] > price_change_threshold * df['historical_volatility'], volatility_multiplier, 1)
+    
+    return df['volume_weighted_momentum']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

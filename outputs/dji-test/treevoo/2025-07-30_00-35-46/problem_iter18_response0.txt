@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range and Adjust for Volume
+    intraday_range = df['high'] - df['low']
+    volume_adjustment = (df['volume'] / df['volume'].rolling(window=5).mean()) + 0.01
+    adjusted_intraday_range = intraday_range * volume_adjustment
+    
+    # Smoothing
+    sma_adjusted_intraday_range = adjusted_intraday_range.rolling(window=5).mean()
+    
+    # Calculate SMA Cross Signal
+    short_sma_close = df['close'].rolling(window=5).mean()
+    long_sma_close = df['close'].rolling(window=20).mean()
+    
+    # Determine Momentum
+    momentum = (short_sma_close > long_sma_close).astype(int) - (short_sma_close < long_sma_close).astype(int)
+    
+    # Calculate Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = df['close'] - df['open']
+    intraday_momentum = (high_low_diff + open_close_return) / 2
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = pd.Series(0, index=df.index)
+    close_diff = df['close'].diff()
+    obv[close_diff > 0] = df['volume'][close_diff > 0]
+    obv[close_diff < 0] = -df['volume'][close_diff < 0]
+    obv = obv.cumsum()
+    
+    # Weight OBV by Difference between Short and Long SMA
+    final_obv_factor = obv * abs(short_sma_close - long_sma_close)
+    
+    # Apply Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    shock_filter = (volume_ratio > 1.5) & (amount_ratio > 1.5)
+    
+    # Measure Volume Synchronization
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronization_value = (volume_change * price_change).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Synthesize Combined Factor
+    combined_factor = sma_adjusted_intraday_range + synchronization_value
+    combined_factor = combined_factor.where(combined_factor > 0, 0)
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor * final_obv_factor * shock_filter.astype(int)
+    
+    return final_alpha_factor
+```

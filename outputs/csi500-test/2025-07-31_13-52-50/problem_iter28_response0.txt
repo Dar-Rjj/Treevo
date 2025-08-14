@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']) / df['volume'].sum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal_potential'] = (df['deviation_from_vwap'] > df['deviation_from_vwap'].shift(1)) & (df['volume'] > df['volume'].rolling(window=5).mean())
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_adjusted_intraday_return'] = (df['volume'] - df['volume'].rolling(window=7).mean()) * df['intraday_return']
+    
+    # Incorporate Price Volatility
+    close_std_7d = df['close'].rolling(window=7).std()
+    df['volatility_adjusted_intraday_return'] = df['intraday_return'].where(close_std_7d < 0.05, df['intraday_return'] * 1.5).where(close_std_7d >= 0.05, df['intraday_return'] * 0.5)
+    
+    # Incorporate Momentum Shift
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_shift'] = (df['ema_5'] > df['ema_20']) * 0.8 - (df['ema_5'] < df['ema_20']) * 0.8
+    
+    # Combine Indicators
+    df['combined_score'] = 0
+    df.loc[df['trend_reversal_potential'], 'combined_score'] += df['volume_adjusted_intraday_return']
+    df['combined_score'] *= 1.2  # Assign higher score for stronger indication
+    df['combined_score'] += df['momentum_shift']
+    
+    # Smoothing factor
+    df['smoothed_combined_score'] = df['combined_score'].rolling(window=3, min_periods=1).mean()
+    
+    return df['smoothed_combined_score']
+```

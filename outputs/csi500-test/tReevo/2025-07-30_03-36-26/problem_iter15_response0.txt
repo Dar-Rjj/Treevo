@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['TotalVolume'] = df['volume']
+    df['TotalDollarValue'] = df['close'] * df['volume']
+    df['VWAP'] = df.groupby(df.index.date)['TotalDollarValue'].cumsum() / df.groupby(df.index.date)['TotalVolume'].cumsum()
+
+    # Calculate VWAP Deviation
+    df['VWAPDeviation'] = df['close'] - df['VWAP']
+
+    # Calculate Cumulative VWAP Deviation
+    df['CumulativeVWAPDeviation'] = df.groupby(df.index.date)['VWAPDeviation'].cumsum()
+
+    # Integrate Adaptive Short-Term Momentum (5 days)
+    short_term_momentum_period = 5
+    df['ShortTermMomentum'] = df['VWAPDeviation'].rolling(window=short_term_momentum_period).sum()
+    df['CombinedFactorShort'] = (df['ShortTermMomentum'] * 0.3) + (df['CumulativeVWAPDeviation'] * 0.7)
+
+    # Integrate Adaptive Medium-Term Momentum (10 days)
+    medium_term_momentum_period = 10
+    df['MediumTermMomentum'] = df['VWAPDeviation'].rolling(window=medium_term_momentum_period).sum()
+    df['CombinedFactorMedium'] = (df['MediumTermMomentum'] * 0.2) + (df['CumulativeVWAPDeviation'] * 0.8)
+
+    # Integrate Adaptive Long-Term Momentum (20 days)
+    long_term_momentum_period = 20
+    df['LongTermMomentum'] = df['VWAPDeviation'].rolling(window=long_term_momentum_period).sum()
+    df['CombinedFactorLong'] = (df['LongTermMomentum'] * 0.1) + (df['CumulativeVWAPDeviation'] * 0.9)
+
+    # Combine all momentum factors
+    df['CombinedMomentum'] = (df['CombinedFactorShort'] + df['CombinedFactorMedium'] + df['CombinedFactorLong']) / 3
+
+    # Calculate Intraday Volatility
+    df['HighLowRange'] = df['high'] - df['low']
+    df['AbsoluteVWAPDeviation'] = abs(df['close'] - df['VWAP'])
+    df['IntradayVolatility'] = df['HighLowRange'] + df['AbsoluteVWAPDeviation']
+
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (df['IntradayVolatility'] * 0.1) + (df['CombinedMomentum'] * 0.9)
+
+    return df['FinalAlphaFactor']
+```

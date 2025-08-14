@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the ratio of close to open prices (Close/Open)
+    df['close_open_ratio'] = df['close'] / df['open']
+    
+    # Calculate the ratio of high to low prices (High/Low)
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Calculate the exponential moving average (EMA) of trading volume over a period (e.g., 20 days)
+    df['volume_ema_20'] = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the difference between current day's volume and the EMA volume
+    df['volume_diff_ema'] = df['volume'] - df['volume_ema_20']
+    
+    # Compute the percentage change in close price over a short period (e.g., 5 days)
+    df['close_pct_change_5'] = df['close'].pct_change(5)
+    
+    # Compute the percentage change in close price over a long period (e.g., 60 days)
+    df['close_pct_change_60'] = df['close'].pct_change(60)
+    
+    # Determine the number of days the close price has been increasing or decreasing consecutively
+    df['close_consecutive_days'] = np.sign(df['close'].diff()).groupby((df['close'].diff() > 0).cumsum()).cumcount() + 1
+    
+    # Calculate the rate of change (ROC) of the close price over a period (e.g., 14 days)
+    df['roc_14'] = df['close'].pct_change(14)
+    
+    # Calculate the daily price range (High - Low)
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate the average true range over a period (e.g., 14 days)
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: np.max(x) - np.min(x), axis=1)
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    
+    # Compute the standard deviation of returns over a period (e.g., 20 days)
+    df['returns'] = df['close'].pct_change()
+    df['std_dev_20'] = df['returns'].rolling(window=20).std()
+    
+    # Calculate the on-balance volume (OBV) over a period
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Determine the percentage change in OBV over a period
+    df['obv_pct_change_14'] = df['obv'].pct_change(14)
+    
+    # Calculate the money flow index (MFI) over a period (e.g., 14 days)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df['money_flow'].where(df['typical_price'].diff() > 0, 0)
+    df['negative_money_flow'] = df['money_flow'].where(df['typical_price'].diff() < 0, 0)
+    df['positive_money_flow_14'] = df['positive_money_flow'].rolling(window=14).sum()
+    df['negative_money_flow_14'] = df['negative_money_flow'].rolling(window=14).sum()
+    df['mfi_14'] = 100 - (100 / (1 + (df['positive_money_flow_14'] / df['negative_money_flow_14'])))
+    
+    # Identify if there is a gap between the previous day's close and the current day's open
+    df['gap'] = df['open'] - df['close'].shift(1)
+    
+    # Determine the size and direction of the gap
+    df['gap_direction'] = np.sign(df['gap'])
+    
+    # Check if the current day's high or low breaks through a significant level (e.g., 52-week high/low)
+    df['high_breakout_52_week'] = df['high'] > df['high'].rolling(window=252).max().shift(1)
+    df['low_breakout_52_week'] = df['low'] < df['low'].rolling(window=252).min().shift(1)
+    
+    # Calculate the breakout momentum by comparing the current close to the previous period's high/low
+    df['breakout

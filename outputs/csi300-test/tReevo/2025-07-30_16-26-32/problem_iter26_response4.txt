@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    daily_range = df['high'] - df['low']
+    normalized_range = daily_range / df['open']
+
+    # Open to Close Momentum
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    open_to_close_ema = open_to_close_return.ewm(span=5).mean()
+
+    # Volume-Weighted Open-to-Close Return
+    volume_weighted_return = open_to_close_return * df['volume']
+    volume_weighted_ema = volume_weighted_return.ewm(span=5).mean()
+
+    # Price-Volume Trend Indicator
+    daily_price_change = df['close'].diff()
+    price_volume_trend = (daily_price_change * df['volume']).rolling(window=30).sum()
+
+    # Volume-Adjusted Intraday Movement
+    intraday_movement = df['close'] - df['open']
+    volume_20_day_sma = df['volume'].rolling(window=20).mean()
+    adjusted_intraday_movement = intraday_movement / volume_20_day_sma
+
+    # Combined Momentum and Volatility Factor
+    adaptive_weights_momentum_volatility = np.array([0.4, 0.3, 0.3])  # Example weights
+    combined_momentum_volatility = (normalized_range * adaptive_weights_momentum_volatility[0] +
+                                    open_to_close_ema * adaptive_weights_momentum_volatility[1] +
+                                    volume_weighted_ema * adaptive_weights_momentum_volatility[2])
+    smoothed_combined_momentum_volatility = combined_momentum_volatility.ewm(alpha=0.1).mean()
+
+    # Volume-Sensitive Momentum Factor
+    adaptive_weights_volume_sensitive = np.array([0.3, 0.4, 0.3])  # Example weights
+    volume_sensitive_momentum = (price_volume_trend * adaptive_weights_volume_sensitive[0] +
+                                 volume_weighted_ema * adaptive_weights_volume_sensitive[1] +
+                                 adjusted_intraday_movement * adaptive_weights_volume_sensitive[2])
+    smoothed_volume_sensitive_momentum = volume_sensitive_momentum.ewm(alpha=0.1).mean()
+
+    # Final Alpha Factor
+    adaptive_weights_final = np.array([0.5, 0.5])  # Example weights
+    final_alpha_factor = (smoothed_combined_momentum_volatility * adaptive_weights_final[0] +
+                          smoothed_volume_sensitive_momentum * adaptive_weights_final[1])
+    final_smoothed_alpha_factor = final_alpha_factor.ewm(alpha=0.1).mean()
+
+    return final_smoothed_alpha_factor
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

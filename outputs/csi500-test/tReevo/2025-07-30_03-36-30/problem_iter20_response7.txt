@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 3, 5, 10, and 20-Day Rolling Returns
+    df['3D_Return'] = (df['close'].shift(-2) - df['close']) / df['close']
+    df['5D_Return'] = (df['close'].shift(-4) - df['close']) / df['close']
+    df['10D_Return'] = (df['close'].shift(-9) - df['close']) / df['close']
+    df['20D_Return'] = (df['close'].shift(-19) - df['close']) / df['close']
+
+    # Combine 3-Day, 5-Day, 10-Day, and 20-Day Returns
+    df['Combined_Return'] = (df['3D_Return'] * 0.2 + 
+                             df['5D_Return'] * 0.3 + 
+                             df['10D_Return'] * 0.25 + 
+                             df['20D_Return'] * 0.25)
+    
+    # Multiply by Volume of day t
+    df['Volume_Adjusted_Momentum'] = df['Combined_Return'] * df['volume']
+
+    # Calculate Comprehensive Volatility Index
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Open_Close_Spread'] = abs(df['open'] - df['close'])
+    df['Mean_Price'] = (df['high'] + df['low'] + df['open'] + df['close']) / 4
+    df['High_Mean_Spread'] = df['high'] - df['Mean_Price']
+    df['Low_Mean_Spread'] = df['Mean_Price'] - df['low']
+    df['Comprehensive_Volatility'] = (df['High_Low_Spread'] + 
+                                      df['Open_Close_Spread'] + 
+                                      df['High_Mean_Spread'] + 
+                                      df['Low_Mean_Spread']) / df['Mean_Price']
+
+    # Integrate Market Sentiment
+    df['Daily_Change_Amount'] = df['amount'] - df['amount'].shift(1)
+    df['Normalized_Change_Amount'] = df['Daily_Change_Amount'] / df['amount']
+    df['Daily_Change_Volume'] = df['volume'] - df['volume'].shift(1)
+    df['Normalized_Change_Volume'] = df['Daily_Change_Volume'] / df['volume']
+    df['Market_Sentiment'] = df['Normalized_Change_Amount'] + df['Normalized_Change_Volume']
+
+    # Incorporate Liquidity
+    df['20D_Volume_EMA'] = df['volume'].ewm(span=20).mean()
+    df['Relative_Volume'] = df['volume'] / df['20D_Volume_EMA']
+
+    # Final Factor Calculation
+    df['Final_Factor'] = (df['Volume_Adjusted_Momentum'] + 
+                          df['Market_Sentiment'] * df['Relative_Volume'] - 
+                          df['Comprehensive_Volatility'])
+
+    return df['Final_Factor'].dropna()
+```

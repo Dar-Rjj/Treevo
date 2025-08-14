@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate intraday volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate simple moving average (SMA) of close prices
+    df['sma_close'] = df['close'].rolling(window=20).mean()
+    df['sma_ratio'] = df['close'] / df['sma_close']
+    
+    # Calculate exponential moving average (EMA) of close prices
+    df['ema_close'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_ratio'] = df['close'] / df['ema_close']
+    
+    # Calculate average volume over a period
+    df['sma_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['sma_volume']
+    
+    # Calculate price-volume momentum
+    df['price_volume_momentum'] = (df['close'] - df['open']) * df['volume']
+    
+    # Large trade indicator
+    df['large_trade_indicator'] = (df['volume'] > 2 * df['sma_volume']).astype(int)
+    
+    # Calculate dynamic momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['sma_high_low_diff'] = df['high_low_diff'].rolling(window=14).mean()
+    df['raw_momentum'] = df['high_low_diff'] - df['sma_high_low_diff']
+    df['dynamic_momentum'] = df['raw_momentum'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Enhance momentum indicators
+    df['high_to_low_range'] = df['high'] - df['low']
+    df['ema_7_high_low'] = df['high_to_low_range'].ewm(span=7, adjust=False).mean()
+    df['ema_21_high_low'] = df['high_to_low_range'].ewm(span=21, adjust=False).mean()
+    df['adjusted_momentum'] = (df['ema_7_high_low'] / df['ema_21_high_low']) * abs(df['close'] - df['open'])
+    
+    # Enhanced components
+    df['intraday_volatility_enhanced'] = abs(df['close'] - df['open'])
+    df['volume_trend'] = df['volume'] - df['volume'].rolling(window=5).mean()
+    
+    # Combine enhanced components
+    df['combined_enhanced_components'] = (df['intraday_volatility_enhanced'] + df['volume_trend']) * df['adjusted_momentum']
+    
+    # Weights for the composite factor
+    weights = {
+        'sma_ratio': 0.1,
+        'ema_ratio': 0.1,
+        'intraday_volatility': 0.1,
+        'volume_ratio': 0.1,
+        'price_volume_momentum': 0.1,
+        'large_trade_indicator': 0.1,
+        'dynamic_momentum': 0.1
+    }
+    
+    # Weighted composite factor
+    weighted_composite = (df['sma_ratio'] * weights['sma_ratio'] +
+                          df['ema_ratio'] * weights['ema_ratio'] +
+                          df['intraday_volatility'] * weights['intraday_volatility'] +
+                          df['volume_ratio'] * weights['volume_ratio'] +
+                          df['price_volume_momentum'] * weights['price_volume_momentum'] +
+                          df['large_trade_indicator'] * weights['large_trade_indicator'] +
+                          df['dynamic_momentum'] * weights['dynamic_momentum'])
+    
+    # Final alpha factor
+    df['final_alpha_factor'] = df['combined_enhanced_components'] + weighted_composite
+    
+    return df['final_alpha_factor']
+```

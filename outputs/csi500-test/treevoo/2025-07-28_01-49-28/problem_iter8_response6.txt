@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Adjust for Volume
+    volume_adjusted_range = daily_range * df['volume']
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Smoothed Momentum
+    smoothed_momentum = daily_return.rolling(window=20).sum() / df['volume'].rolling(window=20).mean()
+    
+    # Incorporate Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = (ten_day_high - df['close']) / (ten_day_high - ten_day_low)
+    proximity_to_low = (df['close'] - ten_day_low) / (ten_day_high - ten_day_low)
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    inverted_proximity = 1 - min_proximity
+    twenty_day_std = daily_return.rolling(window=20).std()
+    adjusted_proximity = inverted_proximity / twenty_day_std
+    
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff + open_low_diff) * df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Combine Indicators
+    combined_indicator = (volume_adjusted_range + open_close_movement + smoothed_momentum) * df['volume']
+    strong_move_filter = (combined_indicator > combined_indicator.quantile(0.75)).astype(int)
+    
+    # Final Alpha Factor
+    final_alpha_factor = strong_move_filter * adjusted_proximity * weighted_avg_volatility
+    
+    # Amount per Unit Close Price Rate of Change
+    n = 10
+    amount_per_close_t = df['amount'].rolling(window=n).sum() / df['close']
+    amount_per_close_t_n = df['amount'].shift(n).rolling(window=n).sum() / df['close'].shift(n)
+    rate_of_change = amount_per_close_t - amount_per_close_t_n
+    
+    # Add to final alpha factor
+    final_alpha_factor += rate_of_change
+    
+    return final_alpha_factor
+```

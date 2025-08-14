@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Compute Volume Adjusted Intraday Range Ratio
+    volume_adjusted_intraday_range_ratio = intraday_range_ratio * df['volume']
+    
+    # Calculate Previous Day's Close-to-Open Change
+    previous_close_open_change = df['open'].shift(-1) - df['close']
+    
+    # Calculate Daily High-Low Range
+    daily_high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Volatility
+    n_period = 5  # Example: 5-day period
+    high_low_range_volatility = daily_high_low_range.rolling(window=n_period).sum() / n_period
+    
+    # Smooth High-Low Range Volatility using EMA
+    ema_window_size = 15
+    smoothed_high_low_range_volatility = high_low_range_volatility.ewm(span=ema_window_size, adjust=False).mean()
+    
+    # Incorporate Close-Open Difference
+    close_open_difference = df['close'] - df['open']
+    fixed_weight = 0.3  # Example: 30% weight
+    combined_volatility = smoothed_high_low_range_volatility + fixed_weight * close_open_difference
+    
+    # Generate Combined Alpha Factor
+    combined_alpha_factor = volume_adjusted_intraday_range_ratio - previous_close_open_change
+    
+    # Set Dynamic Threshold (e.g., EMA of Smoothed High-Low Range Volatility)
+    dynamic_threshold = combined_volatility.ewm(span=ema_window_size, adjust=False).mean()
+    
+    # Adjust Combined Alpha Factor based on Dynamic Threshold
+    positive_signal = (smoothed_high_low_range_volatility > dynamic_threshold)
+    negative_signal = (smoothed_high_low_range_volatility < dynamic_threshold)
+    adjusted_combined_alpha_factor = combined_alpha_factor.where(positive_signal, combined_alpha_factor * 0.4)
+    adjusted_combined_alpha_factor = adjusted_combined_alpha_factor.where(negative_signal, combined_alpha_factor * 1.6)
+    
+    # Final Alpha Factor
+    final_alpha_factor = adjusted_combined_alpha_factor * df['volume']
+    
+    return final_alpha_factor
+```

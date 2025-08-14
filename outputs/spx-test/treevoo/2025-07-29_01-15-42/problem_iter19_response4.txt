@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Close Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Smooth Returns with EMA
+    ema_window = 5
+    df['ema_return'] = df['daily_return'].ewm(span=ema_window, adjust=False).mean()
+
+    # Adjust for Volume and Amount
+    df['volume_sum'] = df['volume'].rolling(window=ema_window).sum()
+    df['amount_sum'] = df['amount'].rolling(window=ema_window).sum()
+    df['adjusted_momentum'] = df['ema_return'] / (df['volume_sum'] + df['amount_sum'])
+
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+
+    # Calculate Relative True Strength Index (RTSI)
+    df['gain'] = np.where(df['close'].diff() > 0, df['close'].diff(), 0)
+    df['loss'] = np.where(df['close'].diff() < 0, -df['close'].diff(), 0)
+    rtsi_window = 14
+    df['ema_gain'] = df['gain'].ewm(span=rtsi_window, adjust=False).mean()
+    df['ema_loss'] = df['loss'].ewm(span=rtsi_window, adjust=False).mean()
+    df['rtsi'] = (df['ema_gain'] / (df['ema_gain'] + df['ema_loss'])) * 100
+
+    # Calculate Intraday Volatility (ATR)
+    atr_window = 14
+    df['tr'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['atr'] = df['tr'].rolling(window=atr_window).mean()
+
+    # Combine Factors
+    df['combined_factor'] = (df['price_range'] * df['rtsi']) + df['adjusted_momentum'] + df['atr']
+
+    # Drop NaN values
+    df.dropna(inplace=True)
+
+    # Output the factor values
+    return df['combined_factor']
+```

@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    weighted_close = df['close'] * df['volume']
+    volume_weighted_price = weighted_close / df['volume'].sum()
+
+    # Calculate Exponential Moving Average (EMA) of Volume-Weighted Prices
+    ema_volume_weighted_price = volume_weighted_price.ewm(span=5, adjust=False).mean()
+    
+    # Intraday Volatility Adjustment Factor
+    intraday_volatility = df['high'] - df['low']
+    adjusted_ema = ema_volume_weighted_price + intraday_volatility
+
+    # Volume Spike Indicator
+    volume_change = df['volume'].diff()
+    volume_spike = (volume_change > 0) & (volume_change > volume_change.quantile(0.9))
+    adjusted_ema[volume_spike] += volume_change[volume_spike]
+
+    # Short-Term Momentum
+    avg_close_4_days = df['close'].rolling(window=4).mean()
+    short_term_momentum = df['close'] - avg_close_4_days
+    
+    # True Average Price
+    true_avg_price = (df['high'] + df['low'] + df['close']) / 3
+
+    # Long-Term Price Momentum
+    long_term_momentum = true_avg_price.ewm(span=20, adjust=False).mean()
+    
+    # Difference between Short and Long-Term Momentum
+    momentum_diff = short_term_momentum - long_term_momentum
+    
+    # Calculate Price Range Volatility
+    daily_price_range = df['high'] - df['low']
+    price_range_volatility = daily_price_range.rolling(window=20).std()
+    
+    # Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Rolling Average Daily Return
+    rolling_avg_daily_return = daily_return.rolling(window=21).mean()
+    
+    # Rolling Volatility of Close Prices
+    rolling_volatility = df['close'].pct_change().rolling(window=20).std()
+    
+    # Adjust Momentum by Volatility
+    adjusted_momentum = rolling_avg_daily_return / rolling_volatility
+    
+    # Weighting by Volume and Price Movement
+    volume_price_movement_score = df['volume'] * (df['high'] - df['open'])
+    weighted_score = volume_price_movement_score * daily_price_range
+    
+    # Incorporate Volume Trend
+    ema_volume_5d = df['volume'].ewm(span=5, adjust=False).mean()
+    ema_volume_20d = df['volume'].ewm(span=20, adjust=False).mean()
+    volume_trend_diff = ema_volume_5d - ema_volume_20d
+    
+    # Combine Momentum and Volume Trends
+    combined_trends = momentum_diff + volume_trend_diff
+    
+    # Adjusted True Average Price
+    adjusted_true_avg_price = true_avg_price / price_range_volatility
+    
+    # Final Momentum Indicator
+    final_momentum_indicator = adjusted_true_avg_price * weighted_score
+    
+    # Integrate with Combined Momentum and Volume Trends
+    integrated_alpha = combined_trends * final_momentum_indicator
+    
+    # Additional Price Range Indicator
+    high_low_range = df['high'] - df['low']
+    high_close_range = df['high'] - df['close']
+    combined_ranges = (high_low_range + high_close_range) / 2
+    
+    # Adjusted Alpha Factor
+    adjusted_alpha_factor = integrated_alpha * combined_ranges
+    
+    return adjusted_alpha_factor
+```

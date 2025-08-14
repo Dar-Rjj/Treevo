@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_adj_lookback=10, price_mom_lookback=5, pct_change_lookback=5, long_term_sma_lookback=50, liquidity_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_adj_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=price_mom_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Long_Term_SMA'] = df['close'].rolling(window=long_term_sma_lookback).mean()
+    df['Trend_Indicator'] = (df['SMA'] > df['Long_Term_SMA']).astype(int)
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Liquidity_Rolling_Avg'] = df['Daily_Turnover'].rolling(window=liquidity_lookback).mean()
+    df['Liquidity_Adj_Weight'] = df['Liquidity_Rolling_Avg'] / df['Liquidity_Rolling_Avg'].std()
+    
+    # Define the Weights for Each Component
+    weights = {
+        'Price_Momentum': 0.4,
+        'Volume_Adjusted_Volatility': 0.2,
+        'Pct_Change': 0.2,
+        'Liquidity_Adj_Weight': 0.2
+    }
+    
+    # Combine Components
+    df['Alpha_Factor'] = (
+        weights['Price_Momentum'] * df['Price_Momentum'] +
+        weights['Volume_Adjusted_Volatility'] * df['Volume_Adjusted_Volatility'] +
+        weights['Pct_Change'] * df['Pct_Change'] +
+        weights['Liquidity_Adj_Weight'] * df['Liquidity_Adj_Weight']
+    )
+    
+    # Dynamically Adjust Weights Based on Market Trend
+    df['Alpha_Factor'] = df['Alpha_Factor'] * (1 + 0.1 * (df['Trend_Indicator'] - 0.5))
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

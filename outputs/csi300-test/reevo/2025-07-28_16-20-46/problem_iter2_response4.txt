@@ -1,0 +1,41 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    df['price_change'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Calculate the 5-day and 20-day moving averages of the close price
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+
+    # Calculate the 5-day standard deviation of the high price for volatility
+    df['std_high_5'] = df['high'].rolling(window=5).std()
+
+    # Calculate the 5-day average volume
+    df['avg_volume_5'] = df['volume'].rolling(window=5).mean()
+
+    # Momentum factor: (current close - 20-day SMA) / (20-day SMA)
+    df['momentum_factor'] = (df['close'] - df['sma_20']) / df['sma_20']
+
+    # Volatility factor: (5-day standard deviation of high) / (5-day SMA of close)
+    df['volatility_factor'] = df['std_high_5'] / df['sma_5']
+
+    # Liquidity factor: (current volume - 5-day average volume) / (5-day average volume)
+    df['liquidity_factor'] = (df['volume'] - df['avg_volume_5']) / df['avg_volume_5']
+
+    # Adaptive weighting: higher weight to momentum in trending markets, higher weight to liquidity in volatile markets
+    df['weight_momentum'] = 1 / (1 + df['volatility_factor'])
+    df['weight_liquidity'] = 1 / (1 + df['momentum_factor'])
+
+    # Normalize the weights
+    total_weight = df['weight_momentum'] + df['weight_liquidity']
+    df['weight_momentum'] /= total_weight
+    df['weight_liquidity'] /= total_weight
+
+    # Calculate the alpha factor
+    df['alpha_factor'] = (df['weight_momentum'] * df['momentum_factor']) + \
+                         (df['weight_liquidity'] * df['liquidity_factor']) + \
+                         (1 - (df['weight_momentum'] + df['weight_liquidity'])) * df['price_change']
+
+    return df['alpha_factor'].dropna()
+```

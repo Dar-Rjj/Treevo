@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Evaluate IRWAP Difference
+    irwap_diff = df['close'] - irwap
+    
+    # Adjust Daily Return by Intraday Volatility
+    daily_return = (df['close'] / df['close'].shift(1)) - 1
+    adj_daily_return = daily_return / intraday_spread
+    
+    # Smooth the Adjusted Return
+    smoothed_adj_return = adj_daily_return.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Short-Term Momentum
+    log_returns = np.log(df['close']) - np.log(df['close'].shift(1))
+    short_term_momentum = log_returns.rolling(window=7).mean()
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = log_returns.rolling(window=25).mean()
+    
+    # Combine Short and Long-Term Momentum
+    combined_momentum = short_term_momentum - long_term_momentum
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_momentum = combined_momentum * (1 / price_volatility)
+    
+    # Confirm with Volume Trends
+    avg_volume = df['volume'].rolling(window=30).mean()
+    volume_trend = (df['volume'] > avg_volume).astype(int) * 2 - 1
+    
+    # Calculate Intraday Strength
+    intraday_strength = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Smooth Intraday Strength
+    smoothed_intraday_strength = intraday_strength.ewm(span=5, adjust=False).mean()
+    
+    # Compute Intraday Balance
+    intraday_balance = (df['high'] + df['low']) / 2 - df['close']
+    
+    # Smooth Intraday Balance
+    smoothed_intraday_balance = intraday_balance.ewm(span=5, adjust=False).mean()
+    
+    # Final Factor Calculation
+    final_factor = (
+        irwap_diff + 
+        smoothed_adj_return + 
+        adjusted_momentum + 
+        smoothed_intraday_strength + 
+        smoothed_intraday_balance + 
+        volume_trend
+    )
+    
+    return final_factor
+```

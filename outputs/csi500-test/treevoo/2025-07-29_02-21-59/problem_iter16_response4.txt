@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Volume-Adjusted Momentum
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Momentum_Diff'] = df['EMA_20'] - df['SMA_20']
+    df['Volume_Adjusted_Momentum'] = df['Momentum_Diff'] * df['volume']
+    df['Smoothed_VAM'] = df['Volume_Adjusted_Momentum'].rolling(window=5).mean()
+
+    # Compute Price-Volume Synchronization Measure
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Prev_Day_Close_Open_Change'] = (df['close'].shift(1) - df['open'].shift(1)).abs()
+    df['Price_Volume_Sync'] = (df['volume'] * df['Intraday_Range']) / df['Prev_Day_Close_Open_Change']
+
+    # Combine Volume-Adjusted Momentum and Price-Volume Synchronization
+    df['Combined_Factor'] = df['Smoothed_VAM'] + df['Price_Volume_Sync']
+
+    # Identify Price and Volume Trends
+    df['Volume_Diff'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Change_Sign'] = df['Volume_Diff'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    df['Close_Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Price_Change_Sign'] = df['Close_Price_Change'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+
+    # Confirm Trend
+    df['Trend_Confirmation'] = 0
+    df.loc[(df['Smoothed_VAM'] > 0) & (df['Volume_Change_Sign'] == 1) & (df['Price_Change_Sign'] == 1), 'Trend_Confirmation'] = 1
+    df.loc[(df['Smoothed_VAM'] < 0) & (df['Volume_Change_Sign'] == -1) & (df['Price_Change_Sign'] == -1), 'Trend_Confirmation'] = -1
+
+    # Return the Combined Factor
+    return df['Combined_Factor']
+
+# Example usage:
+# data = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': [100] * 100,
+#     'high': [105] * 100,
+#     'low': [95] * 100,
+#     'close': [102] * 100,
+#     'amount': [10000] * 100,
+#     'volume': [1000] * 100
+# })
+# data.set_index('date', inplace=True)
+# factor_values = heuristics_v2(data)
+# print(factor_values)
+```

@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['return'] = df['close'].pct_change()
+    
+    # Adaptive Volatility and Momentum Factors
+    rolling_window = 20
+    df['historical_volatility'] = df['return'].rolling(window=rolling_window).std()
+    
+    # Average True Range (ATR)
+    df['tr'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    df['atr'] = df['tr'].rolling(window=rolling_window).mean()
+    
+    # Composite Volatility Factor
+    df['composite_volatility'] = (df['historical_volatility'] + df['atr']) / 2
+    
+    # Momentum
+    df['momentum'] = df['return'].rolling(window=rolling_window).mean()
+    
+    # Volume-Adjusted Momentum
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=rolling_window).mean()
+    df['volume_adjusted_momentum'] = df['momentum'] * df['volume_ratio']
+    
+    # Dynamic Trend Following Factors
+    short_term = 10
+    long_term = 50
+    df['short_ma'] = df['close'].rolling(window=short_term).mean()
+    df['long_ma'] = df['close'].rolling(window=long_term).mean()
+    df['ma_crossover_signal'] = (df['short_ma'] > df['long_ma']).astype(int)
+    
+    # Exponential Moving Averages Crossover
+    df['short_ema'] = df['close'].ewm(span=short_term, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=long_term, adjust=False).mean()
+    df['ema_crossover_signal'] = (df['short_ema'] > df['long_ema']).astype(int)
+    
+    # MACD (Moving Average Convergence Divergence)
+    df['macd_line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['signal_line'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+    df['macd_signal'] = (df['macd_line'] > df['signal_line']).astype(int)
+    
+    # Sentiment and Macroeconomic Factors
+    # Placeholder for sentiment score and macroeconomic indicators
+    df['sentiment_score'] = 0.5  # Assume a neutral sentiment score
+    df['gdp_growth'] = 0.2  # Assume a GDP growth rate of 2%
+    df['inflation_rate'] = 0.02  # Assume an inflation rate of 2%
+    df['unemployment_rate'] = 0.05  # Assume an unemployment rate of 5%
+    
+    # Machine Learning for Weight Adjustments
+    features = ['composite_volatility', 'volume_adjusted_momentum', 'ma_crossover_signal', 'ema_crossover_signal', 'macd_signal', 'sentiment_score', 'gdp_growth', 'inflation_rate', 'unemployment_rate']
+    X = df[features].dropna()
+    y = df.loc[X.index, 'return'].shift(-1)  # Predict next day's return
+    X, y = X.dropna(), y.dropna()
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    df['predicted_return'] = model.predict(df[features])
+    
+    # Sector-Specific Indicators
+    # Placeholder for sector-specific indicators
+    df['sector_performance'] = 0.5  # Assume a neutral sector performance
+    df['sector_momentum'] = 0.5  # Assume a neutral sector momentum
+    df['sector_volatility'] = 0.5  # Assume a neutral sector volatility
+    df['sector_specific_factor'] = (df['sector_performance'] + df['sector_momentum'] + df['sector_volatility']) / 3
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['predicted_return'] * df['sector_specific_factor']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

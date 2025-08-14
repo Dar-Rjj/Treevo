@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the Weighted Moving Average (WMA) of Closing Prices over a 50-day period
+    wma = df['close'].rolling(window=50).apply(lambda x: (x * range(1, len(x) + 1)).sum() / sum(range(1, len(x) + 1)), raw=True)
+    
+    # Introduce Relative Strength Indicator (RSI) based on closing prices over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # RSI line based on the WMA of closing prices
+    delta_wma = wma.diff()
+    gain_wma = (delta_wma.where(delta_wma > 0, 0)).rolling(window=14).mean()
+    loss_wma = (-delta_wma.where(delta_wma < 0, 0)).rolling(window=14).mean()
+    rs_wma = gain_wma / loss_wma
+    rsi_wma = 100 - (100 / (1 + rs_wma))
+    
+    # Evaluate Daily Price Movement
+    daily_price_movement = df['close'] - df['close'].shift(1)
+    cumulative_sum = daily_price_movement.rolling(window=20).sum()
+    average_daily_movement = daily_price_movement.rolling(window=20).mean()
+    
+    # Measure Volume Ratio
+    volume_sma = df['volume'].rolling(window=20).mean()
+    volume_ratio = df['volume'] / volume_sma
+    volume_momentum = (df['volume'] - df['volume'].shift(20)) / df['volume'].shift(20)
+    
+    # Calculate Volatility Measures
+    true_range = pd.concat([df['high'] - df['low'], abs(df['high'] - df['close'].shift()), abs(df['low'] - df['close'].shift())], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Analyze Price Gaps
+    price_gap = df['open'] - df['close'].shift(1)
+    up_gaps = (price_gap > 0).rolling(window=30).sum()
+    down_gaps = (price_gap < 0).rolling(window=30).sum()
+    avg_up_gap = (price_gap * (price_gap > 0)).rolling(window=30).sum() / up_gaps
+    avg_down_gap = (price_gap * (price_gap < 0)).rolling(window=30).sum() / down_gaps
+    
+    # Explore Momentum
+    roc_10 = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    roc_20 = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Incorporate Accumulation/Distribution Line
+    median_price = (df['high'] + df['low'] + df['close']) / 3
+    ad_line = (median_price - df['close'].shift(1)) * df['volume']
+    ad_line_roc = (ad_line - ad_line.shift(20)) / ad_line.shift(20)
+    
+    # Calculate Intraday Price Movement
+    intraday_movement = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    close_difference = df['close'] - df['close'].shift(1)
+    weighted_intraday_movement = intraday_movement * (df['volume'] * close_difference)
+    
+    # Integrate Intraday Volatility
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    reversal_signal = (df['close'] - df['open']) / df['open']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    weighted_intraday_return = (df['amount'] * intraday_movement) + (df['volume'] * reversal_signal)
+    
+    # Combine Enhanced Factors
+    combined_factor = (weighted_intraday_movement + avg_daily_range) * (df['volume'] * close_difference)
+    
+    # Adjust by Average Volume
+    avg_volume =

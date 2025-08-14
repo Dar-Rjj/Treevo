@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    df['Close_Difference'] = df['close'] - df['close'].shift(1)
+    df['Weighted_Intraday_Movement'] = df['Intraday_Price_Movement'] * df['volume'] * df['Close_Difference']
+    
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['Daily_Range'].ewm(span=20, adjust=False).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * df['Reversal_Signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Weighted_Intraday_Return'] = (df['amount'] * df['Intraday_Price_Movement']) + (df['volume'] * df['Reversal_Signal'])
+    
+    # Combine Enhanced Factors
+    df['Combined_Factor'] = df['Weighted_Intraday_Movement'] + df['Intraday_Volatility'] + df['Volume_Weighted_Return']
+    
+    # Adjust by Relative Volume
+    df['Volume_EMA'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['Relative_Volume'] = df['volume'] / df['Volume_EMA']
+    df['Adjusted_Combined_Factor'] = df['Combined_Factor'] / df['Relative_Volume']
+    
+    # Incorporate Close Price Momentum
+    df['30D_MA'] = df['close'].rolling(window=30).mean()
+    df['10D_EMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Momentum'] = (df['close'] - df['30D_MA']) * df['Intraday_Volatility']
+    
+    # Construct Momentum Factor
+    df['5D_Mom'] = df['close'].pct_change(5)
+    df['20D_Mom'] = df['close'].pct_change(20)
+    df['60D_Mom'] = df['close'].pct_change(60)
+    df['Momentum_Factor'] = (df['5D_Mom'] + df['20D_Mom'] + df['60D_Mom']) / 3
+    
+    # Design Volatility Measures
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['5D_Vol'] = df['Log_Return'].rolling(window=5).std()
+    df['20D_Vol'] = df['Log_Return'].rolling(window=20).std()
+    df['60D_Vol'] = df['Log_Return'].rolling(window=60).std()
+    df['Volatility_Measures'] = (df['5D_Vol'] + df['20D_Vol'] + df['60D_Vol']) / 3
+    
+    # Incorporate Volume-Based Indicators
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Explore Price Action Patterns
+    def candlestick_pattern_strength(candle_type, df):
+        if candle_type == 'engulfing':
+            return (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+        elif candle_type == 'doji':
+            return (df['close'] - df['open']).abs() <= 0.005 * (df['high'] - df['low'])
+        return False
+    
+    df['Engulfing_Pattern'] = candlestick_pattern_strength('engulfing', df).astype(int)
+    df['Doji_Pattern'] = candlestick_pattern_strength('doji', df).astype(int)
+    df['Pattern_Score'] = df['Engulfing_Pattern'] + df['Doji_Pattern']
+    
+    # Develop Trend-Following Signals
+    df['Trend_Signal'] = (df['close'] - df['close'].rolling(window=20).mean()).apply(lambda x: 1 if x > 0

@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Adaptive Smoothing Factor based on recent volume changes
+    def adaptive_smoothing_factor(volume, window=30):
+        vol_avg = volume.rolling(window=window).mean()
+        vol_std = volume.rolling(window=window).std()
+        return 2 / (1 + np.exp(-((vol_avg - volume) / vol_std)))
+    
+    alpha = adaptive_smoothing_factor(df['volume'])
+    
+    # Exponential Moving Average of Volume-Weighted Intraday Return
+    df['ema_volume_weighted_intraday_return'] = df['volume_weighted_intraday_return'].ewm(alpha=alpha, min_periods=30).mean()
+    
+    # Calculate Intraday Volatility
+    df['squared_intraday_return'] = df['intraday_return'] ** 2
+    df['intraday_volatility'] = df['squared_intraday_return'].rolling(window=30).sum().sqrt()
+    
+    # Simple Moving Average of Intraday Volatility
+    df['sma_intraday_volatility'] = df['intraday_volatility'].rolling(window=30).mean()
+    
+    # Adjust for Recent Volatility
+    df['sma_recent_volatility'] = df['intraday_volatility'].rolling(window=10).mean()
+    
+    # Volume-Weighted Intraday Momentum
+    df['volume_weighted_intraday_momentum'] = df['intraday_return'] * df['volume']
+    
+    # Exponential Moving Average of Volume-Weighted Intraday Momentum
+    df['ema_volume_weighted_intraday_momentum'] = df['volume_weighted_intraday_momentum'].ewm(alpha=alpha, min_periods=30).mean()
+    
+    # Integrate Longer-Term Trends
+    df['60_day_ma'] = df['close'].rolling(window=60).mean()
+    df['trend_indicator'] = df['close'] - df['60_day_ma']
+    
+    # Combine Factors
+    df['final_factor'] = (
+        df['ema_volume_weighted_intraday_return'] +
+        df['sma_intraday_volatility'] +
+        df['sma_recent_volatility'] +
+        df['trend_indicator']
+    )
+    
+    return df['final_factor']
+```

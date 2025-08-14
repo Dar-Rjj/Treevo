@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['low']
+    intraday_reversal = -intraday_return
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    price_change = df['close'].diff()
+    five_day_momentum = price_change.rolling(window=5).sum()
+    open_close_spread = abs(df['open'] - df['close'])
+    momentum_adjusted = five_day_momentum * open_close_spread
+    combined_signal = momentum_adjusted / adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    smoothed_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Integrate Intraday Reversal into Final Factor
+    close_to_open_diff = df['close'] - df['open']
+    intraday_reversal_factor = intraday_reversal * close_to_open_diff
+    
+    # Introduce a New Volatility Component
+    daily_volatility = np.sqrt(((df['high'] - df['low'])**2 / 4) + ((df['close'] - df['open'])**2 / 4))
+    
+    # Enhance with Trend Confirmation
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    
+    # Add a New Momentum Adjustment
+    short_term_momentum = df['close'] - df['close'].shift(10)
+    
+    # Incorporate Cumulative Return
+    daily_returns = df['close'].pct_change()
+    cumulative_return = daily_returns.rolling(window=20).sum()
+    
+    # Incorporate Volume-Based Factors
+    volume_change = df['volume'] - df['volume'].shift(1)
+    cumulative_volume = df['volume'].rolling(window=20).sum()
+    
+    # Final Alpha Factor
+    final_factor = (
+        smoothed_signal *
+        intraday_reversal_factor *
+        daily_volatility *
+        long_term_momentum *
+        short_term_momentum *
+        cumulative_return *
+        cumulative_volume
+    )
+    
+    return final_factor
+```

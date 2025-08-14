@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume Weighted Close Price Momentum
+    df['Avg_Close_5'] = df['close'].rolling(window=5, min_periods=1).mean()
+    df['Avg_Volume_6'] = df['volume'].rolling(window=6, min_periods=1).mean().shift(1)
+    df['Volume_Weighted_Momentum'] = (df['close'] - df['Avg_Close_5']) * (df['volume'] / df['Avg_Volume_6'])
+
+    # Price Volatility
+    df['Close_StdDev_7'] = df['close'].rolling(window=7, min_periods=1).std()
+    df['Price_Volatility'] = df['Close_StdDev_7'] / df['close'].shift(1)
+
+    # Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+
+    # Volume Spike Detection
+    df['Volume_Change'] = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['Volume_Change'].rolling(window=20, min_periods=1).quantile(0.8) * 1.7
+    df['Volume_Spike'] = df['Volume_Change'] > spike_threshold
+
+    # Volume Increase Ratio
+    df['Volume_Increase_Ratio'] = df['volume'] / df['volume'].shift(2)
+
+    # High-Low Breakout Intensity
+    df['Breakout_Intensity'] = (df['high'] - df['low']) / df['close'].shift(1)
+    df['Breakout_Intensity'] = df['Breakout_Intensity'].apply(lambda x: max(x, 0))
+
+    # Moving Average of High-Low Differences (10-day period)
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['MA_High_Low_Diff_10'] = df['High_Low_Diff'].rolling(window=10, min_periods=1).mean()
+
+    # Intermediate Factor
+    df['Intermediate_Factor'] = df['Volume_Increase_Ratio'] * (df['close'] - df['Avg_Close_5'])
+
+    # Combined Intraday, Close-to-PreviousClose Returns, and Breakout Intensity
+    df['Close_to_PrevClose_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Combined_Metrics'] = df['Intraday_Return'] + df['Close_to_PrevClose_Return'] + df['Breakout_Intensity']
+    df['Rolling_Volatility'] = df['High_Low_Diff'].rolling(window=20, min_periods=1).std()
+    df['Adjusted_Combined_Metrics'] = df['Combined_Metrics'] / df['Rolling_Volatility']
+
+    # Final Composite Factor
+    df['Final_Composite_Factor'] = (
+        df['Intermediate_Factor'] +
+        df['MA_High_Low_Diff_10'] +
+        df['Volume_Weighted_Momentum'] +
+        df['Price_Volatility'] +
+        df['Adjusted_Combined_Metrics']
+    )
+
+    return df['Final_Composite_Factor']
+```

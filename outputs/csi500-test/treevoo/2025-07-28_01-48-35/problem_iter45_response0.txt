@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Simple Moving Average (SMA) and Exponential Moving Average (EMA)
+    n_sma = 20
+    n_ema = 20
+    df['sma'] = df['close'].rolling(window=n_sma).mean()
+    df['ema'] = df['close'].ewm(span=n_ema, adjust=False).mean()
+    
+    # Identify SMA and EMA crossovers
+    df['sma_crossover'] = (df['sma'].rolling(window=2).apply(lambda x: x[-1] > x[0], raw=True)).astype(int)
+    df['ema_crossover'] = (df['ema'].rolling(window=2).apply(lambda x: x[-1] > x[0], raw=True)).astype(int)
+    
+    # Calculate price momentum
+    n_momentum = 10
+    df['price_momentum'] = (df['close'] - df['close'].shift(n_momentum)) / df['close'].shift(n_momentum)
+    
+    # Calculate volume and amount changes
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['amount_change'] = df['amount'] - df['amount'].shift(1)
+    
+    # Calculate volume-price and amount-price correlation
+    n_corr = 20
+    df['volume_price_corr'] = df['volume'].rolling(window=n_corr).corr(df['close'])
+    df['amount_price_corr'] = df['amount'].rolling(window=n_corr).corr(df['close'])
+    
+    # Calculate volume-price trend
+    n_trend = 10
+    df['volume_price_trend'] = (df['volume'] - df['volume'].shift(n_trend)) / df['volume'].shift(n_trend)
+    
+    # Calculate True Range and Average True Range (ATR)
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1)
+    df['atr'] = df['true_range'].ewm(span=n_ema, adjust=False).mean()
+    
+    # Calculate High-Low Spread and High-Low Range Volatility
+    df['high_low_spread'] = df['high'] - df['low']
+    df['high_low_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Analyze Open and Close Price Relationship
+    df['gap_up'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['gap_down'] = (df['open'] < df['close'].shift(1)).astype(int)
+    df['doji_pattern'] = ((abs(df['open'] - df['close']) < (df['high'] - df['low']) * 0.05)).astype(int)
+    df['bullish_engulfing'] = ((df['open'] < df['close'].shift(1)) & (df['close'] > df['open'].shift(1))).astype(int)
+    df['bearish_engulfing'] = ((df['open'] > df['close'].shift(1)) & (df['close'] < df['open'].shift(1))).astype(int)
+    
+    # Combine all the factors into a single alpha factor
+    alpha_factor = (
+        df['sma_crossover'] + 
+        df['ema_crossover'] + 
+        df['price_momentum'] + 
+        df['volume_price_corr'] + 
+        df['amount_price_corr'] + 
+        df['volume_price_trend'] + 
+        df['atr'] + 
+        df['high_low_volatility'] + 
+        df['gap_up'] - df['gap_down'] + 
+        df['doji_pattern'] + 
+        df['bullish_engulfing'] - df['bearish_engulfing']
+    )
+    
+    return alpha_factor
+```

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=20):
+    # Calculate Intraday Volume Proportion
+    df['intraday_volume'] = df['volume'] - (df['volume'].shift(1) + df['volume'].diff())
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Intensity
+    df['intraday_vol_intensity'] = df['intraday_volume'] / (df['high'] - df['low'])
+    
+    # Calculate Volume Impact Score
+    df['sum_volume_n_days'] = df['volume'].rolling(window=n).sum()
+    df['avg_high_n_days'] = df['high'].rolling(window=n).mean()
+    df['avg_low_n_days'] = df['low'].rolling(window=n).mean()
+    df['high_low_spread'] = df['avg_high_n_days'] - df['avg_low_n_days']
+    df['volume_impact_score'] = df['high_low_spread'] / df['sum_volume_n_days']
+    
+    # Calculate Weighted Intraday Volume Intensity
+    df['weighted_intraday_vol_intensity'] = df['intraday_vol_intensity'] * df['intraday_return']
+    
+    # Calculate Intraday and Breakout Momentum
+    df['high_low_spread'] = df['high'] - df['low']
+    df['prev_close'] = df['close'].shift(1)
+    df['breakout_momentum'] = df['high_low_spread'] / df['prev_close']
+    
+    # Adjust by Cumulative Volume
+    df['cumulative_volume'] = df['volume'].rolling(window=n).sum()
+    df['adjusted_momentum'] = df['breakout_momentum'] / df['cumulative_volume']
+    
+    # Generate Factor 1
+    df['factor_1'] = df['intraday_return'] * df['volume_impact_score']
+    
+    # Confirm with Volume Trend
+    df['avg_volume_5_days'] = df['volume'].rolling(window=5).mean()
+    df['current_volume'] = df['volume']
+    df['volume_ratio'] = df['current_volume'] / df['avg_volume_5_days']
+    df['price_momentum'] = df['close'] / df['close'].shift(1) - 1
+    df['factor_2'] = df['volume_ratio'].apply(lambda x: df['price_momentum'] * df['intraday_return'] if x > 1 else 0)
+    
+    # Adjust by Enhanced Volume Trend
+    df['avg_volume_15_days'] = df['volume'].rolling(window=15).mean()
+    df['enhanced_volume_ratio'] = df['current_volume'] / df['avg_volume_15_days']
+    df['combined_momentum'] = df['enhanced_volume_ratio'].apply(
+        lambda x: df['price_momentum'] * df['intraday_return'] if x > 1.5 else 0.3 * (df['price_momentum'] + df['intraday_return'])
+    )
+    df['cumulative_vol_weighted_momentum'] = (df['adjusted_momentum'] * df['volume']).rolling(window=m).sum()
+    
+    # Final Factor
+    df['final_factor'] = df['factor_1'] * df['cumulative_vol_weighted_momentum']
+    
+    return df['final_factor']
+```

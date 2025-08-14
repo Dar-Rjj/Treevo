@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_sma_period=20, long_sma_period=200, vol_lookback=10, momentum_lookback=50, pct_change_lookback=5):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=short_sma_period).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Vol_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    average_close = df['close'].rolling(window=momentum_lookback).mean()
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / average_close
+    
+    # Calculate the Percentage Change in Close Price
+    df['Pct_Change'] = df['close'].pct_change(pct_change_lookback)
+    
+    # Calculate Long-Term SMA and Market Trend
+    df['Long_Term_SMA'] = df['close'].rolling(window=long_sma_period).mean()
+    df['Trend'] = (df['SMA'] > df['Long_Term_SMA']).astype(int)
+    
+    # Define the Weights for Each Component
+    weight_momentum = 0.4
+    weight_volatility = 0.3
+    weight_pct_change = 0.2
+    weight_trend = 0.1
+    
+    # Dynamically Adjust Weights Based on Recent Performance
+    recent_performance_lookback = 10
+    df['Recent_Momentum_Perf'] = (df['Price_Momentum'] - df['Price_Momentum'].shift(recent_performance_lookback)).cumsum()
+    df['Recent_Volatility_Perf'] = (df['Vol_Adjusted_Volatility'] - df['Vol_Adjusted_Volatility'].shift(recent_performance_lookback)).cumsum()
+    df['Recent_Pct_Change_Perf'] = (df['Pct_Change'] - df['Pct_Change'].shift(recent_performance_lookback)).cumsum()
+    
+    # Normalize the performance to sum to 1
+    total_perf = (df['Recent_Momentum_Perf'] + df['Recent_Volatility_Perf'] + df['Recent_Pct_Change_Perf']).abs()
+    df['Weight_Momentum'] = (df['Recent_Momentum_Perf'] / total_perf).fillna(weight_momentum).clip(0, 1)
+    df['Weight_Volatility'] = (df['Recent_Volatility_Perf'] / total_perf).fillna(weight_volatility).clip(0, 1)
+    df['Weight_Pct_Change'] = (df['Recent_Pct_Change_Perf'] / total_perf).fillna(weight_pct_change).clip(0, 1)
+    df['Weight_Trend'] = 1 - (df['Weight_Momentum'] + df['Weight_Volatility'] + df['Weight_Pct_Change'])
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Weight_Momentum'] * df['Price_Momentum'] +
+        df['Weight_Volatility'] * df['Vol_Adjusted_Volatility'] +
+        df['Weight_Pct_Change'] * df['Pct_Change'] +
+        df['Weight_Trend'] * df['Trend']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Assume df is your DataFrame with the necessary columns
+# alpha_factor = heuristics_v2(df)
+```

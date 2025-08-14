@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive EMA calculation for close price
+    ema_short = df['close'].ewm(span=5, adjust=False).mean()
+    ema_long = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Momentum factor using adaptive EMAs
+    momentum_factor = (ema_short - ema_long) / (df['high'].rolling(window=5).mean() + 1e-7)
+    
+    # Volume change factor using exponential smoothing
+    volume_sma = df['volume'].rolling(window=5).mean()
+    volume_ema = df['volume'].ewm(span=5, adjust=False).mean()
+    volume_change = (df['volume'] - volume_ema) / (volume_sma + 1e-7)
+    
+    # Close ratio using adaptive EMAs
+    close_ratio = df['close'] / (ema_long + 1e-7)
+    
+    # Price range over the last 5 days
+    price_range = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Price range factor normalized by the adaptive EMA
+    price_range_factor = price_range / (ema_long + 1e-7)
+    
+    # ATR (Average True Range) for robust volatility
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.ewm(span=14, adjust=False).mean()
+    
+    # ATR factor normalized by the adaptive EMA
+    atr_factor = atr / (ema_long + 1e-7)
+    
+    # RSI (Relative Strength Index) for momentum
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rsi = 100 - (100 / (1 + (gain / (loss + 1e-7))))
+    
+    # Interaction terms for more comprehensive signals
+    interaction_term_1 = momentum_factor * atr_factor * rsi
+    interaction_term_2 = volume_change * close_ratio * rsi
+    interaction_term_3 = close_ratio * price_range_factor * rsi
+    
+    # Combine the factors in a heuristic way
+    alpha_factor = interaction_term_1 * interaction_term_2 * interaction_term_3
+    
+    return alpha_factor.dropna()
+```

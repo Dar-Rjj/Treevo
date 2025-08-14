@@ -1,0 +1,56 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate simple moving averages (SMA) for different time periods
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate exponential moving averages (EMA) for different time periods
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Compute the difference between 20-day EMA and 50-day EMA as a trend strength indicator
+    df['trend_strength'] = df['EMA_20'] - df['EMA_50']
+    
+    # Flag days with trading volume significantly higher than the 20-day moving average
+    df['vol_moving_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = df['volume'] > 1.5 * df['vol_moving_avg']
+    
+    # Calculate the correlation between daily volume and price changes over the past 30 days
+    df['price_change'] = df['close'].pct_change()
+    df['volume_price_corr'] = df['price_change'].rolling(window=30).corr(df['volume'])
+    
+    # Calculate the daily range (high - low) and its ratio to the closing price
+    df['daily_range'] = df['high'] - df['low']
+    df['range_ratio'] = df['daily_range'] / df['close']
+    
+    # Measure the difference between the opening price of the current day and the closing price of the previous day
+    df['open_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate the true range
+    df['true_range'] = (df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)).combine(df['high'] - df['close'].shift(1), max).combine(df['close'].shift(1) - df['low'], max)
+    
+    # Calculate the 14-period ATR based on the true range
+    df['ATR'] = df['true_range'].rolling(window=14).mean()
+    
+    # Develop a composite factor
+    # Assign weights to each component based on historical performance
+    weights = {
+        'trend_strength': 0.3,
+        'volume_spike': 0.2,
+        'volume_price_corr': 0.1,
+        'range_ratio': 0.1,
+        'open_gap': 0.1,
+        'ATR': 0.2
+    }
+    
+    # Summarize multiple indicators into a single score
+    df['composite_factor'] = (df['trend_strength'] * weights['trend_strength'] +
+                              df['volume_spike'] * weights['volume_spike'] +
+                              df['volume_price_corr'] * weights['volume_price_corr'] +
+                              df['range_ratio'] * weights['range_ratio'] +
+                              df['open_gap'] * weights['open_gap'] +
+                              df['ATR'] * weights['ATR'])
+    
+    return df['composite_factor']

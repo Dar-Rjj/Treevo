@@ -1,0 +1,29 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_ma_10 = df['volume'].rolling(window=10).mean()
+    volume_trend = df['volume'] - volume_ma_10
+    volume_trend_adj = volume_trend.apply(lambda x: 1.5 if x > 0 else 0.5)
+    
+    # Incorporate Volatility
+    close_std_20 = df['close'].rolling(window=20).std()
+    high_low_spread_vol_adj = high_low_spread / close_std_20
+    
+    # Adjust for Volume Trend
+    high_low_spread_vol_adj = high_low_spread_vol_adj * volume_trend_adj
+    
+    # Calculate Price Change Momentum
+    short_term_returns = (df['close'] - df['close'].shift(5)) / df['close'].rolling(window=5).mean()
+    
+    # Combine High-Low Spread, Adjusted Volume Trend, and Momentum
+    combined_factor = high_low_spread_vol_adj * short_term_returns * 0.7
+    
+    # Adjust for Market Sentiment (Assuming a column 'sentiment' with values 'bullish' or 'bearish')
+    combined_factor = combined_factor * df['sentiment'].apply(lambda x: 1.2 if x == 'bullish' else 0.8)
+    
+    return combined_factor

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Advanced Price Momentum
+    ema_20_close = df['close'].ewm(span=20).mean()
+    advanced_momentum = (df['close'] - ema_20_close) / (df['open'] - df['low'])
+    
+    # Combine with Close-to-Range Ratio
+    combined_momentum = close_to_range_ratio * advanced_momentum
+    
+    # Adjust for Volume Activity
+    volume_20_sum = df['volume'].rolling(window=20).sum()
+    volume_trend_indicator = (df['volume'] - df['volume'].shift(5)).apply(lambda x: 1 if x > 0 else -1)
+    average_volume_10_days = df['volume'].rolling(window=10).mean()
+    volume_change_rate = df['volume'] / average_volume_10_days
+    volume_trend_score = volume_change_rate.apply(lambda x: x * 1.5 if x > 1 else x * -1.2)
+    
+    # Calculate Range Expansion
+    true_range = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    atr_10 = true_range.rolling(window=10).mean()
+    range_expansion = true_range / atr_10
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = np.zeros_like(df['close'])
+    prev_obv = 0
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv[i] = prev_obv + df['volume'][i]
+        elif df['close'][i] < df['close'][i-1]:
+            obv[i] = prev_obv - df['volume'][i]
+        else:
+            obv[i] = prev_obv
+        prev_obv = obv[i]
+    
+    # Composite Factor
+    composite_factor = (combined_momentum * volume_trend_score) / volume_20_sum
+    composite_factor += range_expansion + obv
+    smoothed_composite = composite_factor.ewm(span=10).mean()
+    
+    # Opening Impact Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    final_alpha_factor = smoothed_composite - open_to_close_return
+    
+    return final_alpha_factor
+```

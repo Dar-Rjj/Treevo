@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['prev_high_low_range'] = df['high_low_range'].shift(1)
+
+    # Generate Alpha Factor from Momentum
+    df['high_low_ratio'] = df['high_low_range'] / df['prev_high_low_range']
+    df['ema_high_low_ratio'] = df['high_low_ratio'].ewm(span=10).mean()
+    df['baseline_ema'] = df['ema_high_low_ratio'].mean()
+    df['momentum_signal'] = (df['ema_high_low_ratio'] > df['baseline_ema']).astype(int) * 2 - 1
+    df['volume_adjusted_momentum'] = df['momentum_signal'] * df['volume']
+
+    # Adjust Alpha Factor by Close-Price Change
+    df['close_change'] = df['close'] - df['close'].shift(1)
+    df['alpha_factor'] = df['volume_adjusted_momentum'] * df['close_change']
+
+    # Incorporate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    fixed_weight = 0.1
+    df['alpha_factor'] += fixed_weight * df['close_open_diff']
+
+    # Enhance Alpha Factor with Volume-Adjusted High-Low Range
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['enhanced_alpha_factor'] = df['high_low_range'] * df['avg_volume']
+    df['alpha_factor'] += df['enhanced_alpha_factor']
+
+    # Calculate Absolute Close-to-Close Return
+    df['abs_close_return'] = df['close'] - df['close'].shift(1)
+
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['combined_value'] = df['high_low_range'] - df['abs_close_return']
+
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).rolling(window=5).mean()
+
+    # Calculate Combined Value Momentum
+    df['combined_value_momentum'] = df['combined_value'] - df['combined_value'].shift(1)
+
+    # Calculate Close Price Momentum
+    n_days = 30
+    df['close_momentum'] = df['close'].pct_change().rolling(window=n_days).sum()
+
+    # Apply Volume Filter
+    df['median_volume'] = df['volume'].rolling(window=10).median()
+    df.loc[df['volume'] < df['median_volume'], 'alpha_factor'] = 0
+
+    # Adjust for Volatility
+    df['volatility'] = df['close'].rolling(window=30).std()
+    df['alpha_factor'] /= df['volatility']
+
+    # Incorporate Trading Volume Spike
+    df['average_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_spike'] = df['volume'] / df['average_volume']
+    df['alpha_factor'] *= df['volume_spike']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['intraday_volatility'] *
+                                 (df['combined_value_momentum'] + 
+                                  df['close_momentum'] + 
+                                  df['close_open_diff'] + 
+                                  df['volume_spike'])) * df['volume']
+
+    return df['final_alpha_factor']
+```

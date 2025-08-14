@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['5_day_SMA'] = df['close'].rolling(window=5).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+
+    df['5_day_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['20_day_EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['50_day_EMA'] = df['close'].ewm(span=50, adjust=False).mean()
+
+    df['5_day_ROC'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5) * 100
+    df['10_day_ROC'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10) * 100
+    df['20_day_ROC'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20) * 100
+
+    # Volume Indicators
+    df['OBV'] = ((df['close'] - df['close'].shift(1)) / abs(df['close'] - df['close'].shift(1))) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+
+    df['money_flow'] = df['volume'] * (df['high'] + df['low']) / 2
+    df['20_day_CMF'] = df['money_flow'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['50_day_CMF'] = df['money_flow'].rolling(window=50).sum() / df['volume'].rolling(window=50).sum()
+
+    df['PVT'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    df['PVT'] = df['PVT'].cumsum()
+
+    # Volatility Indicators
+    df['true_range'] = df[['high'-'low', 'high'-'close'.shift(1), 'close'.shift(1)-'low']].max(axis=1)
+    df['14_day_ATR'] = df['true_range'].rolling(window=14).mean()
+
+    df['20_day_BBand_upper'] = df['close'].rolling(window=20).mean() + 2 * df['close'].rolling(window=20).std()
+    df['20_day_BBand_lower'] = df['close'].rolling(window=20).mean() - 2 * df['close'].rolling(window=20).std()
+    df['20_day_BBand_width'] = (df['20_day_BBand_upper'] - df['20_day_BBand_lower']) / df['close']
+
+    # Trend Strength Indicators
+    df['ADX_pos'] = 100 * (abs(df['high'] - df['high'].shift(1)) + abs(df['low'].shift(1) - df['high'].shift(1)))
+    df['ADX_neg'] = 100 * (abs(df['low'].shift(1) - df['low']) + abs(df['high'].shift(1) - df['low'].shift(1)))
+    df['ADX_pos'] = df['ADX_pos'].ewm(alpha=1/14, adjust=False).mean()
+    df['ADX_neg'] = df['ADX_neg'].ewm(alpha=1/14, adjust=False).mean()
+    df['ADX'] = 100 * (abs(df['ADX_pos'] - df['ADX_neg']) / (df['ADX_pos'] + df['ADX_neg']))
+
+    df['9_day_mass_index'] = (df['high'] - df['low']).rolling(window=9).sum() / (df['high'] - df['low']).rolling(window=25).sum()
+
+    # Market Sentiment Indicators
+    df['10_day_HighLowRatio'] = df['high'].rolling(window=10).max() / df['low'].rolling(window=10).min()
+
+    # Relative Strength Indicators
+    df['RSL'] = df['close'] / df['close'].rolling(window=20).mean()
+    df['RSI'] = 100 - (100 / (1 + (df['close'].pct_change().gt(0).apply(lambda x: 1 if

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight by Volume
+    df['weighted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Intraday Momentum
+    df['close_open_diff'] = df['close'] - df['open']
+    df['momentum_rolling_sum'] = df['close_open_diff'].rolling(window=5).sum()
+    
+    # Integrate Momentum and Volatility
+    df['integrated_factor'] = df['weighted_volatility'] + df['momentum_rolling_sum']
+    
+    # Apply Dynamic Exponential Smoothing
+    smoothing_factor = 0.9
+    df['smoothed_factor'] = df['integrated_factor'].ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Ensure Values are Positive
+    df['positive_smoothed_factor'] = df['smoothed_factor'] + 1e-6
+    
+    # Apply Logarithmic Transformation
+    df['log_transformed_factor'] = np.log(df['positive_smoothed_factor'])
+    
+    # Incorporate Additional Price/Volume Features
+    df['avg_volume_rolling'] = df['volume'].rolling(window=5).mean()
+    df['close_ma_rolling'] = df['close'].rolling(window=5).mean()
+    df['vwap'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Combine All Features
+    df['combined_factor'] = (
+        df['log_transformed_factor'] * 
+        df['avg_volume_rolling'] * 
+        df['close_ma_rolling'] * 
+        df['vwap']
+    )
+    
+    # Factor Output
+    factor_series = df['combined_factor']
+    
+    return factor_series
+```

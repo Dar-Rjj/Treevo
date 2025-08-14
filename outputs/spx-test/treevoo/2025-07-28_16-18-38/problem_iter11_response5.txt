@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Changes
+    close_changes = df['close'].diff()
+
+    # Calculate Exponentially Weighted Moving Average (EWMA) of Close Price Changes
+    alpha = 0.3
+    ewma = close_changes.ewm(alpha=alpha, adjust=False).mean()
+
+    # Volume-Weight the EWMA of Close Price Changes
+    volume_multiplier = df['volume'] / df['volume'].rolling(window=14).sum()
+    volume_weighted_ewma = ewma * volume_multiplier
+
+    # Integrate High-Low Price Information
+    high_low_diff = df['high'] - df['low']
+    sma_high_low = high_low_diff.rolling(window=14).mean()
+    raw_momentum = high_low_diff - sma_high_low
+    smoothed_momentum = raw_momentum.ewm(alpha=0.2, adjust=False).mean()
+
+    # Combine Adjusted EWMA and High-Low Momentum
+    combined_momentum = volume_weighted_ewma * smoothed_momentum
+    final_smoothed_momentum = combined_momentum.ewm(alpha=0.3, adjust=False).mean()
+
+    # Calculate Volume-Weighted High-to-Low Return
+    high_low_return = (df['high'] - df['low']) / df['low']
+    volume_weighted_high_low_return = high_low_return * df['volume']
+
+    # Incorporate Previous Day's Close-to-Open Movement
+    prev_close_to_open_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    combined_return = volume_weighted_high_low_return + prev_close_to_open_return
+
+    # Calculate N-day Closing Price Change for Relative Strength
+    n_day_close_change = df['close'] - df['close'].shift(10)
+
+    # Combine Volume-Weighted EWMA, High-Low Momentum, Volume-Weighted High-to-Low Return, and Relative Strength
+    combined_alpha_factor = final_smoothed_momentum + combined_return + n_day_close_change
+
+    # Adjust for the sign of the Volume Momentum
+    volume_momentum = df['volume'].diff().ewm(alpha=0.3, adjust=False).mean()
+    combined_alpha_factor = combined_alpha_factor * np.sign(volume_momentum)
+
+    return combined_alpha_factor
+```

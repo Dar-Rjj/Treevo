@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) with a 15-day window and smoothing factor 0.2
+    ema_15 = df['close'].ewm(span=15, adjust=False).mean()
+    
+    # Calculate Simple Moving Averages (SMA)
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_30 = df['close'].rolling(window=30).mean()
+    
+    # Identify Crossover of 5-day and 30-day SMAs
+    crossover_signal = (sma_5 > sma_30).astype(int)
+    
+    # Calculate Daily Range and sum last 7 days' ranges
+    daily_range = df['high'] - df['low']
+    sum_last_7_days_range = daily_range.rolling(window=7).sum()
+    
+    # Calculate True Range
+    true_range = np.maximum(
+        df['high'] - df['low'],
+        np.abs(np.maximum(
+            df['high'] - df['open'].shift(1),
+            np.abs(df['low'] - df['open'].shift(1))
+        ))
+    )
+    
+    # Calculate Average True Range (ATR) with a 10-day window
+    atr_10 = true_range.rolling(window=10).mean()
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] - ema_15
+    
+    # Analyze Volume for Market Strength
+    avg_volume_7 = df['volume'].rolling(window=7).mean()
+    volume_strength = (df['volume'] > 1.2 * avg_volume_7).astype(int)
+    
+    # Measure Volume Spikes
+    volume_spike = (df['volume'] / df['volume'].shift(1) - 1) > 0.4
+    volume_spike_signal = volume_spike.astype(int)
+    
+    # Integrate Price and Volume Indicators
+    combined_signal = 0.6 * price_momentum + 0.4 * volume_spike_signal
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        price_momentum - atr_10 + 
+        crossover_signal + 
+        0.5 * (volume_spike_signal - 0.5 * atr_10)
+    )
+    
+    return final_alpha_factor
+```

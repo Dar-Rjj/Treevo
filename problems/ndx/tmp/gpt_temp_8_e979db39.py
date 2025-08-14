@@ -1,0 +1,38 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Momentum
+    df['momentum'] = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Calculate 30-Day Average True Range for Stability
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1
+    )
+    df['atr_30'] = df['true_range'].rolling(window=30).mean()
+    
+    # Calculate Short-Term Moving Average
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate Long-Term Moving Average
+    df['ma_200'] = df['close'].rolling(window=200).mean()
+    
+    # Derive Moving Average Crossover Signal
+    df['ma_crossover_signal'] = (df['ma_50'] > df['ma_200']).astype(int) - (df['ma_50'] < df['ma_200']).astype(int)
+    
+    # Adjust Momentum Factor with Inverse of Volatility
+    df['adjusted_momentum'] = df['momentum'] / df['atr_30']
+    
+    # Incorporate Volume into the Momentum Adjustment
+    df['avg_volume_30'] = df['volume'].rolling(window=30).mean()
+    df['volume_factor'] = df['volume'] / df['avg_volume_30']
+    df['adjusted_momentum_with_volume'] = df['adjusted_momentum'] * df['volume_factor']
+    
+    # Integrate Price Position Relative to Moving Averages
+    df['position_relative_to_mas'] = ((df['close'] > df['ma_50']) & (df['close'] > df['ma_200'])).astype(int) - \
+                                     ((df['close'] < df['ma_50']) & (df['close'] < df['ma_200'])).astype(int)
+    
+    # Final Alpha Factor Composition
+    df['alpha_factor'] = df['adjusted_momentum_with_volume'] + df['ma_crossover_signal'] + df['position_relative_to_mas']
+    
+    return df['alpha_factor']

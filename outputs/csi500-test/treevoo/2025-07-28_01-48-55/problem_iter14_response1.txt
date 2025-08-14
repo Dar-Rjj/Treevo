@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Weighted Moving Average (WMA)
+    def weighted_moving_average(data, window):
+        weights = np.arange(1, window + 1)
+        wma = data.rolling(window=window).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+        return wma
+    
+    # Calculate Price Momentum
+    df['WMA_10'] = weighted_moving_average(df['close'], 10)
+    df['Price_Momentum'] = df['close'] - df['WMA_10']
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Log Return with Volume Change
+    df['Integrated_Momentum'] = (df['Daily_Log_Return'] * df['Volume_Change']).rolling(window=10).sum()
+    
+    # Enhance with Moving Average Crossover
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Crossover_Signal'] = np.where(df['EMA_5'] > df['EMA_20'], 1, np.where(df['EMA_5'] < df['EMA_20'], -1, 0))
+    df['Integrated_Momentum'] += df['Crossover_Signal']
+    
+    # Incorporate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Integrated_Momentum'] *= df['High_Low_Range']
+    
+    # Calculate Intraday Momentum
+    df['Intraday_Momentum'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Enhanced Volume Thrust
+    df['Upward_Thrust'] = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0).rolling(window=10).sum()
+    df['Downward_Thrust'] = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0).rolling(window=10).sum()
+    df['Price_Range_Factor'] = (df['high'] - df['low']) / df['open']
+    df['Enhanced_Volume_Thrust'] = df['Upward_Thrust'] - df['Downward_Thrust'] + df['Price_Range_Factor']
+    
+    # Final Integration
+    df['Final_Integration'] = df['Integrated_Momentum'] + df['Intraday_Momentum'] + df['Enhanced_Volume_Thrust']
+    
+    # Final Alpha Factor
+    df['Spread'] = df['high'] - df['low']
+    df['Relative_Volume'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Volume_Adjusted_Spread'] = df['Spread'] * df['Relative_Volume']
+    df['Final_Alpha_Factor'] = df['Price_Momentum'] + df['Final_Integration'] - df['Volume_Adjusted_Spread']
+    
+    return df['Final_Alpha_Factor']
+```

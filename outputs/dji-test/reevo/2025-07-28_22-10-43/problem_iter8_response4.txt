@@ -1,0 +1,58 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the Exponential Moving Averages (EMAs) of the close price for short and long terms
+    df['close_ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['close_ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['close_ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Calculate the 50-day and 200-day moving averages for longer-term context
+    df['close_ma_50'] = df['close'].rolling(window=50).mean()
+    df['close_ma_200'] = df['close'].rolling(window=200).mean()
+    
+    # Calculate the Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 14-day Average True Range (ATR) for volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the volume relative to its 5-period moving average
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_relative'] = df['volume'] / (df['volume_ma_5'] + 1e-7)
+    
+    # Incorporate a sentiment factor, e.g., using a simple moving average crossover
+    df['sentiment_short'] = (df['close_ema_10'] > df['close_ema_30']).astype(int)
+    df['sentiment_long'] = (df['close_ema_50'] > df['close_ema_30']).astype(int)
+    
+    # Calculate the Chaikin Money Flow (CMF) over 20 days
+    mfv = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mfv = mfv * df['volume']
+    df['cmf_20'] = mfv.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Calculate the On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    
+    # Factor combining the momentum, ATR-normalized volatility, volume surge, sentiment, CMF, and OBV
+    factor = (
+        ((df['close'] - df['close_ema_10']) / df['atr_14']) * 
+        df['rsi_14'] * 
+        df['volume_relative'] * 
+        (df['sentiment_short'] + df['sentiment_long']) * 
+        df['cmf_20'] * 
+        df['obv']
+    )
+    
+    return factor
+```

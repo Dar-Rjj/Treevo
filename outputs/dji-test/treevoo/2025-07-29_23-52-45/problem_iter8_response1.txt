@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).abs()
+    
+    # Determine Price Momentum
+    daily_range = df['high'] - df['low']
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    price_momentum = daily_range * close_to_open_return
+    
+    # Adjust for Historical Volatility
+    n = 30  # Number of days for historical volatility
+    daily_returns = df['close'].pct_change()
+    historical_volatility = daily_returns.rolling(window=n).std()
+    integrated_metric = price_momentum / historical_volatility
+    
+    # Integrate Volume and Price Momentum
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_weighted_momentum = volume_change * price_momentum
+    
+    # Calculate Short-Term Return
+    short_term_return = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Calculate Long-Term Return
+    long_term_return = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Short-Term Return
+    volume_weighted_short_term_return = short_term_return * df['volume']
+    
+    # Volume-Weighted Long-Term Return
+    volume_weighted_long_term_return = long_term_return * df['volume']
+    
+    # Adjust Short-Term Return by Intraday Volatility
+    adjusted_short_term_return = volume_weighted_short_term_return / intraday_volatility
+    
+    # Adjust Long-Term Return by Intraday Volatility
+    adjusted_long_term_return = volume_weighted_long_term_return / intraday_volatility
+    
+    # Combined Adjusted Momentum Factor
+    combined_adjusted_momentum = adjusted_long_term_return - adjusted_short_term_return
+    
+    # Reversal Indicator
+    reversal_indicator = -combined_adjusted_momentum
+    
+    # Calculate Price Momentum over a Lookback Period
+    lookback_period = 10
+    price_momentum_lookback = df['close'].pct_change().rolling(window=lookback_period).sum()
+    
+    # Adjust Price Momentum by Intraday Volatility
+    adjusted_price_momentum = price_momentum_lookback / intraday_volatility
+    
+    # Combine Adjusted Momentum Factors
+    final_alpha_factor = (
+        0.4 * adjusted_price_momentum + 
+        0.3 * adjusted_short_term_return + 
+        0.3 * adjusted_long_term_return
+    )
+    
+    return final_alpha_factor
+```

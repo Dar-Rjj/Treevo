@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day, 30-day, and 50-day moving averages of the close price
+    df['close_ma_10'] = df['close'].rolling(window=10).mean()
+    df['close_ma_30'] = df['close'].rolling(window=30).mean()
+    df['close_ma_50'] = df['close'].rolling(window=50).mean()
+
+    # Calculate the 14-day and 28-day RSI (Relative Strength Index)
+    gain = df['close'].diff(1).clip(lower=0)
+    loss = -df['close'].diff(1).clip(upper=0)
+    avg_gain_14 = gain.rolling(window=14).mean()
+    avg_loss_14 = loss.rolling(window=14).mean()
+    rs_14 = avg_gain_14 / (avg_loss_14 + 1e-7)
+    rsi_14 = 100 - (100 / (1 + rs_14))
+
+    avg_gain_28 = gain.rolling(window=28).mean()
+    avg_loss_28 = loss.rolling(window=28).mean()
+    rs_28 = avg_gain_28 / (avg_loss_28 + 1e-7)
+    rsi_28 = 100 - (100 / (1 + rs_28))
+
+    # Calculate the 14-day ATR (Average True Range) for short-term volatility
+    df['tr_14'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14'] = df['tr_14'].rolling(window=14).mean()
+
+    # Calculate the 50-day ATR (Average True Range) for long-term volatility
+    df['tr_50'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_50'] = df['tr_50'].rolling(window=50).mean()
+
+    # Calculate the volume relative to its 5-period and 20-period moving average
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_relative_5'] = df['volume'] / (df['volume_ma_5'] + 1e-7)
+    df['volume_relative_20'] = df['volume'] / (df['volume_ma_20'] + 1e-7)
+
+    # Factor combining the multi-period momentum, ATR-normalized volatility, and volume surge
+    factor = (
+        (df['close'] - df['close_ma_10']) / df['atr_14'] * rsi_14 * df['volume_relative_5'] +
+        (df['close'] - df['close_ma_30']) / df['atr_50'] * rsi_28 * df['volume_relative_20']
+    ) / 2
+
+    return factor
+```

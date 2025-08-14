@@ -1,0 +1,41 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate RSI
+    def rsi(series, period):
+        delta = series.diff(1)
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    df['rsi_10'] = rsi(df['close'], 10)
+    df['rsi_50'] = rsi(df['close'], 50)
+    
+    # Calculate MACD
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    
+    # Calculate Chaikin Money Flow
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    cmf = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['cmf'] = cmf
+    
+    # Historical Sharpe ratios
+    sharpe_ratios = {
+        'rsi_10': (df['rsi_10'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['rsi_10'].rolling(window=60).std(),
+        'rsi_50': (df['rsi_50'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['rsi_50'].rolling(window=60).std(),
+        'macd': (df['macd'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['macd'].rolling(window=60).std(),
+        'cmf': (df['cmf'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['cmf'].rolling(window=60).std()
+    }
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['rsi_10'] * sharpe_ratios['rsi_10'] +
+                         df['rsi_50'] * sharpe_ratios['rsi_50'] +
+                         df['macd'] * sharpe_ratios['macd'] +
+                         df['cmf'] * sharpe_ratios['cmf'])
+    
+    return heuristics_matrix

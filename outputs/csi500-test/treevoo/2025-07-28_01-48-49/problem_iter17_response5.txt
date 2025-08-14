@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-Day Average High-Low Spread
+    df['HighLowSpread'] = df['high'] - df['low']
+    df['AvgHighLowSpread'] = df['HighLowSpread'].rolling(window=5).mean()
+
+    # Calculate 5-Day Momentum
+    df['Momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+
+    # Multiply High-Low Spread and Momentum
+    df['HighLowMomentum'] = df['AvgHighLowSpread'] * df['Momentum']
+
+    # Calculate Intraday Price Movement
+    df['IntradayRange'] = df['high'] - df['low']
+
+    # Integrate Intraday Price Movement and Volume
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['IntradayMomentumScore'] = df['IntradayRange'] * df['VolumeChange']
+
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['IntegratedMomentumFactor'] = df['HighLowMomentum'] + df['IntradayMomentumScore']
+
+    # Introduce Volume Trend
+    df['5DayVolumeSum'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DayVolumeSum']
+
+    # Final Factor Computation
+    df['VolumeTrendAdjustedFactor'] = df['IntegratedMomentumFactor'] * df['VolumeRatio']
+
+    # Integrate Intraday Volatility
+    df['DailyRange'] = df['high'] - df['low']
+    df['AvgDailyRange'] = df['DailyRange'].rolling(window=5).mean()
+
+    # Adjust Momentum by Intraday Volatility
+    df['AdjustedMomentum'] = df['VolumeTrendAdjustedFactor'] * df['AvgDailyRange']
+
+    # Calculate Dynamic Adjustment Factor
+    df['DynamicAdjustmentFactor'] = df['volume'].ewm(span=5, adjust=False).mean()
+
+    # Apply Dynamic Adjustment
+    df['DynamicallyAdjustedMomentum'] = df['AdjustedMomentum'] * df['DynamicAdjustmentFactor']
+
+    # Calculate Open Price Impact
+    df['RelativeOpenPriceChange'] = (df['open'] - df['open'].shift(1)) / df['open'].shift(1)
+
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = 0.80 * df['DynamicallyAdjustedMomentum'] + 0.20 * df['RelativeOpenPriceChange']
+
+    # Subtract N-day Exponential Moving Average of Final Alpha Factor
+    df['FinalAlphaFactor'] -= df['FinalAlphaFactor'].ewm(span=5, adjust=False).mean()
+
+    return df['FinalAlphaFactor']
+```

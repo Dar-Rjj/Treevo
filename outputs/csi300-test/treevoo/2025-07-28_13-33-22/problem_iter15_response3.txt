@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=10, threshold=3):
+    # Calculate Daily Log Returns
+    df['log_return'] = df['close'].pct_change().apply(lambda x: np.log(1 + x))
+    
+    # Compute Weighted Average Log Return
+    df['weighted_log_return'] = (df['volume'].rolling(window=n).apply(lambda x: (x * df.loc[x.index, 'log_return']).sum() / x.sum(), raw=False))
+    
+    # Incorporate Short-Term Price Reversal
+    df['high_low_range'] = df['high'] - df['low']
+    df['reversed_weighted_log_return'] = df['weighted_log_return'] - df['high_low_range']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday Features
+    df['average_intraday_range'] = df['intraday_range'].rolling(window=n).mean()
+    df['combined_feature'] = df['average_intraday_range'] * (df['close_to_open_return'] - df['high_low_range'] + df['weighted_log_return'])
+    
+    # Enhance with Recent Volatility
+    df['absolute_price_change'] = (df['close'] - df['close'].shift(1)).abs()
+    df['recent_volatility'] = df['absolute_price_change'].rolling(window=m).mean()
+    df['enhanced_feature'] = df['combined_feature'] + df['recent_volatility']
+    
+    # Adjust by Volume Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1) * 2).astype(float)
+    df['adjusted_factor'] = df['enhanced_feature'] / (df['volume_spike'] + 1)  # Adding 1 to avoid division by zero
+    
+    # Cap at a Threshold to Avoid Extreme Values
+    df['final_factor'] = df['adjusted_factor'].clip(lower=-threshold, upper=threshold)
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

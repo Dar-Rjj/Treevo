@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day EMA of closing prices
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Momentum indicator: 5-day EMA - 20-day EMA
+    df['momentum'] = df['ema_5'] - df['ema_20']
+    
+    # Calculate daily VWAP
+    df['vwap'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # 10-day EMA of VWAP
+    df['vwap_10_ema'] = df['vwap'].ewm(span=10, adjust=False).mean()
+    
+    # Liquidity signal: today's VWAP - 10-day EMA of VWAP
+    df['liquidity_signal'] = df['vwap'] - df['vwap_10_ema']
+    
+    # Compute the average true range (ATR) over 14 days
+    df['tr'] = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs()  # True range calculation simplified for this example
+    df['atr_14'] = df['tr'].rolling(window=14).mean()
+    
+    # Relative volatility: today's ATR / 14-day ATR
+    df['relative_volatility'] = df['tr'] / df['atr_14']
+    
+    # Accumulation/Distribution Line (A/D Line)
+    mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mf_volume = mfm * df['volume']
+    df['ad_line'] = mf_volume.cumsum()
+    
+    # 30-day EMA of A/D Line
+    df['ad_line_30_ema'] = df['ad_line'].ewm(span=30, adjust=False).mean()
+    
+    # Buying/selling pressure signal: A/D Line - 30-day EMA of A/D Line
+    df['pressure_signal'] = df['ad_line'] - df['ad_line_30_ema']
+    
+    # Final alpha factor
+    alpha_factor = (
+        df['momentum'] + 
+        df['liquidity_signal'] + 
+        df['relative_volatility'] + 
+        df['pressure_signal']
+    )
+    
+    return alpha_factor
+```

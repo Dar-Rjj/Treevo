@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    n = 20  # Lookback period for mean volume and momentum
+    m = 5   # Moving average window for smoothing momentum
+    short_term = 5  # Short-term moving average window
+    long_term = 20  # Long-term moving average window
+
+    # Compute Close Price Difference
+    df['close_diff'] = df['close'] - df['close'].shift(n)
+
+    # Smoothing the Momentum
+    df['momentum_ma'] = df['close_diff'].rolling(window=m).mean()
+
+    # Volume Weighing Process
+    df['mean_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['mean_volume']
+    df['adjusted_momentum'] = df['momentum_ma'] * df['volume_ratio']
+
+    # Calculate Intraday Movement
+    df['intraday_movement'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['close_to_open'] = df['close'] - df['open']
+
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = ((df['high'] - df['low']) / df['high']) * 100
+
+    # Combine Factors
+    df['combined_factors'] = (df['intraday_movement'] + df['close_to_open']) * df['price_range_ratio']
+
+    # Integrate Volume Adjusted Momentum
+    df['integrated_momentum'] = df['adjusted_momentum'] + df['combined_factors']
+
+    # Calculate Price Momentum
+    df['short_term_ma'] = df['close'].rolling(window=short_term).mean()
+    df['long_term_ma'] = df['close'].rolling(window=long_term).mean()
+
+    # Determine Trend Direction
+    df['trend_direction'] = (df['short_term_ma'] > df['long_term_ma']).astype(int) * 2 - 1
+
+    # Confirm with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['confirmed_trend'] = df['trend_direction'] * df['volume_change']
+
+    # Calculate Relative Strength
+    df['relative_strength'] = df['short_term_ma'] - df['long_term_ma']
+
+    # Momentum Signal
+    df['momentum_signal'] = df['integrated_momentum'] > 0
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['integrated_momentum'] * df['confirmed_trend']
+
+    return df['alpha_factor']
+```

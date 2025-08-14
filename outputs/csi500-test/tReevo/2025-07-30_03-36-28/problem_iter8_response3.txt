@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_lookback = 20
+    vol_adj_volatility_lookback = 10
+    price_momentum_lookback = 5
+    percentage_change_lookback = 1
+    atr_lookback = 14
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adj_Vol_Rolling_Avg'] = df['Volume_Adjusted_Volatility'].rolling(window=vol_adj_volatility_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=price_momentum_lookback).mean()
+    
+    # Incorporate Enhanced Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(percentage_change_lookback)
+    df['High_Low_Range'] = (df['high'] - df['low']) / df['close']
+    df['Open_Close_Diff'] = (df['open'] - df['close']).abs() / df['close']
+    
+    # Calculate the Average True Range (ATR)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['close'].shift()).abs()
+    df['TR3'] = (df['low'] - df['close'].shift()).abs()
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=atr_lookback).mean()
+    
+    # Final Alpha Factor
+    weights = {
+        'Price_Momentum': 0.4,
+        'Vol_Adj_Vol_Rolling_Avg': 0.3,
+        'Percentage_Change': 0.2,
+        'High_Low_Range': 0.05,
+        'Open_Close_Diff': 0.05
+    }
+    
+    df['Alpha_Factor'] = (
+        df['Price_Momentum'] * weights['Price_Momentum'] +
+        df['Vol_Adj_Vol_Rolling_Avg'] * weights['Vol_Adj_Vol_Rolling_Avg'] +
+        df['Percentage_Change'] * weights['Percentage_Change'] +
+        df['High_Low_Range'] * weights['High_Low_Range'] +
+        df['Open_Close_Diff'] * weights['Open_Close_Diff']
+    )
+    
+    return df['Alpha_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_market_data.csv')
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range and True Range
+    df['true_range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['previous_close'] = df['close'].shift(1)
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], x['high'] - x['previous_close'], x['previous_close'] - x['low']), axis=1)
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_true_range'] = df['true_range'] * df['volume']
+
+    # Calculate Open-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+
+    # Aggregate Price Movements
+    lookback_period = 5
+    df['sum_high_low'] = df['high'] - df['low']
+    df['sum_close_open'] = df['close'] - df['open']
+    df['agg_high_low'] = df['sum_high_low'].rolling(window=lookback_period).sum()
+    df['agg_close_open'] = df['sum_close_open'].rolling(window=lookback_period).sum()
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['weighted_avg'] = (df['volume_adjusted_true_range'] + df['open_close_momentum']) / 2  # Simple average for demonstration
+
+    # Introduce Volume Trend Analysis
+    df['volume_trend'] = df['volume'] - df['volume'].shift(1)
+    df['adjusted_weighted_avg'] = df['weighted_avg'] * (1 + df['volume_trend'] / df['volume'])
+
+    # Dynamic Momentum Indicator
+    df['yesterday_factor'] = df['adjusted_weighted_avg'].shift(1)
+    df['today_factor'] = df['adjusted_weighted_avg']
+    df['momentum_change'] = df['today_factor'] - df['yesterday_factor']
+
+    # Smoothing based on volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['volatility'] = df['daily_return'].rolling(window=lookback_period).std()
+    df['smoothed_momentum_change'] = df['momentum_change'] / df['volatility']
+
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=lookback_period).mean()
+    df['high_volume'] = (df['volume'] > df['avg_volume']).astype(int)
+
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = df['smoothed_momentum_change'] * df['high_volume'] + df['open_close_momentum']
+
+    return df['alpha_factor']
+```

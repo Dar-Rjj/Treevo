@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Define lookback periods
+    momentum_lookback = 10
+    volume_lookback = 5
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'].pct_change()
+    smoothed_momentum = price_momentum.ewm(span=momentum_lookback, adjust=False).mean()
+    
+    # Adjust by Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    smoothed_volume_ratio = volume_ratio.rolling(window=volume_lookback, min_periods=1).mean()
+    combined_momentum_volume = smoothed_momentum * smoothed_volume_ratio
+    
+    # Calculate High-Low Price Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    upward_volume = (df['close'] > df['open']) * df['volume']
+    downward_volume = (df['close'] < df['open']) * df['volume']
+    cumulative_upward_volume = upward_volume.rolling(window=volume_lookback, min_periods=1).sum()
+    cumulative_downward_volume = downward_volume.rolling(window=volume_lookback, min_periods=1).sum()
+    volume_influence_ratio = cumulative_upward_volume / (cumulative_downward_volume + 1e-6)  # Avoid division by zero
+    
+    # Multiply High-Low Difference with Volume Influence Ratio
+    high_low_volume_influence = high_low_diff * volume_influence_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Identify Volume Trend
+    volume_change = df['volume'] - df['volume'].shift(1)
+    trend_strength = np.where(volume_change > 0, 1.5, 0.5)
+    
+    # Integrate All Components into Final Alpha Factor
+    alpha_factor = combined_momentum_volume * high_low_volume_influence * intraday_return * trend_strength
+    
+    return alpha_factor
+```

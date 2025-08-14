@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Close-to-Open Return
+    close_to_open_return = (df['close'].shift(1) - df['open']) / df['open']
+    
+    # Daily Volume Change
+    daily_volume_change = df['volume'] / df['volume'].shift(1)
+    
+    # Daily Amount Change
+    daily_amount_change = df['amount'] / df['amount'].shift(1)
+    
+    # Weighted Intraday and Close-to-Open Returns
+    weighted_intraday_return = intraday_return * np.abs(intraday_return)
+    weighted_close_to_open_return = close_to_open_return * np.abs(close_to_open_return)
+    
+    # Integrate Volume and Amount Changes
+    adjusted_weighted_intraday_return = weighted_intraday_return * daily_volume_change * daily_amount_change
+    adjusted_weighted_close_to_open_return = weighted_close_to_open_return * daily_volume_change * daily_amount_change
+    
+    interim_factor = adjusted_weighted_intraday_return + adjusted_weighted_close_to_open_return
+    
+    # Smooth and Combine Interim Factor
+    interim_factor_smoothed = interim_factor.rolling(window=3).mean()
+    
+    # Enhanced Momentum Indicators
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    ema_30 = df['close'].ewm(span=30, adjust=False).mean()
+    rsi_14 = 100 - (100 / (1 + (df['close'].diff().where(lambda x: x > 0, 0).rolling(window=14).mean() / 
+                                df['close'].diff().where(lambda x: x < 0, 0).abs().rolling(window=14).mean())))
+    
+    # True Range Averaging
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr_20 = true_range.rolling(window=20).mean()
+    
+    # Volume Weighted Price Change
+    close_to_close_change = (df['close'] - df['close'].shift(1)).abs()
+    volume_weighted_price_change = (close_to_close_change * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Incorporate Volume Patterns
+    volume_change_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Final Composite Alpha Factor
+    momentum_score = (sma_5 - sma_20) + (ema_10 - ema_30) + rsi_14
+    volatility_score = (volume_weighted_price_change / atr_20) + volume_change_ratio
+    final_composite_alpha_factor = interim_factor_smoothed + momentum_score + volatility_score
+    
+    return final_composite_alpha_factor
+```

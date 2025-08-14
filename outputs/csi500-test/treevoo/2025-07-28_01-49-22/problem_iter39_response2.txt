@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Generate Alpha Factor from Momentum
+    df['Prev_High_Low_Range'] = df['High_Low_Range'].shift(1)
+    df['High_Low_Range_Ratio'] = df['High_Low_Range'] / df['Prev_High_Low_Range']
+    
+    # Smooth High-Low Range Ratio with EMA (10 days)
+    df['EMA_HL_Range_Ratio'] = df['High_Low_Range_Ratio'].ewm(span=10).mean()
+    
+    # Dynamic Threshold (Average of EMA)
+    dynamic_threshold = df['EMA_HL_Range_Ratio'].expanding().mean()
+    df['Signal'] = np.where(df['EMA_HL_Range_Ratio'] > dynamic_threshold, 1, -1)
+    df['Volume_Adjusted_Signal'] = df['Signal'] * df['volume']
+    
+    # Adjust Alpha Factor by Close-Price Change
+    df['Close_Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Alpha_Factor'] = df['Volume_Adjusted_Signal'] * df['Close_Price_Change']
+    
+    # Incorporate Close-Open Difference
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    fixed_weight = 0.5  # Example fixed weight
+    df['Alpha_Factor'] += fixed_weight * df['Close_Open_Diff']
+    
+    # Enhance Alpha Factor with Volume-Adjusted High-Low Range
+    n_period = 10
+    df['Avg_Volume'] = df['volume'].rolling(window=n_period).mean()
+    df['Vol_Adjusted_HL_Range'] = df['High_Low_Range'] * df['Avg_Volume']
+    df['Alpha_Factor'] += df['Vol_Adjusted_HL_Range']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['Abs_Close_Return'] = df['close'] - df['close'].shift(1)
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['Combined_Metric'] = df['High_Low_Range'] - df['Abs_Close_Return']
+    df['Alpha_Factor'] += df['Combined_Metric']
+    
+    # Calculate Close Price Momentum (Sum of N-day Returns over the last 30 days)
+    df['Daily_Return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['Momentum'] = df['Daily_Return'].rolling(window=30).sum()
+    df['Alpha_Factor'] *= df['Momentum']
+    
+    # Apply Volume Filter (Exclude Days Below Median)
+    median_volume = df['volume'].rolling(window=30).median()
+    df['Alpha_Factor'] = df['Alpha_Factor'].where(df['volume'] >= median_volume, 0)
+    
+    # Adjust for Volatility
+    df['Volatility'] = df['close'].rolling(window=30).std()
+    df['Alpha_Factor'] /= df['Volatility']
+    
+    # Introduce Trend Following Component
+    df['50_MA'] = df['close'].rolling(window=50).mean()
+    df['200_MA'] = df['close'].rolling(window=200).mean()
+    trend_signal = np.where(df['50_MA'] > df['200_MA'], 1, -1)
+    df['Alpha_Factor'] *= trend_signal
+    
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Weight by Volume Difference
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['weighted_intraday_momentum'] = df['intraday_return'] * df['volume_diff']
+    
+    # Compute Volume Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = (df['high'] - df['low'])
+    
+    # Normalize by Average Price
+    df['average_price'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    df['normalized_intraday_range'] = df['intraday_range'] / df['average_price']
+    
+    # Adjust for Intraday Volatility
+    df['volume_thrust'] = df['volume_ratio'] / df['normalized_intraday_range']
+    
+    # Combine Intraday Momentum and Volume Thrust
+    df['indicator'] = df['weighted_intraday_momentum'] * df['volume_thrust']
+    
+    # Smooth the Indicator
+    df['smoothed_indicator'] = df['indicator'].ewm(alpha=0.1, adjust=False).mean()
+    
+    # Compute Recent Trend Slope
+    def compute_slope(values):
+        x = np.arange(len(values))
+        y = values
+        A = np.vstack([x, np.ones(len(x))]).T
+        m, c = np.linalg.lstsq(A, y, rcond=None)[0]
+        return m
+    
+    df['recent_trend_slope'] = df['smoothed_indicator'].rolling(window=5).apply(compute_slope, raw=True)
+    
+    # Add Trend Slope to Indicator
+    df['final_factor'] = df['smoothed_indicator'] + df['recent_trend_slope']
+    
+    return df['final_factor']
+```

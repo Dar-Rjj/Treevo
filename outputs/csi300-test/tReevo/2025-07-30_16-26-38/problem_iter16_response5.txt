@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Forward Close-to-Open Return
+    df['ForwardCtoOReturn'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['VolumeWeightedReturn'] = df['volume'] * df['ForwardCtoOReturn']
+    
+    # Simplified Volatility Adjustment
+    # Calculate Daily True Range
+    df['TrueRange'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], x['high'] - x['close'].shift(1), x['close'].shift(1) - x['low']), axis=1
+    )
+    
+    # Define a simple adjustment based on the relative size of the True Range
+    # Here, we assume that if TrueRange is in the top 20% of its historical distribution, it's high, and vice versa.
+    true_range_threshold_high = df['TrueRange'].quantile(0.8)
+    true_range_threshold_low = df['TrueRange'].quantile(0.2)
+    
+    def adjust_multiplier(tr):
+        if tr > true_range_threshold_high:
+            return 0.5  # Lower multiplier for high True Range
+        elif tr < true_range_threshold_low:
+            return 1.5  # Higher multiplier for low True Range
+        else:
+            return 1.0  # Neutral multiplier
+    
+    df['SimplifiedVolAdjustment'] = df['TrueRange'].apply(adjust_multiplier)
+    df['AdjustedVolumeWeightedReturn'] = df['VolumeWeightedReturn'] * df['SimplifiedVolAdjustment']
+    
+    return df['AdjustedVolumeWeightedReturn'].dropna()
+```

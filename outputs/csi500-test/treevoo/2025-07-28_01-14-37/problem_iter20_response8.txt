@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Performance
+    df['close_open_diff'] = df['close'] - df['open']
+    df['positive_day'] = (df['close'] > df['open']).astype(int)
+    
+    # Count Consecutive Positive Days
+    df['consecutive_positive_days'] = df['positive_day'].groupby((df['positive_day'] != df['positive_day'].shift()).cumsum()).cumsum()
+    
+    # Calculate N-Day Average True Range (ATR)
+    n = 14
+    df['tr'] = df[['high'-'low', 'high'-'close.shift(1)', 'low'-'close.shift(1)']].max(axis=1)
+    df['atr'] = df['tr'].rolling(window=n).mean()
+    
+    # Weighted Momentum Indicator (Using ATR to Adjust Weights)
+    df['weighted_momentum'] = df['close_open_diff'] / df['atr']
+    
+    # Evaluate Intraday Volatility
+    df['high_low_ratio'] = df['high'] / df['low']
+    smooth_window = 5
+    df['smoothed_high_low_ratio'] = df['high_low_ratio'].rolling(window=smooth_window).mean()
+    df['volume_weighted_volatility'] = df['smoothed_high_low_ratio'] * df['volume']
+    
+    # Explore Central Tendency
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['central_tendency_diff'] = df['close'] - df['typical_price']
+    fixed_period = 10
+    df['accumulated_diff'] = df['central_tendency_diff'].rolling(window=fixed_period).sum()
+    df['dynamic_adjustment_factor'] = df['typical_price'].pct_change()
+    
+    # Compute Weighted Momentum
+    df['weighted_momentum'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['weighted_momentum'] = df['price_change'] / df['weighted_momentum']
+    
+    # Adjust for Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['adjusted_momentum'] = df['weighted_momentum'] / df['high_low_range']
+    
+    # Determine Trend Direction
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['trend_direction'] = np.where(df['ma_5'] > df['ma_20'], 1, -1)
+    
+    # Incorporate Price Oscillator
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_oscillator'] = df['ema_5'] - df['ema_20']
+    
+    # Confirm with Volume
+    df['final_factor'] = (df['adjusted_momentum'] * df['trend_direction'] * df['price_oscillator'])
+    
+    return df['final_factor']
+```

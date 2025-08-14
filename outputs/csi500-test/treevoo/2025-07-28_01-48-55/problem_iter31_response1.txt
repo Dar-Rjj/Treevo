@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Thought 1.1: Calculate the price momentum
+    df['daily_return'] = df['close'].pct_change()
+    df['weekly_return'] = df['close'].pct_change(periods=7)
+    df['monthly_return'] = df['close'].pct_change(periods=21)
+    
+    # Thought 1.2: Analyze intraday price movements
+    df['daily_range'] = df['high'] - df['low']
+    df['daily_volatility'] = df['daily_return'].rolling(window=20).std()
+    
+    # Thought 1.3: Examine volume and amount
+    df['trading_volume'] = df['volume']
+    df['avg_transaction_value'] = df['amount'] / df['volume']
+    
+    # Thought 2.1: Calculate Moving Averages
+    df['5_day_SMA'] = df['close'].rolling(window=5).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+    
+    # Thought 2.2: Identify trend following indicators
+    df['SMA_diff'] = df['5_day_SMA'] - df['20_day_SMA']
+    
+    # Thought 2.3: Analyze price patterns
+    def rsi(series, n=14):
+        delta = series.diff()
+        dUp, dDown = delta.copy(), delta.copy()
+        dUp[dUp < 0] = 0
+        dDown[dDown > 0] = 0
+        RolUp = dUp.rolling(n).mean()
+        RolDown = dDown.rolling(n).mean().abs()
+        RS = RolUp / RolDown
+        return 100.0 - (100.0 / (1.0 + RS))
+    
+    df['RSI'] = rsi(df['close'])
+    
+    def mfi(high, low, close, volume, n=14):
+        typical_price = (high + low + close) / 3
+        raw_money_flow = typical_price * volume
+        positive_flow = [raw_money_flow[i] if typical_price[i] > typical_price[i - 1] else 0 for i in range(1, len(typical_price))]
+        negative_flow = [raw_money_flow[i] if typical_price[i] < typical_price[i - 1] else 0 for i in range(1, len(typical_price))]
+        positive_mf = [sum(positive_flow[i-n+1:i+1]) for i in range(n-1, len(positive_flow))]
+        negative_mf = [sum(negative_flow[i-n+1:i+1]) for i in range(n-1, len(negative_flow))]
+        mfi = [100 * (1 - (1 + p / n)) for p, n in zip(positive_mf, negative_mf)]
+        return mfi
+    
+    df['MFI'] = mfi(df['high'], df['low'], df['close'], df['volume'])
+    
+    # Thought 3.1: Calculate the On-Balance Volume (OBV)
+    df['OBV'] = (df['close'].diff() / df['close'].abs()).fillna(0) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Thought 3.2: Analyze the Chaikin Money Flow (CMF)
+    def cmf(high, low, close, volume, n=20):
+        mf_multiplier = ((close - low) - (high - close)) / (high - low)
+        mf_volume = mf_multiplier * volume
+        cmf = mf_volume.rolling(window=n).sum() / volume.rolling(window=n).sum()
+        return cmf
+    
+    df['CMF'] = cmf(df['high'], df['low'], df['close'], df['volume'])
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['daily_return'] + 
+        df['weekly_return'] + 
+        df['monthly_return'] + 
+        df['daily_range'] + 
+        df['daily_volatility'] + 
+        df['trading_volume'] + 
+        df['avg_transaction_value'] + 
+        df['5_day_SMA'] + 
+        df['20_day_SMA'] + 
+        df['SMA_diff'] + 
+        df['RSI'] + 
+        df['MFI'] + 
+        df['OBV'] + 
+        df['CMF']
+    )
+    
+    return alpha_factor
+```

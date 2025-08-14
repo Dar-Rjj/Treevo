@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    upward_volume = df[df['close'] > df['open']]['volume'].sum()
+    downward_volume = df[df['close'] < df['open']]['volume'].sum()
+    volume_influence_ratio = (upward_volume + 1) / (downward_volume + 1)
+    
+    # Multiply High-Low Difference with Volume Influence Ratio
+    high_low_vol_influence = high_low_diff * volume_influence_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Identify Volume Momentum
+    df['vol_moving_avg_10'] = df['volume'].rolling(window=10).mean()
+    daily_volume_change = df['volume'] - df['vol_moving_avg_10']
+    volume_momentum_strength = daily_volume_change.apply(lambda x: 1.5 if x > 0 else 0.5)
+    
+    # Combine High-Low Difference, Volume Influence, and Intraday Return
+    combined_factor = (high_low_vol_influence * intraday_return) * volume_momentum_strength
+    
+    # Calculate Daily Price Reversal
+    df['prev_close'] = df['close'].shift(1)
+    price_reversal = df['close'] - df['prev_close']
+    price_reversal = price_reversal * (df['close'].diff().shift(1) > 0).astype(int) * -1 + price_reversal * (df['close'].diff().shift(1) <= 0).astype(int)
+    
+    # Calculate Volume Surprise
+    df['vol_surprise'] = df['volume'] - df['vol_moving_avg_10']
+    volume_surprise_factor = price_reversal * df['vol_surprise']
+    
+    # Integrate Short-Term Price Volatility
+    short_term_volatility = df['close'].rolling(window=5).std()
+    final_alpha_factor = (combined_factor + volume_surprise_factor) / (short_term_volatility + 1e-6)
+    
+    # Incorporate Trend Strength
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    trend_direction = (df['ema_20'] > df['ema_50']).apply(lambda x: 1.2 if x else 0.8)
+    final_alpha_factor *= trend_direction
+    
+    return final_alpha_factor
+```

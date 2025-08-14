@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return features
+    df['log_return'] = df['close'].pct_change().apply(lambda x: np.log(1 + x))
+    df['simple_return'] = df['close'].pct_change()
+    
+    # Identify trend-related features
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+    df['60_day_MA'] = df['close'].rolling(window=60).mean()
+    
+    # Determine price momentum
+    df['momentum_5_20'] = df['5_day_MA'] - df['20_day_MA']
+    df['momentum_20_60'] = df['20_day_MA'] - df['60_day_MA']
+    
+    # Incorporate volatility measures
+    df['5_day_STD'] = df['log_return'].rolling(window=5).std()
+    df['20_day_STD'] = df['log_return'].rolling(window=20).std()
+    df['60_day_STD'] = df['log_return'].rolling(window=60).std()
+    
+    # Explore volume-related features
+    df['volume_change'] = df['volume'].pct_change()
+    df['5_day_vol_MA'] = df['volume'].rolling(window=5).mean()
+    df['20_day_vol_MA'] = df['volume'].rolling(window=20).mean()
+    df['60_day_vol_MA'] = df['volume'].rolling(window=60).mean()
+    
+    # Combine price and volume signals
+    composite_score = 0.3 * df['momentum_5_20'] + 0.2 * df['momentum_20_60'] + 0.2 * df['volume_change']
+    
+    # Incorporate additional price patterns
+    df['support_level'] = df['low'].rolling(window=5).min()
+    df['resistance_level'] = df['high'].rolling(window=5).max()
+    df['breakout_signal'] = (df['close'] > df['resistance_level']) | (df['close'] < df['support_level'])
+    
+    # Enhance trend identification
+    df['5_day_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['20_day_EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['60_day_EMA'] = df['close'].ewm(span=60, adjust=False).mean()
+    
+    df['EMA_SMA_diff_5'] = df['5_day_EMA'] - df['5_day_MA']
+    df['EMA_SMA_diff_20'] = df['20_day_EMA'] - df['20_day_MA']
+    df['EMA_SMA_diff_60'] = df['60_day_EMA'] - df['60_day_MA']
+    
+    # Integrate technical indicators
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    df['12_day_EMA'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['26_day_EMA'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD_line'] = df['12_day_EMA'] - df['26_day_EMA']
+    df['signal_line'] = df['MACD_line'].ewm(span=9, adjust=False).mean()
+    
+    # Incorporate market sentiment
+    df['ATR'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1).rolling(window=14).mean()
+    df['positive_returns'] = df['simple_return'].apply(lambda x: 1 if x > 0 else 0).rolling(window=14).mean()
+    df['negative_returns'] = df['simple_return'].apply(lambda x: 1 if x < 0 else 0).rolling(window=14).mean()
+    
+    # Combine all signals into a final alpha factor
+    alpha_factor = (
+        0.3 * df['momentum_5_20'] + 
+        0.

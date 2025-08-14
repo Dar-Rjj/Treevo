@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate EMA and SMA
+    N = 10
+    df['EMA'] = df['close'].ewm(span=N, adjust=False).mean()
+    df['SMA'] = df['close'].rolling(window=N).mean()
+
+    # Price Momentum and Momentum Strength
+    df['Momentum'] = df['close'] - df['EMA']
+    df['ROC_5'] = df['close'].pct_change(5)
+
+    # Volume Adjusted High-Low Range and Trading Volume Patterns
+    df['Range'] = df['high'] - df['low']
+    df['Avg_Range_30'] = df['Range'].rolling(window=30).mean()
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Adj_Range'] = df['Range'] * (np.log(df['Volume_Ratio'])) ** (1/3)
+
+    # Enhanced Momentum Factor
+    weights = np.exp(np.arange(7)) / np.sum(np.exp(np.arange(7)))
+    df['Enhanced_Momentum'] = df['Adj_Range'].rolling(window=7).apply(lambda x: np.sum(weights * x), raw=True)
+
+    # Analyze Daily Price Action and Volatility
+    df['True_Range'] = df[['high' - 'low', 'high' - df['close'].shift(1), df['close'].shift(1) - 'low']].max(axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['Range_Ratio'] = df['Range'] / df['Avg_Range_30']
+
+    # Market Sentiment
+    df['Up_Days'] = df['close'] > df['open']
+    df['Down_Days'] = df['close'] < df['open']
+    df['Sentiment_Score'] = df['Up_Days'].rolling(window=30).sum() - df['Down_Days'].rolling(window=30).sum()
+    df['Gap'] = df['open'] - df['close'].shift(1)
+
+    # Financial Flows
+    df['Midpoint'] = (df['high'] + df['low']) / 2
+    df['Value_Traded'] = df['amount'] / df['volume']
+    df['Value_Above_Mid'] = (df['value_traded'] * (df['close'] > df['Midpoint'])).cumsum()
+    df['Value_Below_Mid'] = (df['value_traded'] * (df['close'] < df['Midpoint'])).cumsum()
+
+    # Trend Indicator
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Trend_Indicator'] = np.where(df['SMA_50'] > df['close'], -1, 1)
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Momentum'] 
+                          - df['Adj_Range'] 
+                          + df['Enhanced_Momentum'] 
+                          * df['Trend_Indicator'])
+
+    return df['Alpha_Factor']
+```

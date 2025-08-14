@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Price and Volume Momentum
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['10D_MA_Price_Change'] = df['Daily_Price_Change'].rolling(window=10).mean()
+    
+    df['Daily_Return'] = df['close'] / df['open']
+    df['Volume_Amount_Weighted_Return'] = df['Daily_Return'] * df['volume'] * df['amount']
+    df['20D_MA_Volume_Amount_Weighted_Return'] = df['Volume_Amount_Weighted_Return'].rolling(window=20).mean()
+    
+    df['Raw_Momentum'] = df['close'] / df['close'].shift(20) - 1
+    cumulative_volume = df['volume'].rolling(window=20).sum()
+    df['Volume_Weighted_Momentum'] = df['Raw_Momentum'] / cumulative_volume
+    
+    df['Price_Range'] = df['high'] - df['low']
+    df['Combined_Momentum'] = df['Volume_Weighted_Momentum'] + df['Price_Range']
+    
+    df['20D_MA_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['20D_MA_Volume']
+    df['Combined_Momentum_Adjusted'] = df['Combined_Momentum'] * df['Volume_Ratio']
+    
+    # Combine Signals
+    df['Momentum_Signal'] = df['10D_MA_Price_Change'] - df['20D_MA_Volume_Amount_Weighted_Return']
+    df['Smoothed_Momentum_Signal'] = df['Momentum_Signal'].rolling(window=5).mean()
+    
+    # Smooth Combined Momentum
+    df['Smoothed_Combined_Momentum'] = df['Combined_Momentum_Adjusted'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Measure Enhanced Volatility
+    df['True_Range'] = df[['high', 'low']].sub(df['close'].shift(), axis=0).abs().max(axis=1)
+    df['20D_ATR'] = df['True_Range'].rolling(window=20).mean()
+    
+    df['Close_to_Close_Change'] = df['close'].diff().abs()
+    df['Volume_Weighted_Price_Change'] = (df['Close_to_Close_Change'] * df['volume']).rolling(window=20).sum() / cumulative_volume
+    
+    df['Volume_Change_Ratio'] = df['volume'] / df['volume'].shift()
+    df['Volume_Spike'] = (df['Volume_Change_Ratio'] > 2).astype(int)
+    df['Volume_Stability'] = df['Volume_Change_Ratio'].rolling(window=20).std()
+    
+    # Analyze Price and Volume Relationships
+    df['OBV'] = np.where(df['close'] > df['close'].shift(), df['volume'], -df['volume'])
+    df['OBV'] = df['OBV'].cumsum()
+    
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Positive_Money_Flow'] = df[df['Typical_Price'] > df['Typical_Price'].shift()]['Money_Flow']
+    df['Negative_Money_Flow'] = df[df['Typical_Price'] < df['Typical_Price'].shift()]['Money_Flow']
+    df['14D_Positive_Money_Flow'] = df['Positive_Money_Flow'].rolling(window=14).sum()
+    df['14D_Negative_Money_Flow'] = df['Negative_Money_Flow'].rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + (df['14D_Positive_Money_Flow'] / df['14D_Negative_Money_Flow'])))
+    
+    # Final Composite Alpha Factor
+    df['Momentum_Score'] = df['Smoothed_Combined_Momentum']
+    df['Volatility_Score'] = df['20D_ATR']
+    df['Volume_Relationship_Score'] = (df['OBV'] + df['MFI']) / 2
+    
+    df['Alpha_Factor'] = (df['Momentum_Score'] + 
+                          df['Volatility_Score'] + 
+                          df['Volume_Relationship_Score']) / 3
+    
+    return df['Alpha_Factor']
+```

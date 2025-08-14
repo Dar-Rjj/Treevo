@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference and Close-Open Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+
+    # Aggregate Price Movements and Smooth High-Low Ranges
+    period = 10
+    long_period = 50
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=period).sum()
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=period).sum()
+    df['smooth_high_low_range'] = df['high_low_diff'].ewm(span=20, adjust=False).mean()
+    df['long_term_high_low_range'] = df['high'].rolling(window=long_period).max() - df['low'].rolling(window=long_period).min()
+
+    # Calculate Combined Price and High-Low Range Momentum
+    df['price_momentum'] = df['sum_high_low_diff'] + df['sum_close_open_diff']
+    df['range_momentum'] = df['long_term_high_low_range'] - df['smooth_high_low_range']
+    df['volatility'] = df['close'].rolling(window=period).std()
+    df['weighted_price_momentum'] = df['price_momentum'] * (df['volatility'] / df['volatility'].max())
+
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].ewm(span=period, adjust=False).mean()
+    high_volume_threshold = 1.5
+    df['high_volume'] = (df['volume'] > high_volume_threshold * df['avg_volume']).astype(int)
+
+    # Integrate Price, High-Low Range, and Volume Activity
+    intraday_weight = 0.5
+    combined_intraday = (intraday_weight * df['high_low_diff'] + (1 - intraday_weight) * df['close_open_diff'])
+    df['combined_momentum'] = df['weighted_price_momentum'] + df['range_momentum']
+    df['final_alpha'] = df['combined_momentum'] * combined_intraday * df['high_volume']
+
+    # Smooth Oscillation with Exponential Moving Average
+    df['final_alpha_smoothed'] = df['final_alpha'].ewm(span=14, adjust=False).mean()
+
+    return df['final_alpha_smoothed']
+```

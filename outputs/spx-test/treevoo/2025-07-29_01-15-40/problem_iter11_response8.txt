@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Ratio
+    df['HighLowRatio'] = df['high'] / df['low']
+    
+    # Calculate Rolling Average of High-Low Ratios (10 days)
+    df['RollingAvgHLR'] = df['HighLowRatio'].rolling(window=10).mean()
+    
+    # Calculate Daily Volume Weight
+    df['VolumeWeight'] = df['volume'] / df['close']
+    
+    # Calculate Rolling Average of Volume Weighted High-Low Ratios (10 days)
+    df['VolWeightedHLR'] = df['HighLowRatio'] * df['VolumeWeight']
+    df['RollingAvgVolHLR'] = df['VolWeightedHLR'].rolling(window=10).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradayHLSpread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread over past N days (10 days)
+    df['AvgIntradayHLSpread'] = df['IntradayHLSpread'].rolling(window=10).mean()
+    
+    # Compute High-Low Momentum Score
+    df['HLMomentumScore'] = (df['IntradayHLSpread'] > df['AvgIntradayHLSpread']).astype(int) - (df['IntradayHLSpread'] < df['AvgIntradayHLSpread']).astype(int)
+    df['HLMomentumScore'] = df['HLMomentumScore'] * df['volume']
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate True Range
+    df['PrevClose'] = df['close'].shift(1)
+    df['TrueRange'] = df[['high', 'low', 'PrevClose']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['PrevClose']), abs(x['low'] - x['PrevClose'])), axis=1)
+    
+    # Compute Intraday Volatility Adjusted Return
+    df['IntradayVolAdjReturn'] = df['IntradayReturn'] / df['TrueRange']
+    
+    # Integrate Price and Volume Information
+    df['VolumeChange'] = df['volume'] / df['volume'].shift(1)
+    df['VolAdjIntradayReturn'] = df['IntradayVolAdjReturn'] * df['VolumeChange']
+    
+    # Combine High-Low Momentum, Intraday Volatility Adjusted Return, and Volume Trend
+    df['CombinedFactor'] = 0.3 * df['HLMomentumScore'] + 0.5 * df['VolAdjIntradayReturn'] + 0.2 * df['VolumeChange']
+    
+    # Calculate Final Factor
+    final_factor = df['CombinedFactor']
+    
+    return final_factor
+```

@@ -1,0 +1,33 @@
+def heuristics_v2(df):
+    # Calculate the Exponential Moving Averages and their ratio
+    short_term_ema = df['close'].ewm(span=9, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=21, adjust=False).mean()
+    ema_ratio = short_term_ema / long_term_ema
+
+    # Calculate the Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the Average True Range (ATR)
+    df['H-L'] = abs(df['high'] - df['low'])
+    df['H-PC'] = abs(df['high'] - df['close'].shift(1))
+    df['L-PC'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)
+    atr = df['TR'].rolling(window=21).mean()
+
+    # Calculate the 21-day rolling standard deviation of the close price
+    std_close = df['close'].rolling(window=21).std()
+
+    # Dynamic weights based on the 21-day rolling standard deviation
+    weight_ema = 0.5 * (1 + std_close / std_close.max())
+    weight_rsi = 0.4 * (1 + std_close / std_close.max())
+    weight_atr = 0.1 * (1 + std_close / std_close.max())
+
+    # Combine EMA ratio, RSI, and ATR into a single heuristics measure
+    heuristics_matrix = (weight_ema * ema_ratio + weight_rsi * rsi + weight_atr * atr)
+    return heuristics_matrix

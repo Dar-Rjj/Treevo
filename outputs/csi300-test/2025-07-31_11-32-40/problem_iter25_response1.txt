@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Price Momentum
+    adjusted_momentum = df['close'] - df['low'].shift(1)
+    ema_smoothed_adjusted_momentum = adjusted_momentum.ewm(span=5, adjust=False).mean()
+    
+    # Simple Price Momentum
+    simple_momentum = df['close'] - df['close'].shift(1)
+    ema_smoothed_simple_momentum = simple_momentum.ewm(span=5, adjust=False).mean()
+    
+    # Combine Adjusted Momentum and Simple Price Momentum
+    combined_momentum = ema_smoothed_adjusted_momentum + ema_smoothed_simple_momentum
+    
+    # Adjust by Volume Change
+    volume_ratio = df['volume'] / df['volume'].rolling(window=5).mean()
+    sma_smoothed_volume_ratio = volume_ratio.rolling(window=5).mean()
+    adjusted_combined_momentum = combined_momentum * sma_smoothed_volume_ratio
+    
+    # Compute Volume Influence Ratio
+    upward_volume = (df[df['close'] > df['open']]['volume']).sum()
+    downward_volume = (df[df['close'] < df['open']]['volume']).sum()
+    volume_influence_ratio = (upward_volume / downward_volume) ** 0.5
+    
+    # Integrate Combined Momentum, Volume Ratio, and Directional Volume Impact
+    integrated_momentum = adjusted_combined_momentum * volume_influence_ratio
+    
+    # Calculate Adjusted Intraday Reversal
+    intraday_reversal = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    adjusted_intraday_reversal = intraday_reversal * (1 + (df['close'] - df['close'].shift(10)) / df['close'].shift(10))
+    
+    # Generate Preliminary Alpha Factor
+    day_to_day_open_change = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    preliminary_alpha_factor = adjusted_intraday_reversal * integrated_momentum + day_to_day_open_change
+    
+    # Calculate Daily Volume Surprise
+    volume_10d_ma = df['volume'].rolling(window=10).mean()
+    daily_volume_surprise = df['volume'] - volume_10d_ma
+    
+    # Combine Price Momentum and Volume Surprise
+    price_momentum = df['close'] - df['close'].shift(10)
+    combined_price_momentum_volume_surprise = price_momentum * daily_volume_surprise
+    
+    # Final Alpha Factor
+    final_alpha_factor = preliminary_alpha_factor * combined_price_momentum_volume_surprise * volume_influence_ratio
+    
+    return final_alpha_factor
+```

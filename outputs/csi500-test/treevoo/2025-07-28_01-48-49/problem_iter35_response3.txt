@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    intraday_range = df['high'] - df['low']
+    intraday_range.name = 'IntradayRange'
+    
+    # Adjust by Volume Change and Price Level
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_level_ratio = df['close'] / df['open']
+    adjusted_range = (intraday_range * volume_change) * price_level_ratio
+    adjusted_range.name = 'AdjustedRange'
+    
+    # Integrate Intraday Price Movement and Volume
+    intraday_momentum_score = intraday_range * volume_change
+    intraday_momentum_score.name = 'IntradayMomentumScore'
+    
+    # Calculate 5-Day Average High-Low Spread
+    high_low_spread_5day_avg = (df['high'] - df['low']).rolling(window=5).mean()
+    high_low_spread_5day_avg.name = 'HighLowSpread5DayAvg'
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    close_5day_ago = df['close'].shift(5)
+    five_day_momentum = (df['close'] - close_5day_ago) / close_5day_ago
+    high_low_spread_momentum = high_low_spread_5day_avg * five_day_momentum
+    high_low_spread_momentum.name = 'HighLowSpreadMomentum'
+    integrated_momentum_factor = intraday_momentum_score + high_low_spread_momentum
+    integrated_momentum_factor.name = 'IntegratedMomentumFactor'
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    close_to_close_return = df['close'] / df['close'].shift(1)
+    volume_weighted_price = (df['amount'] / df['volume']).rolling(window=5).mean()
+    combined_factor = (close_to_close_return * intraday_range) / volume_weighted_price
+    
+    # Introduce Volume Trend
+    volume_5day_sum = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / volume_5day_sum
+    volume_trend_adjusted_factor = combined_factor * volume_ratio
+    volume_trend_adjusted_factor.name = 'VolumeTrendAdjustedFactor'
+    
+    # Final Factor Calculation
+    final_factor = 0.2 * adjusted_range + \
+                   0.3 * five_day_momentum + \
+                   0.2 * integrated_momentum_factor + \
+                   0.3 * volume_trend_adjusted_factor
+    final_factor.name = 'VWIMRIPA'
+    
+    return final_factor
+```

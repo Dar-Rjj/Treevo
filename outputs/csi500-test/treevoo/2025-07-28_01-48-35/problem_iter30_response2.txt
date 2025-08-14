@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between the close price and open price to assess daily market sentiment
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Compute the rolling sum of the daily price differences over a 5-day window to gauge short-term momentum
+    df['5d_rolling_sum'] = df['close_open_diff'].rolling(window=5).sum()
+    
+    # Apply a simple moving average (SMA) with a 10-day period to the 5-day rolling sum to smooth out noise
+    df['10d_sma'] = df['5d_rolling_sum'].rolling(window=10).mean()
+    
+    # Compute the difference between the current value and the SMA of the 5-day rolling sum to determine the strength of the recent trend
+    df['trend_strength'] = df['5d_rolling_sum'] - df['10d_sma']
+    
+    # Calculate the ratio of the volume to the absolute value of the close-open difference to identify potential volatility
+    df['volatility_ratio'] = df['volume'] / df['close_open_diff'].abs()
+    
+    # Compute the rolling mean of this ratio over a 20-day period to stabilize the measure
+    df['20d_volatility_mean'] = df['volatility_ratio'].rolling(window=20).mean()
+    
+    # Determine the difference between the current ratio and its 20-day rolling mean to highlight unusual trading activity
+    df['unusual_activity'] = df['volatility_ratio'] - df['20d_volatility_mean']
+    
+    # Use the high and low prices to calculate the true range, capturing the full range of price movement
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'], x['low']) - min(x['high'], x['low']), axis=1)
+    
+    # Compute the rolling mean of the true range over a 30-day period to represent the average volatility
+    df['30d_true_range_mean'] = df['true_range'].rolling(window=30).mean()
+    
+    # Subtract the 30-day rolling mean of the true range from the true range to identify days with abnormally high or low volatility
+    df['abnormal_volatility'] = df['true_range'] - df['30d_true_range_mean']
+    
+    # Multiply the result by the sign of the difference between the close and open prices to incorporate the direction of the price movement into the final alpha factor
+    df['alpha_factor'] = df['abnormal_volatility'] * df['close_open_diff'].apply(np.sign)
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    df['close_pos_in_range'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate Recent Average High-Low Range (21-day rolling sum)
+    df['recent_avg_high_low_range'] = df['high_low_range'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = df['high_low_range'] / df['recent_avg_high_low_range']
+    
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Weighted by Volume
+    df['weighted_daily_return'] = df['daily_return'] * df['volume']
+    
+    # Combine Initial Factors
+    df['initial_factors'] = df['close_pos_in_range'] + df['weighted_daily_return']
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_close_to_open_delta'] = df['close'] - df['open']
+    df['intraday_reversal_score'] = (df['intraday_close_to_open_delta'] / df['high_low_range']) * df['volume']
+    
+    # Combine Breakout and Intraday Factors
+    df['combined_breakout_intraday'] = df['initial_factors'] + df['breakout_strength'] + df['intraday_reversal_score']
+    
+    # Calculate Price Momentum
+    df['7_day_return'] = (df['close'] / df['close'].shift(7)) - 1
+    df['21_day_return'] = (df['close'] / df['close'].shift(21)) - 1
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+    
+    # Determine Volume Activity
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).sum()
+    df['21_day_avg_volume'] = df['volume'].rolling(window=21).sum()
+    df['volume_activity'] = df['7_day_avg_volume'] / df['21_day_avg_volume']
+    
+    # Introduce Trend Indicator
+    df['50_day_ma'] = df['close'].rolling(window=50).mean()
+    df['200_day_ma'] = df['close'].rolling(window=200).mean()
+    df['trend_indicator'] = df['50_day_ma'] > df['200_day_ma']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        0.7 * df['combined_breakout_intraday'] +
+        0.5 * df['price_momentum'] +
+        0.8 * df['volume_activity']
+    )
+    df['final_alpha_factor'] = df['final_alpha_factor'] * df['trend_indicator'].astype(int) - df['final_alpha_factor'] * (~df['trend_indicator']).astype(int)
+    
+    # Derive High-Low Range Signal
+    df['high_low_range_signal'] = (df['high_low_range'] > df['recent_avg_high_low_range']).astype(int)
+    
+    # Integrate Combined Return and Momentum with High-Low Range Signal
+    df['integrated_component'] = 0.7 * df['final_alpha_factor'] + 0.3 * df['high_low_range_signal']
+    
+    return df['integrated_component']
+```

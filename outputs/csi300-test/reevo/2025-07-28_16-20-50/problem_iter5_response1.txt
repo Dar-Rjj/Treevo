@@ -1,0 +1,32 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume'])
+
+    # Exponential smoothing for VWAP
+    df['vwap_smoothed'] = df['vwap'].ewm(span=5, adjust=False).mean()
+
+    # Multi-period momentum factor
+    momentum_10 = df['close'].pct_change(periods=10)
+    momentum_20 = df['close'].pct_change(periods=20)
+    momentum = (momentum_10 + momentum_20) / 2
+
+    # Market depth: ratio of high to low
+    market_depth = (df['high'] - df['low']) / df['low']
+
+    # Seasonality: day of the week
+    df['day_of_week'] = df.index.dayofweek
+    seasonality = df['day_of_week'].map({0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 0, 6: 0})
+
+    # Robust statistical method: median of the price range
+    price_range = df['high'] - df['low']
+    median_price_range = price_range.rolling(window=5).median()
+    
+    # Combine all factors into a single alpha factor
+    factor = (df['vwap_smoothed'] + momentum + market_depth + seasonality) / (median_price_range + 1e-7)
+
+    return factor
+```

@@ -1,0 +1,54 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators Based on Close Prices
+    # Simple Moving Averages (SMAs)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Momentum_SMA'] = df['SMA_5'] - df['SMA_20']
+    
+    # Exponential Moving Averages (EMAs)
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Trend_EMA'] = df['EMA_5'] - df['EMA_5'].shift(1)
+    
+    # Volume-Weighted Activity Analysis
+    # Daily Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['VWAP_Change'] = df['VWAP'].pct_change()
+    
+    # Intraday Sentiment Indicator
+    # Intraday Price Movement Ratio
+    df['High_Low_Ratio'] = df['high'] / df['low']
+    df['Open_Close_Ratio'] = df['close'] / df['open']
+    df['Intraday_Ratio'] = (df['High_Low_Ratio'] + df['Open_Close_Ratio']) / 2
+    
+    # Measure Price-Volatility Alignment
+    df['Intraday_Volatility'] = (df['high'] - df['low']).abs() * df['volume']
+    df['Sentiment'] = df['Intraday_Ratio'] / df['Intraday_Volatility']
+    
+    # Market Sentiment Using Open and Close Prices
+    # Daily Return
+    df['Daily_Return'] = (df['close'] - df['open']) / df['open']
+    # Cumulative Return Over a Recent Period
+    df['Cumulative_Return_5'] = (1 + df['Daily_Return']).rolling(window=5).apply(lambda x: x.prod()) - 1
+    
+    # Volatility Indicators
+    # True Range Calculation
+    df['True_Range'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    # Average True Range (ATR)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['Momentum_SMA'] + 
+        df['Trend_EMA'] + 
+        df['VWAP_Change'] + 
+        df['Intraday_Ratio'] + 
+        df['Sentiment'] + 
+        df['Cumulative_Return_5'] + 
+        df['ATR_14']
+    )
+    
+    return df['Alpha_Fctor']

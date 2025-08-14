@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) over 20 days
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Exponential Moving Average (EMA) over 10 days
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Daily price change (Close_t - Close_(t-1))
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # High-Low spread (High_t - Low_t)
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Close/Open ratio (Close_t / Open_t)
+    df['Close_Open_Ratio'] = df['close'] / df['open']
+    
+    # Close/Previous Close ratio (Close_t / Close_(t-1))
+    df['Close_Prev_Close_Ratio'] = df['close'] / df['close'].shift(1)
+    
+    # Volume change (Volume_t - Volume_(t-1))
+    df['Volume_Change'] = df['volume'].diff()
+    
+    # Volume-weighted close (Sum(Close_i * Volume_i) / Sum(Volume_i) for i in range(t-9, t+1))
+    df['Volume_Weighted_Close'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Price-Volume Trend (PVT)
+    df['PVT'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    df['PVT'] = df['PVT'].cumsum()
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = ((df['close'] > df['close'].shift(1)) * df['volume'] - (df['close'] < df['close'].shift(1)) * df['volume']).cumsum()
+    
+    # Three-day price pattern
+    df['Three_Day_Price_Pattern'] = (df['close'] - df['open']) + (df['close'].shift(1) - df['open'].shift(1)) + (df['close'].shift(2) - df['open'].shift(2))
+    
+    # Inside bar pattern
+    df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)).astype(int)
+    
+    # Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Rate of Change (ROC) over 12 days
+    df['ROC'] = (df['close'] / df['close'].shift(12) - 1) * 100
+    
+    # True Range (TR) over 14 days
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Average True Range (ATR) over 14 days
+    df['ATR'] = df['TR'].rolling(window=14).mean()
+    
+    # Composite price-volume indicator
+    df['Composite_Price_Volume'] = (df['PVT'] + df['OBV']) / (df['SMA_20'] + df['EMA_10'])
+    
+    # Composite momentum-volatility indicator
+    df['Composite_Momentum_Volatility'] = (df['RSI'] + df['ROC']) / (df['ATR'] + df['TR'])
+    
+    return df['Composite_Momentum_Volatility']
+```

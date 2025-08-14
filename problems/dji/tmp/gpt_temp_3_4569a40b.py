@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+
+    # Adjust Daily Return by Price Gap
+    def adjust_daily_return(row):
+        if row['price_gap'] > 0:
+            return row['daily_return'] - (row['price_gap'] / row['close'].shift(1)) * np.exp(-1)
+        elif row['price_gap'] < 0:
+            return row['daily_return'] + (row['price_gap'] / row['close'].shift(1)) * np.exp(-1)
+        else:
+            return row['daily_return']
+    
+    df['adjusted_daily_return'] = df.apply(adjust_daily_return, axis=1)
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price Range Momentum
+    df['price_range_momentum'] = df['high_low_range'].pct_change()
+
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Integrate Adjusted Daily Return and Price Range Momentum
+    df['volume_weighted_adj_return'] = df['adjusted_daily_return'] * df['volume']
+    df['volume_adjusted_price_range_mom'] = df['price_range_momentum'] * df['volume_change']
+
+    # Synthesize Final Alpha Factor
+    df['alpha_factor'] = df['volume_weighted_adj_return'] + df['volume_adjusted_price_range_mom']
+
+    return df['alpha_factor']

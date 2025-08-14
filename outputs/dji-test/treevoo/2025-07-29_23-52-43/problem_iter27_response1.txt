@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['CloseToPrevCloseReturn'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['BreakoutIntensity'] = (df['high'] - df['low']) / df['close']
+    df['BreakoutIntensity'] = df['BreakoutIntensity'].apply(lambda x: max(x, 0))
+    
+    # Volume Weighted Intraday Return
+    df['VolumeWeightedIntradayReturn'] = ((df['close'] - df['open']) / df['open']) * (df['volume'] / df['volume'].rolling(window=5).mean())
+    
+    # Volume Spike Detection
+    df['DailyVolumeChange'] = df['volume'] - df['volume'].shift(1)
+    spike_threshold = df['DailyVolumeChange'].rolling(window=21).quantile(0.90) * 2.0
+    df['VolumeSpike'] = (df['DailyVolumeChange'] > spike_threshold).astype(int)
+    
+    # Volume Increase Ratio
+    df['VolumeIncreaseRatio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Price Volatility
+    df['PriceVolatility'] = df['close'].rolling(window=5).std() / df['close'].shift(1)
+    
+    # Intermediate Factor
+    df['IntermediateFactor'] = (df['VolumeIncreaseRatio'] * (df['close'] - df['close'].rolling(window=5).mean()) * df['PriceVolatility'])
+    
+    # Adjust for Volatility
+    df['RollingVolatility'] = df['high'].sub(df['low']).rolling(window=5).std()
+    df['AdjustedCombinedMetrics'] = df['IntermediateFactor'] / df['RollingVolatility']
+    
+    # Trend Following Indicator
+    df['TrendFollowingIndicator'] = (df['close'] - df['close'].shift(1)) / df['close'].rolling(window=5).std()
+    
+    # Volume Momentum Indicator
+    df['VolumeMomentumIndicator'] = (df['volume'] - df['volume'].rolling(window=5).mean()) / df['volume'].rolling(window=5).std()
+    
+    # Final Composite Factor
+    df['FinalCompositeFactor'] = (
+        df['VolumeWeightedIntradayReturn'] +
+        df['IntermediateFactor'] +
+        df['AdjustedCombinedMetrics'] +
+        df['TrendFollowingIndicator'] +
+        df['VolumeMomentumIndicator']
+    )
+    
+    return df['FinalCompositeFactor']
+```

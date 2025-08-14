@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Dynamic Volatility Calculation
+    df['High_Low_Close'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volatility'] = df['High_Low_Close'].rolling(window=50).std()
+    
+    def adjust_window_size(volatility, high_vol_threshold=0.05, low_vol_threshold=0.01):
+        if volatility > high_vol_threshold:
+            return 20
+        elif volatility < low_vol_threshold:
+            return 100
+        else:
+            return 50
+    
+    df['Dynamic_Window_Size'] = df['Volatility'].apply(adjust_window_size)
+    
+    # Market Microstructure Features
+    df['Bid_Ask_Spread'] = df['high'] - df['low']
+    df['Price_Impact'] = (df['high'] - df['low']) / df['close']
+    df['Trade_Imbalance'] = df['amount'] - df['volume']
+    
+    # Rolling Statistics
+    rolling_mean_VWR = df['Volume_Weighted_Return'].rolling(window=df['Dynamic_Window_Size']).mean()
+    rolling_std_VWR = df['Volume_Weighted_Return'].rolling(window=df['Dynamic_Window_Size']).std()
+    rolling_mean_BAS = df['Bid_Ask_Spread'].rolling(window=df['Dynamic_Window_Size']).mean()
+    rolling_std_BAS = df['Bid_Ask_Spread'].rolling(window=df['Dynamic_Window_Size']).std()
+    rolling_mean_PI = df['Price_Impact'].rolling(window=df['Dynamic_Window_Size']).mean()
+    rolling_std_PI = df['Price_Impact'].rolling(window=df['Dynamic_Window_Size']).std()
+    rolling_mean_TI = df['Trade_Imbalance'].rolling(window=df['Dynamic_Window_Size']).mean()
+    rolling_std_TI = df['Trade_Imbalance'].rolling(window=df['Dynamic_Window_Size']).std()
+    
+    # Combine all the features
+    df['alpha_factor'] = (rolling_mean_VWR + rolling_std_VWR 
+                          - rolling_mean_BAS - rolling_std_BAS 
+                          + rolling_mean_PI + rolling_std_PI 
+                          - rolling_mean_TI - rolling_std_TI)
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # VWAP Deviation from Close
+    vwap_deviation = df['close'] - vwap
+    
+    # Weighted Ratio of High-Low to Open-Close
+    weighted_ratio = high_low_range / abs(open_close_movement)
+    
+    # Identify Trend Strength and Reversal Signals
+    positive_momentum = high_low_range > 1.5 * abs(open_close_movement)
+    potential_reversal = (abs(open_close_movement) > 0.8 * high_low_range) & (vwap_deviation < 0) & (open_close_movement < 0)
+    momentum_continuation = (high_low_range > 2 * abs(open_close_movement)) & (vwap > df['close'])
+    reversal_confirmation = (open_close_movement < -0.5 * high_low_range) & (vwap < df['close'])
+    
+    # Calculate Intraday Range Percentage
+    intraday_range_percentage = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Integrate Volume Activity Ratio
+    n_period_sum_volume = df['volume'].rolling(window=10).sum()
+    n_period_avg_volume = df['volume'].rolling(window=10).mean()
+    volume_activity_ratio = n_period_sum_volume / n_period_avg_volume
+    
+    # Calculate Intraday Volume Intensity
+    past_10_day_median_volume = df['volume'].rolling(window=10).median()
+    intraday_volume_intensity = df['volume'] / past_10_day_median_volume
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_price_trend = df['close'] - ema_20
+    
+    # Incorporate Recent Volatility
+    recent_volatility = df['close'].rolling(window=20).std()
+    ema_adjustment = recent_price_trend / recent_volatility
+    
+    # Composite Alpha Factor
+    weighted_sum = (weighted_ratio * 0.3 +
+                    vwap_deviation * 0.3 +
+                    intraday_volume_intensity * 0.2 +
+                    closing_position * 0.2)
+    
+    trend_adjustment = ema_adjustment
+    final_alpha_factor = weighted_sum + trend_adjustment
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] - df['open']
+    
+    # Compute Moving Sum of Positive Returns
+    df['Positive_Returns'] = df['Daily_Return'].apply(lambda x: x if x > 0 else 0)
+    df['Pos_Returns_Moving_Sum'] = df['Positive_Returns'].rolling(window=21).sum()
+    
+    # Volume Adjusted Momentum
+    df['Cumulative_Volume'] = df['volume'].rolling(window=21).sum()
+    df['Volume_Adjusted_Momentum'] = (df['Pos_Returns_Moving_Sum'] * df['Cumulative_Volume']) / 21
+    
+    # Calculate 1-Period Price Momentum
+    df['Price_Momentum_1P'] = df['close'].pct_change()
+    
+    # Adjust by Average Volume
+    n = 21
+    df['Avg_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume']
+    df['Momentum_Volume_Adjusted'] = df['Price_Momentum_1P'] * df['Volume_Ratio']
+    
+    # Short-Term and Long-Term Momentum
+    df['Daily_Return_Close'] = df['close'].pct_change()
+    df['Short_Term_Momentum'] = df['Daily_Return_Close'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    df['Long_Term_Momentum'] = df['Daily_Return_Close'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Calculate Average True Range
+    df['True_Range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), 
+        axis=1
+    )
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Ratio
+    df['Close_to_Open_Ratio'] = df['close'] / df['open']
+    
+    # Incorporate Volume Momentum
+    df['Volume_Momentum'] = df['volume'] * (df['close'] - df['open'])
+    
+    # Combine Momentum and Volatility
+    df['Combined_Momentum_Volatility'] = (df['Short_Term_Momentum'] + df['Long_Term_Momentum']) / df['ATR']
+    
+    # Combine Intraday Factors
+    df['Intraday_Factors'] = df['Intraday_Range'] + df['Close_to_Open_Ratio'] + df['Volume_Momentum']
+    
+    # Final Combined Alpha Factor
+    df['Final_Alpha_Factor'] = df['Volume_Adjusted_Momentum'] + df['Momentum_Volume_Adjusted'] + df['Combined_Momentum_Volatility'] + df['Intraday_Factors']
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+```

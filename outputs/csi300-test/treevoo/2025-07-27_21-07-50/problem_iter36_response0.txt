@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    df['HighLowSpreadRatio'] = (df['high'] - df['low']) / (df['low'] + 0.01)
+
+    # Calculate Volume-Weighted Close-Open Difference
+    df['VolumeWeightedCO'] = (df['close'] - df['open']) * np.sqrt(df['volume'])
+
+    # Integrate Both Factors
+    df['IntegratedFactor'] = 0.6 * df['HighLowSpreadRatio'] + 0.4 * df['VolumeWeightedCO']
+
+    # Composite Alpha Factor
+    # Calculate EMA of Close prices
+    ema_period = 21
+    df['EMA'] = df['close'].ewm(span=ema_period, adjust=False).mean()
+
+    # Calculate Volume-Weighted Close Price
+    df['VolumeWeightedClose'] = df['close'] * np.sqrt(df['volume'])
+
+    # Subtract EMA from volume-weighted close
+    df['CompositeAlpha'] = df['VolumeWeightedClose'] - df['EMA']
+
+    # Add medium-term reversal
+    m_days = 10
+    df['DailyReturn'] = (df['close'] - df['open']) / df['open']
+    df['Reversal'] = df['DailyReturn'].rolling(window=m_days).sum()
+    df['CompositeAlpha'] += df['Reversal']
+
+    # Generate Adjusted Return
+    # Use Intraday Log-Return
+    df['IntradayLogReturn'] = np.log(df['close'] / df['open'])
+
+    # Compute True Range
+    df['TrueRange'] = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))), abs(df['low'] - df['close'].shift(1)))
+
+    # Scale by Log-Return
+    df['ScaledIntradayReturn'] = df['IntradayLogReturn'] / df['TrueRange']
+
+    # Incorporate Volume Impact
+    avg_vol_window = 5
+    df['AverageVolume'] = df['volume'].rolling(window=avg_vol_window).mean()
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolumeImpact'] = (df['VolumeChange'] / df['AverageVolume']).fillna(0)
+
+    # Add Volume Impact to the Adjusted Return
+    df['AdjustedReturn'] = df['ScaledIntradayReturn'] + df['VolumeImpact']
+
+    # Final Integration
+    df['FinalFactor'] = df['IntegratedFactor'] + df['CompositeAlpha'] + df['AdjustedReturn']
+
+    return df['FinalFactor']
+```

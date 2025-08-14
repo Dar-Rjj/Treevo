@@ -1,0 +1,69 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day simple moving average of closing prices to capture momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum factor: difference between 5-day and 20-day moving averages
+    df['momentum_factor'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day SMA
+    df['relative_strength'] = df['close'] / df['SMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Adaptive weights for the factors
+    df['momentum_weight'] = df['volatility_factor'].rank(pct=True)
+    df['liquidity_weight'] = df['liquidity_factor'].rank(pct=True)
+    df['relative_strength_weight'] = df['relative_strength'].rank(pct=True)
+    df['market_breadth_weight'] = df['market_breadth'].rank(pct=True)
+
+    # Calculate the 5-day exponential moving average of the momentum factor
+    df['EMA_momentum'] = df['momentum_factor'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+
+    # Logarithmic returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Advanced Volatility: Parkinson's Volatility
+    df['park_volatility'] = np.sqrt((1/(4*np.log(2))) * (np.log(df['high']/df['low'])**2)).rolling(window=20).mean()
+
+    # RSI (Relative Strength Index)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # MACD (Moving Average Convergence Divergence)
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD_line'] = df['EMA_12'] - df['EMA_26']
+    df['Signal_line'] = df['MACD_line'].ewm(span=9, adjust=False).mean()
+    df['MACD_histogram'] = df['MACD_line'] - df['Signal_line']
+
+    # Bollinger Bands
+    df['BB_middle'] = df['close'].rolling(window=20).mean()
+    df['BB_std'] = df['close'].rolling(window=20).std()
+    df['BB_upper'] = df['BB_middle'] + 2 * df['BB_std']
+    df['BB_lower'] = df['BB_middle'] - 2 * df['BB_std']
+    df['BB_width'] = (df['BB_upper'] - df['BB_lower']) / df['BB_middle']
+
+    # Chaikin Money Flow (CMF)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['CMF'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Combine the factors with adaptive weights
+    heuristic_factor = (df['EMA

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicator
+    df['ROC_12'] = (df['close'] / df['close'].shift(12) - 1)
+    df['SMA_ROC_25'] = df['ROC_12'].rolling(window=25).mean()
+    df['Momentum_Signal'] = df['SMA_ROC_25'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Volume-based Strength Indicator
+    df['VMA_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['VMA_20']
+    df['Volume_Score'] = df['Volume_Ratio'].apply(lambda x: 1 if x > 1 else (0 if x == 1 else -1))
+
+    # Price Volatility Indicator
+    df['Daily_Range'] = df['high'] - df['low']
+    df['ATR_14'] = df['Daily_Range'].rolling(window=14).mean()
+    df['ATR_Trend'] = df['ATR_14'].diff().apply(lambda x: 1 if x > 0 else -1)
+
+    # Money Flow Index (MFI)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Positive_Money_Flow'] = df['Money_Flow'].where(df['Typical_Price'] > df['Typical_Price'].shift(1), 0)
+    df['Negative_Money_Flow'] = df['Money_Flow'].where(df['Typical_Price'] < df['Typical_Price'].shift(1), 0)
+    df['Positive_MF_Sum_14'] = df['Positive_Money_Flow'].rolling(window=14).sum()
+    df['Negative_MF_Sum_14'] = df['Negative_Money_Flow'].rolling(window=14).sum()
+    df['Money_Flow_Ratio'] = df['Positive_MF_Sum_14'] / df['Negative_MF_Sum_14']
+    df['MFI'] = 100 - (100 / (1 + df['Money_Flow_Ratio']))
+    df['MFI_Condition'] = df['MFI'].apply(lambda x: 'oversold' if x < 20 else ('overbought' if x > 80 else 'neutral'))
+
+    # Accumulation/Distribution Line (A/D Line)
+    df['Money_Flow_Multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['AD_Line'] = (df['Money_Flow_Multiplier'] * df['volume']).cumsum()
+    df['AD_Trend'] = df['AD_Line'].diff().apply(lambda x: 'accumulation' if x > 0 else 'distribution')
+
+    # Alpha Factor
+    df['Alpha_Factor'] = df['Momentum_Signal'] + df['Volume_Score'] + df['ATR_Trend']
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

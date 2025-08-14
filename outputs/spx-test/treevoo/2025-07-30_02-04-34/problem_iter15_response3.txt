@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=20, k=14):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['daily_price_change'].rolling(window=n).mean()
+    
+    # Identify Volume Spikes
+    df['vol_ma'] = df['volume'].rolling(window=m).mean()
+    df['is_volume_spike'] = df['volume'] > 1.5 * df['vol_ma']
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df.apply(lambda row: row['raw_momentum'] * 0.8 if row['is_volume_spike'] else row['raw_momentum'], axis=1)
+    
+    # Calculate Smoothed Price Momentum
+    df['smoothed_price_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Volume Weight
+    df['avg_vol'] = df['volume'].rolling(window=n).mean()
+    df['normalized_vol'] = df['volume'] / df['avg_vol']
+    df['volume_weight'] = df['normalized_vol'].rolling(window=n).mean()
+    
+    # Combine Smoothed Price Momentum and Volume Weight
+    df['combined_momentum'] = df['smoothed_price_momentum'] * df['volume_weight']
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['combined_intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['avg_5_day_vol'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['avg_5_day_vol']
+    
+    # Introduce Volatility Factor
+    df['daily_range'] = df['high'] - df['low']
+    df['true_range'] = df.apply(lambda row: max(row['high'] - row['low'], abs(row['high'] - df['close'].shift(1)), abs(row['low'] - df['close'].shift(1))), axis=1)
+    df['atr'] = df['true_range'].rolling(window=k).mean()
+    
+    # Adjust Final Alpha Factor by Volatility
+    df['final_alpha_factor'] = df['combined_momentum'] * df['combined_intraday_factor'] * df['weighted_price_movement_normalized'] * (1 / df['atr'])
+    
+    # Introduce Short-Term Reversal Indicator
+    df['1_day_price_change'] = df['close'].diff()
+    reversal_constant = 0.01
+    df['short_term_reversal_indicator'] = df['1_day_price_change'].apply(lambda x: 0 if x >= 0 else reversal_constant)
+    
+    # Combine All Indicators
+    df['final_alpha'] = df['final_alpha_factor'] + df['short_term_reversal_indicator']
+    
+    return df['final_alpha']
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    high_low_range = df['high'] - df['low']
+    close_open_diff = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    volume_adjusted_momentum = (close_open_diff * df['volume'])
+    volume_adjusted_momentum_ema = volume_adjusted_momentum.ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Dynamic Market Volatility
+    daily_return = df['close'].pct_change()
+    abs_daily_return = np.abs(daily_return)
+    dynamic_market_volatility = daily_return.rolling(window=20).std()
+    modified_volume_adjusted_momentum = volume_adjusted_momentum_ema / (dynamic_market_volatility + 1e-8)  # Adding a small value to avoid division by zero
+    
+    # Incorporate Trend Reversal Signal
+    short_term_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_reversal = short_term_momentum - long_term_momentum
+    reversal_points = np.sign(momentum_reversal)
+    
+    # Integrate Non-Linear Transformation
+    sqrt_transformed_momentum = np.sqrt(np.abs(modified_volume_adjusted_momentum))
+    log_transformed_momentum = np.log(np.abs(modified_volume_adjusted_momentum) + 1)  # Adding 1 to avoid log(0)
+    
+    # Enhance Reversal Signal with Advanced Adaptive Smoothing
+    smoothed_reversal_signal_5_ema = reversal_points.ewm(span=5, adjust=False).mean()
+    smoothed_reversal_signal_10_ema = reversal_points.ewm(span=10, adjust=False).mean()
+    smoothed_reversal_signal = (smoothed_reversal_signal_5_ema + smoothed_reversal_signal_10_ema) / 2
+    combined_signal = sqrt_transformed_momentum + log_transformed_momentum + smoothed_reversal_signal
+    
+    # Refine Final Alpha Factor
+    interim_alpha_factor = combined_signal
+    final_alpha_factor_5_ema = interim_alpha_factor.ewm(span=5, adjust=False).mean()
+    final_alpha_factor_10_ema = interim_alpha_factor.ewm(span=10, adjust=False).mean()
+    final_alpha_factor = (final_alpha_factor_5_ema + final_alpha_factor_10_ema) / 2
+    
+    return final_alpha_factor
+```

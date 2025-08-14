@@ -1,0 +1,36 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    
+    # Incorporate Volume Influence
+    df['volume_adjusted_momentum'] = (df['close_open_diff'] + df['high_low_range']) * df['volume']
+    df['smoothed_mom'] = df['volume_adjusted_momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['abs_daily_return'] = df['daily_return'].abs()
+    df['volatility'] = df['daily_return'].rolling(window=30).std()
+    df['adjusted_momentum'] = df['smoothed_mom'] / df['volatility']
+    
+    # Enhance Trend Reversal Signal
+    df['short_term_mom'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['long_term_mom'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_reversal'] = df['short_term_mom'] - df['long_term_mom']
+    df['reversal_signal'] = np.where(df['momentum_reversal'] > 0, 1, -1)
+    df['interim_alpha_factor'] = df['adjusted_momentum'] + df['reversal_signal']
+    
+    # Incorporate Relative Strength
+    df['relative_strength'] = df['close'] / df['index_close']
+    df['rs_ratio'] = df['relative_strength'].ewm(span=14, adjust=False).mean()
+    df['modified_interim_alpha_factor'] = df['interim_alpha_factor'] * df['rs_ratio']
+    
+    # Refine Final Alpha Factor
+    df['final_alpha_factor'] = df['modified_interim_alpha_factor'].ewm(span=5, adjust=False).mean()
+    
+    return df['final_alpha_factor']

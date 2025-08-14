@@ -1,0 +1,87 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, threshold=0.5):
+    # Simple Momentum
+    df['Simple_Momentum'] = df['close'] / df['close'].shift(n) - 1
+    
+    # Average Volume (t to t-n)
+    df['Avg_Volume'] = df['volume'].rolling(window=n).mean()
+    
+    # Adjusted Momentum by Volume
+    df['Volume_Adjusted_Momentum'] = df['Simple_Momentum'] * df['Avg_Volume']
+    
+    # High-to-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # High-to-Low Return
+    df['High_Low_Return'] = df['High_Low_Range'] / df['close'].shift(1)
+    
+    # Combined Momentum and High-Low Return
+    df['Combined_Momentum_High_Low'] = df['Volume_Adjusted_Momentum'] + df['High_Low_Return']
+    
+    # Open-High Price Difference
+    df['Open_High_Diff'] = df['high'] - df['open']
+    
+    # Open-Low Price Difference
+    df['Open_Low_Diff'] = df['open'] - df['low']
+    
+    # Volume Percentage Change
+    df['Volume_Pct_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Adjust Volatility using Volume Change
+    df['Adjusted_Volatility'] = (df['Open_High_Diff'] + df['Open_Low_Diff']) * df['Volume_Pct_Change']
+    
+    # Sum of Amounts over past n days
+    df['Sum_Amount_n_days'] = df['amount'].rolling(window=n).sum()
+    
+    # Divide sum by Close price
+    df['Amount_Per_Unit_Close_Price'] = df['Sum_Amount_n_days'] / df['close']
+    
+    # Same Ratio for Previous Period
+    df['Prev_Amount_Per_Unit_Close_Price'] = df['Amount_Per_Unit_Close_Price'].shift(n)
+    
+    # Differential Between the Ratios
+    df['Differential_Ratios'] = df['Amount_Per_Unit_Close_Price'] - df['Prev_Amount_Per_Unit_Close_Price']
+    
+    # Calculate Daily Range
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    df['Open_Close_Movement'] = df['close'] - df['open']
+    
+    # Combine Indicators
+    df['Combined_Indicator'] = (df['Daily_Range'] * df['volume']) + df['Open_Close_Movement']
+    
+    # Filter for Strong Moves
+    df['Strong_Move'] = df['Combined_Indicator'].apply(lambda x: 1 if x > threshold else 0)
+    
+    # Daily High-Low Price Spread
+    df['Daily_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Moving Sum of High-Low Price Spread
+    df['Moving_Sum_High_Low_Spread'] = df['Daily_High_Low_Spread'].rolling(window=20).sum()
+    
+    # Spread Momentum
+    df['Spread_Momentum'] = df['Moving_Sum_High_Low_Spread'] - df['Moving_Sum_High_Low_Spread'].shift(1)
+    
+    # Volume-Weighted Close Price
+    df['Volume_Weighted_Close_Price'] = df['close'] * df['volume']
+    
+    # Moving Average of Volume-Weighted Close Price
+    df['MA_Volume_Weighted_Close_Price'] = df['Volume_Weighted_Close_Price'].rolling(window=20).mean()
+    
+    # Volume-Weighted Momentum
+    df['Volume_Weighted_Momentum'] = df['Volume_Weighted_Close_Price'] - df['MA_Volume_Weighted_Close_Price']
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        df['Combined_Momentum_High_Low'] +
+        df['Adjusted_Volatility'] +
+        df['Differential_Ratios'] +
+        df['Strong_Move'] * df['Volume_Weighted_Momentum'] +
+        df['Spread_Momentum']
+    )
+    
+    return alpha_factor.dropna()
+```

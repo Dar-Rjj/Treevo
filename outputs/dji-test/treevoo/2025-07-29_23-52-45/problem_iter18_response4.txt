@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Short-Term Return
+    short_term_return = df['close'] / df['close'].shift(7) - 1
+    
+    # Long-Term Return
+    long_term_return = df['close'] / df['close'].shift(90) - 1
+    
+    # Volume-Weighted Returns
+    volume_weighted_short_term = short_term_return * df['volume'].shift(1)
+    volume_weighted_long_term = long_term_return * df['volume'].shift(1)
+    
+    # Momentum Factor
+    momentum_factor = volume_weighted_short_term - volume_weighted_long_term
+    
+    # Reversal Indicator
+    reversal_indicator = -momentum_factor
+    
+    # Price Change
+    price_change = df['open'] - df['close']
+    
+    # Volume Adjusted Price Change
+    volume_adjusted_price_change = price_change * df['volume'].shift(1)
+    
+    # Smoothed Momentum Calculation
+    smoothed_momentum = volume_adjusted_price_change.rolling(window=15).median()
+    first_difference = smoothed_momentum - smoothed_momentum.shift(1)
+    
+    # Momentum Trend
+    ema_momentum = momentum_factor.ewm(span=30, adjust=False).mean()
+    momentum_trend = pd.Series(index=df.index, dtype=str)
+    momentum_trend[momentum_factor > ema_momentum] = 'Strong Uptrend'
+    momentum_trend[momentum_factor < ema_momentum] = 'Strong Downtrend'
+    momentum_trend[(momentum_factor <= ema_momentum) & (momentum_factor >= ema_momentum)] = 'Sideways or Neutral'
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (momentum_factor + first_difference + reversal_indicator) / 3
+    
+    return alpha_factor
+```

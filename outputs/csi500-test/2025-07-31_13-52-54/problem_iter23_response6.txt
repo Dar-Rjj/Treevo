@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Volume-Weighted High-Low Spread
+    high_low_vol = (df['high'] - df['low']) * df['volume']
+    cum_high_low_vol = high_low_vol.rolling(window=20).sum()
+    total_volume = df['volume'].rolling(window=20).sum()
+    volume_weighted_price = (df['close'] * df['volume']).rolling(window=20).sum() / total_volume
+    volume_averaged_high_low_spread_ratio = cum_high_low_vol / volume_weighted_price
+
+    # Calculate Momentum
+    current_day_high_low_vol = (df['high'] - df['low']) * df['volume']
+    past_n_days_high_low_vol = high_low_vol.rolling(window=20).mean() / df['volume'].rolling(window=20).mean()
+    momentum = current_day_high_low_vol - past_n_days_high_low_vol
+
+    # Incorporate Price Trend
+    price_change = df['close'] - df['open']
+    price_trend = price_change + momentum
+
+    # Calculate Intraday Range Growth
+    today_high_low_range = df['high'] - df['low']
+    prev_high = df['high'].shift(1)
+    prev_low = df['low'].shift(1)
+    prev_high_low_range = prev_high - prev_low
+    intraday_range_growth = (today_high_low_range - prev_high_low_range) / prev_high_low_range
+
+    # Volume Weighted Moving Average
+    close_prices = df['close']
+    volumes = df['volume']
+    weighted_close_prices = close_prices * volumes
+    sum_weighted_close_prices = weighted_close_prices.rolling(window=20).sum()
+    sum_volumes = volumes.rolling(window=20).sum()
+    volume_weighted_moving_average = sum_weighted_close_prices / sum_volumes
+
+    # Combine Intraday Range Growth and Volume Weighted Moving Average
+    combined_factor = intraday_range_growth + volume_weighted_moving_average
+
+    # Calculate Price Momentum
+    n_day_return_close = (df['close'] / df['close'].shift(20)) - 1
+    n_day_return_open = (df['open'] / df['open'].shift(20)) - 1
+    price_momentum = n_day_return_close + n_day_return_open
+
+    # Adjust for Volume Surge
+    n_day_volume_change = df['volume'] - df['volume'].shift(20)
+    m_day_volume_change = df['volume'] - df['volume'].shift(10)
+    volume_surge = n_day_volume_change + m_day_volume_change
+    adjusted_volume_surge = volume_surge.where(volume_surge > 0, volume_surge * 0.8)
+
+    # Final Combined Alpha Factor
+    final_alpha_factor = (price_momentum * volume_averaged_high_low_spread_ratio +
+                          intraday_range_growth + adjusted_volume_surge + momentum)
+
+    # Calculate the 50-day Simple Moving Average (SMA) of closing prices
+    sma_50 = df['close'].rolling(window=50).mean()
+    trend_signal = (df['close'] > sma_50).astype(int) - (df['close'] < sma_50).astype(int)
+
+    # Explore Momentum in High and Low Prices
+    high_momentum = df['high'] - df['high'].shift(1)
+    low_momentum = df['low'] - df['low'].shift(1)
+    combined_momentum_score = high_momentum + low_momentum
+    momentum_threshold = combined_momentum_score.abs().quantile(0.75)
+    momentum_signal = (combined_momentum_score > momentum_threshold).astype(int) - (combined_momentum_score < -momentum_threshold).astype(int)
+
+    # Analyze Volume Patterns
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_intensity_signal = (daily_volume_change > 0.3).astype(int) - (daily_volume_change < -0.3).astype(int)
+
+    # Leverage Price and Volume for an Intensity Factor
+    return_intensity = (df['close'] - df['close'].shift(1)) * df['volume']
+    intensity_ma = return_intensity.rolling(window=20).mean()
+
+    # Synthesize Factors
+    composite_alpha_factor = (volume_averaged_high_low_spread_ratio + 
+                              trend_signal + 
+                              combined_momentum_score + 
+                              volume_intensity_signal + 
+                              intensity_ma)
+
+    return composite_alpha_factor
+```

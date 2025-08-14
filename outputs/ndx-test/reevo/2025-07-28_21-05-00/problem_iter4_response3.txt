@@ -1,0 +1,42 @@
+```python
+def heuristics_v2(df: pd.DataFrame, sector_factors: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility factor using the standard deviation of the past 10 days
+    volatility_10d = df['close'].rolling(window=10).std()
+
+    # Integrate multiple indicators to create a robust factor
+    combined_factor = (price_change * volume_change + diff_close_avg + momentum_5d + rsi + volatility_10d)
+
+    # Apply exponential smoothing to the combined factor
+    smoothed_factor = combined_factor.ewm(span=5, adjust=False).mean()
+
+    # Incorporate sector-specific factors
+    if sector_factors is not None:
+        sector_effect = sector_factors.ewm(span=5, adjust=False).mean()
+        smoothed_factor += sector_effect
+
+    # Use machine learning for non-linear interactions
+    # For simplicity, we'll use a rolling window to capture non-linear interactions
+    non_linear_interactions = smoothed_factor.rolling(window=5).apply(lambda x: np.polyfit(range(5), x, 2)[0], raw=False)
+    
+    # Combine the smoothed factor with non-linear interactions
+    final_factor = (smoothed_factor + non_linear_interactions).ewm(span=5, adjust=False).mean()
+    return final_factor
+```

@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10):
+    # Calculate High-Low Range and Its Volume-Adjusted Version
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Volume_Adjusted_High_Low_Range'] = df['High_Low_Range'] * df['volume']
+
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    df['Cumulative_Volume_Adjusted_High_Low_Range'] = df['Volume_Adjusted_High_Low_Range'].rolling(window=n).sum()
+    df['High_to_Low_Price_Ratio'] = df['high'] / df['low']
+
+    # Analyze Volume Trends and Momentum
+    df['Volume_Moving_Average'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = (df['volume'] > df['Volume_Moving_Average']).astype(int) * 2 - 1
+    df['Aggregated_Volume_t-1'] = df['volume'].shift(1)
+    df['Aggregated_Volume_t-n'] = df['volume'].shift(n)
+    df['Volume_Momentum'] = df['Aggregated_Volume_t-1'] - df['Aggregated_Volume_t-n']
+
+    # Integrate Open-Close Momentum with Volatility Indicators
+    df['Open_Close_Price_Change'] = df['close'] - df['open']
+    df['Cumulative_Open_Close_Price_Change'] = df['Open_Close_Price_Change'].rolling(window=n).sum()
+    df['Average_True_Range'] = df['High_Low_Range'].rolling(window=n).mean()
+
+    # Synthesize Components into Alpha Factor
+    df['Volume_Trend_High_Low_Ratio'] = df['High_to_Low_Price_Ratio'] * df['Volume_Trend']
+    df['Volume_Momentum_Adjusted_High_Low_Range'] = df['High_Low_Range'] * df['volume'] * df['Volume_Momentum']
+    df['Momentum_Range_Expansion'] = df['High_Low_Range'] * (df['Aggregated_Volume_t-1'] - df['Aggregated_Volume_t-n'])
+    df['Open_Close_Momentum_Adjusted_High_Low_Range'] = df['Open_Close_Price_Change'] * df['High_Low_Range'] * df['volume']
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Volume_Trend_High_Low_Ratio'] +
+        df['Volume_Momentum_Adjusted_High_Low_Range'] +
+        df['Momentum_Range_Expansion'] +
+        df['Open_Close_Momentum_Adjusted_High_Low_Range']
+    )
+
+    return df['Alpha_Factor']
+```

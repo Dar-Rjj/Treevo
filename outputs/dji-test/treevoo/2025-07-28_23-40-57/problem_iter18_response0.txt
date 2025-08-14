@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5):
+    # Calculate Intraday Volume Proportion
+    df['IntradayVolume'] = df['volume'] - (df['volume'].shift(1) + df['volume'].shift(-1))
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Intensity
+    df['HighLowRange'] = df['high'] - df['low']
+    df['IntradayVolumeIntensity'] = df['IntradayVolume'] / df['HighLowRange']
+    
+    # Calculate Volume Impact Score
+    sum_volume_n_days = df['volume'].rolling(window=n).sum()
+    avg_high_n_days = df['high'].rolling(window=n).mean()
+    avg_low_n_days = df['low'].rolling(window=n).mean()
+    df['VolumeImpactScore'] = (avg_high_n_days - avg_low_n_days) / sum_volume_n_days
+    
+    # Multiply Intraday Return by Volume Impact Score
+    df['CombinedFactor'] = df['IntradayReturn'] * df['VolumeImpactScore']
+    
+    # Calculate Weighted Intraday Volume Intensity
+    df['WeightedIntradayVolumeIntensity'] = df['IntradayVolumeIntensity'] * df['IntradayReturn']
+    
+    # Calculate Intraday and Breakout Momentum
+    df['Momentum'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Volume
+    sum_volume_N_days = df['volume'].rolling(window=n).sum()
+    df['AdjustedMomentum'] = df['Momentum'] / sum_volume_N_days
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    df['CumulativeVolumeWeightedMomentum'] = df['AdjustedMomentum'] * df['volume']
+    df['CumulativeVolumeWeightedMomentum'] = df['CumulativeVolumeWeightedMomentum'].rolling(window=n).sum()
+    
+    # Aggregate Momentum Over M Days
+    df['AggregatedMomentum'] = df['CumulativeVolumeWeightedMomentum'].rolling(window=m).sum()
+    
+    # Enhance with Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=n).mean()
+    avg_loss = loss.rolling(window=n).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Combine with Volume-Weighted Momentum
+    df['EnhancedFactor'] = df['RSI'] * df['AggregatedMomentum']
+    
+    return df['EnhancedFactor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame({'open': [..], 'high': [..], 'low': [..], 'close': [..], 'volume': [..]})
+# factor_values = heuristics_v2(df)
+```

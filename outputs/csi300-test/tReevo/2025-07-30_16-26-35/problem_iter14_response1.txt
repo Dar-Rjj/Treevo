@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open'].shift(1)) / df['close'].shift(1)
+    
+    # Determine Market Trend
+    df['trend'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'trend'] = 1  # Trending Up
+    df.loc[df['close'] < df['close'].shift(1), 'trend'] = -1  # Trending Down
+    
+    # Dynamic Weighting Based on Market Trends
+    def apply_weights(row):
+        if row['trend'] == 1:  # Trending Up
+            w_intraday, w_close_to_open = 0.6, 0.4
+        elif row['trend'] == -1:  # Trending Down
+            w_intraday, w_close_to_open = 0.7, 0.3
+        else:  # Ranging
+            w_intraday, w_close_to_open = 0.5, 0.5
+        return (row['intraday_range'] * w_intraday + row['close_to_open_return'] * w_close_to_open)
+
+    df['combined_factor'] = df.apply(apply_weights, axis=1)
+    
+    # Emphasize Recent Data
+    df['recent_factor'] = df['intraday_range'] * 0.8 + df['close_to_open_return'] * 0.2
+    df['older_factor'] = df['intraday_range'] * 0.5 + df['close_to_open_return'] * 0.5
+    
+    # Compute Volume Impact
+    df['volume_impact'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Final Dynamic Factor
+    df['interim_factor'] = df['recent_factor'] * 0.7 + df['older_factor'] * 0.3
+    df['final_factor'] = df['interim_factor'] * 0.8 + df['volume_impact'] * 0.2
+    
+    # Return the final factor as a Series
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', parse_dates=True, index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

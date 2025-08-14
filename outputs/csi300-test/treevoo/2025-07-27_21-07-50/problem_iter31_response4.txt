@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum and Trend Analysis
+    df['weighted_close'] = df['close'].rolling(window=10).apply(lambda x: (x * np.arange(1, 11)).sum() / 55, raw=True)
+    df['roc_adjusted'] = (df['close'] - df['close'].shift(5)) / df['volume']
+    
+    # Volume Anomaly and Surge Detection
+    df['volume_ma_30'] = df['volume'].rolling(window=30).mean()
+    df['volume_ratio_40_max'] = df['volume'] / df['volume'].rolling(window=40).max()
+    
+    # Price Volatility and Stability
+    df['recent_volatility'] = df['close'].rolling(window=10).std()
+    df['atr'] = (df[['high', 'low', 'close']].diff().abs().rolling(window=14).mean()).max(axis=1)
+    df['atr_ratio'] = df['atr'] / df['atr'].shift(14)
+    
+    # Reversal and Continuation Patterns
+    def engulfing(df):
+        condition_bullish = (df['close'] > df['open']) & (df['close'].shift(-1) < df['open'].shift(-1))
+        condition_bearish = (df['close'] < df['open']) & (df['close'].shift(-1) > df['open'].shift(-1))
+        return (condition_bullish | condition_bearish).astype(int)
+
+    def hammer_hanging_man(df):
+        body_high = df[['close', 'open']].max(axis=1)
+        body_low = df[['close', 'open']].min(axis=1)
+        tail_up = df['high'] - body_high
+        tail_down = body_low - df['low']
+        is_hammer = (tail_up > 2 * (body_high - body_low)) & (tail_down < 0.5 * (body_high - body_low))
+        is_hanging_man = (tail_down > 2 * (body_high - body_low)) & (tail_up < 0.5 * (body_high - body_low))
+        return (is_hammer | is_hanging_man).astype(int)
+
+    df['engulfing'] = engulfing(df)
+    df['hammer_hanging_man'] = hammer_hanging_man(df)
+    
+    # Liquidity and Trading Activity
+    df['volume_amount_ratio'] = df['volume'] / df['amount']
+    df['volume_amount_ratio_ma_20'] = df['volume_amount_ratio'].rolling(window=20).mean()
+    df['up_down_volume_ratio'] = df['volume'].where(df['close'] > df['close'].shift(1), 0) / df['volume'].where(df['close'] < df['close'].shift(1), 1)
+    df['up_down_volume_ratio_ma_20'] = df['up_down_volume_ratio'].rolling(window=20).mean()
+    
+    # Intraday Volatility
+    df['hl_spread'] = df['high'] - df['low']
+    df['oc_spread'] = df['close'] - df['open']
+    df['intraday_volatility'] = (df['hl_spread'] + df['oc_spread']) * df['volume']
+    
+    # Volume-Weighted Close
+    df['vwc'] = df['close'] * df['volume']
+    df['sma_vwc_21'] = df['vwc'].rolling(window=21).mean()
+    
+    # Composite Alpha Factor
+    df['composite_alpha'] = (df['vwc'] - df['sma_vwc_21']) + df['intraday_volatility'] + df['close'] - df['close'].shift(1) + df['amount'] / df['volume']
+
+    # Return the composite alpha factor
+    return df['composite_alpha'].dropna()
+```

@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily return based on close prices
+    daily_return = df['close'].pct_change()
+    
+    # Calculate the 10-day exponential moving average of daily returns for stability
+    smoothed_daily_return = daily_return.ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 30-day cumulative return as a momentum factor
+    momentum = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Calculate the 10-day standard deviation of smoothed daily returns as volatility
+    volatility = smoothed_daily_return.rolling(window=10).std()
+    
+    # Incorporate market sentiment using the ratio of close to open price
+    market_sentiment = df['close'] / df['open']
+    
+    # Calculate volume dynamics as the 10-day exponentially weighted moving average of volume
+    volume_dynamics = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the Relative Strength Index (RSI) with a 14-day window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_signal_diff = macd_line - signal_line
+    
+    # Combine the momentum, market sentiment, RSI, MACD, and volatility
+    # Higher market sentiment, RSI, and MACD signal difference increase the score
+    # Higher volatility reduces the score, indicating higher risk
+    factor = (
+        momentum + 
+        (market_sentiment - 1) + 
+        (rsi - 50) / 50 + 
+        macd_signal_diff + 
+        (volume_dynamics / df['volume'].mean()) - 
+        (volatility / volatility.mean())
+    )
+    
+    # Add an additional smoothing to further stabilize the signal
+    factor = factor.ewm(span=5, adjust=False).mean()
+    
+    return factor
+```

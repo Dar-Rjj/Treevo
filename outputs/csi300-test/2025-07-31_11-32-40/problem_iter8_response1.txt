@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Intraday Close-Open Return
+    close_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Influence Ratio
+    upward_volume = df[df['close'] > df['open']]['volume'].sum()
+    downward_volume = df[df['close'] < df['open']]['volume'].sum()
+    volume_influence_ratio = upward_volume / downward_volume if downward_volume != 0 else 0
+    
+    # Combine High-Low Spread and Close-Open Return
+    intraday_momentum = high_low_spread * close_open_return
+    
+    # Calculate Intraday Reversal
+    intraday_reversal = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    
+    # Adjust for Open Interest
+    open_interest_adjustment = 1 + (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_intraday_reversal = intraday_reversal * open_interest_adjustment
+    
+    # Calculate Volume Weighted Close-to-Open Change
+    close_open_change = df['close'] - df['open']
+    volume_weighted_close_open_change = close_open_change * df['volume']
+    
+    # Consider Day-to-Day Open Price Change
+    day_to_day_open_price_change = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Daily Price Momentum
+    daily_price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Calculate Volume Surprise
+    volume_10_day_ma = df['volume'].rolling(window=10).mean()
+    volume_surprise = df['volume'] - volume_10_day_ma
+    intermediate_alpha_factor = daily_price_momentum * volume_surprise
+    
+    # Calculate Volume Surge
+    volume_surge = df['volume'] - df['volume'].shift(1)
+    
+    # Final Alpha Factor Components
+    final_alpha_factor = (
+        intraday_momentum * volume_influence_ratio +
+        volume_weighted_close_open_change +
+        adjusted_intraday_reversal +
+        day_to_day_open_price_change +
+        intermediate_alpha_factor * volume_influence_ratio +
+        volume_surge
+    )
+    
+    # Calculate Moving Average
+    moving_average = final_alpha_factor.rolling(window=5).mean()
+    factor_score = (final_alpha_factor > moving_average).astype(int) * 2 - 1
+    
+    return final_alpha_factor, factor_score
+```

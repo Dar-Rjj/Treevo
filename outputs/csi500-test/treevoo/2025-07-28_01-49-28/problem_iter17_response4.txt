@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['Spread'] = df['high'] - df['low']
+    
+    # Incorporate Volume into Daily Range
+    df['Volume_Adjusted_Spread'] = df['Spread'] * df['volume']
+    
+    # Calculate Open-to-Close Movement
+    df['Open_Close_Movement'] = df['close'] - df['open']
+    
+    # Adjust for Volume in Open-to-Close Movement
+    df['Volume_Adjusted_Breakout_Strength'] = df['Open_Close_Movement'] * np.sqrt(df['volume']) + df['Volume_Adjusted_Spread']
+    
+    # Calculate 5-day Momentum
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['5_day_Momentum'] = np.where(df['close'] > df['5_day_MA'], 1, -1)
+    
+    # Calculate Weighted Momentum
+    df['Momentum'] = df['close'] - df['close'].shift(1)
+    df['Volume_Weighted_Momentum'] = df['Momentum'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Momentum
+    df['EMA_Momentum'] = df['Volume_Weighted_Momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Price Change Ratio
+    df['Price_Change_Ratio'] = df['close'] / df['open']
+    
+    # Calculate Relative Strength Index (RSI)
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Positive_Returns'] = df['Daily_Returns'].where(df['Daily_Returns'] > 0, 0)
+    df['Negative_Returns'] = -df['Daily_Returns'].where(df['Daily_Returns'] < 0, 0)
+    df['Average_Gain'] = df['Positive_Returns'].rolling(window=14).mean()
+    df['Average_Loss'] = df['Negative_Returns'].rolling(window=14).mean()
+    df['Relative_Strength'] = df['Average_Gain'] / df['Average_Loss']
+    df['RSI'] = 100 - (100 / (1 + df['Relative_Strength']))
+    
+    # Proximity to 10-Day Range
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['Proximity_to_High'] = df['10_day_high'] - df['close']
+    df['Proximity_to_Low'] = df['close'] - df['10_day_low']
+    df['Min_Proximity'] = df[['Proximity_to_High', 'Proximity_to_Low']].min(axis=1)
+    df['Inverted_Proximity'] = 1 / df['Min_Proximity']
+    df['20_day_volatility'] = df['Daily_Returns'].rolling(window=20).std()
+    df['Adjusted_Proximity'] = df['Inverted_Proximity'] / df['20_day_volatility']
+    
+    # Combine Factors
+    df['Combined_Indicator'] = (
+        (df['Volume_Adjusted_Spread'] + df['Volume_Weighted_Momentum']) * 
+        df['Price_Change_Ratio'] * 
+        df['EMA_Momentum'] * 
+        df['Adjusted_Proximity'] * 
+        df['RSI'] +
+        df['Volume_Adjusted_Breakout_Strength']
+    ) * df['5_day_Momentum']
+    
+    # Filter for Strong Moves
+    threshold = 0.5
+    df['Alpha_Factor'] = np.where(df['Combined_Indicator'] > threshold, 1, 0)
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv')
+# alpha_factor = heuristics_v2(df)
+```

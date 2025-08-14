@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Adjusted Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['adj_return'] = ((df['close'] - df['low'].shift(1)) / (df['high'].shift(1) - df['low'].shift(1))) * 100
+    
+    # Apply Volume Smoothing
+    df['volume_ewma'] = df['volume'].ewm(span=14, adjust=False).mean()
+    df['norm_volume'] = df['volume'] / df['volume_ewma']
+    
+    # Weighted Returns Calculation
+    df['weighted_return'] = df['adj_return'] * df['norm_volume']
+    df['weighted_return_21'] = df['weighted_return'].rolling(window=21).sum()
+    
+    # Separate Positive and Negative Weights
+    df['positive_weight'] = df[df['weighted_return'] > 0]['weighted_return'].rolling(window=21).sum()
+    df['negative_weight'] = df[df['weighted_return'] < 0]['weighted_return'].abs().rolling(window=21).sum()
+    
+    # Compute Dynamic RSI
+    df['relative_strength'] = df['positive_weight'] / df['negative_weight']
+    df['dynamic_rsi'] = 100 - (100 / (1 + df['relative_strength']))
+    
+    # Calculate Volume Adjusted Price (VAP)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['vap'] = df['typical_price'] * df['volume']
+    
+    # Calculate Volume Adjusted Momentum
+    df['vap_ema_25'] = df['vap'].ewm(span=25, adjust=False).mean()
+    df['vap_momentum'] = df['vap'] - df['vap_ema_25']
+    
+    # Incorporate Recent Volatility
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility_15'] = df['daily_returns'].rolling(window=15).std()
+    df['inv_volatility'] = 1 / df['volatility_15']
+    df['vap_momentum_adj'] = df['vap_momentum'] * df['inv_volatility']
+    
+    # Combine Volume Adjusted Momentum and High-Low Range Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_range_volatility'] = df['high_low_range'].rolling(window=25).std()
+    df['alpha_factor'] = df['vap_momentum_adj'] - df['high_low_range_volatility']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,30 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Price Momentum
+    df['price_diff'] = df['high'] - df['low'].shift(1)
+    ema_span = 5  # Define EMA smoothing factor
+    df['adjusted_momentum_ema'] = df['price_diff'].ewm(span=ema_span, min_periods=ema_span).mean()
+
+    # Adjust by Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    sma_window = 3  # Define SMA length
+    df['volume_ratio_sma'] = df['volume_ratio'].rolling(window=sma_window, min_periods=sma_window).mean()
+
+    # Combine Adjusted Momentum and Volume Ratio
+    df['combined_momentum'] = df['adjusted_momentum_ema'] * df['volume_ratio_sma']
+
+    # Compute Volume Influence Ratio
+    df['upward_volume'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else 0, axis=1)
+    df['downward_volume'] = df.apply(lambda row: row['volume'] if row['close'] < row['open'] else 0, axis=1)
+    df['total_upward_volume'] = df['upward_volume'].rolling(window=sma_window, min_periods=sma_window).sum()
+    df['total_downward_volume'] = df['downward_volume'].rolling(window=sma_window, min_periods=sma_window).sum()
+    df['volume_influence_ratio'] = df['total_upward_volume'] / df['total_downward_volume'].replace(0, np.nan)
+
+    # Integrate Combined Adjusted Momentum, Volume Ratio, and Directional Volume Impact
+    df['alpha_factor'] = df['combined_momentum'] * df['volume_influence_ratio']
+
+    return df['alpha_factor']
+```

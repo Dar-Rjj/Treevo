@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, price_momentum_coeff=0.5, volume_trend_coeff=0.5):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_HL_Spread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread over past N days
+    df['Avg_Intraday_HL_Spread'] = df['Intraday_HL_Spread'].rolling(window=n).mean()
+    
+    # Compute High-Low Momentum Score
+    df['HL_Momentum_Score'] = 0
+    df.loc[df['Intraday_HL_Spread'] > df['Avg_Intraday_HL_Spread'], 'HL_Momentum_Score'] = 1
+    df.loc[df['Intraday_HL_Spread'] < df['Avg_Intraday_HL_Spread'], 'HL_Momentum_Score'] = -1
+    
+    # Adjust by Volume
+    df['HL_Momentum_Score_Adjusted'] = df['HL_Momentum_Score'] * df['volume']
+    
+    # Calculate Simple Moving Average (SMA) of Close
+    df['SMA_Close'] = df['close'].rolling(window=n).mean()
+    
+    # Calculate Price Reversal Indicator
+    df['Price_Reversal_Indicator'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Integrate Volume into Momentum: Compute Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] + df['open']) / 2 * df['volume']
+    df['VWAP'] = df['VWAP'].rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Combine SMA and VWAP
+    df['Integrated_Momentum'] = (df['SMA_Close'] + df['VWAP']) / 2
+    
+    # Composite Factor Construction
+    df['Composite_Factor'] = df['HL_Momentum_Score_Adjusted'] * df['Integrated_Momentum'] * df['Price_Reversal_Indicator']
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'].pct_change(n)
+    
+    # Calculate Volume Trend
+    df['Volume_Trend'] = df['volume'].pct_change(n)
+    
+    # Combine Momentum and Volume Interaction
+    df['Weighted_Sum'] = (df['Price_Momentum'] * price_momentum_coeff) + (df['Volume_Trend'] * volume_trend_coeff)
+    
+    # Calculate Final Enhanced Factor
+    df['Final_Enhanced_Factor'] = df['Weighted_Sum'] + df['high'] - df['low']
+    
+    return df['Final_Enhanced_Factor']
+```

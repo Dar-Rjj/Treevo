@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=10, p=5):
+    # Intraday Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Volume and Price Spike Adjustment
+    volume_spike = (df['volume'] > df['volume'].shift(1)).astype(int)
+    price_spike = (df['close'] > df['close'].shift(1)).astype(int)
+
+    # Volatility-Adjusted Intraday Momentum
+    log_returns = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x == 0 else np.log(x))
+    std_log_returns = log_returns.rolling(window=n).std()
+    volatility_adjusted_intraday_momentum = intraday_momentum / std_log_returns
+    
+    # Scaled Intraday Momentum
+    combined_spikes = volume_spike + price_spike
+    scaled_intraday_momentum = combined_spikes.where(combined_spikes < 3, 3) * volatility_adjusted_intraday_momentum
+    
+    # Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    combined_intraday_features = df['open'] - ((df['high'] + df['low']) / 2) - opening_gap
+    
+    # Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Recent Volatility-Enhanced Factor
+    absolute_price_change = df['close'].diff().abs()
+    avg_abs_price_change = absolute_price_change.rolling(window=m).mean()
+    recent_volatility_enhanced_factor = combined_intraday_features * avg_abs_price_change
+    
+    # Volume-Adjusted Factor
+    volume_adjusted_factor = recent_volatility_enhanced_factor / volume_spike
+    volume_adjusted_factor = volume_adjusted_factor.where(volume_adjusted_factor < 10, 10)
+    
+    # Relative Volume Weighted Factor
+    avg_volume = df['volume'].rolling(window=n).mean()
+    relative_volume_weighted_factor = volume_adjusted_factor / avg_volume * df['volume']
+    
+    # Daily Momentum
+    daily_momentum = df['close'] - df['close'].shift(n)
+    
+    # Volume-Adjusted Transaction Intensity
+    amount_per_volume = df['amount'] / df['volume']
+    avg_amount_per_volume = amount_per_volume.rolling(window=n).sum()
+    
+    # Price Trend Reversal
+    price_trend_reversal = (df['close'] - df['close'].shift(1)) * (avg_amount_per_volume / avg_amount_per_volume.mean())
+    
+    # Intraday Volatility Standard Deviation
+    std_intraday_range = intraday_range.rolling(window=n).std()
+    
+    # Combined Alpha Factor
+    combined_alpha_factor = (intraday_range.mean() * (close_to_open_return + df['close'].diff())) + daily_momentum + price_trend_reversal
+    combined_alpha_factor += (std_intraday_range * close_to_open_return)
+    
+    # Recent Amount Trend
+    avg_amount = df['amount'].rolling(window=p).mean()
+    final_factor = combined_alpha_factor * avg_amount
+
+    return final_factor
+```

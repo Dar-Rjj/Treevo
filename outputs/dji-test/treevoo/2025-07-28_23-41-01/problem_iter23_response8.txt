@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    df['close_position_in_range'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'].pct_change().fillna(0))
+    
+    # Weighted by Volume
+    df['weighted_daily_return'] = df['daily_return'] * df['volume']
+    
+    # Combine Initial Factors
+    df['initial_factor'] = df['close_position_in_range'] + df['weighted_daily_return']
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = (df['high'] - df['low']) / df['high'].rolling(window=21).mean() - df['low'].rolling(window=21).mean()
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_reversal_score'] = (df['close'] - df['open']) / df['intraday_range'] * df['volume']
+    
+    # Combine Breakout and Intraday Factors
+    df['combined_breakout_intraday'] = df['initial_factor'] + df['breakout_strength'] + df['intraday_reversal_score']
+    
+    # Calculate Price Momentum
+    df['7_day_return'] = df['close'].pct_change(7).fillna(0)
+    df['21_day_return'] = df['close'].pct_change(21).fillna(0)
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+    
+    # Determine Volume Impact
+    mean_volume = df['volume'].mean()
+    df['volume_ratio'] = df['volume'] / mean_volume
+    df['adjusted_factor'] = df['combined_breakout_intraday'] * df['volume_ratio']
+    
+    # Incorporate Momentum
+    df['momentum_adjusted_factor'] = df['adjusted_factor'] + df['price_momentum']
+    
+    # Integrate Volume Momentum
+    df['10_day_rolling_sum_volume'] = df['volume'].rolling(window=10).sum()
+    df['10_day_rolling_sum_price_changes'] = df['close'].diff().rolling(window=10).sum()
+    
+    # Calculate Volume Activity
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).mean()
+    df['21_day_avg_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_activity'] = df['7_day_avg_volume'] / df['21_day_avg_volume']
+    
+    # Introduce Trend Indicator
+    df['50_day_ma'] = df['close'].rolling(window=50).mean()
+    df['200_day_ma'] = df['close'].rolling(window=200).mean()
+    df['trend_indicator'] = (df['50_day_ma'] > df['200_day_ma']).astype(int) * 2 - 1
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['momentum_adjusted_factor'] * df['volume_activity']) * df['trend_indicator']
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Short-Term Return
+    short_term_return = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Long-Term Return
+    long_term_return = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Volume-Weighted Returns
+    volume_weighted_short_term = short_term_return * df['volume']
+    volume_weighted_long_term = long_term_return * df['volume']
+    
+    # Measure Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).abs()
+    
+    # Adjust Returns by Intraday Volatility
+    adjusted_short_term = volume_weighted_short_term / intraday_volatility
+    adjusted_long_term = volume_weighted_long_term / intraday_volatility
+    
+    # Combined Adjusted Momentum Factor
+    combined_adjusted_momentum = adjusted_long_term - adjusted_short_term
+    
+    # Reversal Indicator
+    reversal_indicator = -combined_adjusted_momentum
+    
+    # Calculate 5-Day Moving Average of Close Price
+    ma_5_day = df['close'].rolling(window=5).mean()
+    
+    # Calculate 60-Day Moving Average of Close Price
+    ma_60_day = df['close'].rolling(window=60).mean()
+    
+    # Trend Indicator
+    trend_indicator = ma_5_day - ma_60_day
+    
+    # Momentum Trend
+    momentum_trend = combined_adjusted_momentum.rolling(window=20).mean()
+    strong_uptrend_signal = (combined_adjusted_momentum > momentum_trend).astype(int)
+    strong_downtrend_signal = (combined_adjusted_momentum < momentum_trend).astype(int)
+    
+    # Price Change
+    price_change = df['high'] - df['low']
+    
+    # Volume Adjusted Price Change
+    volume_adjusted_price_change = price_change * df['volume']
+    
+    # Smoothed Momentum Calculation
+    smoothed_momentum = volume_adjusted_price_change.rolling(window=10).mean()
+    first_difference_smoothed_momentum = smoothed_momentum.diff()
+    
+    # Compute Daily Returns
+    daily_returns = df['close'].pct_change()
+    
+    # Calculate Exponential Moving Average (EMA) of Returns
+    ema_returns = daily_returns.ewm(span=10, adjust=False).mean()
+    
+    # Incorporate Volume
+    volume_weighted_return = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Calculate EMA of Intraday Volatility
+    ema_intraday_volatility = intraday_volatility.ewm(span=10, adjust=False).mean()
+    
+    # Combine Momentum, Intraday Volatility, and Volume
+    combined_factor = (ema_returns + volume_weighted_return) / ema_intraday_volatility
+    
+    # Adjust Combined Factor by Intraday Volatility
+    adjusted_combined_factor = combined_factor / ema_intraday_volatility
+    
+    # Momentum Indicator
+    rolling_median_volume_adjusted = volume_adjusted_price_change.rolling(window=10).median()
+    first_difference_rolling_median = rolling_median_volume_adjusted.diff()
+    
+    # Final Alpha Factor
+    final_alpha_factor = reversal_indicator + trend_indicator + (df['close'] - df['open'])
+    
+    # Additional Feature: High-Frequency Trading (HFT) Indicator
+    hft_activity = (df[['high', 'low', 'open', 'close']].diff().dropna().ne(0)).sum(axis=1)
+    adjusted_final_alpha_factor = final_alpha_factor / hft_activity
+    
+    return adjusted_final_alpha_factor
+```

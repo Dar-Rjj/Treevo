@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    intraday_price_movement = df['high'] - df['low']
+    
+    # Adjust by Volume Change and Average Volume
+    lookback_period = 20
+    df['volume_ma'] = df['volume'].rolling(window=lookback_period).mean()
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_price_range = (intraday_price_movement * volume_change) / df['volume_ma']
+    
+    # Apply Enhanced Price Level Adjustment
+    price_level_ratio = df['close'] / df['open']
+    smoothing_parameter = 1.5
+    sigmoid_adjustment = 1 / (1 + np.exp(-smoothing_parameter * (price_level_ratio - 1)))
+    adjusted_range = adjusted_price_range * sigmoid_adjustment
+    
+    # Incorporate Close Price Momentum
+    momentum_lookback_period = 10
+    momentum = df['close'].pct_change(momentum_lookback_period)
+    
+    # Calculate 5-Day Average High-Low Spread
+    avg_high_low_spread_5d = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate 10-Day EMA of High-Low Spread
+    ema_high_low_spread_10d = (df['high'] - df['low']).ewm(span=10, adjust=False).mean()
+    
+    # Combine 5-Day Average High-Low Spread and Momentum
+    combined_momentum = avg_high_low_spread_5d * momentum
+    
+    # Integrate Intraday Volatility
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=lookback_period).mean()
+    
+    # Incorporate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Weighted Return
+    volume_weighted_return = df['volume'] * close_to_open_return
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    high_low_spread_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    integrated_momentum_factor = combined_momentum * high_low_spread_momentum
+    
+    # Combine Intraday and High-Low Spread Momentum
+    integrated_momentum_factor += adjusted_range
+    integrated_momentum_factor.name = 'IntegratedMomentumFactor'
+    
+    # Calculate Volume Weighted Average Price
+    vwap = (df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    close_to_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    factor = close_to_close_return * intraday_price_movement / vwap
+    
+    # Filter for Recent Price Trend
+    recent_price_trend = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Introduce Volume Trend
+    vol_sum_5d = df['volume'].rolling(window=5).sum()
+    vol_ratio = df['volume'] / vol_sum_5d
+    volume_trend_adjusted_factor = factor * vol_ratio
+    volume_trend_adjusted_factor.name = 'VolumeTrendAdjustedFactor'
+    
+    # Final Factor Calculation
+    final_factor = (adjusted_range * 0.2 + momentum * 0.3 +
+                    integrated_momentum_factor * 0.3 + volume_trend_adjusted_factor * 0.2)
+    return final_factor
+```

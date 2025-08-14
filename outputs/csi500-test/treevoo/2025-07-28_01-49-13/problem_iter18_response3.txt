@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Calculate Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_close_to_open = close_to_open_return * intraday_range
+    
+    # Combine Metrics: Weight Intraday Range by Volume Change and Adjust by Close-to-Open Return
+    combined_metrics = (intraday_range * volume_change) + adjusted_close_to_open
+    
+    # Calculate Volume Trend
+    volume_trend = df['volume'] - df['volume'].rolling(window=20).mean()
+    
+    # Incorporate Volume Trend
+    combined_metrics_with_volume_trend = combined_metrics * volume_trend
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Cumulative Price Momentum
+    cumulative_price_momentum = daily_price_change.cumsum()
+    
+    # Compute Cumulative Volume Change
+    cumulative_volume_change = volume_change.cumsum()
+    
+    # Final Combination: Combine Cumulative Sums
+    combined_cumulative_sums = cumulative_price_momentum * cumulative_volume_change
+    
+    # Add Combined Metrics to Combined Cumulative Sums
+    final_combination = combined_metrics_with_volume_trend + combined_cumulative_sums
+    
+    # Calculate Daily Price Return
+    n_day_return = df['close'] / df['close'].shift(20) - 1
+    
+    # Identify Volume Spike
+    volume_spike = (df['volume'] > (df['volume'].rolling(window=20).mean() + 2 * df['volume'].rolling(window=20).std()))
+    
+    # Adjust Daily Price Return for Volume Spike
+    k = 1.5  # Example constant greater than 1
+    adjusted_n_day_return = n_day_return.where(~volume_spike, n_day_return * k)
+    
+    # Compute Cumulative Sum of Adjusted Price Return
+    cumulative_adjusted_price_return = adjusted_n_day_return.cumsum()
+    
+    # Introduce Price Trend
+    price_trend = df['close'] - df['close'].rolling(window=20).mean()
+    
+    # Adjust Final Combination with Price and Volume Trends
+    adjusted_final_combination = final_combination * price_trend * volume_trend
+    
+    # Final Alpha Factor
+    final_alpha_factor = adjusted_final_combination + cumulative_adjusted_price_return
+    
+    return final_alpha_factor
+```

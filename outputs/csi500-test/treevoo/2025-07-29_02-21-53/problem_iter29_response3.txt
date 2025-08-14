@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicator Development
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    crossover_signal = short_sma - long_sma
+    
+    high_low_range = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+    
+    sum_high_low_range = high_low_range.rolling(window=20).sum()
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+    
+    smoothed_high_low_range = high_low_range.ewm(span=20).mean()
+    momentum_high_low = smoothed_high_low_range - smoothed_high_low_range.shift(1)
+    
+    true_range = pd.DataFrame({
+        'hl': df['high'] - df['low'],
+        'hc': df['high'] - df['close'].shift(1),
+        'lc': df['low'] - df['close'].shift(1)
+    }).max(axis=1)
+    
+    rolling_atr = true_range.rolling(window=14).mean()
+    
+    # Volume Trend Analysis
+    positive_volume_sum = (df['volume'].diff().clip(lower=0)).rolling(window=20).sum()
+    negative_volume_sum = (df['volume'].diff().clip(upper=0)).rolling(window=20).sum()
+    volume_oscillator = positive_volume_sum - negative_volume_sum
+    
+    volume_impact = high_low_range * df['volume']
+    
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = df['volume'] > avg_volume * 1.5
+    
+    # Price Action Strength
+    price_strength = true_range / rolling_atr
+    
+    # Market Sentiment Factors
+    open_close_spread = df['open'] - df['close']
+    daily_high_low_range_pct = (df['high'] - df['low']) / df['low'] * 100
+    combined_sentiment_score = open_close_spread + daily_high_low_range_pct
+    
+    # Integrated Alpha Factor
+    integrated_momentum_score = (sum_high_low_range + sum_close_open_change) * df['close'].rolling(window=20).std()
+    volume_ratio = df['volume'] / avg_volume
+    integrated_factor = integrated_momentum_score * volume_ratio + combined_sentiment_score
+    
+    return integrated_factor
+```

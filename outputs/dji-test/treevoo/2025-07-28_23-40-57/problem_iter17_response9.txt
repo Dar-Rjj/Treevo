@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=5):
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate Volume Impact Score
+    sum_volume_n_days = df['volume'].rolling(window=n).sum()
+    avg_high_n_days = df['high'].rolling(window=n).mean()
+    avg_low_n_days = df['low'].rolling(window=n).mean()
+    volume_impact_score = (avg_high_n_days - avg_low_n_days) / sum_volume_n_days
+
+    # Multiply Intraday Return by Volume Impact Score
+    factor_1 = intraday_return * volume_impact_score
+
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(n)
+
+    # Adjust by Volume
+    cumulative_volume = df['volume'].rolling(window=n).sum()
+    adjusted_momentum = price_momentum / cumulative_volume
+
+    # Calculate Cumulative Volume-Weighted Momentum
+    cumulative_vol_weighted_momentum = (adjusted_momentum * df['volume']).rolling(window=n).sum()
+
+    # Confirm with Volume Trend
+    avg_volume_past_m_days = df['volume'].rolling(window=m).mean()
+    current_day_volume = df['volume']
+    volume_ratio = current_day_volume / avg_volume_past_m_days
+
+    # If Volume Ratio > 1
+    factor_2 = pd.Series(0, index=df.index)
+    factor_2[volume_ratio > 1] = (price_momentum * intraday_return)[volume_ratio > 1]
+    factor_2 = factor_2.rolling(window=n).sum()
+
+    # Final Factor
+    final_factor = factor_1 * factor_2
+
+    return final_factor
+```

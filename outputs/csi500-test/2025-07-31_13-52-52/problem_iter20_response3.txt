@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-Day Rolling Momentum
+    rolling_momentum = (price_movement_ratio.rolling(window=5).sum() / 
+                        high_low_range.rolling(window=5).sum())
+    
+    # Adjust for Volume
+    volume_adjusted_momentum = rolling_momentum * df['volume']
+    
+    # Calculate 10-Day Price Momentum
+    price_momentum_10 = df['close'] - df['close'].shift(10)
+    
+    # Compute Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Combine and Adjust Price and Intraday Momentum
+    combined_momentum = price_momentum_10 + intraday_return
+    volume_change_indicator = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    combined_momentum_adjusted = combined_momentum * np.where(volume_change_indicator > 0, 1, 0)
+    
+    # Calculate Daily Volatility
+    daily_volatility = abs(df['high'] - df['low'])
+    
+    # Calculate Price Trend Indicator
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    price_trend = np.where(short_sma > long_sma, 1, -1)
+    
+    # Combine Factors
+    combined_factor = combined_momentum_adjusted * price_trend
+    
+    # Final Alpha Factor
+    final_alpha_factor = volume_adjusted_momentum + combined_factor
+    final_alpha_factor_smoothed = (final_alpha_factor.rolling(window=10).mean() + 
+                                    final_alpha_factor.ewm(span=10, adjust=False).mean()) / 2
+    
+    # Final Adjustment for Volume
+    final_alpha_factor = final_alpha_factor_smoothed * df['volume']
+    
+    return final_alpha_factor
+```

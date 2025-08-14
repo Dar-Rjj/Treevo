@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Thought 1.1: Moving Average Crossover
+    sma5 = df['close'].rolling(window=5).mean()
+    sma20 = df['close'].rolling(window=20).mean()
+    sma_crossover = (sma5 > sma20).astype(int) - (sma5 < sma20).astype(int)
+    
+    # Thought 1.2: Momentum
+    momentum_5d = df['close'].pct_change(5)
+    momentum_score = (momentum_5d > 0).astype(int) - (momentum_5d < 0).astype(int)
+    
+    # Thought 2.1: On-Balance Volume (OBV)
+    obv = ((df['close'] > df['close'].shift(1)) * df['volume']).cumsum() - ((df['close'] < df['close'].shift(1)) * df['volume']).cumsum()
+    obv_trend = (obv > obv.shift(1)).astype(int) - (obv < obv.shift(1)).astype(int)
+    
+    # Thought 2.2: Price-Volume Trend (PVT)
+    pvt = (df['close'].pct_change().fillna(0) * df['volume']).cumsum()
+    pvt_trend = (pvt > pvt.shift(1)).astype(int) - (pvt < pvt.shift(1)).astype(int)
+    
+    # Thought 3.1: True Range and ATR14
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr14 = true_range.rolling(window=14).mean()
+    atr_trend = (atr14 > atr14.shift(1)).astype(int) - (atr14 < atr14.shift(1)).astype(int)
+    
+    # Thought 3.2: Bollinger Bands
+    sma20_bb = df['close'].rolling(window=20).mean()
+    sd20 = df['close'].rolling(window=20).std()
+    upper_band = sma20_bb + 2 * sd20
+    lower_band = sma20_bb - 2 * sd20
+    bb_upper = (df['close'] > upper_band).astype(int)
+    bb_lower = (df['close'] < lower_band).astype(int)
+    bb_score = bb_upper - bb_lower
+    
+    # Combine all factors
+    factor = sma_crossover + momentum_score + obv_trend + pvt_trend + atr_trend + bb_score
+    return factor
+```

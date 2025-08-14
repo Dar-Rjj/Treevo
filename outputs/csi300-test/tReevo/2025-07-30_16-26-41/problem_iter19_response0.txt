@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the average sentiment score over a rolling window (e.g., 5 days)
+    df['sentiment_score'] = df['sentiment'].rolling(window=5).mean()
+    
+    # Calculate the average return of the sector to which the stock belongs over a rolling window (e.g., 5 days)
+    df['sector_performance'] = df['sector_return'].rolling(window=5).mean()
+    
+    # Calculate the net impact score of news articles over a rolling window (e.g., 5 days)
+    df['news_impact'] = df['news_score'].rolling(window=5).sum()
+    
+    # Calculate the standard deviation of returns over a short-term period (e.g., 10 days)
+    df['volatility'] = df['close'].pct_change().rolling(window=10).std()
+    
+    # Adapt the EMA window size inversely proportional to the standard deviation
+    ema_window = 1 / df['volatility'].fillna(30)  # Default to 30 if volatility is 0
+    
+    # Apply Exponential Moving Average (EMA) to the sentiment, sector performance, and news impact scores
+    df['ema_sentiment'] = df['sentiment_score'].ewm(span=ema_window, adjust=False).mean()
+    df['ema_sector_performance'] = df['sector_performance'].ewm(span=ema_window, adjust=False).mean()
+    df['ema_news_impact'] = df['news_impact'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Calculate volume-weighted average price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).cumsum() / (df['volume']).cumsum()
+    
+    # Calculate the difference between the closing price and VWAP
+    df['vwap_diff'] = df['close'] - df['vwap']
+    
+    # Assign weights to each factor based on their historical predictive power
+    weights = {
+        'sentiment': 0.3,
+        'sector_performance': 0.2,
+        'news_impact': 0.2,
+        'vwap_diff': 0.3
+    }
+    
+    # Combine short-term (e.g., 10-day) and long-term (e.g., 50-day) factors
+    short_term_factors = df[['ema_sentiment', 'ema_sector_performance', 'ema_news_impact', 'vwap_diff']].rolling(window=10).mean()
+    long_term_factors = df[['ema_sentiment', 'ema_sector_performance', 'ema_news_impact', 'vwap_diff']].rolling(window=50).mean()
+    
+    # Use a weighted average to balance the contributions of short and long-term factors
+    df['combined_factors'] = (short_term_factors * 0.7 + long_term_factors * 0.3).mul(weights).sum(axis=1)
+    
+    # Apply exponential smoothing to the combined alpha factor
+    alpha = 0.2  # Smoothing factor
+    df['alpha_factor'] = df['combined_factors'].ewm(alpha=alpha, adjust=False).mean()
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': np.random.rand(100) * 100,
+#     'high': np.random.rand(100) * 100,
+#     'low': np.random.rand(100) * 100,
+#     'close': np.random.rand(100) * 100,
+#     'amount': np.random.rand(100) * 1000,
+#     'volume': np.random.rand(100) * 100,
+#     'sentiment': np.random.rand(100) * 2 - 1,  # Sentiment score between -1 and 1
+#     'sector_return': np.random.rand(100) * 0.1,  # Sector return
+#     'news_score': np.random.randint(-1, 2, 100)  # News impact score (-1, 0, 1)
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

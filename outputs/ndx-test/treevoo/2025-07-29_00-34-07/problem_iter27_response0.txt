@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+    
+    # Calculate Price Change (Close price of day t - Open price of day t-1)
+    price_change = df['close'] - df['open'].shift(1)
+    
+    # Combine High-to-Low Range with Price Change
+    combined_value = high_to_low_range * 150 + price_change
+    
+    # Smoothing and Initial Momentum Calculation
+    smoothed_value = combined_value.ewm(span=7).mean()
+    initial_momentum = smoothed_value - smoothed_value.shift(7)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate Multi-Day Price Momentum
+    momentum_4d = (df['close'] - df['close'].shift(4)) / df['close'].shift(4)
+    momentum_8d = (df['close'] - df['close'].shift(8)) / df['close'].shift(8)
+    momentum_20d = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Average the Momentum
+    avg_momentum = (momentum_4d + momentum_8d + momentum_20d) / 3
+    
+    # Adjust for Volume Changes
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    volume_adjusted_momentum = avg_momentum * (1 + 3 * daily_volume_change)
+    
+    # Intermediate Factor Combination
+    intermediate_factor = initial_momentum + volume_adjusted_momentum
+    
+    # Calculate 20-day Rolling High-Low Differential
+    rolling_high = df['high'].rolling(window=20).max()
+    rolling_low = df['low'].rolling(window=20).min()
+    high_low_differential = rolling_high - rolling_low
+    
+    # Weight by Volume Volatility
+    volume_volatility = df['volume'].rolling(window=15).std()
+    weighted_high_low_differential = high_low_differential * volume_volatility
+    
+    # Aggregate the Signals
+    aggregated_signal = weighted_high_low_differential - price_change
+    
+    # Adjust for Volume
+    aggregated_signal *= daily_volume_change
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    volume_weighted_close_open = (df['open'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Combine Cumulative High-Low Momentum and Volume-Weighted Close-to-Open Return
+    alpha_factor = intermediate_factor + aggregated_signal + volume_weighted_close_open
+    
+    # Calculate Weighted Price Momentum
+    close_10d_ema = df['close'].ewm(span=10).mean()
+    weighted_price_momentum = (df['close'] - close_10d_ema) * daily_log_return
+    
+    # Final Factor Construction
+    final_factor = intermediate_factor + volume_adjusted_momentum + weighted_price_momentum + alpha_factor
+    
+    return final_factor
+```

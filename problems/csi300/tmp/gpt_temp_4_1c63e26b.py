@@ -1,0 +1,56 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day simple moving average of closing prices to capture momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum factor: difference between 5-day and 20-day moving averages
+    df['momentum_factor'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day SMA
+    df['relative_strength'] = df['close'] / df['SMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Adaptive weights for the factors
+    df['momentum_weight'] = df['volatility_factor'].rank(pct=True)
+    df['liquidity_weight'] = df['liquidity_factor'].rank(pct=True)
+    df['relative_strength_weight'] = df['relative_strength'].rank(pct=True)
+    df['market_breadth_weight'] = df['market_breadth'].rank(pct=True)
+
+    # Calculate the 5-day exponential moving average of the momentum factor
+    df['EMA_momentum'] = df['momentum_factor'].ewm(span=5, adjust=False).mean()
+
+    # Calculate the Volume Weighted Average Price (VWAP)
+    df['cumulative_volume'] = df['volume'].cumsum()
+    df['cumulative_amount'] = (df['close'] * df['volume']).cumsum()
+    df['VWAP'] = df['cumulative_amount'] / df['cumulative_volume']
+
+    # Incorporate advanced technical indicators
+    df['RSI'] = ta.momentum.RSIIndicator(close=df['close'], window=14).rsi()
+    macd = ta.trend.MACD(close=df['close'])
+    df['MACD_line'] = macd.macd()
+    df['MACD_signal'] = macd.macd_signal()
+
+    # Rank-based weights for advanced technical indicators
+    df['RSI_weight'] = df['RSI'].rank(pct=True)
+    df['MACD_weight'] = (df['MACD_line'] - df['MACD_signal']).rank(pct=True)
+
+    # Combine the factors with adaptive weights
+    heuristic_factor = (df['EMA_momentum'] * df['momentum_weight']) + \
+                       (df['liquidity_factor'] * df['liquidity_weight']) + \
+                       (df['relative_strength'] * df['relative_strength_weight']) + \
+                       (df['market_breadth'] * df['market_breadth_weight']) + \
+                       (df['VWAP'] * df['RSI_weight']) + \
+                       ((df['MACD_line'] - df['MACD_signal']) * df['MACD_weight'])
+
+    return heuristic_factor

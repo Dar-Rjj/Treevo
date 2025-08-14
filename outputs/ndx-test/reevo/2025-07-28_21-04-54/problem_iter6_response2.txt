@@ -1,0 +1,33 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day cumulative return (short-term momentum)
+    short_term_momentum = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate the 30-day cumulative return (medium-term trend)
+    medium_term_trend = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Calculate the 90-day cumulative return (long-term trend)
+    long_term_trend = (df['close'] / df['close'].shift(90)) - 1
+    
+    # Calculate the 10-day standard deviation of daily returns (volatility)
+    volatility = df['close'].pct_change().rolling(window=10).std()
+    
+    # Normalize the volatility by its mean to get a risk adjustment factor
+    normalized_volatility = volatility / volatility.mean()
+    
+    # Calculate the percentage change in volume, indicating changes in liquidity or interest
+    vol_change = df['volume'].pct_change().fillna(0)
+    
+    # Calculate a weighted difference of high and low prices, giving more importance to the high price,
+    # this could indicate the strength of positive price movement
+    weighted_price_diff = (1.5 * df['high'] - 0.5 * df['low']) / (df['close'] + 1e-7)
+    
+    # Combine the short-term momentum, medium-term trend, long-term trend, and normalized volatility
+    # Higher volatility reduces the score, indicating higher risk
+    factor = (short_term_momentum + 0.6 * medium_term_trend + 0.4 * long_term_trend - normalized_volatility) * (1 + 0.5 * vol_change * weighted_price_diff)
+    
+    # Apply exponential smoothing to the combined alpha factor for better responsiveness
+    factor_smoothed = factor.ewm(span=3).mean().fillna(factor)
+    
+    return factor_smoothed
+```

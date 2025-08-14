@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Identify Breakouts
+    df['upward_breakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['downward_breakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = 0
+    df.loc[df['upward_breakout'] == 1, 'breakout_strength'] = (df['close'] - df['high'].shift(1)) / df['daily_range']
+    df.loc[df['downward_breakout'] == 1, 'breakout_strength'] = (df['low'].shift(1) - df['close']) / df['daily_range']
+    
+    # Cumulate Breakout Strength over the past 10 days
+    df['cumulated_breakout_strength'] = df['breakout_strength'].rolling(window=10).sum()
+    
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5d_close_return'] = df['close'].pct_change(periods=5)
+    df['5d_volume_ratio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=50).mean()
+    df['5d_volume_adjusted_momentum'] = df['5d_close_return'] * df['5d_volume_ratio']
+    
+    # Calculate High-Low Price Oscillation
+    df['hl_range'] = df['high'] - df['low']
+    df['10d_mean_hl_range'] = df['hl_range'].rolling(window=10).mean()
+    df['10d_std_hl_range'] = df['hl_range'].rolling(window=10).std()
+    df['adjusted_price_oscillation'] = (df['hl_range'] - df['10d_mean_hl_range']) / df['10d_std_hl_range']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['open']
+    df['5d_intraday_volatility_ma'] = df['intraday_volatility'].rolling(window=5).mean()
+    
+    # Combine Indicators
+    df['alpha_factor'] = (df['cumulated_breakout_strength'] + 
+                          df['5d_volume_adjusted_momentum'] + 
+                          df['adjusted_price_oscillation'] + 
+                          df['5d_intraday_volatility_ma'])
+    
+    return df['alpha_factor']
+```

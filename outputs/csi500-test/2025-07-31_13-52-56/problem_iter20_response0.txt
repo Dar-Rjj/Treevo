@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Adjust Intraday Return with Volatility
+    df['adjusted_intraday_return'] = df['intraday_return'] / df['intraday_volatility'].replace(0, 1)  # Avoid division by zero
+    
+    # 20-day Price Momentum
+    df['20_day_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Enhanced High-to-Low Price Ratio
+    df['enhanced_high_low_ratio'] = df['high'] / df['low']
+    
+    # Evaluate Volume Trend
+    df['10_day_volume_MA'] = df['volume'].rolling(window=10).mean()
+    df['volume_trend'] = (df['volume'] > df['10_day_volume_MA']).astype(int) * 2 - 1  # +1 for increasing, -1 for decreasing
+    
+    # Integrate Intraday and Historical Factors
+    df['volume_displacement'] = df['volume'] - df['volume'].shift(1)
+    df['integrated_factors'] = df['adjusted_intraday_return'] * df['volume_displacement']
+    
+    # Combine High-Low Price Ratio and 30-day Momentum
+    df['30_day_momentum'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    df['average_high_low_range'] = (df['high'] - df['low']).rolling(window=30).mean()
+    df['combined_high_low_30_momentum'] = (df['enhanced_high_low_ratio'] + df['30_day_momentum']) / 2
+    
+    # Adjust with Volume and Amount Shocks
+    df['30_day_avg_volume'] = df['volume'].rolling(window=30).mean()
+    df['volume_shock'] = (df['volume'] > 1.5 * df['30_day_avg_volume']).astype(int)
+    df['30_day_avg_amount'] = df['amount'].rolling(window=30).mean()
+    df['amount_shock'] = (df['amount'] > 1.5 * df['30_day_avg_amount']).astype(int)
+    df['shock_adjustment'] = df['combined_high_low_30_momentum'] * df['volume_shock'] * df['amount_shock']
+    
+    # Final Factor Integration
+    df['final_factor'] = df['integrated_factors'] * df['shock_adjustment'] \
+                         + df['20_day_momentum'] \
+                         + (df['volume'] - df['volume'].shift(10))
+    df['20_day_ATR'] = (df['high'] - df['low']).rolling(window=20).mean()
+    df['final_factor'] += df['20_day_ATR']
+    df['final_factor'] *= df['enhanced_high_low_ratio'] * df['volume_trend']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

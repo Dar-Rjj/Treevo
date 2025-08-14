@@ -1,0 +1,34 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate 30-day Close Price Momentum
+    close_momentum = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Combine High-Low Range and Close Price Momentum
+    integrated_momentum = (high_low_range + close_momentum) / 2
+    
+    # Identify Volume Shock
+    volume_shock = (df['volume'] > 2 * df['volume'].rolling(window=30, min_periods=1).mean()).astype(int)
+    
+    # Analyze Amount Trend
+    amount_trend = (df['amount'] > 1.5 * df['amount'].rolling(window=30, min_periods=1).mean()).astype(int)
+    
+    # Calculate Price Volatility
+    true_range = df[['high', 'low', df['close'].shift(1)]].max(axis=1) - df[['high', 'low', df['close'].shift(1)]].min(axis=1)
+    price_volatility = true_range.rolling(window=30, min_periods=1).std()
+    
+    # Compute Rolling Volume Average
+    rolling_volume_avg = df['volume'].rolling(window=30, min_periods=1).mean()
+    
+    # Compare Current Volume to Rolling Volume Average
+    volume_spike = (df['volume'] / rolling_volume_avg - 1).clip(lower=0)
+    
+    # Integrate All Factors
+    integrated_factor = (integrated_momentum * volume_shock * amount_trend) + price_volatility
+    integrated_factor = integrated_factor * volume_spike
+    
+    return integrated_factor

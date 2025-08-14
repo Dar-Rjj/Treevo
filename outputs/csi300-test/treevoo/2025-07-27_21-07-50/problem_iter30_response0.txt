@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+
+    # Calculate Volume-Weighted Close-Open Difference
+    volume_weighted_diff = (df['close'] - df['open']) * df['volume']
+
+    # Integrate Both Factors
+    integrated_factor = high_low_ratio * volume_weighted_diff
+
+    # Composite Alpha Factor
+    ema_close = df['close'].ewm(span=21, adjust=False).mean()
+    volume_weighted_close = df['close'] * df['volume']
+    composite_alpha = (volume_weighted_close - ema_close) + df['close'].pct_change(10)
+
+    # Generate Adjusted Return
+    log_return = np.log(df['close'] / df['open'])
+    true_range = pd.concat(
+        [df['high'] - df['low'],
+         (df['high'] - df['close'].shift(1)).abs(),
+         (df['low'] - df['close'].shift(1)).abs()],
+        axis=1).max(axis=1)
+    adjusted_return = log_return * (true_range / df['close'].shift(1))
+
+    # Incorporate Volume Impact
+    volume_change = df['volume'] / df['volume'].shift(1)
+    final_adjusted_return = adjusted_return * volume_change
+
+    # Final Integration
+    alpha_factor = integrated_factor + composite_alpha + final_adjusted_return
+
+    return alpha_factor
+```

@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    
+    # Calculate 30-day Price Momentum
+    price_momentum = (df['close'].pct_change(30)).fillna(0)
+    
+    # Enhance Price Momentum with High-Low Range
+    highest_high_30 = df['high'].rolling(window=30).max()
+    lowest_low_30 = df['low'].rolling(window=30).min()
+    high_low_range_30 = highest_high_30 - lowest_low_30
+    enhanced_momentum = price_momentum / high_low_range_30
+    
+    # Identify Volume Shock
+    avg_volume_30 = df['volume'].rolling(window=30).mean().shift(1)
+    volume_shock = (df['volume'] > 2 * avg_volume_30).astype(int)
+    
+    # Calculate Intraday Return
+    intraday_return = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=30).std() + \
+                          (df['close'] - df['open']).rolling(window=30).std()
+    
+    # Adjust Intraday Return by Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Combine Adjusted Range, 30-day Momentum, Volume Shock, and Intraday Adjusted
+    combined_factor = (adjusted_high_low_range + price_momentum) * volume_shock * adjusted_intraday_return
+    
+    # Calculate Cumulative High-Low Range
+    cumulative_high_low_range = high_low_range.rolling(window=30).sum()
+    
+    # Calculate Cumulative Open-to-Close Price Change
+    open_close_change = (df['close'] - df['open']).rolling(window=30).sum()
+    
+    # Final Combined Alpha Factor
+    high_low_momentum = cumulative_high_low_range / open_close_change
+    final_alpha_factor = high_low_momentum * combined_factor * (df['high'][-1] - df['low'][-1])
+    
+    return final_alpha_factor
+```

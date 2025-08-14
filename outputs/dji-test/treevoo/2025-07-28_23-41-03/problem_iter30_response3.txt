@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['50_SMA'] = df['close'].rolling(window=50).mean()
+    df['100_SMA'] = df['close'].rolling(window=100).mean()
+    df['200_SMA'] = df['close'].rolling(window=200).mean()
+
+    # Momentum Signals
+    df['Momentum_100_200'] = df['100_SMA'] - df['200_SMA']
+    df['Momentum_50_100'] = df['50_SMA'] - df['100_SMA']
+
+    # Intraday Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+
+    # Reversal Signal
+    df['Reversal_Signal'] = df['Intraday_Return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal
+    df['Combined_Momentum_Reversal_100_200'] = df['Momentum_100_200'] * df['Reversal_Signal']
+    df['Combined_Momentum_Reversal_50_100'] = df['Momentum_50_100'] * df['Reversal_Signal']
+
+    # High-Low Range Momentum
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['High_Low_Range_Momentum'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+
+    # Volume Adjustment
+    n = 50
+    df['Volume_Adjustment'] = df['volume'].rolling(window=n).sum() / n
+
+    # Adjusted High-Low Range Momentum
+    df['Adjusted_High_Low_Range_Momentum'] = df['High_Low_Range_Momentum'] / df['Volume_Adjustment']
+
+    # Price Change Momentum
+    df['Price_Change_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combined Price and Volume Momentum
+    df['Combined_Price_Volume_Momentum'] = df['Price_Change_Momentum'] * df['Volume_Adjustment']
+
+    # Daily Volatility
+    m = 30
+    df['Daily_Volatility'] = df['High_Low_Range'].rolling(window=m).mean()
+
+    # Adjusted Daily Volatility
+    df['Adjusted_Daily_Volatility'] = df['Daily_Volatility'] / df['Volume_Adjustment']
+
+    # Relative Strength Index (RSI)
+    p = 14
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=p).mean()
+    avg_loss = loss.rolling(window=p).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Weighted Momentum and RSI
+    df['Weighted_Momentum_RSI_50_100'] = df['Momentum_50_100'] * df['RSI']
+    df['Weighted_Momentum_RSI_100_200'] = df['Momentum_100_200'] * df['RSI']
+
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        (df['Momentum_50_100'] + df['Momentum_100_200']) * df['Reversal_Signal'] +
+        df['Adjusted_High_Low_Range_Momentum'] +
+        df['Combined_Price_Volume_Momentum'] +
+        df['Adjusted_Daily_Volatility'] +
+        df['Weighted_Momentum_RSI_50_100'] +
+        df['Weighted_Momentum_RSI_100_200']
+    )
+
+    return df['Final_Alpha_Factor']
+```

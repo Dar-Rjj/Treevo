@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day, 10-Day, and 20-Day Simple Moving Averages (SMA) of Close Prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Compute the difference between 10-Day SMA and 20-Day SMA as a Momentum Indicator
+    df['Momentum'] = df['SMA_10'] - df['SMA_20']
+
+    # Identify Days Where Close Price Exceeds Highest High or Lowest Low over Last 30 Days
+    df['HH_30'] = df['high'].rolling(window=30).max()
+    df['LL_30'] = df['low'].rolling(window=30).min()
+    df['Breakout_Score'] = 0
+    df.loc[df['close'] > df['HH_30'], 'Breakout_Score'] = 1
+    df.loc[df['close'] < df['LL_30'], 'Breakout_Score'] = -1
+
+    # Calculate the Percentage Change in Volume from Previous Day
+    df['Volume_Change'] = df['volume'].pct_change()
+
+    # Mark Days with Large Volume Increase (>10%) and Associated Price Movement (>2%)
+    df['Large_Volume_Price_Move'] = ((df['Volume_Change'] > 0.1) & (df['close'].pct_change() > 0.02)).astype(int)
+
+    # Determine if the Stock Opened Higher but Closed Lower (Bearish Signal)
+    # Determine if the Stock Opened Lower but Closed Higher (Bullish Signal)
+    df['Price_Behavior'] = 0
+    df.loc[(df['open'] > df['close']) & (df['open'] > df.shift(1)['close']), 'Price_Behavior'] = -1
+    df.loc[(df['open'] < df['close']) & (df['open'] < df.shift(1)['close']), 'Price_Behavior'] = 1
+
+    # Calculate the Ratio of Amount to Volume (Price Weighted Volume)
+    df['Amount_to_Volume_Ratio'] = df['amount'] / df['volume']
+
+    # Calculate the 5-Day and 10-Day Moving Averages of the Amount to Volume Ratio
+    df['Ratio_MA_5'] = df['Amount_to_Volume_Ratio'].rolling(window=5).mean()
+    df['Ratio_MA_10'] = df['Amount_to_Volume_Ratio'].rolling(window=10).mean()
+
+    # Generate a Signal When the 5-Day MA Crosses Above/Below the 10-Day MA
+    df['Ratio_Crossover'] = (df['Ratio_MA_5'] > df['Ratio_MA_10']).astype(int)
+
+    # Measure the Difference Between Today’s Open and Yesterday’s Close
+    df['Gap_Difference'] = df['open'] - df.shift(1)['close']
+    df['Gap_Type'] = 0
+    df.loc[df['Gap_Difference'] > 0, 'Gap_Type'] = 1
+    df.loc[df['Gap_Difference'] < 0, 'Gap_Type'] = -1
+
+    # Compute the Range (High - Low) for Each Day
+    df['Daily_Range'] = df['high'] - df['low']
+
+    # Track Moving Average of Daily Ranges to Assess Volatility Trends
+    df['Range_MA_5'] = df['Daily_Range'].rolling(window=5).mean()
+    df['Range_MA_10'] = df['Daily_Range'].rolling(window=10).mean()
+
+    # Generate a Signal When the 5-Day MA of Ranges Crosses Above/Below the 10-Day MA
+    df['Range_Crossover'] = (df['Range_MA_5'] > df['Range_MA_10']).astype(int)
+
+    # Calculate the 5-Day and 10-Day Standard Deviations of Close Prices
+    df['SD_5'] = df['close'].rolling(window=5).std()
+    df['SD_10'] = df['close'].rolling(window=10).std()
+
+    # Generate a Signal When the 5-Day SD Crosses Above/Below the 10-Day SD
+    df['SD_Crossover'] = (df['SD_5'] > df['SD_10']).astype(int)
+
+    # Identify Days with Unusually High Volume Compared to the 30-Day Moving Average
+    df['Volume_MA_30'] = df['

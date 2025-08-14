@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    short_sma_lookback = 20
+    long_sma_lookback = 50
+    atr_lookback = 14
+    turnover_lookback = 20
+    price_change_lookback = 10
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=short_sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['HighLowDiff'] = df['high'] - df['low']
+    df['VolWeightedHL'] = df['HighLowDiff'] * df['volume']
+    df['VolAdjVol'] = df['VolWeightedHL'].rolling(window=short_sma_lookback).mean()
+    
+    # Enhance Volatility Measures
+    df['PrevClose'] = df['close'].shift(1)
+    df['TrueRange'] = df[['high', 'low', 'PrevClose']].max(axis=1) - df[['high', 'low', 'PrevClose']].min(axis=1)
+    df['ATR'] = df['TrueRange'].rolling(window=atr_lookback).mean()
+    
+    # Compute Price Momentum
+    df['PriceMomentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=short_sma_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['PctChange'] = df['close'].pct_change(periods=price_change_lookback)
+    df['HighLowRange'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['LongTermSMA'] = df['close'].rolling(window=long_sma_lookback).mean()
+    df['TrendIndicator'] = (df['SMA'] > df['LongTermSMA']).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Liquidity Measures
+    df['DailyTurnover'] = df['volume'] * df['close']
+    df['AvgTurnover'] = df['DailyTurnover'].rolling(window=turnover_lookback).mean()
+    
+    # Final Alpha Factor
+    weights = {
+        'PriceMomentum': 0.3,
+        'VolAdjVol': -0.2,
+        'PctChange': 0.2,
+        'HighLowRange': 0.1,
+        'TrendIndicator': 0.1,
+        'AvgTurnover': 0.1
+    }
+    
+    df['AlphaFactor'] = (
+        weights['PriceMomentum'] * df['PriceMomentum'] +
+        weights['VolAdjVol'] * df['VolAdjVol'] +
+        weights['PctChange'] * df['PctChange'] +
+        weights['HighLowRange'] * df['HighLowRange'] +
+        weights['TrendIndicator'] * df['TrendIndicator'] +
+        weights['AvgTurnover'] * df['AvgTurnover']
+    )
+    
+    # Adjust Weights Based on Market Trend and Liquidity
+    df['AlphaFactor'] = df['AlphaFactor'] * (1 + 0.1 * df['TrendIndicator']) * (1 + 0.05 * (df['AvgTurnover'] / df['AvgTurnover'].mean()))
+    
+    return df['AlphaFactor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

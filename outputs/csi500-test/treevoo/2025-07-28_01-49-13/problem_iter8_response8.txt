@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Spread
+    df['weighted_high_low'] = (df['high'] - df['low']) * df['volume']
+    
+    # Exponential Moving Average (EMA) of Weighted High-Low Spread
+    ema_window = 10
+    df['ema_weighted_high_low'] = df['weighted_high_low'].ewm(span=ema_window, adjust=False).mean()
+    df['ema_diff'] = df['ema_weighted_high_low'] - df['ema_weighted_high_low'].shift(5)
+    
+    # Incorporate Price Momentum
+    sma_window = 20
+    df['sma_close'] = df['close'].rolling(window=sma_window, min_periods=1).mean()
+    df['price_momentum'] = (df['close'] - df['sma_close']) * df['ema_diff']
+    
+    # Adjust Price Momentum for Volume Spike
+    n_days = 5
+    m_days = 10
+    k = 1.5  # Constant factor to amplify the return during volume spike
+    
+    df['daily_return'] = df['close'].pct_change(n_days)
+    df['vol_ma'] = df['volume'].rolling(window=m_days, min_periods=1).mean()
+    df['vol_std'] = df['volume'].rolling(window=m_days, min_periods=1).std()
+    df['volume_spike'] = df['volume'] > (df['vol_ma'] + 2 * df['vol_std'])
+    
+    df['adjusted_daily_return'] = df['daily_return'].where(~df['volume_spike'], df['daily_return'] * k)
+    df['combined_price_momentum'] = df['price_momentum'] * df['adjusted_daily_return']
+    
+    # Compute Cumulative Sum of Combined Price Momentum
+    df['cumulative_price_momentum'] = df['combined_price_momentum'].cumsum()
+    
+    # Compute Cumulative Sum of Volume Change
+    df['volume_change'] = df['volume'].diff().fillna(0)
+    df['cumulative_volume_change'] = df['volume_change'].cumsum()
+    
+    # Combine Cumulative Sums
+    df['final_factor'] = df['cumulative_price_momentum'] * df['cumulative_volume_change']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

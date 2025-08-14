@@ -1,0 +1,110 @@
+```python
+import pandas as pd
+
+def sma(data, window):
+    return data.rolling(window=window).mean()
+
+def ema(data, span):
+    return data.ewm(span=span, adjust=False).mean()
+
+def roc(data, n):
+    return (data - data.shift(n)) / data.shift(n)
+
+def macd_line(close, fast, slow):
+    return ema(close, fast) - ema(close, slow)
+
+def signal_line(macd, signal_span):
+    return ema(macd, signal_span)
+
+def true_range(high, low, close):
+    tr = high - low
+    tr = tr.combine((close.shift(1) - high).abs(), max)
+    tr = tr.combine((close.shift(1) - low).abs(), max)
+    return tr
+
+def adx(high, low, close, span):
+    plus_dm = (high.diff() > 0).astype(int) * (high.diff().combine(low.diff(), max))
+    minus_dm = (low.diff() < 0).astype(int) * (low.diff().combine(high.diff(), min)).abs()
+    tr = true_range(high, low, close)
+    
+    atr = ema(tr, span)
+    plus_di = 100 * (ema(plus_dm, span) / atr)
+    minus_di = 100 * (ema(minus_dm, span) / atr)
+    
+    dx = (plus_di - minus_di).abs() / (plus_di + minus_di) * 100
+    return ema(dx, span)
+
+def bollinger_bands(close, span):
+    middle_band = ema(close, span)
+    std_dev = close.rolling(span).std()
+    upper_band = middle_band + 2 * std_dev
+    lower_band = middle_band - 2 * std_dev
+    return middle_band, upper_band, lower_band
+
+def on_balance_volume(close, volume):
+    obv = volume.copy()
+    obv[close < close.shift(1)] -= volume
+    obv[close > close.shift(1)] += volume
+    obv[close == close.shift(1)] = 0
+    return obv.cumsum()
+
+def chaikin_money_flow(high, low, close, volume, span):
+    mf_multiplier = ((close - low) - (high - close)) / (high - low)
+    mf_volume = mf_multiplier * volume
+    cmf = mf_volume.rolling(window=span, min_periods=span).sum() / volume.rolling(window=span, min_periods=span).sum()
+    return cmf
+
+def heuristics_v2(df):
+    close = df['close']
+    open = df['open']
+    high = df['high']
+    low = df['low']
+    volume = df['volume']
+    
+    # Momentum Indicators
+    sma_short = sma(close, 10)
+    sma_long = sma(close, 30)
+    sma_ratio = sma_short / sma_long
+    
+    ema_short = ema(close, 10)
+    ema_long = ema(close, 30)
+    ema_ratio = ema_short / ema_long
+    
+    roc_close = roc(close, 5)
+    
+    # Trend Indicators
+    macd = macd_line(close, 12, 26)
+    signal = signal_line(macd, 9)
+    
+    adx_indicator = adx(high, low, close, 14)
+    
+    # Volatility Indicators
+    middle_band, upper_band, lower_band = bollinger_bands(close, 20)
+    bb_width = (upper_band - lower_band) / middle_band
+    
+    atr = ema(true_range(high, low, close), 14)
+    
+    # Volume-based Indicators
+    obv = on_balance_volume(close, volume)
+    
+    cmf = chaikin_money_flow(high, low, close, volume, 20)
+    
+    # Integrated Indicators
+    cmi = (sma_ratio + ema_ratio + roc_close) / 3
+    cti = (macd - signal) + adx_indicator
+    cvi = (atr + bb_width) / 2
+    cvoi = (obv + cmf) / 2
+    
+    # Final Alpha Factor
+    faf = (cmi + cti + cvi + cvoi) / 4
+    
+    # Additional Novel Indicators
+    hlr = ema((high - low) / (high + low), 14)
+    
+    pvt = (close - close.shift(1)) / close.shift(1) * volume
+    pvt = pvt.cumsum()
+    
+    vwc = (high + low + close) / 3 * volume
+    
+    # Enhanced Composite Indicators
+

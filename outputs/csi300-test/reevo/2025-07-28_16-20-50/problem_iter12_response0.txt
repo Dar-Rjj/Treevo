@@ -1,0 +1,73 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Volatility factor: Standard deviation of closing prices with a shorter window
+    volatility = df['close'].rolling(window=3).std()
+
+    # VWAP (Volume-Weighted Average Price) with a shorter window
+    vwap = (df['amount'] / df['volume']).rolling(window=3).mean()
+
+    # Momentum factor: 3-day return
+    momentum = df['close'].pct_change(periods=3)
+
+    # Mean reversion factor: Difference between current close and 3-day moving average
+    mean_reversion = df['close'] - df['close'].rolling(window=3).mean()
+
+    # Exponential smoothing of the mean reversion factor
+    mean_reversion_smoothed = mean_reversion.ewm(span=3, adjust=False).mean()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    pos_sum = df['positive_amount_vol'].rolling(window=3).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=3).sum()
+    liquidity_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Trend factor: 3-day and 7-day Simple Moving Averages (SMA) of the closing price
+    sma_3 = df['close'].rolling(window=3).mean()
+    sma_7 = df['close'].rolling(window=7).mean()
+    trend = sma_3 - sma_7
+
+    # Trade signal: 1 if the 3-day SMA is above the 7-day SMA, -1 otherwise
+    trade_signal = (sma_3 > sma_7).astype(int) * 2 - 1
+
+    # Adjust the trend factor based on market conditions
+    adjusted_trend = trend * trade_signal * (1 + volatility)
+
+    # Range factor: High-Low range
+    range_factor = (df['high'] - df['low']).rolling(window=3).mean()
+
+    # Adaptive weights using a rolling window to optimize factor weights
+    corr_momentum = df['close'].pct_change().rolling(window=3).corr(momentum).clip(lower=0)
+    corr_mean_reversion = df['close'].pct_change().rolling(window=3).corr(mean_reversion_smoothed).clip(lower=0)
+    corr_trend = df['close'].pct_change().rolling(window=3).corr(trend).clip(lower=0)
+    corr_liquidity = df['close'].pct_change().rolling(window=3).corr(liquidity_factor).clip(lower=0)
+
+    weight_volatility = corr_momentum * 0.2
+    weight_vwap = corr_mean_reversion * 0.2
+    weight_momentum = corr_trend * 0.2
+    weight_mean_reversion_smoothed = corr_liquidity * 0.2
+    weight_liquidity = corr_momentum * 0.1
+    weight_adjusted_trend = corr_trend * 0.1
+
+    # Normalize the weights
+    total_weight = weight_volatility + weight_vwap + weight_momentum + weight_mean_reversion_smoothed + weight_liquidity + weight_adjusted_trend
+    weight_volatility /= total_weight
+    weight_vwap /= total_weight
+    weight_momentum /= total_weight
+    weight_mean_reversion_smoothed /= total_weight
+    weight_liquidity /= total_weight
+    weight_adjusted_trend /= total_weight
+
+    # Combine factors with adaptive weights
+    combined_factor = (volatility * weight_volatility +
+                       vwap * weight_vwap +
+                       momentum * weight_momentum +
+                       mean_reversion_smoothed * weight_mean_reversion_smoothed +
+                       liquidity_factor * weight_liquidity +
+                       adjusted_trend * weight_adjusted_trend +
+                       range_factor * (1 - total_weight))
+
+    return combined_factor
+```

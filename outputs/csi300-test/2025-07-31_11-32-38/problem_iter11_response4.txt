@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+
+    # Compute 10-Day Moving Average of Daily Price Changes
+    df['MA_10_Daily_Price_Change'] = df['Daily_Price_Change'].rolling(window=10).mean()
+
+    # Compute Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['open']
+
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+
+    # Combine Intraday and Close-to-Open Returns
+    df['Intraday_Return_Abs'] = np.abs(df['Intraday_Return'])
+    df['Close_to_Open_Return_Abs'] = np.abs(df['Close_to_Open_Return'])
+    df['Combined_Return'] = (df['Intraday_Return'] * df['Intraday_Return_Abs'] + 
+                             df['Close_to_Open_Return'] * df['Close_to_Open_Return_Abs']) / \
+                            (df['Intraday_Return_Abs'] + df['Close_to_Open_Return_Abs'])
+
+    # Integrate Volume Change
+    df['Log_Volume'] = np.log(df['volume'])
+    df['Log_Volume_Diff'] = df['Log_Volume'].diff()
+    df['Smoothed_Volume_Diff'] = df['Log_Volume_Diff'].ewm(alpha=0.2).mean()
+    df['Preliminary_Factor'] = df['Combined_Return'] * df['Smoothed_Volume_Diff']
+
+    # Calculate True Range (TR)
+    df['High_Low'] = df['high'] - df['low']
+    df['Prev_Close_High'] = (df['close'].shift(1) - df['high']).abs()
+    df['Prev_Close_Low'] = (df['close'].shift(1) - df['low']).abs()
+    df['TR'] = df[['High_Low', 'Prev_Close_High', 'Prev_Close_Low']].max(axis=1)
+
+    # Calculate Average True Range (ATR)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+
+    # Calculate Positive Directional Movement (+DM) and Negative Directional Movement (-DM)
+    df['+DM'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] >= df['low'].shift(1)), 
+                         df['high'] - df['high'].shift(1), 0)
+    df['-DM'] = np.where((df['low'] < df['low'].shift(1)) & (df['high'] <= df['high'].shift(1)), 
+                         df['low'].shift(1) - df['low'], 0)
+
+    # Smooth +DM and -DM over 14 periods
+    df['+DM_Smoothed'] = df['+DM'].rolling(window=14).sum() / 14
+    df['-DM_Smoothed'] = df['-DM'].rolling(window=14).sum() / 14
+
+    # Calculate +DI and -DI
+    df['+DI'] = df['+DM_Smoothed'] / df['ATR_14']
+    df['-DI'] = df['-DM_Smoothed'] / df['ATR_14']
+
+    # Calculate ADMI
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+
+    # Incorporate Volume Weighted Returns
+    df['Volume_Weighted_Return'] = (df['Intraday_Return'] * df['volume'] + 
+                                    df['Close_to_Open_Return'] * df['volume']) / df['volume']
+    df['MA_20_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].rolling(window=20).mean()
+
+    # Weigh Combined Momentum by Intraday Volume Activity
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['Combined_Momentum'] = df['Combined_Return'] * df['Volume_Ratio']
+
+    # Apply 5-Day Exponential Moving Average to the Combined Momentum
+    df['EMA_5_Combined_Momentum'] = df['Combined_Momentum'].ewm(span=5, adjust=False).mean()
+
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['MA_10_Daily_Price_Change'] - df['MA_20

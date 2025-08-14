@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Compute Previous Day's Close-to-Open Return
+    df['Prev_Close_to_Open_Return'] = df['close'].shift(1) - df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['open'] + df['high'] + df['low'] + df['close']) / 4 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Intraday Momentum and VWAP
+    df['VWAP_Component'] = (df['VWAP'] - df['Intraday_High_Low_Spread']) * df['volume']
+    
+    # Incorporate Multi-Period Momentum
+    df['20_Day_Momentum'] = df['close'] - df['close'].shift(20)
+    df['60_Day_Momentum'] = df['close'] - df['close'].shift(60)
+    
+    # Enhance with Long-Term Price Trend
+    df['50_Day_MA'] = df['close'].rolling(window=50).mean()
+    
+    # Integrate Short-Term Volatility
+    tr1 = df['high'] - df['low']
+    tr2 = np.abs(df['high'] - df['close'].shift())
+    tr3 = np.abs(df['low'] - df['close'].shift())
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df['14_Day_ATR'] = true_range.rolling(window=14).mean()
+    
+    # Incorporate Short-Term Price Trend
+    df['7_Day_MA'] = df['close'].rolling(window=7).mean()
+    
+    # Final Factor Combination
+    df['Factor'] = (
+        df['Intraday_High_Low_Spread'] +
+        df['VWAP_Component'] +
+        df['20_Day_Momentum'] +
+        df['60_Day_Momentum'] +
+        df['Prev_Close_to_Open_Return'] +
+        df['50_Day_MA'] +
+        df['14_Day_ATR'] +
+        df['7_Day_MA']
+    )
+    
+    # Smooth the Factor
+    df['Smoothed_Factor'] = df['Factor'].ewm(span=20).mean()
+    
+    return df['Smoothed_Factor']
+```

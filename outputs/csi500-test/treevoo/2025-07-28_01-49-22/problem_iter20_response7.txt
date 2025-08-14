@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(data):
+    # Calculate Intraday Range Ratio
+    data['intraday_range_ratio'] = (data['high'] - data['low']) / (data['high'] + data['low'])
+    
+    # Compute Volume Adjusted Intraday Range Ratio
+    data['vol_adj_intraday_range_ratio'] = data['intraday_range_ratio'] * data['volume']
+    
+    # Calculate Previous Day's Close-to-Open Change
+    data['prev_close_to_open_change'] = data['open'] - data['close'].shift(1)
+    
+    # Calculate High-Low Range
+    data['high_low_range'] = data['high'] - data['low']
+    
+    # Smooth High-Low Range
+    data['smooth_high_low_range'] = data['high_low_range'].ewm(span=12).mean()
+    
+    # Calculate Volume-Weighted High-Low Range
+    data['vol_weighted_high_low_range'] = data['high_low_range'] * data['volume']
+    data['smooth_vol_weighted_high_low_range'] = data['vol_weighted_high_low_range'].ewm(span=12).mean()
+    
+    # Generate Alpha Factor from High-Low Range
+    data['alpha_high_low_range'] = np.where(data['high_low_range'] > 1.5, 1, -1)
+    
+    # Calculate Absolute Close-to-Close Return
+    data['abs_close_to_close_return'] = abs(data['close'] - data['close'].shift(1))
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    data['combined_high_low_close'] = data['high_low_range'] - data['abs_close_to_close_return']
+    
+    # Smooth Combined High-Low and Close-to-Close
+    data['smooth_combined_high_low_close'] = data['combined_high_low_close'].ewm(span=12).mean()
+    
+    # Generate Combined Alpha Factor
+    data['combined_alpha_factor'] = (data['vol_adj_intraday_range_ratio'] - data['prev_close_to_open_change'])
+    
+    # Calculate High-Low Range Volatility
+    data['high_low_range_volatility'] = data['high_low_range'].rolling(window=25).sum() / 25
+    
+    # Smooth High-Low Range Volatility
+    data['smooth_high_low_range_volatility'] = data['high_low_range_volatility'].ewm(span=15).mean()
+    
+    # Incorporate Close-Open Difference
+    data['close_open_diff'] = data['close'] - data['open']
+    data['weighted_close_open_diff'] = 0.5 * data['close_open_diff']
+    data['smooth_high_low_range_volatility_with_close_open'] = (data['smooth_high_low_range_volatility'] + 
+                                                                data['weighted_close_open_diff'])
+    
+    # Calculate Combined Value Momentum
+    data['combined_value_momentum'] = data['combined_high_low_close'] - data['combined_high_low_close'].shift(1)
+    
+    # Calculate Close Price Momentum
+    data['close_price_momentum'] = ((data['close'] / data['close'].shift(1)) - 1).rolling(window=25).sum()
+    
+    # Final Alpha Factor
+    data['final_alpha_factor'] = (data['combined_alpha_factor'] * 
+                                  (data['combined_value_momentum'] + data['close_price_momentum']) * 
+                                  data['volume'])
+    
+    return data['final_alpha_factor']
+```

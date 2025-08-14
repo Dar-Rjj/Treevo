@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum-based factors
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_5_20_diff'] = df['EMA_5'] - df['EMA_20']
+    df['EMA_10_20_diff'] = df['EMA_10'] - df['EMA_20']
+    df['ROC_5'] = df['close'].pct_change(5)
+    df['ROC_10'] = df['close'].pct_change(10)
+    
+    # Volume-based factors
+    df['vol_ratio_5'] = df['volume'] / df['volume'].rolling(window=5).median()
+    df['vol_ratio_10'] = df['volume'] / df['volume'].rolling(window=10).median()
+    df['vol_ratio_20'] = df['volume'] / df['volume'].rolling(window=20).median()
+    df['vol_mom'] = df['volume'] - df['volume'].shift(1)
+    df['vol_ROC_5'] = df['volume'].pct_change(5)
+    df['vol_ROC_10'] = df['volume'].pct_change(10)
+    
+    # Price and volume combined factors
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    df['VWAP_5'] = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['VWAP_10'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    df['VWAP_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['close_VWAP_5_diff'] = df['close'] - df['VWAP_5']
+    df['close_VWAP_10_diff'] = df['close'] - df['VWAP_10']
+    df['close_VWAP_20_diff'] = df['close'] - df['VWAP_20']
+    
+    # Volatility-based factors
+    df['MAD_5'] = df['close'].rolling(window=5).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    df['MAD_10'] = df['close'].rolling(window=10).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    df['MAD_20'] = df['close'].rolling(window=20).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    df['ATR_5'] = df[['high', 'low', 'close']].rolling(window=5).apply(
+        lambda x: np.mean(np.maximum.reduce([x['high'] - x['low'], 
+                                             np.abs(x['high'] - x['close'].shift()), 
+                                             np.abs(x['low'] - x['close'].shift())])), raw=False)
+    df['ATR_10'] = df[['high', 'low', 'close']].rolling(window=10).apply(
+        lambda x: np.mean(np.maximum.reduce([x['high'] - x['low'], 
+                                             np.abs(x['high'] - x['close'].shift()), 
+                                             np.abs(x['low'] - x['close'].shift())])), raw=False)
+    df['ATR_20'] = df[['high', 'low', 'close']].rolling(window=20).apply(
+        lambda x: np.mean(np.maximum.reduce([x['high'] - x['low'], 
+                                             np.abs(x['high'] - x['close'].shift()), 
+                                             np.abs(x['low'] - x['close'].shift())])), raw=False)
+    gain = df['close'].diff().clip(lower=0)
+    loss = -df['close'].diff().clip(upper=0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+

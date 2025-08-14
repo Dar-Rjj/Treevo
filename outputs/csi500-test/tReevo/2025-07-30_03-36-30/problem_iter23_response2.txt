@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-Day Rolling Return
+    df['5_day_return'] = df['close'].pct_change(periods=5)
+    
+    # Compute 10-Day Rolling Return
+    df['10_day_return'] = df['close'].pct_change(periods=10)
+    
+    # Weighted Average of 5-Day and 10-Day Returns
+    df['weighted_returns'] = (df['5_day_return'] * 0.6) + (df['10_day_return'] * 0.4)
+    
+    # Multiply by Volume of day t
+    df['volume_weighted_momentum'] = df['weighted_returns'] * df['volume']
+    
+    # Calculate Enhanced Open-High-Low Volatility Index
+    df['20_day_high_low_range'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    df['20_day_open_close_range'] = df['open'].rolling(window=20).max() - df['close'].rolling(window=20).min()
+    
+    # 20-Day Mean Price
+    df['20_day_mean_price'] = (df['open'].rolling(window=20).sum() + df['close'].rolling(window=20).sum()) / 40
+    
+    # Combine 20-Day Ranges
+    df['enhanced_volatility_index'] = (df['20_day_high_low_range'] + df['20_day_open_close_range']) / df['20_day_mean_price']
+    
+    # Integrate Market Sentiment
+    df['daily_change_in_amount'] = df['amount'].diff()
+    df['normalized_daily_change_in_amount'] = df['daily_change_in_amount'] / df['amount']
+    
+    # Add to Volume-Weighted Multi-Day Price Momentum
+    df['adjusted_momentum'] = df['volume_weighted_momentum'] + df['normalized_daily_change_in_amount']
+    
+    # Incorporate Liquidity
+    df['20_day_volume_ema'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['normalized_volume'] = df['volume'] / df['20_day_volume_ema']
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['adjusted_momentum'] - df['enhanced_volatility_index']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

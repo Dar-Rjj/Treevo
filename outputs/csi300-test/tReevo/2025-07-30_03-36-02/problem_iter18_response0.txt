@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, window=20, alpha=0.9, current_weight=0.7, lagged_weight=0.3):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight by Volume
+    df['weighted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Intraday Momentum
+    df['daily_momentum'] = df['close'] - df['open']
+    df['rolling_momentum'] = df['daily_momentum'].rolling(window=window).sum()
+    
+    # Integrate Momentum and Volatility
+    df['integrated_value'] = df['weighted_volatility'] + df['rolling_momentum']
+    
+    # Apply Dynamic Exponential Smoothing
+    df['smoothed_value'] = df['integrated_value'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Ensure Values are Positive
+    df['positive_smoothed_value'] = df['smoothed_value'] + 1e-6
+    
+    # Apply Logarithmic Transformation
+    df['log_transformed_value'] = np.log(df['positive_smoothed_value'])
+    
+    # Incorporate Previous Day's Integrated Value
+    df['lagged_log_value'] = df['log_transformed_value'].shift(1)
+    df['factor'] = (current_weight * df['log_transformed_value']) + (lagged_weight * df['lagged_log_value'])
+    
+    return df['factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

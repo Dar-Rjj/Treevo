@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum indicators from close prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Momentum_5'] = df['close'] / df['SMA_5']
+    df['Momentum_10'] = df['close'] / df['SMA_10']
+    df['Momentum_20'] = df['close'] / df['SMA_20']
+
+    # Volume changes for unusual trading activity
+    mean_volume = df['volume'].rolling(window=20).mean()
+    std_volume = df['volume'].rolling(window=20).std()
+    df['Volume_Shock'] = (df['volume'] - mean_volume) / std_volume
+    df['Volume_Trend'] = df['volume'] / df['volume'].shift(1)
+
+    # High and low prices for volatility and range measures
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Range_MA_20'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    recent_high = df['high'].rolling(window=20).max()
+    recent_low = df['low'].rolling(window=20).min()
+    df['Breakout_High'] = (df['high'] > recent_high).astype(int)
+    df['Breakout_Low'] = (df['low'] < recent_low).astype(int)
+
+    # Relationship between open and close for directional bias
+    df['Open_Close_Ratio'] = df['open'] / df['close']
+    df['Green_Candle_Count_5'] = (df['close'] > df['open']).rolling(window=5).sum()
+    df['Red_Candle_Count_5'] = (df['close'] < df['open']).rolling(window=5).sum()
+
+    # Integrate amount (transaction value) into factors
+    total_amount = df['amount'].rolling(window=20).sum()
+    df['Liquidity_Score'] = total_amount
+    df['Amount_Weighted_Price_Movement'] = (df['close'].diff() * df['amount']).cumsum() / total_amount
+
+    # Composite indicators
+    df['Composite_Score'] = df['Momentum_20'] + df['Volume_Shock'] + df['Range_MA_20'] + df['Breakout_High'] - df['Breakout_Low'] + df['Open_Close_Ratio'] + df['Liquidity_Score'] + df['Amount_Weighted_Price_Movement']
+
+    # Interday patterns for predictive signals
+    half_day_index = df.index.floor('12H')
+    first_half = df.groupby(half_day_index)['close'].first()
+    second_half = df.groupby(half_day_index)['close'].last()
+    df['Intraday_Reversal'] = second_half - first_half
+    df['Opening_Gap'] = df['open'] - df['close'].shift(1)
+
+    return df['Composite_Score']
+```

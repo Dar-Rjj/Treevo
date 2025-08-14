@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Daily VWAP Change
+    df['VWAP_Change'] = df['VWAP'].diff()
+    
+    # Separate Positive and Negative Changes
+    positive_changes = df['VWAP_Change'].where(df['VWAP_Change'] > 0, 0)
+    negative_changes = -df['VWAP_Change'].where(df['VWAP_Change'] < 0, 0)
+    
+    # 14-Day Averages for RSI
+    avg_gain = positive_changes.rolling(window=14).mean()
+    avg_loss = negative_changes.rolling(window=14).mean()
+    
+    # Calculate RSI
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Intraday Range Growth
+    df['Today_High_Low_Range'] = df['high'] - df['low']
+    df['Prev_Day_High_Low_Range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_High_Low_Range'] - df['Prev_Day_High_Low_Range']) / df['Prev_Day_High_Low_Range']
+    
+    # Volume-Weighted Moving Average (VWMA)
+    n = 10
+    df['Close_Volume_Weighted'] = df['close'] * df['volume']
+    df['VWMA'] = df['Close_Volume_Weighted'].rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Long-Term and Short-Term Volume-Weighted Returns
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volume_Weighted_Return'] = df['Daily_Return'] * df['volume']
+    
+    long_term_window = 90
+    short_term_window = 5
+    
+    df['Long_Term_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=long_term_window).sum() / df['volume'].rolling(window=long_term_window).sum()
+    df['Short_Term_VW_Return'] = df['Volume_Weighted_Return'].rolling(window=short_term_window).sum() / df['volume'].rolling(window=short_term_window).sum()
+    
+    df['Adjusted_VW_Return'] = df['Long_Term_VW_Return'] - df['Short_Term_VW_Return']
+    
+    # Volatility-Adjusted Alpha Factor
+    volatility_window = 30
+    df['Volatility'] = df['Daily_Return'].rolling(window=volatility_window).std()
+    df['Alpha_Factor'] = (df['RSI'] + df['Intraday_Range_Growth'] + df['VWMA'] + df['Adjusted_VW_Return']) / df['Volatility']
+    
+    return df['Alpha_Factor']
+```

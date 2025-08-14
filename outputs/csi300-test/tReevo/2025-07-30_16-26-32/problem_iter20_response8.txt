@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = df['high'] - df['low']
+    df['adjusted_range'] = df['daily_range'] / df['open']
+    
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['ema_5_open_to_close'] = df['open_to_close_return'].ewm(span=5).mean()
+    
+    # Volume-Weighted Open-to-Close Return
+    df['volume_weighted_return'] = df['open_to_close_return'] * df['volume']
+    df['ema_5_volume_weighted_return'] = df['volume_weighted_return'].ewm(span=5).mean()
+    
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_volume_trend'] = df['price_change'] * df['volume']
+    df['pvt_30_days'] = df['price_volume_trend'].rolling(window=30).sum()
+    
+    # Volume-Adjusted Intraday Movement
+    df['intraday_movement'] = df['close'] - df['open']
+    df['sma_20_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_intraday_movement'] = df['intraday_movement'] / df['sma_20_volume']
+    
+    # Combined Momentum and Volatility Factor
+    liquidity_factor = 1.0  # Placeholder for actual liquidity factor
+    leverage_factor = 1.0   # Placeholder for actual leverage factor
+    technical_indicator = 1.0  # Placeholder for actual technical indicator
+    
+    weight_intraday_range = 0.4 * liquidity_factor
+    weight_open_to_close_momentum = 0.3 * leverage_factor
+    weight_volume_weighted_momentum = 0.3 * technical_indicator
+    
+    df['combined_momentum_volatility'] = (
+        weight_intraday_range * df['adjusted_range'] +
+        weight_open_to_close_momentum * df['ema_5_open_to_close'] +
+        weight_volume_weighted_momentum * df['ema_5_volume_weighted_return']
+    )
+    df['smoothed_combined_momentum_volatility'] = df['combined_momentum_volatility'].ewm(alpha=0.1).mean()
+    
+    # Volume-Sensitive Momentum Factor
+    weight_price_volume_trend = 0.4 * liquidity_factor
+    weight_volume_weighted_return = 0.3 * leverage_factor
+    weight_volume_adjusted_intraday_movement = 0.3 * technical_indicator
+    
+    df['volume_sensitive_momentum'] = (
+        weight_price_volume_trend * df['pvt_30_days'] +
+        weight_volume_weighted_return * df['ema_5_volume_weighted_return'] +
+        weight_volume_adjusted_intraday_movement * df['volume_adjusted_intraday_movement']
+    )
+    df['smoothed_volume_sensitive_momentum'] = df['volume_sensitive_momentum'].ewm(alpha=0.1).mean()
+    
+    # Final Alpha Factor
+    final_liquidity_factor = 1.0  # Placeholder for actual final liquidity factor
+    final_leverage_factor = 1.0   # Placeholder for actual final leverage factor
+    
+    weight_combined_momentum_volatility = 0.6 * final_liquidity_factor
+    weight_volume_sensitive_momentum = 0.4 * final_leverage_factor
+    
+    df['final_alpha_factor'] = (
+        weight_combined_momentum_volatility * df['smoothed_combined_momentum_volatility'] +
+        weight_volume_sensitive_momentum * df['smoothed_volume_sensitive_momentum']
+    )
+    df['smoothed_final_alpha_factor'] = df['final_alpha_factor'].ewm(alpha=0.1).mean()
+    
+    return df['smoothed_final_alpha_factor']
+```

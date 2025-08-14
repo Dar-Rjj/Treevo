@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_lookback=20, momentum_lookback=20, pct_change_lookback=5, long_sma_lookback=60, turnover_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['HighLowDiff'] = df['high'] - df['low']
+    df['VolumeWeightedHighLow'] = df['HighLowDiff'] * df['volume']
+    df['VolumeAdjustedVolatility'] = df['VolumeWeightedHighLow'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['MomentumNumerator'] = df['close'] - df['SMA']
+    df['MomentumDenominator'] = df['close'].rolling(window=momentum_lookback).mean()
+    df['PriceMomentum'] = df['MomentumNumerator'] / df['MomentumDenominator']
+    
+    # Incorporate Additional Price Change Metrics
+    df['PctChangeClose'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['HighLowRange'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['LongSMA'] = df['close'].rolling(window=long_sma_lookback).mean()
+    df['TrendIndicator'] = (df['SMA'] > df['LongSMA']).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['DailyTurnover'] = df['volume'] * df['close']
+    df['AverageDailyTurnover'] = df['DailyTurnover'].rolling(window=turnover_lookback).mean()
+    df['LiquidityAdjustment'] = df['AverageDailyTurnover'] / df['AverageDailyTurnover'].max()  # Normalize to [0, 1]
+    
+    # Final Alpha Factor
+    weight_momentum = 0.4
+    weight_volatility = 0.2
+    weight_pct_change = 0.1
+    weight_trend = 0.1
+    weight_liquidity = 0.2
+    
+    df['AlphaFactor'] = (
+        weight_momentum * df['PriceMomentum'] +
+        weight_volatility * (1 / df['VolumeAdjustedVolatility']) +  # Higher volatility, lower contribution
+        weight_pct_change * df['PctChangeClose'] +
+        weight_trend * df['TrendIndicator'] +
+        weight_liquidity * df['LiquidityAdjustment']
+    )
+    
+    # Adjust Weights Dynamically based on Market Trend
+    df['AlphaFactor'] = df.apply(
+        lambda row: row['AlphaFactor'] * 1.1 if row['TrendIndicator'] == 1 else row['AlphaFactor'] * 0.9,
+        axis=1
+    )
+    
+    return df['AlphaFactor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': ...,
+#     'open': ...,
+#     'high': ...,
+#     'low': ...,
+#     'close': ...,
+#     'amount': ...,
+#     'volume': ...
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+```

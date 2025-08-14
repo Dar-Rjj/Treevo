@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5):
+    # Calculate the difference between today's close and the close n days ago
+    df['close_momentum'] = df['close'] - df['close'].shift(n)
+    
+    # Determine if this momentum is positive or negative
+    df['momentum_sign'] = (df['close_momentum'] > 0).astype(int)
+    
+    # Compute the true range
+    df['true_range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    
+    # Measure the percentage change in volume from the previous day
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Identify upward and downward gaps
+    df['gap_up'] = (df['open'] - df['close'].shift(1)) > 0
+    df['gap_down'] = (df['open'] - df['close'].shift(1)) < 0
+    
+    # Calculate the number of times the close is higher than the open over the past n days
+    df['close_above_open'] = (df['close'] > df['open']).rolling(window=n).sum()
+    
+    # Check if the position of the close relative to the high and low hints at market sentiment
+    df['close_near_high'] = (df['close'] - df['high']).abs() < (df['high'] - df['low']) * 0.1
+    df['close_near_low'] = (df['close'] - df['low']).abs() < (df['high'] - df['low']) * 0.1
+    
+    # Combine insights from momentum, range, volume, gaps, and intraday positions
+    df['alpha_factor'] = (
+        df['momentum_sign'] * 2 +  # Weight for momentum
+        df['true_range'].rank(pct=True) * 3 +  # Weight for true range
+        df['volume_change'].rank(pct=True) * 4 +  # Weight for volume change
+        df['gap_up'].astype(int) * 1 +  # Weight for gap up
+        df['gap_down'].astype(int) * (-1) +  # Weight for gap down
+        df['close_above_open'] * 2 +  # Weight for close above open
+        df['close_near_high'].astype(int) * 3 +  # Weight for close near high
+        df['close_near_low'].astype(int) * (-3)  # Weight for close near low
+    )
+    
+    return df['alpha_factor']
+```

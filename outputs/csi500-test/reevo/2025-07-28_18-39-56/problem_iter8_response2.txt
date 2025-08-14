@@ -1,0 +1,26 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the adaptive volume-weighted average price (VWAP) using a rolling window that adapts to market volatility
+    vwap = (df['amount'] / df['volume']).rolling(window=df['close'].rolling(window=7).std().mul(5).astype(int)).mean()
+
+    # Calculate the exponential moving average (EMA) of the close price with an adaptive window based on RSI
+    rsi_window = 14
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    ema_close = df['close'].ewm(span=rsi.rolling(window=7).mean().astype(int), adjust=False).mean()
+
+    # Calculate the logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+
+    # Calculate the adaptive rolling standard deviation of the close price
+    adaptive_volatility = df['close'].rolling(window=df['close'].rolling(window=7).std().mul(5).astype(int)).std()
+
+    # Calculate the factor as the difference between the close price and the EMA of close price
+    # scaled by the RSI, multiplied by the logarithmic returns, and adjusted by the adaptive volatility
+    factor = (df['close'] - ema_close) * rsi * log_returns * adaptive_volatility
+
+    return factor
+```

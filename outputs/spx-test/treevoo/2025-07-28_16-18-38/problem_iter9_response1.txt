@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Compute High-Low Range
+    df['high_low_range'] = (df['high'] - df['low']) / df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    df['weighted_intraday_return'] = df['intraday_return'] * df['high_low_range']
+
+    # Calculate Volume Impact
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_impact'] = df['volume'] / df['avg_volume']
+
+    # Adjust for Volume
+    df['adjusted_intraday_momentum'] = df['weighted_intraday_return'] * df['volume_impact']
+
+    # Calculate Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_momentum'] = df['price_change'].rolling(window=20).mean()
+
+    # Calculate Volume Momentum
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_momentum'] = df['volume_change'].rolling(window=20).mean()
+
+    # Adjust Combined Intraday Momentum by Integrated Momentum
+    df['momentum_ratio'] = df['price_momentum'] / df['volume_momentum']
+    df['adjusted_combined_momentum'] = df['adjusted_intraday_momentum'] * df['momentum_ratio']
+
+    # Adjust for the sign of the Volume Momentum
+    df['final_adjusted_momentum'] = df['adjusted_combined_momentum'] * df['volume_momentum'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Calculate Historical Volatility
+    df['log_return'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    df['historical_volatility'] = df['log_return'].rolling(window=20).std() * np.sqrt(252)
+
+    # Adjust Synthesized Momentum by Volatility
+    df['volatility_adjusted_momentum'] = df['final_adjusted_momentum'] / df['historical_volatility']
+
+    # Incorporate Trend Following Signal
+    df['long_term_trend'] = df['close'].rolling(window=200).mean()
+    df['trend_signal'] = df['close'] / df['long_term_trend']
+
+    # Adjust Final Factor by Trend
+    df['final_factor'] = df['volatility_adjusted_momentum'] * (df['trend_signal'].apply(lambda x: 1.5 if x > 1 else 0.5))
+
+    return df['final_factor']
+```

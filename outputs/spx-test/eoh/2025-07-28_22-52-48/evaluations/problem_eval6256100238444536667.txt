@@ -1,0 +1,39 @@
+def heuristics_v2(df):
+    def compute_rsi(close_series, n=14):
+        delta = close_series.diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=n).mean()
+        avg_loss = loss.rolling(window=n).mean()
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def compute_adx(high_series, low_series, close_series, n=14):
+        high_low = high_series - low_series
+        high_close = (high_series - close_series.shift()).abs()
+        low_close = (low_series - close_series.shift()).abs()
+        
+        tr = high_low.combine(high_close, max).combine(low_close, max)
+        atr = tr.rolling(window=n).mean()
+        
+        plus_dm = (high_series - high_series.shift()).where(lambda x: x > 0, 0)
+        minus_dm = (low_series.shift() - low_series).where(lambda x: x > 0, 0)
+        
+        plus_di = 100 * (plus_dm.rolling(window=n).mean() / atr)
+        minus_di = 100 * (minus_dm.rolling(window=n).mean() / atr)
+        
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        adx = dx.rolling(window=n).mean()
+        return adx
+
+    close_prices = df['close']
+    high_prices = df['high']
+    low_prices = df['low']
+
+    rsi_values = compute_rsi(close_prices)
+    adx_values = compute_adx(high_prices, low_prices, close_prices)
+
+    # Heuristic matrix: combination of RSI and ADX
+    heuristics_matrix = (rsi_values + adx_values) / 2
+    return heuristics_matrix

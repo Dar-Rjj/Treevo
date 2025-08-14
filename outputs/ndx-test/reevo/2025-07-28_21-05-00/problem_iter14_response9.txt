@@ -1,0 +1,58 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 20-day moving average of the close
+    momentum_20d = df['close'] - df['close'].rolling(window=20).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility as the standard deviation of the price change over the last 10 days
+    volatility = price_change.rolling(window=10).std()
+
+    # Calculate the money flow index (MFI) for the last 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(price_change > 0, 0)
+    negative_money_flow = raw_money_flow.where(price_change < 0, 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Calculate a longer-term trend indicator, such as the 50-day and 200-day moving averages
+    long_term_trend_50 = df['close'].rolling(window=50).mean()
+    long_term_trend_200 = df['close'].rolling(window=200).mean()
+
+    # Adaptive weighting based on the long-term trends
+    trend_signal_50 = (df['close'] - long_term_trend_50) / long_term_trend_50
+    trend_signal_200 = (df['close'] - long_term_trend_200) / long_term_trend_200
+    adaptive_weight = (trend_signal_50 + 1) / 2  # Normalize to [0, 1]
+
+    # Calculate cross-asset signals (e.g., correlation with a benchmark or another asset)
+    benchmark_returns = df['close'].pct_change()  # Assuming a simple benchmark
+    cross_asset_signal = df['close'].pct_change().rolling(window=10).corr(benchmark_returns)
+
+    # Integrate multiple indicators to create a robust factor with adaptive weighting and cross-asset signals
+    factor = (price_change * volume_change + diff_close_avg + momentum_20d + rsi + volatility + mfi + cross_asset_signal) * adaptive_weight
+    factor = factor.ewm(span=5, adjust=False).mean()
+
+    # Add a sentiment-based signal
+    sentiment_signal = (rsi - 50) / 50  # Centered RSI as a proxy for market sentiment
+    factor += sentiment_signal * 0.1  # Small weight for sentiment
+
+    # Add a longer-term trend signal
+    long_term_trend_signal = (df['close'] - long_term_trend_200) / long_term_trend_200
+    factor += long_term_trend_signal * 0.2  # Moderate weight for long-term trend
+
+    return factor
+```

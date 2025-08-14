@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=10):
+    # Calculate Daily Price Movement
+    daily_price_movement = df['high'] - df['low']
+    
+    # Calculate Price Gap
+    price_gap = df['open'] - df['close']
+    
+    # Calculate Raw Momentum
+    raw_momentum = daily_price_movement.rolling(window=n_days).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Incorporate Market Depth
+    market_depth = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    adjusted_momentum = (raw_momentum * (vwap + market_depth)) / intraday_volatility
+    
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=n_days).mean()
+    total_avg_volume = df['volume'].mean()
+    volume_weighted_momentum = adjusted_momentum * (avg_volume / total_avg_volume)
+    
+    # Integrate Multi-Day Momentum
+    close_return_5_day = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    close_return_10_day = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    multi_day_momentum = (close_return_5_day + close_return_10_day) / 2
+    final_volume_adjusted_momentum = volume_weighted_momentum + multi_day_momentum
+    
+    # Incorporate Liquidity
+    liquidity_adjustment = avg_volume / total_avg_volume
+    final_volume_adjusted_momentum = final_volume_adjusted_momentum * liquidity_adjustment
+    
+    # Enhance with Dynamic Price and Volume Ratios
+    price_to_volume_ratio = df['close'] / df['volume']
+    moving_avg_pv_ratio = price_to_volume_ratio.rolling(window=n_days).mean()
+    avg_pv_ratio = price_to_volume_ratio.mean()
+    final_volume_adjusted_momentum = final_volume_adjusted_momentum * (moving_avg_pv_ratio / avg_pv_ratio)
+    
+    # Consider Volatility Clustering
+    ema_intraday_volatility = intraday_volatility.ewm(span=n_days, adjust=False).mean()
+    avg_intraday_volatility = intraday_volatility.mean()
+    final_alpha_factor = final_volume_adjusted_momentum * (ema_intraday_volatility / avg_intraday_volatility)
+    
+    return final_alpha_factor.dropna()
+
+# Example usage
+# df = pd.read_csv('path_to_your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

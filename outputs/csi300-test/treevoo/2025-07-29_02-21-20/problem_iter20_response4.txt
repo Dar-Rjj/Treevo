@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price
+    adjusted_close = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    weights = [0.6, 0.4]  # Define Weights for High and Low
+    enhanced_intraday_momentum = (weights[0] * high_indicator + weights[1] * low_indicator)
+    
+    # Volume-Impacted Intraday Momentum
+    volume_ema = df['volume'].ewm(span=10, adjust=False).mean()
+    normalized_volume = df['volume'] / volume_ema
+    volume_impacted_intraday_momentum = enhanced_intraday_momentum * normalized_volume
+    
+    # Calculate Weighted Intraday Momentum
+    intraday_return = df['close'] - df['open']
+    weighted_intraday_momentum = (intraday_return * df['volume']).ewm(span=12, adjust=False).mean() * df['volume'].rolling(window=7).mean()
+    
+    # Calculate Adjusted High-Low Breakout Potential
+    high_low_range = df['high'] - df['low']
+    adjusted_high_low_breakout_potential = (high_low_range * df['volume']).ewm(span=25, adjust=False).mean() * df['volume'].rolling(window=15).mean()
+    
+    # Momentum Reversal Indicator
+    momentum_reversal = (intraday_return - weighted_intraday_momentum) / adjusted_high_low_breakout_potential
+    
+    # Long-Term Momentum Adjusted for Volume
+    n = 50  # Define the lookback period for long-term momentum
+    long_term_momentum = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    volume_ratio = df['volume'] / df['volume'].shift(n)
+    long_term_momentum_adjusted = long_term_momentum * volume_ratio
+    
+    # Final Alpha Factor Synthesis
+    final_alpha_factor = (adjusted_close + 
+                          volume_impacted_intraday_momentum + 
+                          weighted_intraday_momentum + 
+                          adjusted_high_low_breakout_potential + 
+                          long_term_momentum_adjusted) / df['open']
+    
+    return final_alpha_factor
+```

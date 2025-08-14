@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Evaluate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Intraday Return with Intraday Volatility
+    adjusted_intraday_return = intraday_return / (intraday_volatility + 1e-6)  # Avoid division by zero
+    
+    # Compute Enhanced High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    
+    # Evaluate Volume Trend
+    volume_ma_15 = df['volume'].rolling(window=15).mean()
+    volume_trend = np.where(df['volume'] > volume_ma_15, 1, -1)
+    
+    # Integrate Volume Trend with Adjusted Range
+    integrated_adjusted_range = adjusted_high_low_range * volume_trend
+    
+    # Calculate Momentum Signal
+    smoothing_factor = 2 / (21 + 1)
+    momentum_signal = df['close'].ewm(alpha=smoothing_factor).mean()
+    
+    # Combine Adjusted Range, Momentum, and Volume Trend
+    combined_factors = integrated_adjusted_range - momentum_signal
+    
+    # Identify Volume Shock
+    volume_shock = np.where(df['volume'] > 2.0 * df['volume'].rolling(window=30).mean(), 1, 0)
+    
+    # Integrate Momentum and Volume Shock
+    integrated_momentum_volume_shock = combined_factors * volume_shock
+    
+    # Calculate 30-day Price Momentum
+    price_momentum_30 = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Calculate Relative Strength
+    sma_60 = df['close'].rolling(window=60).mean()
+    relative_strength = df['close'] / sma_60
+    
+    # 15-day Volume Acceleration
+    volume_acceleration_15 = df['volume'].pct_change(15)
+    
+    # 30-day Average True Range
+    tr = df[['high', 'low']].diff(axis=1).max(axis=1)
+    atr_30 = tr.rolling(window=30).mean()
+    
+    # Final Factor Combination
+    final_factor = (
+        (integrated_momentum_volume_shock + price_momentum_30) * 
+        relative_strength * 
+        (1 + volume_acceleration_15) * 
+        (1 + atr_30)
+    )
+    
+    return final_factor
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

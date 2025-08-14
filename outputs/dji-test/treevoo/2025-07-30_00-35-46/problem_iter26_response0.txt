@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Enhanced Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    high_low_momentum = (df['high'] - df['low']) / df['open']
+    combined_momentum = 0.5 * high_low_momentum + 0.5 * intraday_return
+    non_linear_transformed_momentum = combined_momentum ** 2
+
+    # Synchronized Volume Dynamics
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    price_change = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    synchronized_volume = volume_ratio * price_change
+    volume_shock_filter = (volume_ratio > 1.5) & (volume_ratio.notna())
+    synchronized_volume_filtered = synchronized_volume.where(volume_shock_filter, 0)
+
+    # On-Balance Volume (OBV)
+    obv = pd.Series(0, index=df.index)
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] + df['volume'].iloc[i]
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] - df['volume'].iloc[i]
+        else:
+            obv.iloc[i] = obv.iloc[i-1]
+
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    macd_line = short_ema - long_ema
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    momentum_signal = (macd_line > signal_line).astype(int) - (macd_line < signal_line).astype(int)
+
+    # Weight OBV by the difference between MACD Line and Signal Line
+    weight = (macd_line - signal_line).abs()
+    weighted_obv = obv * weight
+
+    # Apply Volume-Weighted Adjustments
+    volume_impact = df['volume'] / df['volume'].shift(1)
+    amount_impact = df['amount'] / df['amount'].shift(1)
+    adjusted_combined_momentum = (non_linear_transformed_momentum * volume_impact * amount_impact)
+
+    # Smoothing
+    smoothed_combined_momentum = adjusted_combined_momentum.ewm(span=5, adjust=False).mean()
+
+    # Integrate Volume-Weighted Intraday Momentum with OBV Factor
+    final_alpha_factor = smoothed_combined_momentum * weighted_obv
+
+    return final_alpha_factor
+```

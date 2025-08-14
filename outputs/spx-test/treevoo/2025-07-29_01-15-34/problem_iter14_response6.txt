@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / intraday_range
+    
+    # Calculate Intraday Volume Intensity
+    rolling_volume_sum = df['volume'].rolling(window=10).sum()
+    intraday_volume_intensity = df['volume'] / rolling_volume_sum
+    
+    # Calculate Daily Return
+    daily_return = (df['close'].diff() / df['close'].shift(1)).fillna(0)
+    
+    # Identify Local Peaks and Troughs
+    rolling_max = df['close'].rolling(window=20).max()
+    rolling_min = df['close'].rolling(window=20).min()
+    
+    # Measure From High Point
+    measure_from_high = df['close'] - rolling_max
+    
+    # Measure From Low Point
+    measure_from_low = df['close'] - rolling_min
+    
+    # Average Trading Volume
+    avg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Volume Anomaly Factor
+    volume_anomaly = df['volume'] / avg_volume
+    
+    # Money Flow Analysis
+    positive_money_flow = (df['volume'] * daily_return).where(daily_return > 0, 0).rolling(window=20).sum()
+    negative_money_flow = (df['volume'] * daily_return).where(daily_return < 0, 0).rolling(window=20).sum()
+    money_flow_ratio = positive_money_flow / abs(negative_money_flow)
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = df['close'] - ema_20
+    
+    # Combine Factors
+    combined_factor = (
+        intraday_volume_intensity * closing_position +
+        daily_return +
+        measure_from_high +
+        measure_from_low +
+        volume_anomaly +
+        trend_adjustment
+    )
+    
+    # Compound Factor
+    momentum_volume_anomaly = daily_return * volume_anomaly
+    value_change_peaks_valleys = ((df['close'] - rolling_min) / (rolling_max - rolling_min)) * volume_anomaly
+    
+    # Final Alpha Factor
+    alpha_factor = combined_factor + momentum_volume_anomaly + value_change_peaks_valleys
+    
+    return alpha_factor
+```

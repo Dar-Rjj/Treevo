@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Volume Weighted Moving Average (VWMA)
+    short_term_window = 10
+    df['Short_Term_VWMA'] = (df['close'] * df['volume']).rolling(window=short_term_window).sum() / df['volume'].rolling(window=short_term_window).sum()
+
+    # Calculate Long-Term Volume Weighted Moving Average (VWMA)
+    long_term_window = 30
+    df['Long_Term_VWMA'] = (df['close'] * df['volume']).rolling(window=long_term_window).sum() / df['volume'].rolling(window=long_term_window).sum()
+
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5Day_Return'] = df['close'].pct_change(periods=5)
+    df['5Day_Volume_Ratio'] = df['volume'] / df['volume'].shift(5)
+    df['Volume_Adjusted_Momentum'] = df['5Day_Return'] * df['5Day_Volume_Ratio']
+
+    # Calculate 10-Day Price Oscillation
+    df['10Day_High'] = df['high'].rolling(window=10).max()
+    df['10Day_Low'] = df['low'].rolling(window=10).min()
+    df['10Day_Price_Range'] = df['10Day_High'] - df['10Day_Low']
+    df['Average_10Day_Price_Range'] = df['10Day_Price_Range'].expanding().mean()
+
+    # Generate signals
+    df['VWMA_Signal'] = 0
+    df.loc[df['Short_Term_VWMA'] > df['Long_Term_VWMA'], 'VWMA_Signal'] = 1
+    df.loc[df['Short_Term_VWMA'] < df['Long_Term_VWMA'], 'VWMA_Signal'] = -1
+
+    df['Momentum_Signal'] = 0
+    df.loc[df['Volume_Adjusted_Momentum'] > 0, 'Momentum_Signal'] = 1
+    df.loc[df['Volume_Adjusted_Momentum'] < 0, 'Momentum_Signal'] = -1
+
+    df['Oscillation_Signal'] = 0
+    df.loc[df['10Day_Price_Range'] > df['Average_10Day_Price_Range'], 'Oscillation_Signal'] = 1
+    df.loc[df['10Day_Price_Range'] < df['Average_10Day_Price_Range'], 'Oscillation_Signal'] = -1
+
+    # Combine signals
+    df['Combined_Signal'] = df['VWMA_Signal'] + df['Momentum_Signal'] + df['Oscillation_Signal']
+
+    df['Factor_Value'] = 0
+    df.loc[df['Combined_Signal'] == 3, 'Factor_Value'] = 2  # Strong Buy
+    df.loc[df['Combined_Signal'] == -3, 'Factor_Value'] = -2  # Strong Sell
+    df.loc[df['Combined_Signal'] == 2, 'Factor_Value'] = 1  # Moderate Buy
+    df.loc[df['Combined_Signal'] == -2, 'Factor_Value'] = -1  # Moderate Sell
+    df.loc[df['Combined_Signal'] == 1, 'Factor_Value'] = 0.5  # Hold, slightly positive
+    df.loc[df['Combined_Signal'] == -1, 'Factor_Value'] = -0.5  # Hold, slightly negative
+    df.loc[df['Combined_Signal'] == 0, 'Factor_Value'] = 0  # Hold
+
+    return df['Factor_Value']
+```

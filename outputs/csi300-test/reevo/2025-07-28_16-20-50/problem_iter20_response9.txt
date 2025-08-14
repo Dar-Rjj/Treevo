@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    sentiment_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the volatility using the close price
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    volatility = df['log_returns'].rolling(window=20).std() * np.sqrt(252)
+
+    # Volume-weighted price change
+    df['vw_price_change'] = (df['amount'] * (df['close'] - df['close'].shift(1))) / df['volume']
+    vw_price_change_smoothed = df['vw_price_change'].ewm(span=20, adjust=False).mean()
+
+    # VWAP
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+    df['vwap_smoothed'] = df['vwap'].ewm(span=20, adjust=False).mean()
+
+    # Momentum factor
+    momentum = df['close'].pct_change(periods=20)
+
+    # Mean reversion factor
+    mean_reversion = -df['close'].pct_change(periods=5)
+
+    # Short-term trend strength factor: difference between 10-day and 5-day exponential moving averages
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    short_trend_strength = df['ema_5'] - df['ema_10']
+
+    # Adaptive weighting based on recent market conditions
+    recent_volatility = df['log_returns'].rolling(window=5).std() * np.sqrt(252)
+    adaptive_weight = 1 / (1 + np.exp(-recent_volatility))
+
+    # Liquidity factor: ratio of average volume to current volume
+    avg_volume = df['volume'].rolling(window=20).mean()
+    liquidity_factor = avg_volume / df['volume']
+
+    # Order flow imbalance: difference between the buy and sell volume
+    df['buy_volume'] = df['volume'].where(df['close'] > df['close'].shift(1), 0)
+    df['sell_volume'] = df['volume'].where(df['close'] < df['close'].shift(1), 0)
+    order_flow_imbalance = (df['buy_volume'] - df['sell_volume']).rolling(window=20).sum()
+
+    # Combine factors with adaptive weights
+    alpha_factor = (
+        adaptive_weight * sentiment_factor +
+        (1 - adaptive_weight) * (1 / volatility) +
+        0.2 * (df['vwap'] / df['vwap_smoothed']) +
+        0.15 * momentum +
+        0.15 * mean_reversion +
+        0.05 * short_trend_strength +
+        0.1 * (df['vw_price_change'] / vw_price_change_smoothed) +
+        0.05 * liquidity_factor +
+        0.05 * order_flow_imbalance
+    )
+
+    return alpha_factor
+```

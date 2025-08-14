@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['volume_adjustment'] = df['volume'].rolling(window=5).mean().fillna(1)
+    df['volume_adjustment'] = (df['volume'] / df['volume_adjustment']) + 1
+    
+    # Combine Intraday Range and Volume Adjustment
+    df['combined_range_volume'] = df['intraday_range'] * df['volume_adjustment']
+    
+    # Smoothing
+    df['smoothed_range_volume'] = df['combined_range_volume'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate EMA Cross Signal
+    df['ema_short'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_long'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    df['momentum'] = (df['ema_short'] > df['ema_long']).astype(int) - (df['ema_short'] < df['ema_long']).astype(int)
+    
+    # Calculate Intraday Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['open_close_return'] = (df['close'] - df['open']) / df['open']
+    df['intraday_momentum'] = (df['high_low_diff'] + df['open_close_return']) / 2
+    
+    # Calculate On-Balance Volume (OBV)
+    df['obv'] = 0
+    obv = 0
+    for i in range(len(df)):
+        if i == 0:
+            continue
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv += df['volume'].iloc[i]
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv -= df['volume'].iloc[i]
+        df.loc[df.index[i], 'obv'] = obv
+    
+    # Weight OBV by the Difference between Short and Long EMA
+    df['weight'] = (df['ema_short'] - df['ema_long']).abs()
+    df['final_obv'] = df['obv'] * df['weight']
+    
+    # Incorporate Market Sentiment
+    df['price_change'] = (df['close'] - df['open']) / df['open']
+    conditions = [
+        (df['price_change'] > 0.005),
+        (df['price_change'] < -0.005),
+        (df['price_change'] >= -0.005) & (df['price_change'] <= 0.005)
+    ]
+    choices = [1, -1, 0]
+    df['sentiment_score'] = pd.np.select(conditions, choices, default=0)
+    
+    # Adjust Final OBV Factor by Sentiment
+    df['adjusted_obv_factor'] = df['final_obv'] * df['sentiment_score']
+    
+    # Apply Dynamic Volume Shock Filter
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean().fillna(1)
+    df['volume_ratio'] = df['volume'] / df['avg_volume_5d']
+    df['final_alpha_factor'] = df['smoothed_range_volume'] * df['adjusted_obv_factor']
+    df['final_alpha_factor'] = df.apply(lambda row: row['final_alpha_factor'] if row['volume_ratio'] > 1.8 else 0, axis=1)
+    
+    return df['final_alpha_factor']

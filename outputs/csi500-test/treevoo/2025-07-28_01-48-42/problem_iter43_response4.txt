@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    df['Open_Close_Spread'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['Price_Change'] = df['close'].diff()
+    
+    # Compute 5-Day Momentum
+    df['5_Day_Momentum'] = df['Price_Change'].rolling(window=5).sum()
+    
+    # Adjust for Volume and Amount
+    df['Volume_Adjusted_Range'] = df['High_Low_Range'] * df['volume']
+    df['Amount_Adjusted_Range'] = df['High_Low_Range'] * np.sqrt(df['amount'])
+    df['Total_Adjusted_Range'] = df['Volume_Adjusted_Range'] + df['Amount_Adjusted_Range']
+    
+    # Adjust Momentum by Open-Close Spread
+    df['Momentum_Adjusted'] = df['5_Day_Momentum'] * df['Open_Close_Spread'].abs()
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    df['Combined_Signal'] = df['Momentum_Adjusted'] / df['Total_Adjusted_Range']
+    
+    # Enhance Combined Signal with Smoothing
+    df['Enhanced_Combined_Signal'] = df['Combined_Signal'].ewm(span=5).mean()
+    
+    # Calculate Weighted Price Change
+    df['Weighted_Price_Change'] = df['Price_Change'] * (df['volume'] + np.sqrt(df['amount']))
+    
+    # Combine Adjusted Range with Weighted Price Change
+    df['Combined_Factor'] = df['Enhanced_Combined_Signal'] + df['Weighted_Price_Change']
+    
+    # Compute Intraday Return
+    df['Intraday_Return_High'] = df['high'] - df['open']
+    df['Intraday_Return_Low'] = df['low'] - df['open']
+    
+    # Compute Intraday Reversal Score
+    df['Intraday_Reversal_Score'] = -df['Intraday_Return_High'] - df['Intraday_Return_Low']
+    
+    # Integrate Momentum and Reversal
+    df['Integrated_Momentum_Reversal'] = (df['High_Low_Range'] - df['High_Low_Range'].shift(1)) * df['Intraday_Reversal_Score']
+    
+    # Generate Factor Value
+    df['10_Day_HL_Momentum'] = df['High_Low_Range'].rolling(window=10).sum()
+    df['10_Day_Volume_MA'] = df['volume'].rolling(window=10).mean()
+    df['Factor_Value'] = (df['10_Day_HL_Momentum'] * df['10_Day_Volume_MA']) / df['close']
+    
+    # Introduce a New Volatility Component
+    df['Daily_Volatility'] = np.sqrt(((df['high'] - df['low']) ** 2) / 4 + ((df['close'] - df['open']) ** 2) / 4)
+    
+    # Combine All Factors
+    df['Combined_Factors'] = (df['Intraday_Return_High'] * 0.3 +
+                              df['Factor_Value'] * 0.4 +
+                              df['Enhanced_Combined_Signal'] * 0.2 +
+                              df['Generated_Factor_Value'] * 0.1)
+    
+    # Final Alpha Factor
+    df['Smoothened_Momentum'] = df['Combined_Signal'].ewm(span=20).mean()
+    df['Volume_Spike_Factor'] = (df['volume'].diff() > 0).astype(int)
+    df['Trend_Strength'] = df['close'].ewm(span=20).mean()
+    df['Intraday_Volatility'] = df['Daily_Volatility']
+    df['Final_Alpha_Factor'] = (df['Combined_Factors'] * 
+                                df['Smoothened_Momentum'] * 
+                                df['Volume_Spike_Factor'] * 
+                                df['Trend_Strength'] * 
+                                df['Intraday_Volatility'] + 
+                                (df['open'] - df['close'].shift(1)))
+    
+    # Apply Volume Weighting
+    df['Final_Alpha_Factor'] = df['Final_Alpha_Factor'] * df['volume']
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=14):
+    # Calculate True Range and High-Low Spread
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['Prev_Close'])
+    df['TR3'] = abs(df['low'] - df['Prev_Close'])
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Avg_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=lookback_period).mean()
+
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR'] = df['True_Range'].rolling(window=lookback_period).mean()
+
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(lookback_period)
+
+    # Weight by Volume
+    df['Volume_Weighted_Momentum'] = df['volume'] * df['Price_Momentum']
+
+    # Adjust Momentum by ATR
+    df['ATR_Adjusted_Momentum'] = df['Volume_Weighted_Momentum'] / df['ATR']
+
+    # Generate Alpha Factor
+    df['Spread_Relative_Strength'] = df['High_Low_Spread'] - df['Avg_High_Low_Spread']
+    df['Alpha_Factor'] = df['ATR_Adjusted_Momentum'] + df['Close_to_Open_Return'] + df['Spread_Relative_Strength']
+
+    # Explore Trend and Volatility Characteristics
+    df['Daily_Momentum'] = df['close'] - df['close'].shift(1)
+    df['Trend_Direction'] = np.sign(df['Daily_Momentum']).rolling(window=lookback_period).sum()
+    df['Volatility'] = df['Daily_Momentum'].rolling(window=lookback_period).std()
+    df['Volume_Accumulation'] = df['volume'].rolling(window=lookback_period).sum()
+
+    # Examine Opening and Closing Prices
+    df['Up_Day'] = (df['close'] > df['open']).astype(int)
+    df['Down_Day'] = (df['close'] < df['open']).astype(int)
+    df['Up_Day_Count'] = df['Up_Day'].rolling(window=lookback_period).sum()
+    df['Down_Day_Count'] = df['Down_Day'].rolling(window=lookback_period).sum()
+
+    # Use Candlestick Patterns for Predictive Insights
+    df['Doji'] = ((df['high'] - df['low']) / (df['close'] - df['open']) < 0.1).astype(int)
+    df['Marubozu'] = ((df['close'] - df['open']) > 0.9 * (df['high'] - df['low'])).astype(int)
+    df['Candlestick_Pattern_Frequency'] = df['Doji'] + df['Marubozu']
+    df['Pattern_Strength'] = (df['close'] - df['open']).abs() / (df['high'] - df['low'])
+
+    # Explore Historical Price Patterns
+    df['MA_5'] = df['close'].rolling(window=5).mean()
+    df['MA_20'] = df['close'].rolling(window=20).mean()
+    df['MA_100'] = df['close'].rolling(window=100).mean()
+    df['Short_Long_MA_Diff'] = df['MA_5'] - df['MA_100']
+    df['ROC_14'] = (df['close'] - df['close'].shift(14)) / df['close'].shift(14) * 100
+    df['ROC_28'] = (df['close'] - df['close'].shift(28)) / df['close'].shift(28) * 100
+    df['Trend_High_Low'] = (df['high'] - df['low']).rolling(window=lookback_period).mean()
+
+    # Examine Volume and Amount Data
+    df['OBV'] = (np.sign(df['close'] - df['close'].shift(1)) * df['volume']).cumsum()
+    df['MFI'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).rolling(window

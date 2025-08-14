@@ -1,0 +1,38 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 10-day momentum by comparing the current close to the close 5 and 10 days ago
+    df['close_lag_5d'] = df['close'].shift(5)
+    df['close_lag_10d'] = df['close'].shift(10)
+    momentum_5d = df['close'] - df['close_lag_5d']
+    momentum_10d = df['close'] - df['close_lag_10d']
+
+    # Calculate the 10-day and 20-day relative strength as the ratio of the cumulative return to the absolute value of the cumulative return
+    rel_strength_10d = (df['close'] / df['close_lag_10d']) / ((df['close'] / df['close_lag_10d']).abs())
+    df['close_lag_20d'] = df['close'].shift(20)
+    rel_strength_20d = (df['close'] / df['close_lag_20d']) / ((df['close'] / df['close_lag_20d']).abs())
+
+    # Calculate the adjusted volatility as the standard deviation of the last 20 and 30 days' log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    adj_volatility_20d = df['log_return'].rolling(window=20).std()
+    adj_volatility_30d = df['log_return'].rolling(window=30).std()
+
+    # Calculate the liquidity factor as the average volume over the last 30 and 60 days
+    avg_volume_30d = df['volume'].rolling(window=30).mean()
+    avg_volume_60d = df['volume'].rolling(window=60).mean()
+
+    # Dynamic weights based on the recent market conditions (e.g., high volatility periods may decrease the weight on momentum)
+    df['volatility_weight'] = 1 / (adj_volatility_20d + 1e-7)
+    weight_momentum = 0.4 * (df['volatility_weight'] / df['volatility_weight'].rolling(window=20).mean())
+    weight_rel_strength = 0.3 * (df['volatility_weight'] / df['volatility_weight'].rolling(window=20).mean())
+    weight_volatility = 0.2 * (df['volatility_weight'] / df['volatility_weight'].rolling(window=20).mean())
+    weight_liquidity = 0.1 * (df['volatility_weight'] / df['volatility_weight'].rolling(window=20).mean())
+
+    # Combine the factors with dynamic weights to form the final factor
+    # The idea is to favor stocks with strong 5-day and 10-day momentum, high relative strength, low volatility, and high liquidity.
+    factor = (momentum_5d * weight_momentum + momentum_10d * weight_momentum) + \
+             (rel_strength_10d * weight_rel_strength + rel_strength_20d * weight_rel_strength) + \
+             (1 / (adj_volatility_20d + 1e-7) * weight_volatility + 1 / (adj_volatility_30d + 1e-7) * weight_volatility) + \
+             (avg_volume_30d * weight_liquidity + avg_volume_60d * weight_liquidity)
+
+    return factor
+```

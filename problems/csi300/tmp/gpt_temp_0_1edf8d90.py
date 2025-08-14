@@ -1,0 +1,24 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period
+    dynamic_lookback = 10 + (df['close'].rolling(window=5).std() * 10).apply(lambda x: min(int(x), 10)).fillna(10)
+    momentum = np.log(df['close']).diff(periods=dynamic_lookback)
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period
+    liquidity = df['volume'].rolling(window=20 + (df['volume'].rolling(window=5).std() * 5).apply(lambda x: min(int(x), 5)).fillna(5)).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=5 + (money_flow_ratio.rolling(window=5).std() * 2).apply(lambda x: min(int(x), 2)).fillna(2)).mean()
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period
+    volatility = np.log(df['close']).diff().rolling(window=30 + (np.log(df['close']).diff().rolling(window=5).std() * 10).apply(lambda x: min(int(x), 10)).fillna(10)).std()
+    
+    # Weight factors by predictive power and combine them
+    factor = (momentum * 0.4 + 
+              (liquidity - liquidity.mean()) / liquidity.std() * 0.2 + 
+              (market_sentiment - market_sentiment.mean()) / market_sentiment.std() * 0.2 +
+              (volatility + 1e-6) ** (-1) * 0.2)
+    
+    return factor

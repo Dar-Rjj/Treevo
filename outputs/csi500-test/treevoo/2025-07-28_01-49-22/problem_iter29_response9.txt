@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['close_to_close_return'] = abs(df['close'] - df['close'].shift(1))
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['combined_value'] = df['high_low_range'] - df['close_to_close_return']
+    
+    # Calculate Volume Adjusted Intraday Range
+    df['volume_adjusted_intraday_range'] = df['high_low_range'] * df['volume']
+    
+    # Calculate Intraday Volatility (Average of (High - Low) over 10 days)
+    df['intraday_volatility'] = df['high_low_range'].rolling(window=10).mean()
+    
+    # Calculate Combined Value Momentum
+    df['combined_value_momentum'] = df['combined_value'] - df['combined_value'].shift(1)
+    
+    # Calculate Close Price Momentum
+    df['close_price_momentum'] = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Ratio
+    df['intraday_range_ratio'] = df['high_low_range'] / (df['high'] + df['low'])
+    
+    # Compute Previous Day's Close-to-Open Change
+    df['prev_close_to_open'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Daily High-Low Range
+    df['daily_high_low_range'] = df['high_low_range']
+    
+    # Calculate High-Low Range Volatility
+    df['high_low_range_volatility'] = df['daily_high_low_range'].rolling(window=10).sum() / 10
+    
+    # Smooth High-Low Range Volatility
+    df['smoothed_high_low_range_volatility'] = df['high_low_range_volatility'].ewm(span=15, adjust=False).mean()
+    
+    # Incorporate Close-Open Difference
+    df['close_open_diff'] = df['close'] - df['open']
+    df['weighted_close_open_diff'] = df['close_open_diff'] * 0.1  # Fixed weight for the close-open difference
+    df['incorporated_volatility'] = df['smoothed_high_low_range_volatility'] + df['weighted_close_open_diff']
+    
+    # Generate Intermediate Alpha Factor
+    df['intermediate_alpha'] = (
+        df['volume_adjusted_intraday_range'] +
+        df['combined_value_momentum'] +
+        df['intraday_range_ratio'] -
+        df['prev_close_to_open']
+    )
+    
+    # Introduce Dynamic Threshold Adjustment
+    df['10_day_ma_intraday_range_ratio'] = df['intraday_range_ratio'].rolling(window=10).mean()
+    df['dynamic_threshold_intermediate_alpha'] = df['intermediate_alpha'].copy()
+    df.loc[df['intraday_range_ratio'] > df['10_day_ma_intraday_range_ratio'], 'dynamic_threshold_intermediate_alpha'] *= 1.5
+    df.loc[df['intraday_range_ratio'] < df['10_day_ma_intraday_range_ratio'], 'dynamic_threshold_intermediate_alpha'] *= 0.5
+    
+    # Compare with Baseline (Dynamic Threshold, e.g., EMA of Smoothed High-Low Range Volatility)
+    df['signal'] = np.where(df['smoothed_high_low_range_volatility'] > df['incorporated_volatility'], 1, -1)
+    
+    # Adjust Combined Alpha Factor
+    df['adjusted_combined_alpha'] = df['dynamic_threshold_intermediate_alpha'] * np.where(df['signal'] == 1, 1.7, 0.3)
+    
+    # Introduce Volume Momentum
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_momentum'] = df['volume'] / df['10_day_avg_volume']
+    df.loc[df['volume_momentum'] > 1, 'adjusted_combined_alpha'] *= 1.15
+    df.loc[df['volume_momentum'] < 1, 'adjusted_combined_alpha'] *= 0.85
+    
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = (df['intraday_volatility'] * (df['adjusted_combined_alpha'] + df['close_price_momentum'])) * df['volume']
+    
+    # Adjust Final Alpha Factor by Volume
+    df['n_period_avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['final_alpha_factor'] *= df['n_period_avg_volume']
+    
+

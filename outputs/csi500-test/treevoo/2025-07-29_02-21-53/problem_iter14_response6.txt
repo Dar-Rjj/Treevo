@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['Prev_Close'] = df['close'].shift(1)
+    df['High_Low'] = df['high'] - df['low']
+    df['High_PrevClose'] = abs(df['high'] - df['Prev_Close'])
+    df['Low_PrevClose'] = abs(df['low'] - df['Prev_Close'])
+    df['True_Range'] = df[['High_Low', 'High_PrevClose', 'Low_PrevClose']].max(axis=1)
+
+    # Adjust for Volume Impact on Price
+    df['Vol_Adjusted_TR'] = df['True_Range'] * np.sqrt(df['volume'])
+
+    # Smooth True Range (20-day EMA)
+    df['Smoothed_TR'] = df['Vol_Adjusted_TR'].ewm(span=20, adjust=False).mean()
+
+    # Calculate Long-Term True Range (50-day EMA)
+    df['Long_Term_TR'] = df['Vol_Adjusted_TR'].ewm(span=50, adjust=False).mean()
+
+    # Compute Momentum of True Ranges
+    df['Momentum_TR'] = df['Long_Term_TR'] - df['Smoothed_TR']
+
+    # Weight by Volume
+    df['Volume_Weighted_Momentum_TR'] = df['Momentum_TR'] * df['volume']
+
+    # Integrate Price Change
+    df['Open_Close_Momentum'] = (df['close'] - df['open']) / df['open']
+    df['Smoothed_Open_Close_Momentum'] = df['Open_Close_Momentum'].ewm(span=20, adjust=False).mean()
+    df['Combined_Momentum'] = df['Volume_Weighted_Momentum_TR'] + df['Smoothed_Open_Close_Momentum']
+
+    # Integrate Price Trend
+    df['Long_Term_Price_Trend'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['Price_Trend_Momentum'] = df['Long_Term_Price_Trend'] - df['Smoothed_Open_Close_Momentum']
+    df['Combined_Factor'] = df['Combined_Momentum'] + df['Price_Trend_Momentum']
+
+    # Analyze Volume Trend Over Time
+    df['Volume_Change_Rate'] = df['volume'].pct_change()
+    df['Volume_Adjusted_Combined_Factor'] = df['Combined_Factor'] * df['Volume_Change_Rate']
+
+    # Dynamic Momentum Indicator
+    df['Yesterday_Alpha'] = df['Volume_Adjusted_Combined_Factor'].shift(1)
+    df['Today_Alpha'] = df['Volume_Adjusted_Combined_Factor']
+    df['Dynamic_Momentum_Indicator'] = (df['Yesterday_Alpha'] + df['Today_Alpha']).ewm(span=20, adjust=False).mean()
+
+    # Generate Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Dynamic_Momentum_Indicator']
+
+    return df['Final_Alpha_Factor']
+```

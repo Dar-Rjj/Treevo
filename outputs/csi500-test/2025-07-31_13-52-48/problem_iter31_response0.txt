@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 5-day EMA
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the 20-day EMA
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Compute the EMA Crossover Signal
+    df['ema_crossover'] = (df['ema_5'] > df['ema_20']).astype(int)
+    
+    # Calculate the True Range for Each Day
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'], x['low']) - min(x['high'], x['low']), axis=1)
+    
+    # Calculate the 14-day ATR
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Define Upper and Lower Volatility Bands
+    multiplier = 2.0
+    df['upper_band'] = df['close'] + (multiplier * df['atr_14'])
+    df['lower_band'] = df['close'] - (multiplier * df['atr_14'])
+    
+    # Determine Position Relative to Volatility Bands
+    def determine_position(row):
+        if row['close'] > row['upper_band']:
+            return 1
+        elif row['close'] < row['lower_band']:
+            return -1
+        else:
+            return 0
+    
+    df['position'] = df.apply(determine_position, axis=1)
+    
+    # Combine Factors into a Composite Score
+    def composite_score(row):
+        if row['ema_crossover'] == 1 and row['atr_14'] > df['atr_14'].median() and row['position'] == 1:
+            return 1.0  # Very high score
+        elif row['ema_crossover'] == 1 and row['atr_14'] > df['atr_14'].median() and row['position'] == 0:
+            return 0.75  # High score
+        elif row['ema_crossover'] == 1 and row['atr_14'] <= df['atr_14'].median() and row['position'] == 0:
+            return 0.5  # Moderate score
+        else:
+            return 0.25  # Low score
+    
+    df['composite_factor'] = df.apply(composite_score, axis=1)
+    
+    return df['composite_factor']
+```

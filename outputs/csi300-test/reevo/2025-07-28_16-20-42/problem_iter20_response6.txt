@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 2-day simple moving average of the close price
+    sma_2 = df['close'].rolling(window=2).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices with adaptive weights
+    total_prices = df[['open', 'high', 'low', 'close']].sum(axis=1)
+    adaptive_weights_open = (df['open'] / total_prices).fillna(0.25)
+    adaptive_weights_high = (df['high'] / total_prices).fillna(0.25)
+    adaptive_weights_low = (df['low'] / total_prices).fillna(0.25)
+    adaptive_weights_close = (df['close'] / total_prices).fillna(0.25)
+    weighted_prices = (adaptive_weights_open * df['open'] + 
+                       adaptive_weights_high * df['high'] + 
+                       adaptive_weights_low * df['low'] + 
+                       adaptive_weights_close * df['close'])
+    
+    # Calculate the ratio of (high - low) to the 2-day simple moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (sma_2 + 1e-7)
+    
+    # Calculate the 2-day exponential moving average of the close price
+    ema_2 = df['close'].ewm(span=2, adjust=False).mean()
+    
+    # Calculate the 2-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=2).std()
+    
+    # Incorporate volume data for robustness
+    avg_volume = df['volume'].rolling(window=2).mean()
+    volume_factor = (df['volume'] - avg_volume) / (avg_volume + 1e-7)
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = ((weighted_prices - sma_2) / (volatility_ratio + 1e-7) + 
+                    (ema_2 - df['close']) / (realized_volatility + 1e-7) +
+                    volume_factor)
+    return alpha_factor
+```

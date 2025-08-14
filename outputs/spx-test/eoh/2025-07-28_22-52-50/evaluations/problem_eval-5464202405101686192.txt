@@ -1,0 +1,37 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate ATR with volume
+    df['H-L'] = df['high'] - df['low']
+    df['H-PC'] = abs(df['high'] - df['close'].shift(1))
+    df['L-PC'] = abs(df['low'] - df['close'].shift(1))
+    df['TR_vol'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1) * df['volume']
+    atr_period = 14
+    df['ATR_vol'] = df['TR_vol'].rolling(window=atr_period).mean()
+
+    # Calculate MFI
+    mfi_period = 14
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_mf = positive_flow.rolling(window=mfi_period).sum()
+    negative_mf = negative_flow.rolling(window=mfi_period).sum()
+    money_flow_ratio = positive_mf / negative_mf
+    df['MFI'] = 100 - (100 / (1 + money_flow_ratio))
+
+    # Calculate EMA crossovers
+    short_ema_period = 12
+    long_ema_period = 26
+    df['EMA_Short'] = df['close'].ewm(span=short_ema_period, adjust=False).mean()
+    df['EMA_Long'] = df['close'].ewm(span=long_ema_period, adjust=False).mean()
+    ema_crossover = df['EMA_Short'] - df['EMA_Long']
+
+    # Calculate ROC
+    roc_period = 14
+    df['ROC'] = df['close'].pct_change(periods=roc_period)
+
+    # Combined heuristic: ATR with volume, MFI, and ROC-adjusted EMA crossover
+    heuristics_matrix = df['ATR_vol'] + (df['MFI'] - 50) * 0.01 * df['ATR_vol'] + df['ROC'] * ema_crossover
+
+    return heuristics_matrix

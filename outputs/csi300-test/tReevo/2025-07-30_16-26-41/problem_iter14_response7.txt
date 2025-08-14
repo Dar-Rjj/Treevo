@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # 10-day calculations
+    df['HL_Vol_10'] = (df['high'] - df['low']) * df['volume']
+    total_vol_10 = df['volume'].rolling(window=10).sum()
+    weighted_price_diff_10 = df['HL_Vol_10'].rolling(window=10).sum()
+    dynamic_long_term_weighted_price_10 = weighted_price_diff_10 / total_vol_10
+    long_term_momentum_10 = df['close'] - df['open'].shift(10)
+    avg_daily_return_10 = (df['close'] - df['close'].shift(1)).rolling(window=10).sum() / 10
+    daily_returns_10 = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    std_dev_10 = daily_returns_10.rolling(window=10).std()
+    
+    # 5-day calculations
+    df['HL_Vol_5'] = (df['high'] - df['low']) * df['volume']
+    total_vol_5 = df['volume'].rolling(window=5).sum()
+    weighted_price_diff_5 = df['HL_Vol_5'].rolling(window=5).sum()
+    dynamic_short_term_weighted_price_5 = weighted_price_diff_5 / total_vol_5
+    short_term_momentum_5 = df['close'] - df['open'].shift(5)
+    avg_daily_return_5 = (df['close'] - df['close'].shift(1)).rolling(window=5).sum() / 5
+    daily_returns_5 = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    std_dev_5 = daily_returns_5.rolling(window=5).std()
+    
+    # Alpha factor for 10-day
+    alpha_10 = (dynamic_long_term_weighted_price_10 + long_term_momentum_10 - avg_daily_return_10) / std_dev_10
+    
+    # Alpha factor for 5-day
+    alpha_5 = (dynamic_short_term_weighted_price_5 + short_term_momentum_5 - avg_daily_return_5) / std_dev_5
+    
+    # Adaptive weights based on recent market conditions (simple example: use 5-day average volume)
+    avg_vol_5 = df['volume'].rolling(window=5).mean()
+    adaptive_weight_10 = avg_vol_5.rolling(window=5).mean() / (avg_vol_5.rolling(window=10).mean() + 1e-6)
+    adaptive_weight_5 = 1 - adaptive_weight_10
+    
+    # Combine 10-day and 5-day metrics
+    combined_alpha = (alpha_10 * adaptive_weight_10 + alpha_5 * adaptive_weight_5) * avg_vol_5
+    
+    # Apply exponential weights
+    combined_alpha = combined_alpha.ewm(span=10, adjust=False).mean() * 0.8 + combined_alpha.ewm(span=5, adjust=False).mean() * 0.2
+    
+    # Adjust for market depth
+    avg_high_low_spread_5 = (df['high'] - df['low']).rolling(window=5).mean()
+    combined_alpha = combined_alpha / (avg_high_low_spread_5 + 1e-6)
+    
+    return combined_alpha
+```

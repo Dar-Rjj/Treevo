@@ -1,0 +1,46 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Volatility factor: Standard deviation of closing prices with a short-term window
+    volatility = df['close'].rolling(window=5).std()
+
+    # VWAP (Volume-Weighted Average Price) with a short-term window
+    vwap = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Momentum factor: 5-day return
+    momentum = df['close'].pct_change(periods=5)
+
+    # Mean reversion factor: Difference between current close and 5-day moving average
+    mean_reversion = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Exponential smoothing of the mean reversion factor with a shorter span for more recent data
+    mean_reversion_smoothed = mean_reversion.ewm(span=3, adjust=False).mean()
+
+    # Factor: ratio of positive sum to absolute negative sum with a short-term window
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+    liquidity_factor = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Dynamic weighting: Use exponential smoothing on the factors
+    volatility_smoothed = volatility.ewm(span=3, adjust=False).mean()
+    vwap_smoothed = vwap.ewm(span=3, adjust=False).mean()
+    momentum_smoothed = momentum.ewm(span=3, adjust=False).mean()
+    liquidity_factor_smoothed = liquidity_factor.ewm(span=3, adjust=False).mean()
+
+    # Incorporate high and low prices into a new factor
+    price_range = df['high'] - df['low']
+    price_range_smoothed = price_range.ewm(span=3, adjust=False).mean()
+
+    # Combine factors with dynamic weights
+    combined_factor = (volatility_smoothed * 0.2 +
+                       vwap_smoothed * 0.2 +
+                       momentum_smoothed * 0.2 +
+                       mean_reversion_smoothed * 0.2 +
+                       liquidity_factor_smoothed * 0.1 +
+                       price_range_smoothed * 0.1)
+
+    return combined_factor
+```

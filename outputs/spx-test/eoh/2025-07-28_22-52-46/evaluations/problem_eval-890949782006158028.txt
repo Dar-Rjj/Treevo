@@ -1,0 +1,33 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate Rate of Change (ROC) for volume
+    roc_volume = df['volume'] / df['volume'].shift(10) - 1
+    
+    # Calculate historical volatility for RSI and ROC Volume
+    vol_rsi = rsi.rolling(window=10).std()
+    vol_roc_volume = roc_volume.rolling(window=10).std()
+    
+    # Weights based on historical volatility (inverse of volatility)
+    weight_rsi = 1 / vol_rsi
+    weight_roc_volume = 1 / vol_roc_volume
+    
+    # Normalize weights
+    total_weight = weight_rsi + weight_roc_volume
+    weight_rsi = weight_rsi / total_weight
+    weight_roc_volume = weight_roc_volume / total_weight
+    
+    # Compute the heuristics matrix
+    heuristics_matrix = (weight_rsi * rsi + weight_roc_volume * roc_volume)
+    
+    # Drop rows with NaN values resulted from calculations
+    heuristics_matrix.dropna(inplace=True)
+    
+    return heuristics_matrix

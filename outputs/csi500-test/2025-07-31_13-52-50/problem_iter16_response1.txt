@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation from Close
+    df['daily_return'] = df['close'].diff()
+    
+    # Identify Trend Reversal Potential
+    df['trend_reversal'] = (df['daily_return'] > df['daily_return'].shift(1)) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Compute Price Momentum Factor
+    n = 5  # Number of days for price momentum
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 7  # Number of days for volume momentum
+    df['volume_momentum'] = df['volume'].diff().rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.6  # Weight for price momentum
+    k2 = 0.4  # Weight for volume momentum
+    df['combined_momentum'] = (k1 * df['price_momentum']) + (k2 * df['volume_momentum'])
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_ma_20']
+    small_constant = 1e-6  # To avoid division by zero
+    df['volume_adjustment_factor'] = df['volume_deviation'] + small_constant
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Final Composite Factor Calculation
+    df['composite_factor'] = df['adjusted_combined_momentum']
+    df.loc[df['trend_reversal'], 'composite_factor'] += 2  # Higher score for trend reversal indication
+    
+    return df['composite_factor']
+```

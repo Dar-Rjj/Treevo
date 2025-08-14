@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Midpoint
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Multi-Day Average Midpoint
+    df['avg_midpoint_5d'] = df['midpoint'].rolling(window=5).mean()
+    
+    # Compute Volume Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Daily Returns
+    df['daily_returns'] = df['close'] - df['open']
+    
+    # Volume Adjusted Daily Return
+    df['volume_adjusted_daily_return'] = df['volume'] * df['daily_returns']
+    
+    # Intraday Range to Volume Ratio
+    df['intraday_range_to_volume_ratio'] = df['intraday_range'] / df['volume']
+    
+    # Closing Price to High-Low Range Ratio
+    df['closing_price_to_high_low_range_ratio'] = df['close'] / df['intraday_range']
+    
+    # Enhanced Price Envelopment
+    sum_daily_ranges = df['intraday_range'].rolling(window=5).sum()
+    sum_volumes = df['volume'].rolling(window=5).sum()
+    df['enhanced_price_envelopment'] = (sum_daily_ranges / sum_volumes) + df['midpoint']
+    
+    # Volatility-Adjusted Momentum
+    df['volatility'] = df['daily_returns'].rolling(window=5).std()
+    df['volatility_adjusted_momentum'] = df['volume_adjusted_momentum'] / df['volatility']
+    
+    # Integrate Intraday Volatility and Open-to-Close Movement
+    df['integrated_volatility'] = df['intraday_range'] / df['daily_returns']
+    
+    # Incorporate Advanced Volume Impact
+    df['advanced_volume_impact'] = df['volume'] ** (1/3)
+    df['integrated_metric'] = df['integrated_volatility'] * df['advanced_volume_impact']
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    df['adjusted_price_range'] = df['intraday_range'] / (df['open'] + df['close'])
+    df['stability_adjusted_metric'] = df['integrated_metric'] / df['adjusted_price_range']
+    
+    # Synthesize VWAPCHL into the Model
+    vwap_open = (df['open'] * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_close = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwapchl'] = (vwap_close - vwap_open) / df['intraday_range']
+    
+    # Combine Factors
+    df['combined_factor_1'] = df['volume_adjusted_momentum'] * df['enhanced_price_envelopment']
+    df['combined_factor_2'] = df['volume_adjusted_daily_return'].rolling(window=5).sum()
+    df['combined_factor_3'] = df['intraday_range_to_volume_ratio'].rolling(window=5).sum()
+    df['combined_factor_4'] = df['closing_price_to_high_low_range_ratio'].rolling(window=5).sum()
+    df['combined_factor_5'] = df['volatility_adjusted_momentum'].rolling(window=5).sum()
+    df['combined_factor_6'] = df['stability_adjusted_metric'].rolling(window=5).sum()
+    
+    # Assign weights based on historical performance (example weights)
+    weights = [0.2, 0.1, 0.1, 0.1, 0.2, 0.3]
+    
+    # Calculate weighted sum of all factors
+    df['alpha_factor'] = (
+        weights[0] * df['combined_factor_1'] +
+        weights[1] * df['combined_factor_2'] +
+        weights[2] * df['combined_factor_3'] +
+        weights[3] * df['combined_factor_4'] +
+        weights[4] * df['combined_factor_5'] +
+        weights[5] * df['combined_factor_6']
+    )
+    
+    return df['alpha_factor']
+```

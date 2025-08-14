@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    df['5_day_EMA'] = df['Daily_Price_Change'].ewm(span=5, adjust=False).mean()
+    df['10_day_EMA'] = df['Daily_Price_Change'].ewm(span=10, adjust=False).mean()
+    df['Short_Term_Momentum'] = df['5_day_EMA'] - df['10_day_EMA']
+    
+    # Calculate Long-Term Price Momentum
+    df['20_day_SMA'] = df['Daily_Price_Change'].rolling(window=20).mean()
+    df['50_day_SMA'] = df['Daily_Price_Change'].rolling(window=50).mean()
+    df['Long_Term_Momentum'] = df['20_day_SMA'] - df['50_day_SMA']
+    
+    # Calculate Volume Indicator
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    positive_volume_days = (df['Volume_Change'] > 0).rolling(window=20).sum()
+    negative_volume_days = (df['Volume_Change'] < 0).rolling(window=20).sum()
+    
+    # Calculate Average True Range (ATR)
+    true_range = pd.concat([
+        df['high'] - df['low'],
+        (df['high'] - df['close'].shift(1)).abs(),
+        (df['low'] - df['close'].shift(1)).abs()
+    ], axis=1).max(axis=1)
+    df['ATR'] = true_range.rolling(window=14).mean()
+    
+    # Combine Short-Term Price Momentum and Volume Indicator
+    df['Short_Term_Factor'] = df['Short_Term_Momentum'] * positive_volume_days / df['ATR']
+    
+    # Combine Long-Term Price Momentum and Volume Indicator
+    df['Long_Term_Factor'] = df['Long_Term_Momentum'] * negative_volume_days / df['ATR']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Short_Term_Factor'] + df['Long_Term_Factor']
+    
+    return df['Alpha_Factor']
+```

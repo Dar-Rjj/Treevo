@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=5, P=10, Q=10, R=20, S=20):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Momentum-like factor: Sum of (daily return * volume) over the past N days
+    df['momentum_factor'] = (df['daily_return'] * df['volume']).rolling(window=N).sum()
+    
+    # Average daily return over the past M days
+    df['avg_daily_return'] = df['daily_return'].rolling(window=M).mean()
+    
+    # Volatility-adjusted factor: Sum of (deviation * volume) over the past N days
+    df['deviation'] = df['daily_return'] - df['avg_daily_return']
+    df['volatility_adjusted_factor'] = (df['deviation'] * df['volume']).rolling(window=N).sum()
+    
+    # High-low range and its impact on future returns
+    df['high_low_range'] = df['high'] - df['low']
+    df['normalized_high_low_range'] = df['high_low_range'] / df['open']
+    df['smoothed_high_low_range'] = df['normalized_high_low_range'].rolling(window=P).mean()
+    
+    # Trend-following indicator: Smoothed difference between close and average of high and low
+    df['close_avg_high_low_diff'] = df['close'] - (df['high'] + df['low']) / 2
+    df['trend_following_indicator'] = df['close_avg_high_low_diff'].rolling(window=Q).mean()
+    
+    # Combined factor: Percentage change in trading volume combined with daily return
+    df['volume_change'] = df['volume'].pct_change()
+    df['combined_factor'] = df['volume_change'] * df['daily_return']
+    
+    # Volume-sensitivity factor
+    df['avg_volume'] = df['volume'].rolling(window=R).mean()
+    df['excess_return'] = df.apply(lambda row: row['daily_return'] - df['avg_daily_return'].iloc[-1] if row['volume'] > row['avg_volume'] else 0, axis=1)
+    df['deficit_return'] = df.apply(lambda row: row['daily_return'] - df['avg_daily_return'].iloc[-1] if row['volume'] < row['avg_volume'] else 0, axis=1)
+    df['volume_sensitivity_factor'] = df['excess_return'].rolling(window=S).sum() + df['deficit_return'].rolling(window=S).sum()
+    
+    # Final alpha factor
+    df['alpha_factor'] = (
+        df['momentum_factor'] +
+        df['volatility_adjusted_factor'] +
+        df['smoothed_high_low_range'] +
+        df['trend_following_indicator'] +
+        df['combined_factor'] +
+        df['volume_sensitivity_factor']
+    )
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

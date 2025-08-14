@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement Ratio
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['open'] / df['close']
+    intraday_price_movement_ratio = (high_low_ratio + open_close_ratio) / 2
+
+    # Measure Price-Volatility Alignment
+    price_range = df['high'] - df['low']
+    weighted_price_range = price_range * df['volume']
+    alignment = intraday_price_movement_ratio / (weighted_price_range + 1e-6)
+    sentiment = alignment.apply(lambda x: 1 if x > 0 else -1)
+
+    # Calculate Gain and Loss
+    gain = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    loss = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    sum_gain = gain.rolling(window=14).sum()
+    sum_loss = loss.rolling(window=14).sum()
+
+    # Calculate Relative Strength and ARSI
+    rs = sum_gain / (sum_loss + 1e-6)
+    rsi = 100 - (100 / (1 + rs))
+    arsi = rsi * df['volume'].rolling(window=14).mean() * (df['close'] / df['open'])
+
+    # Calculate Short-Term and Long-Term Returns
+    short_term_return = df['close'].pct_change(5)
+    long_term_return = df['close'].pct_change(20)
+
+    # Calculate Volume-Weighted Returns
+    volume_weighted_short_term_return = short_term_return * df['volume']
+    volume_weighted_long_term_return = long_term_return * df['volume']
+
+    # Calculate Short-Term Volatility
+    atr = (df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()).mean()
+
+    # Adjust for Volatility
+    adjusted_short_term_return = volume_weighted_short_term_return / (atr + 1e-6)
+
+    # Calculate Price Oscillator
+    price_oscillator = df['close'].shift(5) - df['close'].shift(20)
+
+    # Combine ARSI, Adjusted Returns, and Price Oscillator
+    combined_factor = arsi * adjusted_short_term_return + price_oscillator - volume_weighted_long_term_return
+
+    # Calculate High-Low Spread and VWMA
+    high_low_spread = df['high'] - df['low']
+    vwma_high_low_spread = (high_low_spread * df['volume']).rolling(window=14).mean()
+
+    # Incorporate Close-to-Close Return
+    close_to_close_return = df['close'].diff()
+    multiplied_vwma = vwma_high_low_spread * close_to_close_return
+
+    # Adjust with Volume Change
+    volume_change = (df['volume'].diff() / df['volume'].shift(1)).fillna(0)
+    final_factor = multiplied_vwma * volume_change + combined_factor
+
+    return final_factor
+```

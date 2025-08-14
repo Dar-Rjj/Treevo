@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    close_position = (df['close'] - df['open']) / intraday_range
+    
+    # Intraday Volume Intensity
+    volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Intraday Price Change
+    price_change = (df['close'] - df['open']) / intraday_range
+    
+    # Intraday Range Percentage
+    range_percentage = (df['high'] - df['low']) / ((df['high'] + df['low']) / 2)
+    
+    # Close-to-Open Momentum Shift
+    momentum_shift = (df['close'] - df['open']) / df['close'].shift(1)
+    
+    # Volume Activity Ratio
+    n = 10
+    volume_activity_ratio = df['volume'].rolling(window=n).sum() / df['volume'].ewm(span=n, adjust=False).mean()
+    
+    # Daily Return Volatility
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    volatility = daily_return.rolling(window=20).std()
+    daily_return_volatility = daily_return / volatility
+    
+    # Combine Intraday Components
+    combined_intraday = (volume_intensity * close_position) + price_change + momentum_shift
+    
+    # Adjust for Recent Price Trend
+    recent_trend = df['close'] - df['close'].rolling(window=20).mean()
+    
+    # Incorporate Daily Return Volatility
+    adjusted_combined = combined_intraday * daily_return_volatility + recent_trend
+    
+    # Trend Reversal Potential
+    rsi = df['close'].diff().apply(lambda x: max(x, 0)).rolling(window=14).mean() / \
+          df['close'].diff().apply(lambda x: abs(x)).rolling(window=14).mean()
+    rsi = 100 - (100 / (1 + rsi))
+    overbought_flag = (rsi > 70).astype(int)
+    oversold_flag = (rsi < 30).astype(int)
+    roc = df['close'] / df['close'].shift(14) - 1
+    trend_reversal_potential = np.where((overbought_flag == 1) & (roc < 0), 1, 0) - np.where((oversold_flag == 1) & (roc > 0), 1, 0)
+    
+    # Final Alpha Factor
+    alpha_factor = adjusted_combined + range_percentage + momentum_shift + trend_reversal_potential
+    
+    return alpha_factor
+```

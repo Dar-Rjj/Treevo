@@ -1,0 +1,58 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=5).mean()
+
+    # Calculate 5 and 10 day Simple Moving Averages (SMA) of the closing price
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+
+    # Calculate the trend component using the difference between SMAs
+    df['trend'] = df['sma_5'] - df['sma_10']
+
+    # Calculate the positive and negative part of the amount over volume
+    df['positive_amount_vol'] = (df['amount'] / df['volume']).clip(lower=0)
+    df['negative_amount_vol'] = (df['amount'] / df['volume']).clip(upper=0)
+
+    # Sum of positive and absolute negative parts
+    pos_sum = df['positive_amount_vol'].rolling(window=5).sum()
+    neg_sum_abs = df['negative_amount_vol'].abs().rolling(window=5).sum()
+
+    # Factor: ratio of positive sum to absolute negative sum
+    factor_pos_neg = pos_sum / (neg_sum_abs + 1e-7)
+
+    # Calculate the 5-day rolling standard deviation (volatility) of the close price
+    df['volatility'] = df['close'].rolling(window=5).std()
+
+    # Generate a trade signal: 1 if the 5-day SMA is above the 10-day SMA, -1 otherwise
+    df['trade_signal'] = (df['sma_5'] > df['sma_10']).astype(int) * 2 - 1
+
+    # Adjust the factor weights based on market conditions
+    df['adjusted_factor_pos_neg'] = factor_pos_neg * df['trade_signal'] * (1 + df['volatility'])
+
+    # Calculate the 5-day and 20-day rate of change (ROC) for momentum
+    df['roc_5'] = df['close'].pct_change(periods=5)
+    df['roc_20'] = df['close'].pct_change(periods=20)
+
+    # Calculate the ratio of 5-day to 20-day ROC
+    roc_ratio = df['roc_5'] / (df['roc_20'] + 1e-7)
+
+    # Calculate the 30-day and 90-day exponential moving average of close prices for smoothness
+    df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['ema_90'] = df['close'].ewm(span=90, adjust=False).mean()
+
+    # Calculate the ratio of 30-day to 90-day EMA
+    ema_ratio = df['ema_30'] / df['ema_90']
+
+    # Calculate the 30-day and 90-day high-low range for volatility
+    df['high_low_range_30'] = df['high'].rolling(window=30).max() - df['low'].rolling(window=30).min()
+    df['high_low_range_90'] = df['high'].rolling(window=90).max() - df['low'].rolling(window=90).min()
+
+    # Calculate the ratio of 30-day to 90-day high-low range
+    high_low_range_ratio = df['high_low_range_30'] / (df['high_low_range_90'] + 1e-7)
+
+    # Combine VWAP, trend, adjusted factor, ROC ratio, EMA ratio, and high-low range ratio
+    combined_factor = (df['vwap'] - df['close']) + df['trend'] + df['adjusted_factor_pos_neg'] + roc_ratio + ema_ratio + high_low_range_ratio
+
+    return combined_factor
+```

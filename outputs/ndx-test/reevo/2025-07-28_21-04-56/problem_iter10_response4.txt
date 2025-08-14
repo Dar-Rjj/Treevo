@@ -1,0 +1,67 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 50-day percentage change in closing price (momentum)
+    momentum_10 = df['close'].pct_change(periods=10)
+    momentum_50 = df['close'].pct_change(periods=50)
+
+    # Calculate the relative strength as the ratio of 10-day momentum to 50-day momentum
+    relative_strength = momentum_10 / momentum_50
+
+    # Calculate the daily return
+    daily_return = df['close'].pct_change()
+
+    # Calculate the volatility as the standard deviation of the daily returns over a 10-day window
+    volatility = daily_return.rolling(window=10).std()
+
+    # Calculate the liquidity as the average volume over a 10-day window
+    liquidity = df['volume'].rolling(window=10).mean()
+
+    # Calculate the 50-day and 200-day moving averages of closing prices
+    ma_50 = df['close'].rolling(window=50).mean()
+    ma_200 = df['close'].rolling(window=200).mean()
+
+    # Calculate the trend strength as the difference between the 50-day and 200-day moving averages
+    trend_strength = ma_50 - ma_200
+
+    # Calculate the 10-day rolling mean of the high-low range
+    hl_range_mean = (df['high'] - df['low']).rolling(window=10).mean()
+
+    # Calculate the volume-weighted momentum
+    volume_weighted_momentum = (momentum_10 * df['volume']).rolling(window=10).mean() / liquidity
+
+    # Calculate the seasonality as the 30-day rolling mean of the daily returns
+    seasonality = daily_return.rolling(window=30).mean()
+
+    # Calculate the sentiment as the 10-day cumulative sum of the daily returns
+    sentiment = daily_return.rolling(window=10).sum()
+
+    # Calculate the 10-day rolling sum of the volume
+    volume_sum = df['volume'].rolling(window=10).sum()
+
+    # Calculate the volume-weighted average price (VWAP)
+    vwap = (df['close'] * df['volume']).rolling(window=10).sum() / volume_sum
+
+    # Calculate the 10-day rolling mean of the VWAP
+    vwap_mean = vwap.rolling(window=10).mean()
+
+    # Calculate the VWAP trend strength
+    vwap_trend_strength = vwap - vwap_mean
+
+    # Calculate the 10-day Aroon Up and Aroon Down
+    aroon_up = 100 * (df['high'].rolling(window=10).apply(lambda x: (x.argmax() + 1) / 10, raw=True))
+    aroon_down = 100 * (df['low'].rolling(window=10).apply(lambda x: (x.argmin() + 1) / 10, raw=True))
+
+    # Calculate the 10-day rolling median of the closing prices
+    median_close = df['close'].rolling(window=10).median()
+
+    # Calculate the 10-day rolling skewness of the daily returns
+    skewness = daily_return.rolling(window=10).skew()
+
+    # Combine the volume-weighted momentum, volatility, liquidity, trend strength, high-low range, seasonality, sentiment, Aroon Up, Aroon Down, median close, and skewness into an alpha factor
+    alpha_factor = (volume_weighted_momentum / (volatility + 1e-7)) * (trend_strength / (hl_range_mean + 1e-7)) * (relative_strength + 1) * (seasonality + 1) * (sentiment + 1) * (vwap_trend_strength + 1) * (aroon_up + 1) * (aroon_down + 1) * (median_close + 1) * (skewness + 1)
+
+    # Smooth the alpha factor using a 2-day exponentially weighted moving average for more responsiveness
+    smoothed_alpha_factor = alpha_factor.ewm(span=2, adjust=False).mean()
+
+    return smoothed_alpha_factor
+```

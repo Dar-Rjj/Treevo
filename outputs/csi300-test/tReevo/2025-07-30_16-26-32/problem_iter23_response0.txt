@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    df['daily_range'] = (df['high'] - df['low']) / df['open']
+    
+    # Open to Close Momentum
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['open_to_close_ema'] = df['open_to_close_return'].ewm(span=5, adjust=False).mean()
+    
+    # Volume-Weighted Open-to-Close Return
+    df['volume_weighted_open_to_close_return'] = df['open_to_close_return'] * df['volume']
+    df['volume_weighted_open_to_close_ema'] = df['volume_weighted_open_to_close_return'].ewm(span=5, adjust=False).mean()
+    
+    # Price-Volume Trend Indicator
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['price_volume_trend'] = df['price_change'] * df['volume']
+    df['price_volume_trend_30_day'] = df['price_volume_trend'].rolling(window=30).sum()
+    
+    # Volume-Adjusted Intraday Movement
+    df['intraday_movement'] = df['close'] - df['open']
+    df['avg_volume_20_day'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjusted_intraday_movement'] = df['intraday_movement'] / df['avg_volume_20_day']
+    
+    # Combined Momentum and Volatility Factor
+    df['combined_momentum_volatility'] = 0.3 * df['daily_range'] + 0.4 * df['open_to_close_ema'] + 0.3 * df['volume_weighted_open_to_close_ema']
+    df['combined_momentum_volatility_ema'] = df['combined_momentum_volatility'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Volume-Sensitive Momentum Factor
+    df['volume_sensitive_momentum'] = 0.4 * df['price_volume_trend_30_day'] + 0.3 * df['volume_weighted_open_to_close_ema'] + 0.3 * df['volume_adjusted_intraday_movement']
+    df['volume_sensitive_momentum_ema'] = df['volume_sensitive_momentum'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = 0.5 * df['combined_momentum_volatility_ema'] + 0.5 * df['volume_sensitive_momentum_ema']
+    df['final_alpha_factor_ema'] = df['final_alpha_factor'].ewm(alpha=0.2, adjust=False).mean()
+    
+    return df['final_alpha_factor_ema']
+```

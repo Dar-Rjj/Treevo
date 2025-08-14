@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range + open_to_close_movement) * df['volume']
+
+    # High-Low Spread Momentum
+    high_low_spread_20d = (df['high'] - df['low']).rolling(window=20).sum()
+    prev_high_low_spread_20d = high_low_spread_20d.shift(1)
+    high_low_spread_momentum = high_low_spread_20d - prev_high_low_spread_20d
+
+    # Enhance with 10-Day High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_ten_day_high = df['close'] / ten_day_high
+    proximity_to_ten_day_low = df['close'] / ten_day_low
+    min_proximity_inverted = 1 / pd.concat([proximity_to_ten_day_high, proximity_to_ten_day_low], axis=1).min(axis=1)
+    
+    # Adjust for 20-Day Volatility
+    twenty_day_volatility = df['close'].pct_change().rolling(window=20).std()
+    adjusted_proximity = min_proximity_inverted / twenty_day_volatility
+
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_by_volume = (open_high_diff + open_low_diff) * df['volume']
+
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    n = 5  # Define the lookback period
+    amount_per_unit_close_current = df['amount'].rolling(window=n).sum() / df['close']
+    amount_per_unit_close_previous = df['amount'].shift(n+1).rolling(window=n).sum() / df['close'].shift(n+1)
+    amount_rate_of_change = (amount_per_unit_close_current - amount_per_unit_close_previous) / amount_per_unit_close_previous
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        volume_adjusted_breakout_strength +
+        high_low_spread_momentum +
+        adjusted_proximity +
+        weighted_avg_by_volume +
+        amount_rate_of_change
+    )
+
+    return alpha_factor
+```

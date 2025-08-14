@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate moving averages
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Momentum Indicator (difference between 10-Day and 20-Day SMA)
+    df['Momentum'] = df['SMA_10'] - df['SMA_20']
+    
+    # Detect breakout events
+    df['30D_High'] = df['high'].rolling(window=30).max()
+    df['30D_Low'] = df['low'].rolling(window=30).min()
+    df['Breakout_Score'] = 0
+    breakout_days = df[(df['close'] > df['30D_High']) | (df['close'] < df['30D_Low'])].index
+    for day in breakout_days:
+        consecutive_days = 1
+        while (day - pd.Timedelta(days=consecutive_days)) in breakout_days:
+            consecutive_days += 1
+        df.at[day, 'Breakout_Score'] = consecutive_days
+    
+    # Explore volume changes
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Price_Change'] = df['close'].pct_change()
+    df['Significant_Volume_Price'] = ((df['Volume_Change'] > 0.1) & (df['Price_Change'].abs() > 0.02)).astype(int)
+    
+    # Incorporate open and close prices
+    df['Bearish_Signal'] = (df['open'] > df['close']).astype(int)
+    df['Bullish_Signal'] = (df['open'] < df['close']).astype(int)
+    
+    # Investigate the relationship between amount and volume
+    df['Amount_to_Volume_Ratio'] = df['amount'] / df['volume']
+    df['A2V_Trend'] = df['Amount_to_Volume_Ratio'].rolling(window=10).mean()
+    
+    # Consider the impact of gap openings
+    df['Gap_Diff'] = df['open'] - df['close'].shift(1)
+    df['Up_Gap'] = (df['Gap_Diff'] > 0).astype(int)
+    df['Down_Gap'] = (df['Gap_Diff'] < 0).astype(int)
+    
+    # Leverage high and low prices for volatility measures
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Range_SMA'] = df['Daily_Range'].rolling(window=10).mean()
+    
+    # Analyze price and volume clusters
+    df['Cluster'] = 0  # This is a placeholder for actual cluster detection logic, which might require more advanced techniques
+    
+    # Evaluate price and volume divergences
+    df['Divergence_Score'] = (df['close'].diff() * df['volume'].diff()).apply(lambda x: 1 if x < 0 else -1 if x > 0 else 0)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['Momentum'] +
+        df['Breakout_Score'] +
+        2 * df['Significant_Volume_Price'] +
+        2 * (df['Bullish_Signal'] - df['Bearish_Signal']) +
+        df['A2V_Trend'].pct_change() +
+        df['Up_Gap'] - df['Down_Gap'] +
+        df['Range_SMA'].pct_change() +
+        df['Divergence_Score']
+    )
+    
+    return alpha_factor
+```

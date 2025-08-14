@@ -1,0 +1,33 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's close and yesterday's close
+    df['close_diff'] = df['close'].diff()
+    
+    # Calculate the average volume over the past 5 days
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    
+    # Calculate the weighted moving average of the close price over the past 10 days
+    weights = [i for i in range(1, 11)]
+    df['wma_10d'] = df['close'].rolling(window=10).apply(lambda prices: sum(w * p for w, p in zip(weights, prices)) / sum(weights), raw=True)
+    
+    # Calculate the ratio of today's volume to the average volume over the past 5 days
+    df['vol_ratio'] = df['volume'] / df['avg_volume_5d']
+    
+    # Calculate the trend component by taking the difference between the current close and the weighted moving average
+    df['trend'] = df['close'] - df['wma_10d']
+    
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14d'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the volatility as the standard deviation of the last 10 days' closing prices
+    df['volatility_10d'] = df['close'].rolling(window=10).std()
+    
+    # Combine the close price difference, volume ratio, trend, RSI, and volatility into a single factor
+    factor = (df['close_diff'] * df['vol_ratio']) + (df['amount'] * df['vol_ratio']) - df['trend'] + df['rsi_14d'] - df['volatility_10d']
+    
+    return factor.dropna()
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate 20-Day Moving Average of Daily Range
+    df['avg_20d_range'] = df['daily_range'].rolling(window=20).mean()
+    
+    # Identify Breakouts
+    df['upward_breakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['downward_breakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = 0
+    df.loc[df['upward_breakout'] == 1, 'breakout_strength'] = (df['close'] - df['high'].shift(1)) / df['avg_20d_range']
+    df.loc[df['downward_breakout'] == 1, 'breakout_strength'] = (df['low'].shift(1) - df['close']) / df['avg_20d_range']
+    
+    # Cumulate Breakout Strength
+    df['positive_breakout_sum'] = df['breakout_strength'][df['breakout_strength'] > 0].rolling(window=10).sum()
+    df['negative_breakout_sum'] = df['breakout_strength'][df['breakout_strength'] < 0].rolling(window=10).sum().abs()
+    df['cumulated_breakout_strength'] = df['positive_breakout_sum'] - df['negative_breakout_sum']
+    
+    # Calculate Intraday Return Series
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute Moving Averages of Intraday Returns
+    df['intraday_ma_5'] = df['intraday_return'].rolling(window=5).mean()
+    df['intraday_ma_20'] = df['intraday_return'].rolling(window=20).mean()
+    
+    # Compute Intraday Return Difference
+    df['intraday_diff'] = df['intraday_ma_20'] - df['intraday_ma_5']
+    
+    # Filter by Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['filtered_intraday_diff'] = df['intraday_diff'] * (df['volume_change'] > 0).astype(int)
+    
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5d_close_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['5d_volume_ratio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['vol_adj_momentum'] = df['5d_close_return'] * df['5d_volume_ratio']
+    
+    # Calculate High-Low Price Oscillation
+    df['high_low_range'] = df['high'] - df['low']
+    df['hl_mean_5d'] = df['high_low_range'].rolling(window=5).mean()
+    df['hl_std_5d'] = df['high_low_range'].rolling(window=5).std()
+    df['norm_high_low_range'] = (df['high_low_range'] - df['hl_mean_5d']) / df['hl_std_5d']
+    
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['prev_close']).abs()
+    df['tr3'] = (df['low'] - df['prev_close']).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    
+    # Calculate 14-Period Average True Range (ATR)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Integrate Breakout and Intraday Sentiment
+    df['integrated_breakout_sentiment'] = 0.5 * df['cumulated_breakout_strength'] + 0.5 * df['filtered_intraday_diff']
+    
+    # Integrate Volume Adjusted Momentum and Price Oscillation
+    df['integrated_momentum_oscillation'] = 0.5 * df['vol_adj_momentum'] + 0.5 * df['norm_high_low_range']
+    
+    # Combine Integrated Factors
+    df['alpha_factor'] = 0.5 * df['integrated_breakout_sentiment'] + 0.5 * df['

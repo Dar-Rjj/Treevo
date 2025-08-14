@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=10, p=5, threshold=3):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    combined_intraday = (df['open'] - intraday_midpoint) - opening_gap
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Average Intraday Range over n periods
+    avg_intraday_range = intraday_range.rolling(window=n).mean()
+    
+    # Combine Factors
+    combined_factors = avg_intraday_range * (close_to_open_return + price_change)
+    
+    # Enhance with Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    volatility_factor = abs_price_change.rolling(window=m).mean()
+    combined_factors_enhanced = combined_factors / volatility_factor
+    
+    # Adjust for Combined Volume and Price Spikes
+    volume_spike = df['volume'] / df['volume'].shift(1)
+    price_spike = price_change.abs() / price_change.shift(1).abs().fillna(0)
+    combined_spike_factor = (volume_spike + price_spike) / 2
+    combined_factors_adjusted = combined_factors_enhanced * combined_spike_factor
+    combined_factors_adjusted_capped = combined_factors_adjusted.clip(lower=-threshold, upper=threshold)
+    
+    # Weight by Volume
+    weighted_feature = combined_factors_adjusted_capped * df['volume']
+    
+    # Add Recent Amount Trend
+    recent_amount_trend = df['amount'].rolling(window=p).mean()
+    final_alpha = weighted_feature * recent_amount_trend
+    
+    return final_alpha
+```

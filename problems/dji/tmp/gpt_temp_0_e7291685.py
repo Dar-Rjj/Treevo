@@ -1,0 +1,31 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume Weighted Close Price Momentum
+    avg_close = df['close'].rolling(window=5).mean()
+    avg_volume = df['volume'].rolling(window=5).mean()
+    close_momentum = (df['close'] - avg_close) * (df['volume'] / avg_volume)
+    
+    # Price Volatility
+    price_volatility = df['close'].rolling(window=6).std() / df['close'].shift(1)
+    
+    # Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Close-to-PreviousClose Return
+    close_to_prev_close_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # High-Low Breakout Intensity
+    breakout_intensity = (df['high'] - df['low']) / df['close']
+    breakout_intensity = breakout_intensity.apply(lambda x: max(x, 0))
+    
+    # Combine Intraday, Close-to-PreviousClose Returns, and Breakout Intensity with Decay
+    combined_metrics = intraday_return + close_to_prev_close_return + breakout_intensity
+    decay_factor = 0.95 ** (df.index - df.index[0])
+    combined_metrics_with_decay = combined_metrics * decay_factor
+    
+    # Final Factor
+    final_factor = (close_momentum * price_volatility) + (combined_metrics_with_decay * 0.5)
+    
+    return final_factor

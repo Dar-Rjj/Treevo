@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Prev_Day_High_Low_Spread'] = df['Intraday_High_Low_Spread'].shift(1)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Daily_VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['Prev_Day_VWAP'] = df['Daily_VWAP'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['Breakout_Intensity'] = (df['high'] - df['low']) / df['close']
+    df['Breakout_Intensity'] = np.where(df['Breakout_Intensity'] < 0, 0, df['Breakout_Intensity'])
+    
+    # Weight by Volume
+    df['Volume_Weighted_Breakout_Intensity'] = df['Breakout_Intensity'] * df['volume']
+    
+    # Calculate Volume Adjusted Momentum (VAM)
+    sma_period = 20
+    momentum_period = 5
+    df['SMA_Close'] = df['close'].rolling(window=sma_period).mean()
+    df['Momentum'] = df['SMA_Close'] - df['SMA_Close'].shift(momentum_period)
+    df['Average_Volume'] = df['volume'].rolling(window=momentum_period).mean()
+    df['Volume_Adjusted_Momentum'] = df['Momentum'] * df['volume'] / df['Average_Volume']
+    
+    # Calculate Price Volatility Indicator (PVI)
+    df['True_Range'] = df[['high', 'low', 'close']].join(df['close'].shift(1)).apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x[2]), abs(x['low'] - x[2])), axis=1
+    )
+    atr_period = 14
+    ema_period = 7
+    df['ATR'] = df['True_Range'].rolling(window=atr_period).mean()
+    df['PVI'] = df['ATR'] - df['True_Range'].ewm(span=ema_period, adjust=False).mean()
+    
+    # Combine Metrics
+    df['Momentum_Difference'] = df['Intraday_High_Low_Spread'] - df['Prev_Day_High_Low_Spread']
+    df['VWAP_Difference'] = df['Daily_VWAP'] - df['Prev_Day_VWAP']
+    df['Final_Alpha_Factor'] = df['Momentum_Difference'] * df['VWAP_Difference'] * df['Volume_Weighted_Breakout_Intensity']
+    
+    # Combine VAM and PVI with Final Alpha Factor
+    df['VAM_PVI_Product'] = df['Volume_Adjusted_Momentum'] * df['PVI']
+    smoothing_period = 30
+    df['VAM_PVI_Product_Smoothed'] = df['VAM_PVI_Product'] - df['VAM_PVI_Product'].rolling(window=smoothing_period).mean()
+    df['Final_Alpha_Factor'] += df['VAM_PVI_Product_Smoothed']
+    
+    return df['Final_Alpha_Factor']
+```

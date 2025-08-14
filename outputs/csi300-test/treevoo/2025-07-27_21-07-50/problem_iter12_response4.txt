@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore
+
+def heuristics_v2(df):
+    # Momentum-based indicators
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    df['ROC_5'] = df['close'].pct_change(5)
+    df['ROC_10'] = df['close'].pct_change(10)
+    df['ROC_20'] = df['close'].pct_change(20)
+    df['ROC_50'] = df['close'].pct_change(50)
+    
+    df['Momentum_14'] = df['close'] - df['close'].shift(14)
+    
+    # Volatility-based indicators
+    df['SD_5'] = df['close'].rolling(window=5).std()
+    df['SD_10'] = df['close'].rolling(window=10).std()
+    df['SD_20'] = df['close'].rolling(window=20).std()
+    df['SD_50'] = df['close'].rolling(window=50).std()
+    
+    def true_range(high, low, prev_close):
+        return max(high - low, abs(high - prev_close), abs(low - prev_close))
+    
+    df['TR'] = df.apply(lambda x: true_range(x['high'], x['low'], df['close'].shift(1)[df.index.get_loc(x.name)]), axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['SD_20']
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['SD_20']
+    
+    # Volume-based indicators
+    df['VWAP'] = (df['volume'] * df['close']).cumsum() / df['volume'].cumsum()
+    
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['CMF_20'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Market sentiment indicators
+    df['RSI_14'] = df['close'].rolling(window=14).apply(lambda x: 100 - (100 / (1 + (x.diff().clip(lower=0).sum() / x.diff().clip(upper=0).sum().abs()))), raw=True)
+    
+    lowest_low = df['low'].rolling(window=14).min()
+    highest_high = df['high'].rolling(window=14).max()
+    df['Stochastic_K'] = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low)
+    df['Stochastic_D'] = df['Stochastic_K'].rolling(window=3).mean()
+    
+    df['Williams_R'] = -100 * (highest_high - df['close']) / (highest_high - lowest_low)
+    
+    # Combine multiple indicators
+    selected_indicators = ['Momentum_14', 'SD_20', 'OBV', 'RSI_14']
+    df[selected_indicators] = df[selected_indicators].apply(zscore)
+    
+    df['Composite_Factor'] = df[selected_indicators].sum(axis=1)
+    
+    df['Momentum_Volatility'] = df['ROC_5'] * df['ATR_14']
+    df['Volume_Sentiment'] = df['OBV'] * df['RSI_14']
+

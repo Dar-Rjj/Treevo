@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Evaluate IRWAP Difference
+    irwap_diff = df['close'] - irwap
+    
+    # Calculate Long-Term Moving Average (LMA)
+    lma = df['close'].rolling(window=200).mean()
+    
+    # Calculate Short-Term Moving Average (SMA)
+    sma = df['close'].rolling(window=50).mean()
+    
+    # Calculate Difference Between LMA and SMA
+    ma_diff = lma - sma
+    
+    # Apply Volume Weighted Filter
+    volume_weighted_ma_diff = ma_diff * df['volume']
+    sum_volume_weighted_ma_diff = volume_weighted_ma_diff.rolling(window=10).sum()
+    smoothed_sum = sum_volume_weighted_ma_diff.ewm(span=10, adjust=False).mean()
+    
+    # Adjust Daily Return by Intraday Volatility
+    daily_return = df['close'].pct_change()
+    adjusted_return = daily_return / intraday_spread
+    
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_return.rolling(window=5).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = df['close'].pct_change().fillna(0).rolling(window=7).sum()
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = df['close'].pct_change().fillna(0).rolling(window=25).sum()
+    
+    # Combine Short and Long-Term Momentum
+    combined_momentum = short_term_momentum - long_term_momentum
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_momentum = combined_momentum / price_volatility
+    
+    # Confirm with Volume Trends
+    average_volume = df['volume'].rolling(window=20).mean()
+    volume_trend = np.where(df['volume'] > average_volume, 1, -1)
+    
+    # Final Factor Calculation
+    final_factor = (irwap_diff + smoothed_adjusted_return + 
+                    adjusted_momentum + smoothed_sum) * volume_trend
+    
+    return final_factor
+```

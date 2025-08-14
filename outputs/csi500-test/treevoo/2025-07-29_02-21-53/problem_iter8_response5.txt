@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Change'] = df['close'] - df['open']
+
+    # Aggregate Price Movements
+    period = 20
+    df['Sum_High_Low_Ranges'] = df['High_Low_Range'].rolling(window=period).sum()
+    df['Sum_Close_Open_Changes'] = df['Close_Open_Change'].rolling(window=period).sum()
+
+    # Smooth High-Low Range with EMA
+    df['Smoothed_High_Low_Range'] = df['High_Low_Range'].ewm(span=20, adjust=False).mean()
+
+    # Calculate Long-Term High-Low Range
+    long_period = 50
+    df['Long_Term_High_Low_Range'] = (df['high'].rolling(window=long_period).max() - 
+                                       df['low'].rolling(window=long_period).min())
+
+    # Compute Momentum of High-Low Ranges
+    df['High_Low_Momentum'] = df['Long_Term_High_Low_Range'] - df['Smoothed_High_Low_Range']
+
+    # Calculate True Range
+    df['True_Range'] = df[['high', 'low', 'close']].shift(1).apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close']), abs(x['low'] - x['close'])), axis=1)
+
+    # Calculate Rolling Average True Range
+    atr_period = 14
+    df['Rolling_ATR'] = df['True_Range'].rolling(window=atr_period).sum() / atr_period
+
+    # Calculate Price Momentum Score
+    df['Price_Volatility'] = df['close'].rolling(window=period).std()
+    df['Weighted_Price_Momentum'] = (df['Sum_High_Low_Ranges'] + df['Sum_Close_Open_Changes']) * df['Price_Volatility']
+
+    # Evaluate Volume Activity
+    df['Average_Volume'] = df['volume'].rolling(window=period).mean()
+    df['High_Volume_Indicator'] = df['volume'] > df['Average_Volume']
+
+    # Integrate Price Momentum and Volume Activity
+    df['Interim_Alpha_Factor'] = df['Weighted_Price_Momentum'] * df['High_Volume_Indicator']
+
+    # Combine ATR and Price Momentum
+    df['Combined_Factor'] = df['Interim_Alpha_Factor'] + df['High_Low_Momentum']
+
+    # Final Alpha Factor
+    final_alpha_factor = df['Combined_Factor']
+
+    return final_alpha_factor
+```

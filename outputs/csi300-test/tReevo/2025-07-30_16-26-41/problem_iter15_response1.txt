@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Define adaptive window sizes and thresholds
+    short_window = 5
+    long_window = 20
+    threshold = df['close'].rolling(window=20).std().mean()
+    
+    # Calculate daily returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Compute rolling standard deviation of daily returns over a window
+    df['rolling_std'] = df['daily_returns'].rolling(window=20).std()
+    
+    # Adjust window sizes based on recent volatility
+    if df['rolling_std'].iloc[-1] > threshold:
+        short_window = 3
+        long_window = 10
+    else:
+        short_window = 5
+        long_window = 20
+    
+    # Calculate short-term momentum
+    df['short_momentum'] = df['close'].pct_change(short_window)
+    df['VWES_short'] = (0.9 * df['short_momentum'] + (1 - 0.9) * df['VWES_short'].shift(1)) * df['volume'] / df['volume'].sum()
+    df['VWES_short'].fillna(0, inplace=True)
+    
+    # Calculate long-term momentum
+    df['long_momentum'] = df['close'].pct_change(long_window)
+    df['VWES_long'] = (0.1 * df['long_momentum'] + (1 - 0.1) * df['VWES_long'].shift(1)) * df['volume'] / df['volume'].sum()
+    df['VWES_long'].fillna(0, inplace=True)
+    
+    # Combine short- and long-term momentum
+    df['combined_momentum'] = 0.6 * df['VWES_short'] + 0.4 * df['VWES_long']
+    
+    # Adjust for volatility
+    df['momentum_adjusted'] = df['combined_momentum'] / df['rolling_std']
+    
+    # Incorporate sentiment
+    df['sentiment_score'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    df['final_signal'] = df['momentum_adjusted'] * df['sentiment_score']
+    
+    # Prioritize recent, liquidity-adjusted data
+    recent_final_signal = df['final_signal'].tail(10).mean()
+    older_final_signal = df['final_signal'].head(-10).mean()
+    weighted_final_signal = 0.7 * recent_final_signal + 0.3 * older_final_signal
+    
+    return pd.Series(weighted_final_signal, index=df.index)
+
+# Example usage
+# df = pd.DataFrame(...)  # Load your DataFrame with (open, high, low, close, amount, volume) columns
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

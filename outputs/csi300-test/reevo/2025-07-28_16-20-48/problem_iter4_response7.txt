@@ -1,0 +1,31 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price momentum adjusted by volume, to identify the strength of the movement
+    momentum_adjusted = (df['close'].diff() / df['volume']).shift(1)
+    
+    # Calculate the money flow index (MFI) to evaluate buying and selling pressure
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Calculate the relative strength index (RSI) to measure the speed and change of price movements
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the Chande Momentum Oscillator (CMO) to identify overbought or oversold conditions
+    cmo = (gain - loss) / (gain + loss)
+    
+    # Combine the momentum-adjusted, MFI, RSI, and CMO into a single alpha factor
+    alpha_factor = (momentum_adjusted + mfi + rsi + cmo) / 4
+    
+    # Smooth the alpha factor with a 5-period simple moving average for stability
+    alpha_factor_smoothed = alpha_factor.rolling(window=5).mean()
+    
+    return alpha_factor_smoothed
+```

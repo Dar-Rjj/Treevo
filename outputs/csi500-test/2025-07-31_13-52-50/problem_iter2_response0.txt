@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['daily_return_deviation'] = df['close'] - df['vwap']
+    
+    # Identify Trend Reversal Potential
+    df['prev_daily_return_deviation'] = df['daily_return_deviation'].shift(1)
+    df['trend_reversal_potential'] = df['daily_return_deviation'] > df['prev_daily_return_deviation']
+    
+    # Check for Volume Increase
+    df['volume_ma_14'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = df['volume'] > df['volume_ma_14']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_adjustment'] = df['volume'] - df['volume_ma_10']
+    df['adjusted_intraday_return'] = df['intraday_return'] * df['volume_adjustment']
+    
+    # Incorporate Price Volatility
+    df['std_close_5'] = df['close'].rolling(window=5).std()
+    df['volatility_factor'] = 1.2 if df['std_close_5'].iloc[-1] > df['std_close_5'].mean() else 0.8
+    df['adjusted_intraday_return'] = df['adjusted_intraday_return'] * df['volatility_factor']
+    
+    # Combine Indicators
+    df['trend_reversal_score'] = 0
+    df.loc[df['trend_reversal_potential'] & df['volume_increase'], 'trend_reversal_score'] = 1
+    df['trend_reversal_score'] += df['adjusted_intraday_return']
+    
+    return df['trend_reversal_score']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

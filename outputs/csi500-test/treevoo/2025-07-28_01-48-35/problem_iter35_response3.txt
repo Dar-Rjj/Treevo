@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    df['CloseToIntradayRatio'] = df['close'] / df['IntradayRange']
+    
+    # Short-Term Price Change
+    df['ShortTermPriceChange'] = df['close'].diff(5)
+    
+    # Adjust for Opening Gap
+    df['OpeningGap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    df['HighLowOpenClose'] = (df['high'] - df['low']) + df['OpeningGap']
+    
+    # Measure Closing Behavior
+    df['ClosingBehavior'] = df['close'] / df['close'].shift(1)
+    
+    # Final Combined Factor
+    df['FinalCombinedFactor'] = df['HighLowOpenClose'] * df['ClosingBehavior']
+    df['FinalCombinedFactor'] = df['FinalCombinedFactor'].apply(lambda x: max(x, 0))
+    
+    # Volume-Weighted Intraday Return
+    df['VolumeWeightedIntradayReturn'] = (df['high'] - df['low']) / df['low'] * df['volume']
+    
+    # Volume-Weighted High-Low Spread
+    df['AvgVolume5D'] = df['volume'].rolling(window=5).mean()
+    df['VolumeWeightedHLSpread'] = (df['high'] - df['low']) * (df['volume'] / df['AvgVolume5D'])
+    
+    # Price Momentum
+    df['EMA20'] = df['close'].ewm(span=20).mean()
+    df['PriceMomentum'] = df['close'] - df['EMA20']
+    
+    # Volume Trend Indicator
+    df['VolumeTrend'] = np.where(df['volume'].diff(10) > 0, 2, -2)
+    
+    # Composite Factor
+    df['CompositeFactor'] = df['FinalCombinedFactor'] * df['PriceMomentum'] + df['VolumeWeightedIntradayReturn']
+    df['CompositeFactor'] = df['CompositeFactor'].apply(lambda x: max(x, 0))
+    
+    # Smooth the Composite Factor
+    df['SmoothedCompositeFactor'] = df['CompositeFactor'].rolling(window=5).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['FinalAlphaFactor'] = df['SmoothedCompositeFactor'] * df['VolumeTrend']
+    
+    # Calculate Daily Market Sentiment
+    df['DailyMarketSentiment'] = df['close'] - df['open']
+    df['RollingSum5D'] = df['DailyMarketSentiment'].rolling(window=5).sum()
+    df['SMA10_RollingSum'] = df['RollingSum5D'].rolling(window=10).mean()
+    df['SentimentDifference'] = df['RollingSum5D'] - df['SMA10_RollingSum']
+    
+    # Calculate Volatility Ratio
+    df['VolatilityRatio'] = df['volume'] / abs(df['close'] - df['open'])
+    df['VolatilityRatio20D'] = df['VolatilityRatio'].rolling(window=20).mean()
+    df['VolatilityDifference'] = df['VolatilityRatio'] - df['VolatilityRatio20D']
+    
+    # Calculate True Range
+    df['TrueRange'] = df[['high', 'low']].apply(lambda x: max(x), axis=1) - df[['high', 'low']].apply(lambda x: min(x), axis=1)
+    df['TrueRange30D'] = df['TrueRange'].rolling(window=30).mean()
+    df['AdjustedTrueRange'] = (df['TrueRange'] - df['TrueRange30D']) * np.sign(df['close'] - df['open'])
+    
+    # Final Enhanced Alpha Factor
+    df['FinalEnhancedAlphaFactor'] = (df['FinalAlphaFactor'] * df['SentimentDifference'] +
+                                      df['SentimentDifference'] +
+                                      df['VolatilityDifference'] +
+                                      df['AdjustedTrueRange'])
+    
+    # Opening Impact Adjustment
+    df['OpenToCloseReturn'] = df['close'] - df['open']
+    df['FinalAlphaFactor'] = df['FinalEnhancedAlphaFactor'] - df['OpenToCloseReturn']
+    
+    return df['FinalAlphaFactor'].dropna()
+```

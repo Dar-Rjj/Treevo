@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the average of (open, high, low, close) over a 5-day window
+    df['avg_price'] = df[['open', 'high', 'low', 'close']].mean(axis=1).rolling(window=5).mean()
+    
+    # Compute daily price change (close - open)
+    df['daily_change'] = df['close'] - df['open']
+    
+    # Sum the daily price changes over a 10-day window
+    df['10_day_momentum'] = df['daily_change'].rolling(window=10).sum()
+    
+    # Determine the ratio of high to low prices
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Track the moving average of the high-to-low ratio over 20 days
+    df['20_day_high_low_ratio_ma'] = df['high_low_ratio'].rolling(window=20).mean()
+    
+    # Calculate the percentage change in volume from the previous day
+    df['volume_pct_change'] = df['volume'].pct_change()
+    
+    # Measure the difference between the current day's amount and the 5-day moving average of amounts
+    df['amount_5_day_ma'] = df['amount'].rolling(window=5).mean()
+    df['amount_diff'] = df['amount'] - df['amount_5_day_ma']
+    
+    # Categorize days into positive, negative, or no gap
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['gap_type'] = df['gap'].apply(lambda x: 'positive' if x > 0 else ('negative' if x < 0 else 'no_gap'))
+    
+    # Integrate the gap size with the 10-day price change to refine the signal
+    df['gap_refined_signal'] = df['gap'] * df['10_day_momentum']
+    
+    # Combine the high-to-low ratio with the 5-day moving average of the price
+    df['composite_indicator'] = df['high_low_ratio'] * df['avg_price']
+    
+    # Adjust the composite by multiplying it with the 20-day smoothed high-to-low ratio
+    df['adjusted_composite'] = df['composite_indicator'] * df['20_day_high_low_ratio_ma']
+    
+    # Evaluate the consistency of the 5-day and 10-day price change indicators
+    df['5_day_change_sign'] = df['daily_change'].rolling(window=5).sum().apply(lambda x: 1 if x > 0 else -1)
+    df['10_day_change_sign'] = df['daily_change'].rolling(window=10).sum().apply(lambda x: 1 if x > 0 else -1)
+    df['consistency_score'] = (df['5_day_change_sign'] == df['10_day_change_sign']).rolling(window=30).sum()
+    
+    # Create a joint indicator that weighs the daily price change by the volume percentage change
+    df['joint_indicator'] = df['daily_change'] * df['volume_pct_change']
+    
+    # Apply a simple threshold to the joint indicator to generate a buy/sell signal
+    df['buy_sell_signal'] = df['joint_indicator'].apply(lambda x: 1 if x > 0.5 else (-1 if x < -0.5 else 0))
+    
+    # Generate the final alpha factor
+    df['alpha_factor'] = (
+        df['adjusted_composite'] + 
+        df['10_day_momentum'] + 
+        df['amount_diff'] + 
+        df['gap_refined_signal'] + 
+        df['consistency_score'] + 
+        df['buy_sell_signal']
+    )
+    
+    return df['alpha_factor']
+```

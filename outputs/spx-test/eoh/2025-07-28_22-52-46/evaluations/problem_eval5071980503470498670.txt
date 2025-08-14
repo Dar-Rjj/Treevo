@@ -1,0 +1,37 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate RSI
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate Bollinger Bands
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['std_20'] = df['close'].rolling(window=20).std()
+    df['boll_upper'] = df['ma_20'] + 2 * df['std_20']
+    df['boll_lower'] = df['ma_20'] - 2 * df['std_20']
+    df['boll_band_width'] = (df['boll_upper'] - df['boll_lower']) / df['ma_20']
+    
+    # Calculate ATR
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'], x['low']) - min(x['high'], x['low']), axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Rolling 60-day historical correlations
+    corr_rsi = df['rsi'].rolling(window=60).corr(df['daily_return'].shift(-1))
+    corr_boll_band_width = df['boll_band_width'].rolling(window=60).corr(df['daily_return'].shift(-1))
+    corr_atr = df['atr'].rolling(window=60).corr(df['daily_return'].shift(-1))
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['rsi'] * corr_rsi +
+                         df['boll_band_width'] * corr_boll_band_width +
+                         df['atr'] * corr_atr)
+    
+    return heuristics_matrix

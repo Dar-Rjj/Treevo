@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Calculate Price Change
+    price_change = df['close'].diff()
+    
+    # Compute 5-Day Momentum
+    five_day_momentum = price_change.rolling(window=5).sum()
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    combined_adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Adjust 5-Day Momentum by Open-Close Spread
+    momentum_adjusted = five_day_momentum * np.abs(open_close_spread)
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    combined_signal = momentum_adjusted / combined_adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    smoothed_combined_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Weighted Price Change
+    weighted_price_change = price_change * (df['volume'] + np.sqrt(df['amount']))
+    
+    # Combine Adjusted Range with Weighted Price Change
+    enhanced_combined_signal = smoothed_combined_signal + weighted_price_change
+    
+    # Compute Intraday Reversal Score
+    intraday_return = high_low_range
+    intraday_reversal = -intraday_return
+    
+    # Consider Close-to-Open Price Change
+    close_to_open_diff = df['close'] - df.shift(1)['open']
+    
+    # Integrate into Final Factor
+    intraday_reversal_factor = intraday_reversal * close_to_open_diff
+    
+    # Calculate Price Momentum
+    daily_close_return = df['close'] / df['close'].shift(1)
+    smoothed_daily_close_return = daily_close_return.ewm(span=12, adjust=False).mean()
+    
+    # Calculate Volume Spike Factor
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike_factor = (volume_change > 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Final Alpha Factor
+    alpha_factor = (enhanced_combined_signal * smoothed_daily_close_return * volume_spike_factor) + close_to_open_diff
+    
+    return alpha_factor
+```

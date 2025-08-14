@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+
+    # Determine Gain and Loss
+    df['gain'] = (df['close'] > df['close'].shift(1)) * (df['close'] - df['close'].shift(1))
+    df['loss'] = (df['close'] <= df['close'].shift(1)) * (df['close'].shift(1) - df['close'])
+
+    # Aggregate Gains and Losses over a 14-day period
+    gain_sum = df['gain'].rolling(window=14).sum()
+    loss_sum = df['loss'].rolling(window=14).sum()
+
+    # Calculate Relative Strength
+    rs = gain_sum / loss_sum.replace(0, 1)
+
+    # Convert to ARSI
+    arsi = 100 - (100 / (1 + rs))
+    arsi = arsi * df['volume'].rolling(window=14).mean()
+
+    # Calculate Intraday Price Movement Ratio
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    intraday_ratio = (high_low_ratio + open_close_ratio) / 2
+
+    # Measure Price-Volatility Alignment
+    price_range = df['high'] - df['low']
+    intraday_volatility = price_range * df['volume']
+    alignment = (intraday_ratio - intraday_volatility.shift(1)).apply(lambda x: 1 if x > 0 else -1)
+
+    # Calculate Short-Term Return and Long-Term Return
+    short_term_return = (df['close'] / df['close'].shift(5)) - 1
+    long_term_return = (df['close'] / df['close'].shift(20)) - 1
+
+    # Calculate Volume-Weighted Returns
+    vol_weighted_short_return = short_term_return * df['volume']
+    vol_weighted_long_return = long_term_return * df['volume']
+
+    # Adjust for Volatility
+    short_volatility = df['close'].pct_change().rolling(window=5).std()
+    adjusted_ratios = (vol_weighted_short_return / short_volatility) - vol_weighted_long_return
+
+    # Adjust based on Intraday Sentiment
+    adjusted_ratios *= alignment
+
+    # Incorporate Momentum
+    close_to_close_return = df['close'] - df['close'].shift(1)
+    momentum_adjusted_ratios = adjusted_ratios * close_to_close_return
+
+    # Final Volume Adjustment
+    final_factors = momentum_adjusted_ratios / df['volume']
+
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+
+    # Compute VWMA of High-Low Spread
+    vwma_high_low = (high_low_spread * df['volume']).rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+
+    # Incorporate Close-to-Close Return
+    multiplied_vwma = vwma_high_low * close_to_close_return
+
+    # Adjust with Volume Change
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    final_factors *= multiplied_vwma * volume_change
+
+    return final_factors
+```

@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Calculate Rolling Median of High-Low Ratios (10 days)
+    df['rolling_median_high_low_ratio'] = df['high_low_ratio'].rolling(window=10).median()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Median Intraday High-Low Spread (10 days)
+    df['median_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=10).median()
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = (df['intraday_high_low_spread'] > df['median_intraday_high_low_spread']).astype(int) * 2 - 1
+    df['high_low_momentum_score'] *= df['volume']
+    
+    # Calculate Price Momentum (5 days)
+    df['price_change'] = df['close'].diff(periods=5)
+    df['price_momentum'] = df['price_change'].rolling(window=5).sum()
+    
+    # Calculate Volume Trend (5 days)
+    df['volume_change'] = df['volume'].diff(periods=5)
+    df['volume_trend'] = df['volume_change'].rolling(window=5).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['daily_range'] = df['high'] - df['low']
+    df['median_daily_range'] = df['daily_range'].rolling(window=10).median()
+    df['range_momentum'] = (df['daily_range'] > df['median_daily_range']).astype(int) * 2 - 1
+    df['open_close_difference'] = df['close'] - df['open']
+    df['open_close_momentum'] = df['open_close_difference'].rolling(window=5).sum()
+    
+    # Combine High-Low Momentum, Price Momentum, Volume Trend, Enhanced Market Sentiment, and Open-Price Movement
+    high_low_coeff = 0.3
+    price_coeff = 0.2
+    volume_coeff = 0.2
+    range_coeff = 0.1
+    open_close_coeff = 0.2
+    
+    df['alpha_factor'] = (high_low_coeff * df['high_low_momentum_score'] + 
+                          price_coeff * df['price_momentum'] + 
+                          volume_coeff * df['volume_trend'] + 
+                          range_coeff * df['range_momentum'] + 
+                          open_close_coeff * df['open_close_momentum'])
+    
+    # Incorporate Open-Price Change (5 days)
+    df['open_price_change'] = df['open'].diff(periods=5)
+    df['open_price_momentum'] = df['open_price_change'].rolling(window=5).sum()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['alpha_factor'] + df['open_price_momentum']
+    
+    return df['final_alpha_factor']
+```

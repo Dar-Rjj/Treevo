@@ -1,0 +1,32 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the change in closing prices
+    close_change = df['close'].pct_change()
+    
+    # Calculate the true range (high - low, high - previous close, or previous close - low)
+    true_range = (df['high'] - df['low']).abs().fillna(0)
+    prev_close = df['close'].shift(1)
+    true_range = true_range.where(true_range > (df['high'] - prev_close).abs(), (df['high'] - prev_close).abs())
+    true_range = true_range.where(true_range > (prev_close - df['low']).abs(), (prev_close - df['low']).abs())
+    
+    # Calculate the average true range over the last 14 days for more stability
+    avg_true_range = true_range.rolling(window=14).mean()
+    
+    # Calculate a weighted momentum factor with dynamic weights based on trend strength
+    trend_strength = close_change.rolling(window=20).mean().abs()
+    weight_5 = 1 + trend_strength
+    weight_10 = 1
+    weight_20 = 1 - trend_strength
+    weighted_momentum = (close_change.rolling(window=5).mean() * weight_5 + 
+                         close_change.rolling(window=10).mean() * weight_10 + 
+                         close_change.rolling(window=20).mean() * weight_20) / (weight_5 + weight_10 + weight_20)
+    
+    # Incorporate volume by calculating the percentage change in volume
+    volume_change = df['volume'].pct_change()
+    
+    # Smooth the alpha factor using an exponential moving average
+    alpha_factor = weighted_momentum * (avg_true_range.mean() / avg_true_range) * volume_change
+    alpha_factor_smoothed = alpha_factor.ewm(span=10, adjust=False).mean()
+    
+    return alpha_factor_smoothed
+```

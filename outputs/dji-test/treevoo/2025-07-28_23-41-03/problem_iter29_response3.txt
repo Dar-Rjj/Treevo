@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+    df['100_day_SMA'] = df['close'].rolling(window=100).mean()
+    df['200_day_SMA'] = df['close'].rolling(window=200).mean()
+
+    # Momentum Signals
+    df['momentum_100_200'] = df['100_day_SMA'] - df['200_day_SMA']
+    df['momentum_50_100'] = df['50_day_SMA'] - df['100_day_SMA']
+
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal
+    df['combined_momentum_100_200'] = df['momentum_100_200'] * df['reversal_signal']
+    df['combined_momentum_50_100'] = df['momentum_50_100'] * df['reversal_signal']
+
+    # High-Low Range Momentum
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_range_momentum'] = df['high_low_range'].diff()
+
+    # Volume Adjustment
+    n = 50
+    df['volume_adjustment'] = df['volume'].rolling(window=n).sum() / n
+
+    # Adjusted High-Low Range Momentum
+    df['adjusted_high_low_range_momentum'] = df['high_low_range_momentum'] / df['volume_adjustment']
+
+    # Price Change Momentum
+    df['price_change_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combined Price and Volume Momentum
+    df['combined_price_volume_momentum'] = df['price_change_momentum'] * df['volume_adjustment']
+
+    # Daily Volatility
+    m = 50
+    df['daily_volatility'] = df['high_low_range'].rolling(window=m).mean()
+
+    # Adjusted Daily Volatility
+    df['adjusted_daily_volatility'] = df['daily_volatility'] / df['volume_adjustment']
+
+    # Trend Reversal Signal
+    n = 50
+    df['trend_reversal_signal'] = (df['low'] > df['high'].shift(n)).astype(int)
+
+    # Volume Change
+    df['volume_change'] = df['volume'].diff()
+
+    # Strength of Moves
+    df['strength_of_moves'] = df['price_change_momentum'] * df['volume']
+
+    # Financial Flows
+    df['financial_flows'] = (df['amount'] > df['amount'].rolling(window=n).mean()).astype(int)
+
+    # Composite Alphas
+    df['composite_alpha'] = (df['combined_momentum_50_100'] + 
+                             df['combined_momentum_100_200'] +
+                             df['adjusted_high_low_range_momentum'] +
+                             df['combined_price_volume_momentum'] +
+                             df['adjusted_daily_volatility'] +
+                             df['trend_reversal_signal'] +
+                             df['volume_change'] +
+                             df['strength_of_moves'] +
+                             df['financial_flows'])
+
+    return df['composite_alpha']
+```

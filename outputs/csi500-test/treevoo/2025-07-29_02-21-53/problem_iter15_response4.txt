@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    df['High_Low_Diff'] = df['high'] - df['low']
+    
+    # Compute Close-Open Difference
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    
+    # Aggregate and Smooth Price Movements
+    period = 20
+    df['Sum_High_Low_Diff'] = df['High_Low_Diff'].rolling(window=period).sum()
+    df['Sum_Close_Open_Diff'] = df['Close_Open_Diff'].rolling(window=period).sum()
+    df['Smoothed_High_Low_Range'] = df['High_Low_Diff'].rolling(window=period).mean()
+    
+    # Combine Price and High-Low Range Momentum
+    df['Combined_Momentum'] = (df['Sum_Close_Open_Diff'] + df['Sum_High_Low_Diff']) - df['Smoothed_High_Low_Range']
+    df['Close_Std'] = df['close'].rolling(window=period).std()
+    df['Weighted_Combined_Momentum'] = df['Combined_Momentum'] * df['Close_Std']
+    
+    # Evaluate Volume Activity
+    df['Avg_Volume'] = df['volume'].rolling(window=period).mean()
+    high_volume_threshold = 1.5
+    df['High_Volume_Indicator'] = (df['volume'] > high_volume_threshold * df['Avg_Volume']).astype(int)
+    
+    # Integrate Price, High-Low Range, and Volume
+    df['Alpha_Factor'] = df['Weighted_Combined_Momentum'] * df['High_Volume_Indicator']
+    
+    # Incorporate Volume Spike Impact
+    volume_spike_threshold = 2.0
+    df['Volume_Spike'] = (df['volume'] > volume_spike_threshold * df['Avg_Volume']).astype(int)
+    df['Alpha_Factor'] = df['Alpha_Fctor'] * (1 + df['Volume_Spike'])
+    
+    # Incorporate Price Change Rate
+    df['Price_Change_Rate'] = df['close'].pct_change()
+    df['Adjusted_Alpha_Factor'] = df['Alpha_Factor'] * (1 + df['Price_Change_Rate'])
+    
+    return df['Adjusted_Alpha_Factor'].dropna()
+```

@@ -1,0 +1,17 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted Close Price
+    volume_weighted_close = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Volume-Weighted Close Price
+    adjusted_volume_weighted_close = volume_weighted_close.where(volume_weighted_close != 0, df['close'])
+    
+    # Compute Ratio
+    ratio = high_low_spread / adjusted_volume_weighted_close
+    
+    return ratio

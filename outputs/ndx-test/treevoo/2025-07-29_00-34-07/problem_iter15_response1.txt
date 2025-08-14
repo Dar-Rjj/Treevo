@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Change
+    price_change = df['close'].shift(-1) - df['open'].shift(1)
+    
+    # Combine High-to-Low Range with Price Change
+    combined_value = (high_low_range * 150) + price_change
+    
+    # Smoothing and Initial Momentum Calculation
+    sma_combined = combined_value.rolling(window=7).mean()
+    initial_momentum = sma_combined - sma_combined.shift(7)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate Multi-Day Price Momentum
+    momentum_3d = (df['close'] - df['close'].shift(3)) / df['close'].shift(3)
+    momentum_10d = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    momentum_30d = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    
+    # Weighted Average the Momentum
+    weighted_momentum = (momentum_3d * 0.3) + (momentum_10d * 0.4) + (momentum_30d * 0.3)
+    
+    # Adjust for Volume Changes
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    final_volume_adjustment = weighted_momentum * (1 + 2 * volume_change)
+    
+    # Filter by Relative Volume
+    median_volume = df['volume'].rolling(window=30).median()
+    volume_filter = df['volume'] > median_volume
+    filtered_days = df[volume_filter].index
+    
+    # Adjusted High-Low Cumulative Return and Weighted Price Gaps
+    daily_price_range = df['high'] - df['low']
+    sum_daily_price_ranges = daily_price_range.loc[filtered_days].sum()
+    weighted_price_gaps = (daily_price_range * volume_change).loc[filtered_days].sum()
+    
+    # Intermediate Factor Combination
+    intermediate_factor = initial_momentum + final_volume_adjustment
+    
+    # Calculate Weighted Price Momentum
+    ema_15_close = df['close'].ewm(span=15, adjust=False).mean()
+    weighted_price_momentum = (df['close'] - ema_15_close) * daily_log_return
+    
+    # Final Alpha Factor Construction
+    alpha_factor = (sum_daily_price_ranges + weighted_price_gaps) * weighted_momentum + intermediate_factor + weighted_price_momentum
+    
+    return alpha_factor
+```

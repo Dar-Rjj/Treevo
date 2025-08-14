@@ -4,6 +4,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 import os
+import uuid
 from omegaconf import DictConfig
 
 from utils.utils import *
@@ -65,7 +66,8 @@ class TreEvoo:
         logging.info("Function name: " + self.func_name)
         
         self.prompt_dir = f"{self.root_dir}/prompts"
-        self.output_file = f"{self.root_dir}/problems/{self.problem}/gpt.py"
+        # self.output_file = f"{self.root_dir}/problems/{self.problem}/gpt.py"
+        self.output_dir = f"{self.root_dir}/problems/{self.problem}/tmp"
         
         # Loading all text prompts
         # Problem-specific prompt components
@@ -291,13 +293,16 @@ class TreEvoo:
         """
         logging.debug(f"Iteration {self.iteration}: Processing Code Run {response_id}")
         
-        with open(self.output_file, 'w') as file:
+        unique_filename = f"gpt_temp_{response_id}_{uuid.uuid4().hex[:8]}.py"
+        output_path = os.path.join(self.output_dir, unique_filename)
+
+        with open(output_path, 'w') as file:
             file.writelines(individual["code"] + '\n')
 
         # Execute the python file with flags
         with open(individual["stdout_filepath"], 'w') as f:
             eval_file_path = f'{self.root_dir}/problems/{self.problem}/eval.py' if self.problem_type != "black_box" else f'{self.root_dir}/problems/{self.problem}/eval_black_box.py' 
-            process = subprocess.Popen(['python', '-u', eval_file_path, f'{self.problem_size}', self.root_dir, "train"],
+            process = subprocess.Popen(['python', '-u', eval_file_path, f'{self.problem_size}', self.root_dir, "train", output_path],
                                         stdout=f, stderr=f)
 
         block_until_running(individual["stdout_filepath"], log_status=True, iter_num=self.iteration, response_id=response_id)
@@ -448,7 +453,7 @@ class TreEvoo:
 
     def mutate(self, population: list[dict]) -> list[dict]:
         """Random mutation. We only mutate the n_pop individual to generate n_pop new individuals."""
-        parent_trees = np.random.choice(population, size=int(self.cfg.pop_size * self.mutation_rate))
+        parent_trees = np.random.choice(population, size=int(self.cfg.pop_size * self.mutation_rate), replace=False)
         messages_lst = []
 
         for parent_tree in parent_trees:
@@ -478,7 +483,7 @@ class TreEvoo:
 
     def pruning(self, population: list[dict]) -> list[dict]:
         """Random pruning. We only prune the n_pop individual to generate n_pop new individuals."""
-        parent_trees = np.random.choice(population, size=int(self.cfg.pop_size * self.pruning_rate))
+        parent_trees = np.random.choice(population, size=int(self.cfg.pop_size * self.pruning_rate), replace=False)
         messages_lst = []
 
         for parent_tree in parent_trees:

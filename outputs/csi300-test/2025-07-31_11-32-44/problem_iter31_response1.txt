@@ -1,0 +1,90 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    daily_momentum = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    momentum_5ma = daily_momentum.rolling(window=5).mean()
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low']) / 2 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    combined_factor_1 = daily_momentum * (vwap - df['close'])
+    
+    # Confirm with Volume
+    volume_change = np.log(df['volume'] / df['volume'].shift(1) + 1)
+    combined_factor_1 = combined_factor_1 * volume_change
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Compute M-day Average of N-day Close Price Percent Change
+    n_day_percent_change = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    m_day_average = n_day_percent_change.rolling(window=5).mean()
+    
+    # Combine Intraday High-Low Spread and Momentum
+    combined_intraday_momentum = intraday_high_low_spread * m_day_average
+    
+    # Adjust with Smoothed Volume
+    smoothed_volume = df['volume'].ewm(span=5, adjust=False).mean()
+    combined_intraday_momentum = combined_intraday_momentum * (smoothed_volume / df['volume'])
+    
+    # Calculate Intraday Reversal
+    intraday_reversal = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Introduce Intraday Range Volatility
+    p_day_std = intraday_high_low_spread.rolling(window=5).std()
+    
+    # Synthesize All Factors
+    synthesized_factors = combined_factor_1 * intraday_reversal * p_day_std
+    
+    # Integrate with Stochastic Oscillator
+    high_14 = df['high'].rolling(window=14).max()
+    low_14 = df['low'].rolling(window=14).min()
+    k_line = (df['close'] - low_14) / (high_14 - low_14)
+    d_line = k_line.rolling(window=3).mean()
+    synthesized_factors = synthesized_factors * d_line
+    
+    # Apply sign of Volume Change as a final confirmation
+    synthesized_factors = synthesized_factors * np.sign(volume_change)
+    
+    # Calculate Raw Momentum
+    raw_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate Enhanced Raw Momentum
+    n_day_close_percent_change = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    exp_weighted_momentum = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    enhanced_raw_momentum = n_day_close_percent_change * exp_weighted_momentum
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(20)
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Volume-Adjusted Intraday Volatility
+    volume_adjusted_intraday_volatility = intraday_volatility / np.sqrt(df['volume'])
+    
+    # Combine Enhanced Raw Momentum, Volume-Adjusted Intraday Volatility, and High-Low Range
+    combined_factor_2 = enhanced_raw_momentum * volume_adjusted_intraday_volatility * high_low_range
+    
+    # Adjust with Volume Delta
+    combined_factor_2 = combined_factor_2 * np.abs(volume_delta)
+    
+    # Integrate with Trend Continuity and Filter
+    trend_continuity = np.sign(df['close'] - df['close'].shift(1))
+    combined_factor_2 = combined_factor_2 * trend_continuity
+    threshold = 0.7
+    combined_factor_2 = np.where(np.abs(combined_factor_2) < threshold, 0, combined_factor_2)
+    
+    # Final Alpha Factor
+    final_alpha_factor = synthesized_factors + combined_factor_2
+    
+    # Introduce a Dynamic Threshold Based

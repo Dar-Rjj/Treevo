@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    ema_intraday_return = intraday_return.ewm(alpha=0.1, adjust=False).mean()
+    
+    # Incorporate Volatility Component
+    intraday_price_range = df['high'] - df['low']
+    std_intraday_range = intraday_price_range.rolling(window=20).std()
+    intraday_momentum_volatility = ema_intraday_return * std_intraday_range
+    
+    # Introduce Enhanced Volume Impact
+    volume_weighted_intraday_return = (df['close'] - df['open']) / df['open'] * df['volume']
+    adjusted_ema_intraday_return = volume_weighted_intraday_return.ewm(alpha=0.05, adjust=False).mean()
+    
+    # Integrate Volume Trend
+    volume_roc = df['volume'].pct_change(periods=20)
+    final_alpha_factor = adjusted_ema_intraday_return + volume_roc
+    
+    # Calculate Daily Price Momentum
+    daily_log_returns = np.log(df['close']).diff().shift(1)
+    daily_momentum = daily_log_returns.rolling(window=5).sum()
+    
+    # Apply Volume-Adjusted Momentum Filter
+    daily_volume_adjusted_momentum = (df['volume'] - df['volume'].shift(1)) * daily_momentum
+    rolling_sum_volume_adjusted_momentum = daily_volume_adjusted_momentum.rolling(window=20).sum()
+    high_momentum_threshold = rolling_sum_volume_adjusted_momentum.abs().quantile(0.75)
+    filtered_volume_adjusted_momentum = rolling_sum_volume_adjusted_momentum[rolling_sum_volume_adjusted_momentum.abs() < high_momentum_threshold]
+    
+    # Calculate Intraday Price Movement
+    pct_high_low_movement = (df['high'] - df['low']) / df['open']
+    pct_close_open_movement = (df['close'] - df['open']) / df['open']
+    avg_intraday_movement = (pct_high_low_movement + pct_close_open_movement) / 2
+    smoothed_avg_intraday_movement = avg_intraday_movement.ewm(span=3, adjust=False).mean()
+    
+    # Calculate Price Breakout Indicator
+    ma_high_20 = df['high'].rolling(window=20).mean()
+    ma_low_20 = df['low'].rolling(window=20).mean()
+    price_breakout_score = (ma_high_20 - ma_low_20) / ma_high_20
+    
+    # Combine Ratios
+    close_to_high_ratio = df['close'] / df['high']
+    close_to_low_ratio = df['close'] / df['low']
+    combined_ratios = 0.5 * close_to_high_ratio + 0.5 * close_to_low_ratio
+    
+    # Combine Adjusted Momentum, Intraday Movement, and Ratios
+    combined_factor = (
+        smoothed_avg_intraday_movement +
+        filtered_volume_adjusted_momentum +
+        combined_ratios +
+        price_breakout_score
+    )
+    
+    # Compute Dynamic Price Momentum Oscillator
+    moving_average_60 = filtered_volume_adjusted_momentum.rolling(window=60).mean()
+    dynamic_pmo = filtered_volume_adjusted_momentum - moving_average_60
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor + dynamic_pmo
+    return final_alpha_factor
+```

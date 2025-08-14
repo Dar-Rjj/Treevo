@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_lookback=20, momentum_n=20, pct_change_lookback=5, long_sma_lookback=100, turnover_lookback=20):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    sma = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    high_low_diff = df['high'] - df['low']
+    volume_weighted_diff = high_low_diff * df['volume']
+    vol_adjusted_volatility = volume_weighted_diff.rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    price_momentum = (df['close'] - sma) / df['close'].rolling(window=momentum_n).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    pct_change = df['close'].pct_change(periods=pct_change_lookback)
+    high_low_range = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    long_sma = df['close'].rolling(window=long_sma_lookback).mean()
+    market_trend = (sma > long_sma).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Dynamic Liquidity Measures
+    daily_turnover = df['volume'] * df['close']
+    avg_turnover = daily_turnover.rolling(window=turnover_lookback).mean()
+    liquidity_weights = (avg_turnover / avg_turnover.max()).fillna(0)
+    
+    # Dynamically Adjust Weights Based on Market Trends
+    trend_weights = (market_trend * 0.7) + (1 - market_trend) * 0.3  # 70% weight for Bullish, 30% for Bearish
+    
+    # Combine all components into the final alpha factor
+    weights = {
+        'price_momentum': 0.4,
+        'vol_adjusted_volatility': 0.3,
+        'pct_change': 0.1,
+        'high_low_range': 0.1,
+        'liquidity': 0.1
+    }
+    
+    alpha_factor = (
+        weights['price_momentum'] * price_momentum +
+        weights['vol_adjusted_volatility'] * vol_adjusted_volatility +
+        weights['pct_change'] * pct_change +
+        weights['high_low_range'] * high_low_range +
+        weights['liquidity'] * avg_turnover
+    ) * trend_weights
+    
+    return alpha_factor
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=100),
+#     'open': [100] * 100,
+#     'high': [105] * 100,
+#     'low': [95] * 100,
+#     'close': [102] * 100,
+#     'amount': [10000] * 100,
+#     'volume': [1000] * 100
+# })
+# df.set_index('date', inplace=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

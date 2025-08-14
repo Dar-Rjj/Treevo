@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the volume-weighted average price (VWAP)
+    vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Calculate the money flow index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(price_movement > 0, 0)
+    negative_money_flow = money_flow.where(price_movement < 0, 0)
+    positive_money_flow_14 = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_14 = negative_money_flow.rolling(window=14).sum()
+    money_ratio = positive_money_flow_14 / negative_money_flow_14
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Calculate the weighted average of the EMA price movement, RSI, and MFI
+    factor = (ema_price_movement * df['amount'] + rsi * df['volume'] + mfi * avg_price) / (df['amount'] + df['volume'] + avg_price)
+
+    return factor
+```

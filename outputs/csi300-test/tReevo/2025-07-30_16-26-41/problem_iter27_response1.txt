@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, short_window=10, long_window=100, lookback_period=20):
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+
+    # Develop a liquidity factor
+    df['liquidity'] = (df['high'] - df['low']) / df['close']
+    df['avg_liquidity'] = df['liquidity'].rolling(window=lookback_period).mean()
+    df['volume_diff'] = df['volume'].diff()
+    df['liquidity_factor'] = df['avg_liquidity'] + df['volume_diff']
+
+    # Construct a dynamic volatility measure
+    df['short_volatility'] = df['daily_return'].rolling(window=short_window).std()
+    df['long_volatility'] = df['daily_return'].rolling(window=long_window).std()
+    df['avg_volume'] = df['volume'].rolling(window=lookback_period).mean()
+    df['volatility_factor'] = (df['short_volatility'] + df['long_volatility']) * (df['volume'] / df['avg_volume'])
+
+    # Create a volume-adjusted return factor
+    df['cumulative_return'] = df['daily_return'].rolling(window=lookback_period).sum()
+    df['volume_adjusted_return'] = df['cumulative_return'] * (df['volume'] / df['avg_volume'])
+
+    # Balance short- and long-term momentum
+    df['short_momentum'] = df['close'].pct_change(periods=short_window)
+    df['long_momentum'] = df['close'].pct_change(periods=long_window)
+    df['momentum_factor'] = 0.6 * df['short_momentum'] + 0.4 * df['long_momentum']
+
+    # Use adaptive lookback periods
+    df['recent_volatility'] = df['daily_return'].rolling(window=short_window).std()
+    df['adaptive_lookback'] = np.where(df['recent_volatility'] > df['recent_volatility'].quantile(0.5), short_window, long_window)
+
+    # Incorporate market sentiment
+    df['positive_volume'] = df['volume'].where(df['daily_return'] > 0, 0)
+    df['negative_volume'] = df['volume'].where(df['daily_return'] < 0, 0)
+    df['sentiment_score'] = df['positive_volume'].rolling(window=lookback_period).sum() / df['negative_volume'].rolling(window=lookback_period).sum()
+    df['sentiment_adjusted_momentum'] = df['momentum_factor'] * df['sentiment_score']
+
+    # Combine all factors
+    df['alpha_factor'] = 0.3 * df['liquidity_factor'] + 0.3 * df['volatility_factor'] + 0.4 * df['sentiment_adjusted_momentum']
+
+    return df['alpha_factor']
+```

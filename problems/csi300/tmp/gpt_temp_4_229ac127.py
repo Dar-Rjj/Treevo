@@ -1,0 +1,67 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from textblob import TextBlob
+from scipy.stats import zscore
+
+def heuristics_v2(df):
+    # Sentiment Analysis
+    def calculate_sentiment(texts):
+        return [TextBlob(text).sentiment.polarity for text in texts]
+
+    df['sentiment_score'] = calculate_sentiment(df['news_headlines'])
+    sentiment_factor = df['sentiment_score'].rolling(window=5).mean()
+
+    # Sector Performance
+    sector_returns = df.groupby('sector')['close'].pct_change().groupby(df['sector']).mean()
+    df['sector_return'] = df['sector'].map(sector_returns)
+    sector_factor = df['sector_return'].rolling(window=5).mean()
+
+    # News Impact
+    news_impact = df['news_impact'].rolling(window=5).mean()
+    news_factor = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * news_impact
+
+    # Adaptive EMA Windows
+    def adaptive_ema(data, short_window=5, long_window=30, alpha=0.2):
+        ema_short = data.ewm(span=short_window, adjust=False).mean()
+        ema_long = data.ewm(span=long_window, adjust=False).mean()
+        adaptive_ema = alpha * ema_short + (1 - alpha) * ema_long
+        return adaptive_ema
+
+    adaptive_ema_factor = adaptive_ema(df['close'])
+
+    # Volume-Weighted Metrics
+    vwap = (df['volume'] * (df['high'] + df['low']) / 2).cumsum() / df['volume'].cumsum()
+    vwap_factor = (vwap - df['close']) / df['close']
+
+    # Volume-weighted return
+    volume_weighted_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    volume_weighted_factor = volume_weighted_return.rolling(window=5).mean()
+
+    # Dynamic Factor Weighting
+    X = pd.DataFrame({
+        'sentiment': sentiment_factor,
+        'sector': sector_factor,
+        'news': news_factor,
+        'adaptive_ema': adaptive_ema_factor,
+        'vwap': vwap_factor,
+        'volume_weighted': volume_weighted_factor
+    }).dropna()
+
+    y = df['close'].pct_change().shift(-1).loc[X.index].dropna()
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    factor_weights = model.feature_importances_
+
+    # Composite Alpha Factor
+    composite_alpha_factor = (X * factor_weights).sum(axis=1)
+
+    return composite_alpha_factor
+
+# Example usage
+# df = pd.read_csv('your_data.csv')
+# composite_alpha = heuristics_v2(df)
+# print(composite_alpha)

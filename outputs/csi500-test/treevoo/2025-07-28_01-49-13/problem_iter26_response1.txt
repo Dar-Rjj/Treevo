@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate rate of change in closing price
+    df['roc_5'] = df['close'].pct_change(periods=5)
+    df['roc_20'] = df['close'].pct_change(periods=20)
+
+    # Evaluate moving average crossovers
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_5_20_crossover'] = df['sma_5'] - df['sma_20']
+    df['sma_20_50_crossover'] = df['sma_20'] - df['sma_50']
+
+    # Assess volatility-adjusted returns
+    df['volatility_20'] = df['close'].rolling(window=20).std()
+    df['vol_adj_returns'] = (df['close'].pct_change() / df['volatility_20']).shift(1)
+
+    # Analyze volume-based indicators
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_20']
+    df['high_volume'] = df['volume_ratio'] > 1.5
+    df['low_volume'] = df['volume_ratio'] < 0.5
+
+    # Consider price patterns and support/resistance levels
+    df['recent_high'] = df['high'].rolling(window=20).max()
+    df['recent_low'] = df['low'].rolling(window=20).min()
+    df['breakout_high'] = df['close'] > df['recent_high']
+    df['breakout_low'] = df['close'] < df['recent_low']
+
+    # Examine relationships between different price points
+    df['day_range'] = df['close'] - df['open']
+    df['close_to_high_ratio'] = df['close'] / df['high']
+    df['close_to_low_ratio'] = df['close'] / df['low']
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['roc_5'] + 
+        df['roc_20'] + 
+        df['sma_5_20_crossover'] + 
+        df['sma_20_50_crossover'] + 
+        df['vol_adj_returns'] + 
+        df['volume_ratio'] + 
+        2 * (df['breakout_high'].astype(int) - df['breakout_low'].astype(int)) + 
+        df['day_range'] + 
+        df['close_to_high_ratio'] + 
+        df['close_to_low_ratio']
+    )
+
+    return alpha_factor.dropna()
+```

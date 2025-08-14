@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Previous Day's Close-to-Open Return
+    df['close_to_open_return'] = (df['close'].shift(1) - df['open']) / df['close'].shift(1)
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Average Volume Over a Period
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['is_above_avg_vol'] = (df['volume'] > df['avg_volume_5d']).astype(int)
+    
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Volume Change Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(5)
+    
+    # Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Integrate Factors
+    df['integrated_factor'] = df['intraday_return'] * df['close_to_open_return'] * df['price_momentum_ratio']
+    df['vol_adjusted_factor'] = df['integrated_factor'] * (1.5 if df['is_above_avg_vol'] else 0.5)
+    
+    # Combine Momentum and Volatility
+    df['weighted_high_low_range'] = df['high_low_range'] * df['volume']
+    
+    # Add Volume Trend Component
+    def calculate_volume_trend(volume_series):
+        x = np.arange(len(volume_series))
+        y = volume_series.values
+        slope, _, _, _, _ = linregress(x, y)
+        return slope
+    
+    df['volume_trend'] = df['volume'].rolling(window=10).apply(calculate_volume_trend, raw=False)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['vol_adjusted_factor'] * df['volume_trend'] + df['weighted_high_low_range']
+    
+    return df['final_alpha_factor']
+```

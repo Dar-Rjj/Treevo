@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Scale Volume by Last 10 Days' Average
+    avg_volume_10d = df['volume'].rolling(window=10).mean()
+    scaled_volume = df['volume'] / avg_volume_10d
+    
+    # Adjusted Intraday Range with Volume Trend
+    adjusted_intraday_range = intraday_range * scaled_volume
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Combined Momentum and Volume Factor
+    N = 10
+    close_returns = df['close'].pct_change().rolling(window=N).sum()
+    momentum_volume_factor = close_returns * close_to_range_ratio * scaled_volume
+    
+    # Opening Impact Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    opening_impact_adjusted = momentum_volume_factor - open_to_close_return
+    
+    # Intermediate Composite Factor
+    close_to_open_return = (df['close'] - df['open'])
+    volume_weighted_close_to_open = close_to_open_return * scaled_volume
+    intermediate_composite = adjusted_intraday_range + volume_weighted_close_to_open
+    
+    # Price Momentum (20-Day EMA)
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    price_momentum = df['close'] - ema_20
+    
+    # Volume Trend (20-Day Sum of Volume)
+    volume_20d_sum = df['volume'].rolling(window=20).sum()
+    volume_trend = df['volume'] / volume_20d_sum
+    
+    # Price Oscillator (7-Day and 14-Day EMAs)
+    ema_7 = df['close'].ewm(span=7, adjust=False).mean()
+    ema_14 = df['close'].ewm(span=14, adjust=False).mean()
+    price_oscillator = ema_7 - ema_14
+    
+    # Integrated Composite Factor
+    integrated_composite = intermediate_composite + price_oscillator
+    
+    # Smoothed Composite Factor (7-Day SMA)
+    smoothed_composite = integrated_composite.rolling(window=7).mean()
+    
+    # Additional Momentum Component (50-Day EMA)
+    ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+    additional_momentum = df['close'] - ema_50
+    
+    # Enhanced Final Alpha Factor
+    enhanced_alpha = smoothed_composite + additional_momentum
+    
+    return enhanced_alpha
+```

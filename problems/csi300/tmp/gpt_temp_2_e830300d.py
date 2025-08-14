@@ -1,0 +1,22 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open'].shift(1)
+    
+    # Determine recent and older periods
+    recent_period = df.index > df.index[-1] - pd.Timedelta(days=30)
+    older_period = df.index <= df.index[-1] - pd.Timedelta(days=30)
+    
+    # Combine Intraday Range and Close-to-Open Return with dynamic weighting
+    df['factor_value'] = 0.0
+    df.loc[recent_period, 'factor_value'] = 0.7 * df.loc[recent_period, 'intraday_range'] + \
+                                           0.3 * df.loc[recent_period, 'close_to_open_return']
+    df.loc[older_period, 'factor_value'] = 0.5 * df.loc[older_period, 'intraday_range'] + \
+                                           0.5 * df.loc[older_period, 'close_to_open_return']
+    
+    return df['factor_value']

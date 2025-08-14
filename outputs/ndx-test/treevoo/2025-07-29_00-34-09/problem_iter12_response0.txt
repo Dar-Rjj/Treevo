@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    df['high_to_low_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['low'] * df['volume'] / (df['high'] + df['low'])
+    
+    # Measure Sustained 5-Day Momentum
+    df['close_shifted'] = df['close'].shift(1)
+    df['daily_momentum'] = (df['close'] - df['close_shifted']) / df['close_shifted']
+    df['sustained_5_day_momentum'] = df['daily_momentum'].rolling(window=5).mean()
+    
+    # Combine Intraday and 5-Day Momentum
+    df['intraday_adj'] = df['intraday_momentum'] * df['amount'].rolling(window=5).mean()
+    df['sustained_5_day_adj'] = df['sustained_5_day_momentum'] * df['volume']
+    df['combined_momentum'] = df['intraday_adj'] + df['sustained_5_day_adj']
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['open']
+    
+    # Compute 5-Day and 10-Day Exponential Moving Average of Price Change
+    df['ema_5'] = df['daily_price_change'].ewm(span=5, adjust=False).mean()
+    df['ema_10'] = df['daily_price_change'].ewm(span=10, adjust=False).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = 0
+    df.loc[df['ema_5'] > df['ema_10'], 'reversal_signal'] = 1
+    df.loc[df['ema_5'] < df['ema_10'], 'reversal_signal'] = -1
+    
+    # Consider High-to-Low Range
+    df['rolling_median_high_to_low'] = df['high_to_low_range'].rolling(window=14).median()
+    df['reversal_signal'] = df['reversal_signal'] * (1 + (df['rolling_median_high_to_low'] / df['rolling_median_high_to_low'].std()))
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)
+    df['filtered_reversal_signal'] = df['reversal_signal'] * (df['volume'] > volume_threshold)
+    
+    # Calculate Weighted Daily Return
+    df['weighted_daily_return'] = (df['close'] - df['close_shifted']) * df['volume']
+    
+    # Calculate Cumulative Weighted Momentum
+    df['cumulative_weighted_momentum'] = df['weighted_daily_return'].rolling(window=5).sum() / df['amount'].rolling(window=5).mean()
+    
+    # Incorporate Volatility into Alpha Factor
+    df['historical_volatility'] = df['close'].rolling(window=21).std()
+    df['volatility_adjusted_factor'] = (df['combined_momentum'] + df['cumulative_weighted_momentum'] + df['filtered_reversal_signal']) / df['historical_volatility']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['volatility_adjusted_factor']
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback=20):
+    # Calculate price-based features
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['body_size'] = abs(df['open'] - df['close'])
+    df['true_range'] = df.apply(lambda x: max(x['high'] - x['low'], 
+                                              abs(x['high'] - x['close'].shift(1)), 
+                                              abs(x['low'] - x['close'].shift(1))), axis=1)
+
+    # Calculate volume and amount-based features
+    df['change_in_volume'] = df['volume'] - df['volume'].shift(1)
+    df['change_in_amount'] = df['amount'] - df['amount'].shift(1)
+    df['VWAP'] = (df['close'] * df['volume']).rolling(window=lookback).sum() / df['volume'].rolling(window=lookback).sum()
+
+    # Calculate volatility measures
+    df['std_daily_return'] = df['daily_return'].rolling(window=lookback).std()
+    df['ATR'] = df['true_range'].rolling(window=lookback).mean()
+
+    # Calculate momentum indicators
+    df['SMA_close'] = df['close'].rolling(window=lookback).mean()
+    df['EMA_close'] = df['close'].ewm(span=lookback, adjust=False).mean()
+    df['ROC'] = (df['close'] - df['close'].shift(lookback)) / df['close'].shift(lookback)
+
+    # Calculate trend indicators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_diff'] = df['SMA_50'] - df['SMA_200']
+    
+    # Compute DMI
+    df['+DM'] = df['high'].diff().apply(lambda x: max(x, 0))
+    df['-DM'] = df['low'].diff().apply(lambda x: -min(x, 0))
+    df['+DI'] = 100 * (df['+DM'].rolling(window=lookback).sum() / df['true_range'].rolling(window=lookback).sum())
+    df['-DI'] = 100 * (df['-DM'].rolling(window=lookback).sum() / df['true_range'].rolling(window=lookback).sum())
+    df['DX'] = 100 * (abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI']))
+    df['ADX'] = df['DX'].ewm(span=lookback, adjust=False).mean()
+
+    # Calculate money flow and accumulation/distribution
+    df['OBV'] = (np.sign(df['close'] - df['close'].shift(1)) * df['volume']).cumsum()
+    df['MF_multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    df['MF_volume'] = df['MF_multiplier'] * df['volume']
+    df['CMF'] = df['MF_volume'].rolling(window=lookback).sum() / df['volume'].rolling(window=lookback).sum()
+
+    # Combine features for comprehensive alpha factor
+    df['alpha_factor'] = (
+        0.3 * df['daily_return'] + 
+        0.2 * df['SMA_diff'] + 
+        0.1 * (df['+DI'] - df['-DI']) + 
+        0.1 * df['CMF'] + 
+        0.1 * df['ROC'] + 
+        0.1 * (df['SMA_close'] - df['EMA_close']) / df['close']
+    )
+    
+    return df['alpha_factor']
+```

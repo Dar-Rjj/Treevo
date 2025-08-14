@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generates a novel and interpretable alpha factor that could help predict future stock returns.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with columns ['open', 'high', 'low', 'close', 'volume'] indexed by date.
+    
+    Returns:
+    pd.Series: Series of the alpha factor values indexed by date.
+    """
+    # Calculate the daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate the 10-day moving average of the close price
+    df['ma_10_close'] = df['close'].rolling(window=10).mean()
+    
+    # Calculate the 30-day moving average of the close price
+    df['ma_30_close'] = df['close'].rolling(window=30).mean()
+    
+    # Calculate the relative strength indicator (RSI) for a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the money flow index (MFI) for a 14-day period
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(delta > 0, 0)
+    negative_money_flow = money_flow.where(delta < 0, 0)
+    mfi_positive = positive_money_flow.rolling(window=14).sum()
+    mfi_negative = negative_money_flow.rolling(window=14).sum()
+    df['mfi_14'] = 100 * (mfi_positive / (mfi_positive + mfi_negative))
+    
+    # Combine the factors into a single alpha factor
+    df['alpha_factor'] = (df['daily_return'] + 
+                          (df['close'] - df['ma_10_close']) / df['ma_10_close'] +
+                          (df['close'] - df['ma_30_close']) / df['ma_30_close'] +
+                          (50 - df['rsi_14']) / 50 +
+                          (50 - df['mfi_14']) / 50)
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

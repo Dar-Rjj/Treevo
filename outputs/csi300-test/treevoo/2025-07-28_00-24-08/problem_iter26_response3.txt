@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate short-term and long-term SMAs
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['momentum_sma'] = df['sma_5'] - df['sma_20']
+    
+    # Calculate EMA
+    df['ema'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['momentum_ema'] = df['ema'] - df['ema'].shift(5)
+    
+    # Calculate average true range
+    df['price_range'] = df['high'] - df['low']
+    df['atr_14'] = df['price_range'].rolling(window=14).mean()
+    df['volatility'] = df['atr_14']
+    
+    # Volume-based indicators
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Composite factor
+    composite = 0.4 * df['momentum_sma'] + 0.3 * df['volatility'] + 0.3 * df['vwap_deviation']
+    
+    # Consider transaction amounts
+    df['amount_change'] = df['amount'] - df['amount'].shift(1)
+    df['transaction_intensity'] = df['amount_change'] / df['volume_change']
+    
+    # Intraday and overnight returns
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['aggregate_return'] = df['intraday_return'] + df['overnight_return']
+    
+    # Weight High-Low Range by Volume
+    df['high_low_range_vol_weighted'] = (df['high'] - df['low']) * df['volume']
+    
+    # Adjust for Combined Volatility
+    df['adjusted_return'] = df['aggregate_return'] * df['high_low_range_vol_weighted']
+    
+    # Smoothed Moving Average
+    df['sma_5_adjusted'] = df['adjusted_return'].rolling(window=5).mean()
+    df['ema_smoothed'] = df['sma_5_adjusted'].ewm(span=5, adjust=False).mean()
+    
+    # Short-Term and Long-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Volume Change Indicator
+    df['volume_change_indicator'] = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    df['integrated_factor'] = (df['intraday_return'] * df['overnight_return']) * df['price_momentum_ratio']
+    df['integrated_factor'] = df['integrated_factor'] * (1.5 if df['volume'] > df['volume'].mean() else 0.5)
+    
+    # Integrate Amount Data
+    df['daily_dollar_volume'] = df['volume'] * df['close']
+    df['final_factor'] = df['ema_smoothed'] * df['daily_dollar_volume']
+    
+    # Volume Surge Indicator
+    df['volume_5_day_avg'] = df['volume'].rolling(window=5).mean()
+    df['volume_surge'] = df['volume'] > df['volume_5_day_avg']
+    
+    # Final Factor
+    final_factor = df['final_factor'] * (1.5 if df['volume_surge'].any() else 1.0)
+    
+    return final_factor.dropna()
+```

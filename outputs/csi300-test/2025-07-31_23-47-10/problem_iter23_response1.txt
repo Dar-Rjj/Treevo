@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    df['Volume_MA_10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Trend'] = df['volume'] - df['Volume_MA_10']
+    
+    # Calculate Short-Term Price Trend
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Short_Term_Price_Trend'] = df['close'] - df['EMA_10']
+    
+    # Calculate Medium-Term Price Trend
+    df['EMA_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['Medium_Term_Price_Trend'] = df['close'] - df['EMA_30']
+    
+    # Calculate Long-Term Price Trend
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['Long_Term_Price_Trend'] = df['close'] - df['EMA_50']
+    
+    # Calculate Dynamic Volatility
+    df['Volatility'] = df['close'].rolling(window=10).std()
+    df['Volatility_Percentile'] = df['Volatility'].rank(pct=True)
+    conditions = [
+        (df['Volatility_Percentile'] > 0.8),
+        (df['Volatility_Percentile'] > 0.6) & (df['Volatility_Percentile'] <= 0.8),
+        (df['Volatility_Percentile'] > 0.4) & (df['Volatility_Percentile'] <= 0.6),
+        (df['Volatility_Percentile'] <= 0.4)
+    ]
+    choices = [2.5, 1.5, 1.0, 0.5]
+    df['Volatility_Score'] = np.select(conditions, choices, default=np.nan)
+    
+    # Integrate Momentum and Relative Strength
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Relative_Strength'] = df['EMA_5'] / df['EMA_20']
+    
+    # Adjust High-Low Spread by Volume Trend
+    spread_multiplier = np.where(df['Volume_Trend'] > 0, 1.5, 0.5)
+    df['Adjusted_Spread'] = df['High_Low_Spread'] * spread_multiplier
+    
+    # Incorporate Short-Term Price Trend
+    st_trend_multiplier = np.where(df['Short_Term_Price_Trend'] > 0, 1.2, 0.8)
+    df['Adjusted_Short_Term_Trend'] = df['Short_Term_Price_Trend'] * st_trend_multiplier
+    
+    # Incorporate Medium-Term Price Trend
+    mt_trend_multiplier = np.where(df['Medium_Term_Price_Trend'] > 0, 1.1, 0.9)
+    df['Adjusted_Medium_Term_Trend'] = df['Medium_Term_Price_Trend'] * mt_trend_multiplier
+    
+    # Incorporate Long-Term Price Trend
+    lt_trend_multiplier = np.where(df['Long_Term_Price_Trend'] > 0, 1.3, 0.7)
+    df['Adjusted_Long_Term_Trend'] = df['Long_Term_Price_Trend'] * lt_trend_multiplier
+    
+    # Incorporate Dynamic Volatility
+    df['Adjusted_Volatility'] = df['Volatility_Score']
+    
+    # Incorporate Momentum and Relative Strength
+    momentum_multiplier = np.where(df['Relative_Strength'] > 1, 1.7, 0.3)
+    df['Adjusted_Relative_Strength'] = df['Relative_Strength'] * momentum_multiplier
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Adjusted_Spread'] +
+        df['Adjusted_Short_Term_Trend'] +
+        df['Adjusted_Medium_Term_Trend'] +
+        df['Adjusted_Long_Term_Trend'] +
+        df['Adjusted_Volatility'] +
+        df['Adjusted_Relative_Strength']
+    )
+    
+    return df['Alpha_Factor']
+```

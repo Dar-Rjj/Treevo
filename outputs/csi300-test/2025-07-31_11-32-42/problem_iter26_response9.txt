@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Integrated Intraday and Opening Gaps
+    integrated_intraday_gap = intraday_high_low_spread - open_to_close_movement
+    
+    # Advanced Volume Impact
+    log_volume = np.log(df['volume'] + 1)
+    volume_adjusted_metric = integrated_intraday_gap * log_volume
+    
+    # Adjusted Price Range as a Stability Measure
+    price_range_stability = (df['high'] - df['low']) / (df['open'] + df['close'])
+    stability_adjusted_metric = volume_adjusted_metric / price_range_stability
+    
+    # Volume-Weighted Prices
+    volume_weighted_close = (df['close'] * df['volume']).cumsum()
+    volume_weighted_open = (df['open'] * df['volume']).cumsum()
+    
+    # VWAPCHL into the Model
+    vwapchl = (volume_weighted_close - volume_weighted_open) / (df['high'] - df['low'])
+    
+    # Volume-Weighted Average Price
+    vwap = ((df['close'] + df['open']) * df['volume']).cumsum() / df['volume'].cumsum()
+    change_in_vwap = vwap - vwap.shift(1)
+    
+    # Dynamic Weighting
+    five_day_vol_rolling_avg = df['volume'].rolling(window=5).mean()
+    five_day_vol_std = df['volume'].rolling(window=5).std()
+    z_score_volume = (df['volume'] - five_day_vol_rolling_avg) / five_day_vol_std
+    z_score_weighted_metric = stability_adjusted_metric * z_score_volume
+    
+    # Short-Term and Medium-Term Momentum
+    short_term_momentum = df['close'] - df['close'].shift(1)
+    n = 20  # Example: 20-day SMA
+    sma_n = df['close'].rolling(window=n).mean()
+    medium_term_momentum = df['close'] - sma_n
+    
+    # Resilience Measure
+    trailing_window = 20
+    resilience = df['close'] / df['close'].rolling(window=trailing_window).min()
+    
+    # Intraday Volatility
+    upper_shadow_length = df['high'] - df['close']
+    lower_shadow_length = df['open'] - df['low']
+    
+    # Candle Body Size
+    candle_body_size = df['close'] - df['open']
+    
+    # Volume Shifts
+    volume_change = df['volume'] - df['volume'].shift(1)
+    significant_volume_days = (df['volume'] > df['volume'].rolling(window=20).mean() * 2).astype(int)
+    
+    # Composite Indicators
+    momentum_with_significant_volume = short_term_momentum * significant_volume_days
+    
+    # Final Integration
+    final_factor = (stability_adjusted_metric * vwapchl + 
+                    medium_term_momentum + 
+                    change_in_vwap * z_score_weighted_metric + 
+                    resilience + 
+                    momentum_with_significant_volume)
+    
+    return final_factor
+```

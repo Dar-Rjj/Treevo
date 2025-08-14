@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Moving Average of Positive Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: max(x, 0))
+    df['ma_positive_returns'] = df['positive_returns'].rolling(window=21).mean()
+    
+    # Volume Adjusted Momentum
+    df['cumulative_volume'] = df['volume'].rolling(window=21).sum()
+    df['volume_adjusted_momentum'] = (df['ma_positive_returns'] * df['cumulative_volume']) / 21
+    
+    # Calculate Short-Term and Long-Term Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Combine High-Low Range and Volume
+    df['high_low_range_vol'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    df['avg_volume_21'] = df['volume'].rolling(window=21).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_21']
+    
+    # Adjust by Average Amount
+    df['avg_amount_21'] = df['amount'].rolling(window=21).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount_21']
+    
+    # Introduce New Component: Price-Volume Divergence
+    df['daily_volume_change_pct'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['price_volume_divergence'] = df['daily_return'] - df['daily_volume_change_pct']
+    
+    # Combine Components
+    combined_momentum = (df['short_term_momentum'] * df['volume_ratio']) * df['amount_ratio']
+    combined_momentum += df['volume_adjusted_momentum']
+    combined_momentum += df['high_low_range_vol']
+    
+    # Weighted Sum of Momentum
+    weighted_momentum = (df['short_term_momentum'] * 0.6) + (df['long_term_momentum'] * 0.4)
+    
+    # Apply Trend Multiplier
+    df['50_day_ema'] = df['close'].ewm(span=50, adjust=False).mean()
+    trend_multiplier = df['close'] > df['50_day_ema']
+    trend_multiplier = trend_multiplier.apply(lambda x: 1.5 if x else 1)
+    
+    # Final Combined Alpha Factor
+    final_alpha_factor = combined_momentum + df['price_volume_divergence']
+    final_alpha_factor = final_alpha_factor * weighted_momentum * trend_multiplier
+    
+    return final_alpha_factor
+```

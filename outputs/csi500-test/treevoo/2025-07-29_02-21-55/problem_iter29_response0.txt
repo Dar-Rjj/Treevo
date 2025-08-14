@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    combined_indicator = intraday_pct_change * volume_ratio
+    
+    # Apply Threshold to Identify Significant Movements
+    threshold = 1.5
+    significant_movements = (combined_indicator > threshold).astype(int)
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    ma_log_return = daily_log_return.rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Moving Average Return by Volume
+    adjusted_ma_return = ma_log_return * ema_volume / df['volume'].rolling(window=20).mean()
+    
+    # Apply Weighted Moving Averages
+    fast_ema = adjusted_ma_return.ewm(span=10, adjust=False).mean()
+    slow_ema = adjusted_ma_return.ewm(span=30, adjust=False).mean()
+    
+    # Confirm with Price Momentum
+    sma_close = df['close'].rolling(window=20).mean()
+    momentum_score = df['close'] - sma_close
+    
+    # Introduce Volatility-Adjusted Momentum
+    ema_abs_log_return = np.abs(daily_log_return).ewm(span=20, adjust=False).mean()
+    volatility_adjusted_momentum = momentum_score / ema_abs_log_return
+    
+    # Integrate Opening and Closing Price Gap
+    price_gap = df['open'] - df['close'].shift(1)
+    gap_direction = np.where(price_gap > 0, 1, -1)
+    gap_adjusted_indicator = price_gap * gap_direction
+    
+    # Synthesize Final Indicator
+    final_indicator = (
+        0.3 * significant_movements +
+        0.4 * volatility_adjusted_momentum +
+        0.2 * gap_adjusted_indicator +
+        0.1 * (fast_ema - slow_ema)
+    )
+    
+    return final_indicator
+```

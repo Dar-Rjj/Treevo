@@ -1,0 +1,33 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=5, threshold=0.5):
+    # Compute N-day Close Price Percent Change
+    df['N_day_close_pct_change'] = df['close'].pct_change(periods=N)
+    
+    # Compute M-day Exponential Moving Average of N-day Close Price Percent Change
+    df['M_day_ema'] = df['N_day_close_pct_change'].ewm(span=M, adjust=False).mean()
+    
+    # Compute Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Weight by Volume to Capture Interest
+    df['volume_adjusted_intraday_return'] = df['intraday_return'] / df['volume']
+    
+    # Combine Enhanced Price Momentum and Volume Adjusted Intraday Return
+    df['combined_factor'] = df['M_day_ema'] * df['volume_adjusted_intraday_return']
+    
+    # Multiply by Sign of (Today's Close - Previous Day's Close)
+    df['trend_continuity'] = np.sign(df['close'].diff())
+    df['integrated_factor'] = df['combined_factor'] * df['trend_continuity']
+    
+    # Introduce a threshold to filter out low signal-to-noise ratio
+    df['final_factor'] = df['integrated_factor'].where(np.abs(df['integrated_factor']) >= threshold, 0)
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,52 @@
+def heuristics_v2(df):
+    # Calculate RSI
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate Parabolic SAR with adjusted parameters
+    high = df['high']
+    low = df['low']
+    close = df['close']
+    psar = close.copy()
+    psar[0] = high[0]
+    ep = high[0]
+    acc_factor = 0.03  # Increased initial acceleration factor
+    max_acc_factor = 0.3  # Increased maximum acceleration factor
+    increment = acc_factor
+    direction = 1 if close[1] > psar[0] else -1
+
+    for i in range(1, len(close)):
+        if direction == 1:
+            psar[i] = psar[i-1] + increment
+            if high[i] > ep:
+                ep = high[i]
+                increment = min(increment + acc_factor, max_acc_factor)
+            if psar[i] > low[i] or psar[i] > ep:
+                direction = -1
+                psar[i] = ep
+                ep = low[i]
+                increment = acc_factor
+        else:
+            psar[i] = psar[i-1] - increment
+            if low[i] < ep:
+                ep = low[i]
+                increment = min(increment + acc_factor, max_acc_factor)
+            if psar[i] < high[i] or psar[i] < ep:
+                direction = 1
+                psar[i] = ep
+                ep = high[i]
+                increment = acc_factor
+
+    # Calculate the adaptive weight for RSI and PSAR based on recent volatility
+    rolling_volatility = close.rolling(window=14).std()
+    volatility_weight = rolling_volatility / rolling_volatility.rolling(window=50).mean()
+    rsi_weight = 0.5 + 0.5 * (volatility_weight - volatility_weight.min()) / (volatility_weight.max() - volatility_weight.min())
+    psar_weight = 1 - rsi_weight
+
+    # Combine RSI and PSAR into a single heuristic factor with dynamic weights
+    heuristics_matrix = rsi_weight * rsi + psar_weight * (psar - close)
+
+    return heuristics_matrix

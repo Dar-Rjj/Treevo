@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate short-term momentum indicators
+    df['SMA5'] = df['close'].rolling(window=5).mean()
+    df['SMA10'] = df['close'].rolling(window=10).mean()
+    df['ShortTermMomentum'] = (df['SMA5'] > df['SMA10']).astype(int)
+
+    # Calculate long-term momentum indicators
+    df['SMA50'] = df['close'].rolling(window=50).mean()
+    df['SMA200'] = df['close'].rolling(window=200).mean()
+    df['LongTermMomentum'] = (df['SMA50'] > df['SMA200']).astype(int)
+
+    # Volume and trading activity analysis
+    df['Vol5'] = df['volume'].rolling(window=5).mean()
+    df['Vol20'] = df['volume'].rolling(window=20).mean()
+    df['IncreasedTradingActivity'] = (df['Vol5'] > 1.2 * df['Vol20']).astype(int)  # Significantly higher volume
+
+    # High-Low price spread analysis
+    df['HL_Spread'] = df['high'] - df['low']
+    df['HL_Spread_MA5'] = df['HL_Spread'].rolling(window=5).mean()
+    df['HigherIntradayVolatility'] = (df['HL_Spread'] > df['HL_Spread_MA5']).astype(int)
+
+    # Integrate short-term and long-term momentum signals
+    df['MomentumSignal'] = 0
+    df.loc[df['ShortTermMomentum'] == 1, 'MomentumSignal'] += 1
+    df.loc[df['LongTermMomentum'] == 1, 'MomentumSignal'] += 1
+
+    # Combine all factors for final trade decision
+    df['TradeSignal'] = 0
+    df.loc[df['MomentumSignal'] == 2, 'TradeSignal'] = 1  # Strong bullish indicator
+    df.loc[(df['MomentumSignal'] == 1) & (df['IncreasedTradingActivity'] == 1) & (df['HigherIntradayVolatility'] == 1), 'TradeSignal'] = 0.5  # Potential breakout
+    df.loc[(df['MomentumSignal'] == 1) & ((df['IncreasedTradingActivity'] == 0) | (df['HigherIntradayVolatility'] == 0)), 'TradeSignal'] = 0  # Wait for confirmation
+    df.loc[df['MomentumSignal'] == 0, 'TradeSignal'] = -1  # Bearish trend indicator
+
+    # Return the final trade signal
+    return df['TradeSignal']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', parse_dates=['date'], index_col='date')
+# trade_signal = heuristics_v2(df)
+# print(trade_signal)
+```

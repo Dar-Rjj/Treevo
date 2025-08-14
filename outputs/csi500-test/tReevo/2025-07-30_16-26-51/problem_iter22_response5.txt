@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Volume-Weight the Return
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Dynamic Lookback Periods for Momentum
+    short_term_lookback = 5
+    mid_term_lookback = 10
+    long_term_lookback = 20
+    
+    # Short-Term Lookback
+    df['5D_SMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].rolling(window=short_term_lookback).mean()
+    df['5D_EMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].ewm(span=short_term_lookback, adjust=False).mean()
+    
+    # Mid-Term Lookback
+    df['10D_SMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].rolling(window=mid_term_lookback).mean()
+    df['10D_EMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].ewm(span=mid_term_lookback, adjust=False).mean()
+    
+    # Long-Term Lookback
+    df['20D_SMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].rolling(window=long_term_lookback).mean()
+    df['20D_EMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].ewm(span=long_term_lookback, adjust=False).mean()
+    
+    # Adaptive Volatility Stabilization
+    df['5D_Std'] = df['Volume_Weighted_Return'].rolling(window=short_term_lookback).std()
+    df['20D_Std'] = df['Volume_Weighted_Return'].rolling(window=long_term_lookback).std()
+    df['Adaptive_Volatility'] = 0.6 * df['5D_Std'] + 0.4 * df['20D_Std']
+    
+    # Integrated Momentum and Adaptive Volatility
+    df['Integrated_Momentum'] = (df['5D_EMA_Volume_Weighted_Return'] + 
+                                 df['10D_EMA_Volume_Weighted_Return'] + 
+                                 df['20D_EMA_Volume_Weighted_Return']) / 3
+    df['Stabilized_Momentum'] = df['Integrated_Momentum'] / df['Adaptive_Volatility']
+    
+    # Incorporate High-Low Price Ratio
+    df['High_Low_Ratio'] = df['high'] / df['low']
+    
+    # Integrate High-Low Momentum
+    df['High_Low_Momentum'] = df['High_Low_Ratio'].rolling(window=short_term_lookback).sum()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['Stabilized_Momentum'] + df['High_Low_Momentum'] + df['Volume_Weighted_Return']
+    
+    return df['Alpha_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

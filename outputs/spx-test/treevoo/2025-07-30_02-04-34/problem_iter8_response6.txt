@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, m=20, volume_spike_threshold=1.5, momentum_dampening_multiplier=0.8):
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'].diff()
+    
+    # Identify Volume Spike
+    df['volume_moving_avg'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = (df['volume'] > df['volume_moving_avg'] * volume_spike_threshold).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    df['adjusted_momentum'] = df['raw_momentum'] * (momentum_dampening_multiplier**df['volume_spike'])
+    
+    # Calculate Intraday High-Low Spread Factor
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Combine Intraday High-Low Spread Factor and Close-to-Open Return
+    df['close_to_open_return'] = df['close'] / df['open'] - 1
+    df['combined_intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+    
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['average_volume'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement_normalized'] = df['weighted_price_movement'] / df['average_volume']
+    
+    # Calculate Intraday Momentum Difference
+    df['intraday_momentum_difference'] = (df['high'] - df['low']) / df['open']
+    df['smoothed_intraday_momentum_difference'] = df['intraday_momentum_difference'].ewm(span=5, adjust=False).mean().shift(1)
+    df['intraday_momentum_difference_smoothed_diff'] = df['intraday_momentum_difference'] - df['smoothed_intraday_momentum_difference']
+    
+    # Incorporate Volume Intensity
+    df['average_volume_5_days'] = df['volume'].rolling(window=5).mean()
+    df['inverse_average_volume'] = 1 / df['average_volume_5_days']
+    df['intraday_momentum_difference_adjusted'] = df['intraday_momentum_difference_smoothed_diff'] * df['inverse_average_volume']
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'] / df['volume'].shift(1) - 1
+    df['average_volume_change'] = df['volume_change'].rolling(window=20).mean()
+    df['volume_spike_detection'] = (df['volume_change'] > 1.5 * df['average_volume_change']).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    df['combined_intraday_momentum_volume'] = df['intraday_momentum_difference_adjusted'] * df['volume_spike_detection']
+    df['combined_intraday_momentum_volume_smoothed'] = df['combined_intraday_momentum_volume'].rolling(window=3).mean().shift(1)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (
+        df['adjusted_momentum'] * 
+        df['combined_intraday_factor'] * 
+        df['weighted_price_movement_normalized'] * 
+        df['combined_intraday_momentum_volume_smoothed']
+    )
+    
+    # Adjust for Volatility
+    df['close_std'] = df['close'].rolling(window=10).std()
+    df['final_alpha_factor_adjusted'] = df['final_alpha_factor'] / (1 + df['close_std'])
+    
+    return df['final_alpha_factor_adjusted']
+```

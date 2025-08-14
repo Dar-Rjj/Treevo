@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate price differences
+    df['open_diff'] = df['open'].diff()
+    df['close_diff'] = df['close'].diff()
+    df['intra_day_movement'] = df['high'] - df['low']
+    
+    # Detect trend reversals
+    df['bullish_reversal'] = ((df['low'].shift(1) > df['low']) & (df['close'] > df['open'])).astype(int)
+    df['bearish_reversal'] = ((df['high'].shift(1) < df['high']) & (df['close'] < df['open'])).astype(int)
+    
+    # Calculate volume differences
+    df['volume_diff'] = df['volume'].diff()
+    
+    # Identify volume spikes relative to price
+    mean_volume = df['volume'].expanding().mean()
+    threshold = 0.5  # Small threshold for minimal price change
+    df['high_vol_min_price_change'] = ((df['close_diff'].abs() < threshold) & (df['volume'] > mean_volume)).astype(int)
+    df['low_vol_sig_price_change'] = ((df['close_diff'].abs() > threshold) & (df['volume'] < mean_volume)).astype(int)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    
+    # Calculate Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = [0]
+    negative_money_flow = [0]
+    
+    for i in range(1, len(df)):
+        if typical_price.iloc[i] > typical_price.iloc[i-1]:
+            positive_money_flow.append(positive_money_flow[-1] + raw_money_flow.iloc[i])
+            negative_money_flow.append(negative_money_flow[-1])
+        elif typical_price.iloc[i] < typical_price.iloc[i-1]:
+            positive_money_flow.append(positive_money_flow[-1])
+            negative_money_flow.append(negative_money_flow[-1] - raw_money_flow.iloc[i])
+        else:
+            positive_money_flow.append(positive_money_flow[-1])
+            negative_money_flow.append(negative_money_flow[-1])
+    
+    df['positive_money_flow'] = positive_money_flow
+    df['negative_money_flow'] = negative_money_flow
+    df['mfi'] = 100 - (100 / (1 + (df['positive_money_flow'] / df['negative_money_flow'])))
+    
+    # Evaluate trend strength
+    df['strong_upward_trend'] = ((df['close'] > df['open']) & (df['obv'] > df['obv'].shift(1))).astype(int)
+    df['strong_downward_trend'] = ((df['close'] < df['open']) & (df['obv'] < df['obv'].shift(1))).astype(int)
+    
+    # Assess market sentiment
+    df['bullish_sentiment'] = (df['mfi'] > 80).astype(int)
+    df['bearish_sentiment'] = (df['mfi'] < 20).astype(int)
+    
+    # Combine factors into a single alpha factor
+    df['alpha_factor'] = (df['open_diff'] + df['close_diff'] + df['intra_day_movement'] 
+                          + df['bullish_reversal'] - df['bearish_reversal'] 
+                          + df['volume_diff'] + df['high_vol_min_price_change'] - df['low_vol_sig_price_change'] 
+                          + df['obv'] + df['mfi'] 
+                          + df['strong_upward_trend'] - df['strong_downward_trend'] 
+                          + df['bullish_sentiment'] - df['bearish_sentiment'])
+    
+    return df['alpha_factor']
+```

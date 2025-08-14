@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['Prev_Open'] = df['open'].shift(1)
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['Prev_Open'])
+
+    # Adjusted Intraday Price Movement
+    df['Adjusted_Intraday_Price_Movement'] = df['Intraday_Price_Movement']
+
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+
+    # Weight by Volume and Close Difference
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Volume_Close_Diff'] = df['volume'] * (df['close'] - df['Prev_Close'])
+
+    # Adjust by Volume Change and Average Volume
+    df['MA_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Adjusted_Range'] = df['Intraday_Range'] * df['Volume_Change'] / df['MA_Volume_20']
+
+    # Apply Price Level Adjustment
+    df['Price_Level_Ratio'] = df['close'] / df['open']
+    df['Adjusted_Volume_Range'] = df['Volume_Adjusted_Range'] * df['Price_Level_Ratio']
+
+    # Incorporate Close Price Momentum
+    momentum_lookback = 10
+    df['Momentum'] = df['close'] / df['close'].shift(momentum_lookback) - 1
+
+    # Calculate 5-Day Average High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Avg_High_Low_Spread_5'] = df['High_Low_Spread'].rolling(window=5).mean()
+
+    # Combine 5-Day Average High-Low Spread and Momentum
+    df['Combined_High_Low_Spread_Momentum'] = df['Avg_High_Low_Spread_5'] * df['Momentum']
+
+    # Integrate Intraday Volatility
+    df['Avg_Daily_Range_20'] = df['High_Low_Spread'].rolling(window=20).mean()
+
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * (df['close'] - df['Prev_Close'])
+
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Weighted_Intraday_Return'] = (df['amount'] * df['Adjusted_Intraday_Price_Movement']) + df['Volume_Weighted_Return']
+
+    # Calculate IntegratedMomentumFactor
+    df['IntegratedMomentumFactor'] = df['Momentum'] + df['Weighted_Intraday_Return'] * df['Combined_High_Low_Spread_Momentum']
+
+    # Combine Factors with Volume-Adjusted Price Trend
+    df['Close_to_Close_Return'] = df['close'] - df['Prev_Close']
+    df['Volume_Adjusted_Price_Trend'] = (df['Close_to_Close_Return'] * df['Intraday_Range']) / df['volume']
+
+    # Filter for Recent Price Trend
+    df['5_Day_MA_Close'] = df['close'].rolling(window=5).mean()
+    df['Recent_Price_Trend'] = df['close'] - df['5_Day_MA_Close']
+
+    # Introduce Volume Trend
+    df['5_Day_Sum_Volume'] = df['volume'].rolling(window=5).sum()
+    df['Volume_Ratio'] = df['volume'] / df['5_Day_Sum_Volume']
+    df['VolumeTrendAdjustedFactor'] = df['Volume_Adjusted_Price_Trend'] * df['Volume_Ratio']
+
+    # Adjust Momentum by Intraday Volatility
+    df['Adjusted_Momentum'] = df['IntegratedMomentumFactor'] * df['Avg_Daily_Range_20']
+
+    # Calculate Dynamic Adjustment Factor
+    df['EMA_Volume_20'] = df['volume'].ewm(span=20, adjust=False).mean()
+
+    # Apply Dynamic Adjustment
+    df['Dynamically_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (df['volume'] / df['EMA_Volume_20'])
+
+    # Calculate Open Price Impact
+    df['Prev_Open_Price'] = df['open'].shift(1)
+    df['Relative_Open_Price_Change'] = (df['open'] - df['Prev_Open_Price']) / df['Prev_Open_Price']
+
+    # Final Alpha Factor
+    final_alpha_factor = (
+        0.3 * df['Adjusted_Intraday_Price_Movement']

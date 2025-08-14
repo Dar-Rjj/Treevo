@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, P=20, M=10, R=10, S=10, Q=10):
+    # Calculate Price Momentum
+    df['log_returns'] = np.log(df['close']).diff()
+    df['price_momentum'] = df['log_returns'].rolling(window=N).sum()
+
+    # Integrate Volatility
+    df['volatility'] = df['log_returns'].rolling(window=P).std()
+    df['price_momentum_vol_adj'] = df['price_momentum'] / df['volatility']
+
+    # Calculate Volume Acceleration
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_acceleration'] = df['volume_change'].rolling(window=M).sum()
+
+    # Consider Market Sentiment
+    df['high_low_spread'] = (df['high'] - df['low'])
+    median_high_low_spread = df['high_low_spread'].median()
+    df['norm_high_low_spread'] = df['high_low_spread'].rolling(window=R).mean() / median_high_low_spread
+    df['volume_acceleration_sent_adj'] = df['volume_acceleration'] * df['norm_high_low_spread']
+
+    # Incorporate Trading Volume Ratio
+    df['trading_volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_acceleration_final'] = df['volume_acceleration_sent_adj'] * df['trading_volume_ratio']
+
+    # Consider Open-Close Spread
+    df['open_close_spread'] = (df['close'] - df['open'])
+    median_open_close_spread = df['open_close_spread'].median()
+    df['norm_open_close_spread'] = df['open_close_spread'].rolling(window=S).mean() / median_open_close_spread
+    df['price_momentum_final'] = df['price_momentum_vol_adj'] * df['norm_open_close_spread']
+
+    # Incorporate Weighted Moving Averages (WMA)
+    weights = np.arange(1, Q + 1)
+    df['wma'] = df['close'].rolling(window=Q).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    df['trend_indicator'] = np.where(df['close'] > df['wma'], 1, -1)
+
+    # Combine Factors
+    alpha_factor = (df['price_momentum_final'] + df['volume_acceleration_final']) * df['trend_indicator']
+    return alpha_factor
+```

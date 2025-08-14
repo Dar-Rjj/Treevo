@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=5, k=5):
+    # Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Close-to-Open Return
+    close_to_open_return = df['close'].shift(-1) - df['open']
+    
+    # Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    combined_intraday_features = df['open'] - intraday_midpoint - opening_gap
+    
+    # Enhanced Intraday Factor
+    avg_intraday_range = intraday_range.rolling(window=n).mean()
+    enhanced_intraday_factor = (avg_intraday_range * (close_to_open_return + price_change) + combined_intraday_features)
+    
+    # Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=m).mean()
+    recent_volatility_adjusted = enhanced_intraday_factor * avg_abs_price_change
+    
+    # Adjust for Volume and Price Spikes
+    volume_spike = (df['volume'] > df['volume'].shift(1)) * 1
+    price_spike = (df['close'] > df['close'].shift(1)) * 1
+    combined_spikes = volume_spike + price_spike
+    
+    # Introduce Volatility Adjustment
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    std_dev_log_returns = log_returns.rolling(window=n).std()
+    adjusted_intraday_momentum = recent_volatility_adjusted / std_dev_log_returns
+    
+    # Scale Intraday Momentum
+    scaled_intraday_momentum = adjusted_intraday_momentum / combined_spikes
+    
+    # Apply Non-Linear Transformation
+    softmax_values = np.exp(scaled_intraday_momentum) / np.sum(np.exp(scaled_intraday_momentum))
+    tanh_transformed = np.tanh(scaled_intraday_momentum)
+    
+    # Volume Adjusted Factor
+    avg_volume = df['volume'].rolling(window=k).mean()
+    volume_adjusted_factor = (df['volume'] > avg_volume) * 1 + (df['volume'] <= avg_volume) * 0.5
+    volume_adjusted_momentum = tanh_transformed * volume_adjusted_factor
+    
+    # Transaction Intensity
+    transaction_intensity = df['amount'] / df['volume']
+    avg_transaction_intensity = transaction_intensity.rolling(window=n).mean()
+    normalized_transaction_intensity = transaction_intensity / avg_transaction_intensity
+    
+    # Volume and Transaction Intensity Adjustment
+    final_adjustment = volume_adjusted_factor * normalized_transaction_intensity
+    final_factor = volume_adjusted_momentum * final_adjustment
+    
+    return final_factor
+```

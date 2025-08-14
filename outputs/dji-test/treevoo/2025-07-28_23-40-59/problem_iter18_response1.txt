@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Weighted Daily Return
+    N = 20
+    df['Volume_Weighted_Return'] = (df['Daily_Price_Change'] * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Introduce Enhanced Price Directional Component
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Price_Direction_Sign'] = np.sign(df['Close_Open_Diff'])
+    
+    # Incorporate Dynamic Volume Spike Indicator
+    rolling_volatility = df['volume'].rolling(window=20).std()
+    mean_volume = df['volume'].rolling(window=20).mean()
+    df['Volume_Spike'] = (df['volume'] > (mean_volume + 2 * rolling_volatility)).astype(int)
+    df['Dynamic_Factor'] = 1 + (df['volume'] - mean_volume) / rolling_volatility
+    df['Volume_Adjusted_Return'] = df['Volume_Weighted_Return'] * (df['Dynamic_Factor'] ** df['Volume_Spike'])
+    
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Adjusted Volume
+    df['Adjusted_Volume'] = df['volume'] / df['High_Low_Spread']
+    
+    # Calculate Log Return
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate High-Close Difference
+    df['High_Close_Diff'] = df['high'] - df['close']
+    df['High_Close_Sign'] = np.sign(df['High_Close_Diff'])
+    
+    # Combine Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['Combined_Component'] = df['Log_Return'] * df['Adjusted_Volume'] * df['Price_Direction_Sign'] * df['High_Close_Sign']
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Adjust Daily Return by Intraday Volatility
+    df['Adjusted_Return'] = df['Daily_Return'] / df['Intraday_Range']
+    
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Return'].ewm(span=5).mean()
+    
+    # Incorporate Intraday Trading Imbalance
+    df['High_Open_Diff'] = df['high'] - df['open']
+    df['Low_Open_Diff'] = df['low'] - df['open']
+    df['Imbalance_Sign'] = np.where(df['High_Open_Diff'] > df['Low_Open_Diff'], 1, -1)
+    
+    # Combine Components into Final Alpha Factor
+    df['Alpha_Factor'] = df['Volume_Adjusted_Return'] + df['Smoothed_Adjusted_Return'] + df['Combined_Component']
+    df['Final_Alpha_Factor'] = df['Alpha_Factor'] * df['Imbalance_Sign']
+    
+    return df['Final_Alpha_Factor']
+```

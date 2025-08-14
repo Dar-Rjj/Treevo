@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Price Momentum
+    df['5_day_momentum'] = df['close'].rolling(window=5).mean()
+    
+    # Incorporate Volume Influence
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['relative_volume'] = df['volume'] / df['5_day_avg_volume']
+    df['adjusted_5_day_momentum'] = df['5_day_momentum'] * df['relative_volume']
+    
+    # Calculate Intraday Returns
+    df['intraday_returns'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    df['open_to_close_returns'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_returns'] = df['intraday_returns'] + df['open_to_close_returns']
+    
+    # Analyze Volume Change
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    conditions = [
+        (df['volume_change'] > 2.0),
+        (df['volume_change'].between(1.8, 2.0)),
+        (df['volume_change'].between(1.6, 1.8)),
+        (df['volume_change'].between(0.9, 1.6)),
+        (df['volume_change'].between(0.7, 0.9)),
+        (df['volume_change'].between(0.5, 0.7)),
+        (df['volume_change'] < 0.5)
+    ]
+    choices = [3, 2, 1, 0, -1, -2, -3]
+    df['volume_trend_classification'] = pd.np.select(conditions, choices, default=0)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['adjusted_combined_returns'] = df['combined_returns'] * df['volume_trend_classification']
+    
+    # Calculate Short-Term and Long-Term Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=7).mean()
+    df['long_term_momentum'] = df['close'].rolling(window=25).mean()
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['high_low_spread_adjusted'] = (df['high'] - df['low']) * df['relative_volume']
+    
+    # Final Alpha Factor
+    df['final_alpha'] = (df['adjusted_combined_returns'] * df['momentum_oscillator'] 
+                         + df['high_low_spread_adjusted'] * df['volume_trend_classification'])
+    
+    # Apply Cumulative Movement
+    df['cumulative_final_alpha'] = df['final_alpha'].rolling(window=5).sum()
+    
+    # Introduce Daily Return Volatility
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5_day_volatility'] = df['daily_return'].rolling(window=5).std()
+    df['final_alpha_with_volatility'] = df['cumulative_final_alpha'] * df['5_day_volatility']
+    
+    return df['final_alpha_with_volatility']
+```

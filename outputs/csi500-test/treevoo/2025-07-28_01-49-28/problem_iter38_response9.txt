@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range * df['volume']) + open_to_close
+    
+    # High-Low Spread Momentum
+    high_low_spread_moving_sum = df['high'] - df['low']
+    high_low_spread_moving_sum = high_low_spread_moving_sum.rolling(window=20).sum()
+    spread_momentum = high_low_spread_moving_sum - high_low_spread_moving_sum.shift(1)
+    
+    # Volume-Adjusted Momentum
+    simple_momentum = df['close'] - df['close'].shift(1)
+    average_volume = (df['volume'] + df['volume'].shift(1)) / 2
+    adjusted_momentum = simple_momentum * (df['volume'] / average_volume)
+    
+    # Enhance with 10-Day High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = df['close'] / ten_day_high
+    proximity_to_low = df['close'] / ten_day_low
+    min_proximity = pd.concat([proximity_to_high, proximity_to_low], axis=1).min(axis=1)
+    inverted_min_proximity = 1 / min_proximity
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    adjusted_proximity = inverted_min_proximity / twenty_day_volatility
+    
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    max_volatility = pd.concat([open_high_diff, open_low_diff], axis=1).max(axis=1)
+    volume_percentage_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_volatility = max_volatility * volume_percentage_change
+    
+    # Enhanced Momentum Factor
+    n = 20
+    smoothed_volume = df['volume'].ewm(span=n, adjust=False).mean()
+    enhanced_momentum = (df['close'] - df['close'].shift(n)) * smoothed_volume
+    
+    # High-Low Return
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    
+    # Combined Factors
+    combined_factors = adjusted_momentum + high_low_return
+    
+    # Amount per Unit Close Price Rate of Change
+    sum_amounts = df['amount'].rolling(window=n).sum()
+    current_ratio = sum_amounts / df['close']
+    previous_ratio = df['amount'].rolling(window=n).sum().shift(n) / df['close'].shift(n)
+    differential = current_ratio - previous_ratio
+    
+    # Price Change Ratio
+    price_change_ratio = df['close'] / df['open']
+    
+    # Integrated Alpha Factor
+    integrated_alpha_factor = (
+        volume_adjusted_breakout_strength +
+        spread_momentum +
+        adjusted_momentum +
+        combined_factors +
+        adjusted_volatility +
+        differential
+    ) * price_change_ratio
+    
+    # Enhanced Alpha Factor
+    threshold = 0.5
+    strong_moves = (integrated_alpha_factor > threshold).astype(int)
+    
+    long_term_momentum = (df['close'] - df['close'].shift(50)) / df['close'].shift(50)
+    short_term_momentum = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    price_trend_score = long_term_momentum - short_term_momentum
+    
+    enhanced_alpha_factor = 0.7 * integrated_alpha_factor + 0.3 * price_trend_score
+    
+    return enhanced_alpha_factor
+```

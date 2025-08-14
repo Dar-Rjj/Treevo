@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Adjusted Daily Range
+    adj_daily_range = (df['high'] - df['low']) * df['volume']
+
+    # Enhanced Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = df['close'] - ten_day_high
+    proximity_to_low = df['close'] - ten_day_low
+    inverted_proximity = 1 / (proximity_to_high + proximity_to_low)
+    twenty_day_std = df['close'].pct_change().rolling(window=20).std()
+    enhanced_reversion = inverted_proximity / twenty_day_std
+
+    # Open-High-Low Volatility
+    open_high_diff = (df['high'] - df['open']) * df['volume']
+    open_low_diff = (df['open'] - df['low']) * df['volume']
+    open_high_low_volatility = (open_high_diff + open_low_diff) / 2
+
+    # Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    thirty_day_sum = high_low_spread.rolling(window=30).sum()
+    spread_momentum = thirty_day_sum - thirty_day_sum.shift(1)
+
+    # Combined Momentum
+    ten_day_return = (df['close'] / df['close'].shift(10)) - 1
+    thirty_day_return = (df['close'] / df['close'].shift(30)) - 1
+    combined_momentum = ten_day_return + thirty_day_return
+
+    # Volume-Adjusted Momentum
+    simple_momentum = df['close'] - df['close'].shift(1)
+    avg_volume = df['volume'].rolling(window=2).mean()
+    volume_adjusted_momentum = simple_momentum * (df['volume'] / avg_volume)
+
+    # Trend Strength
+    fifty_day_ma = df['close'].rolling(window=50).mean()
+    two_hundred_day_ma = df['close'].rolling(window=200).mean()
+    trend_strength = fifty_day_ma - two_hundred_day_ma
+
+    # Final Alpha Factor
+    final_alpha_factor = (adj_daily_range * enhanced_reversion * open_high_low_volatility * 
+                          spread_momentum * trend_strength * combined_momentum * 
+                          volume_adjusted_momentum)
+
+    # Add Volume-Adjusted Open-to-Close Movement
+    vol_adj_open_close_movement = (df['close'] - df['open']) * df['volume']
+    final_alpha_factor += vol_adj_open_close_movement
+
+    # Add Simple Momentum
+    final_alpha_factor += simple_momentum
+
+    # Filter for Strong Moves
+    dynamic_threshold = final_alpha_factor.quantile(0.75)
+    strong_moves = (final_alpha_factor > dynamic_threshold).astype(int)
+
+    return strong_moves
+```

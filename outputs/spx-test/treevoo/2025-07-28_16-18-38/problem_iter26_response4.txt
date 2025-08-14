@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return and intraday volatility
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['open']
+    df['advanced_daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['advanced_daily_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+
+    # Utilize moving averages for trend identification
+    df['SMA_close_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_ratio'] = df['close'] / df['SMA_close_20']
+
+    df['EMA_close_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_ratio'] = df['close'] / df['EMA_close_20']
+
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+    df['trend_indicator'] = df['5_day_MA'] - df['20_day_MA']
+
+    # Examine trading volume and market liquidity
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    df['daily_volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['price_volume_momentum'] = (df['close'] - df['open']) * df['volume']
+
+    # Evaluate high and low range
+    df['daily_price_range'] = df['high'] - df['low']
+    df['high_low_spread'] = df['daily_price_range'] / (df['open'] + df['close'])
+
+    # Construct composite factors
+    df['composite_factor_1'] = (df['SMA_ratio'] + df['EMA_ratio'] + df['intraday_volatility'] + df['volume_ratio'] + df['price_volume_momentum'])
+    df['composite_factor_2'] = (df['daily_return'] + df['advanced_daily_volatility']) * df['daily_volume_change']
+    df['composite_factor_3'] = df['trend_indicator'] * ((df['close'] * df['volume'] - df['close'].shift(1) * df['volume'].shift(1)) / (df['close'].shift(1) * df['volume'].shift(1)))
+    df['composite_factor_4'] = (df['daily_return'] / df['intraday_volatility']) * df['daily_volume_change']
+    df['composite_factor_5'] = (df['daily_price_range'] / (df['high'] + df['low'])) * (df['volume'] - df['volume'].shift(1))
+
+    # Combine multiple indicators for enhanced signals
+    df['integrated_momentum'] = (df['composite_factor_2'] + df['composite_factor_4']) / 2
+    df['combined_trend_and_range'] = (df['composite_factor_3'] + df['composite_factor_5']) / 2
+
+    # Return the factor value
+    return df[['integrated_momentum', 'combined_trend_and_range']]
+```

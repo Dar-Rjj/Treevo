@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-based alpha factor using closing prices
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Momentum_Signal'] = 0
+    df.loc[df['close'] > df['SMA_50'], 'Momentum_Signal'] += 1
+    df.loc[df['close'] < df['SMA_50'], 'Momentum_Signal'] -= 1
+    df.loc[df['close'] > df['EMA_20'], 'Momentum_Signal'] += 1
+    df.loc[df['close'] < df['EMA_20'], 'Momentum_Signal'] -= 1
+
+    # Volatility-based alpha factor using high and low prices
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Rolling_Volatility_30'] = df['Daily_Range'].rolling(window=30).sum()
+    df['ATR_14'] = df['Daily_Range'].rolling(window=14).mean()
+
+    # Volume-based alpha factor
+    df['Price_Change'] = df['close'].diff()
+    df['OBV'] = (df['volume'] * (df['Price_Change'] > 0) - df['volume'] * (df['Price_Change'] < 0)).cumsum()
+
+    # Hybrid alpha factor using price and volume
+    positive_money_flow = df['amount'] * (df['Price_Change'] > 0)
+    negative_money_flow = df['amount'] * (df['Price_Change'] < 0)
+    total_positive_money_flow = positive_money_flow.rolling(window=14).sum()
+    total_negative_money_flow = negative_money_flow.rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + (total_positive_money_flow / total_negative_money_flow)))
+
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = df['Momentum_Signal'] + df['Rolling_Volatility_30'] + df['OBV'] + df['MFI']
+
+    return df['Alpha_Factor']
+```

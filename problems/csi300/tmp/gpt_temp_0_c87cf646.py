@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    intraday_movement = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    weighted_high_low = (0.6 * high_price_indicator + 0.4 * low_price_indicator)
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    vol_ema_10 = df['volume'].ewm(span=10, adjust=False).mean()
+    normalized_vol = df['volume'] / vol_ema_10
+    volume_impact_intraday = weighted_high_low * normalized_vol
+    
+    # Calculate Weighted Intraday Momentum
+    weighted_intraday_momentum = (intraday_movement * df['volume']).ewm(span=12, adjust=False).mean() * df['volume'].rolling(window=7).mean()
+    
+    # Calculate Adjusted High-Low Breakout Potential
+    breakout_potential = (df['high'] - df['low']) * df['volume']
+    adjusted_breakout = breakout_potential.ewm(span=25, adjust=False).mean() * df['volume'].rolling(window=15).mean()
+    
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    volume_ratio = df['volume'] / df['volume'].shift(20)
+    volume_adjusted_long_term = long_term_momentum * volume_ratio + long_term_momentum
+    
+    # Calculate Daily Price Return
+    daily_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    significant_increase = (daily_return > 0).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    avg_weekly_volume = df['volume'].rolling(window=7).mean()
+    volume_spike = (df['volume'] > avg_weekly_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_price_momentum = (daily_return * significant_increase).cumsum()
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = weighted_price_momentum * volume_spike
+    
+    # Introduce Trend Strength Indicator
+    trend_slope = df['close'].rolling(window=50).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0], raw=False)
+    trend_strength = (trend_slope > 0).astype(int)
+    
+    # Consolidate All Factors
+    total_factor = intraday_movement + volume_impact_intraday + volume_adjusted_long_term + filtered_momentum
+    total_factor /= df['open']
+    
+    return total_factor

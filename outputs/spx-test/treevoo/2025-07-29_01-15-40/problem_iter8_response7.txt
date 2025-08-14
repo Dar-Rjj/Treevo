@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movements and Directional Changes
+    df['range'] = df['high'] - df['low']
+    df['spread'] = df['close'] - df['open']
+    
+    # Determine Net Intraday and Directional Movements
+    df['net_movement'] = df[['range', 'spread']].max(axis=1)
+    df['net_movement'] = df['net_movement'] * (df['volume'] / df['volume'].rolling(window=5).mean())
+    
+    # Adjust for Volume Activity
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    df['combined_momentum'] = df['net_movement'] * df['volume_change']
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread
+    N = 20
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = (df['intraday_high_low_spread'] - df['avg_intraday_high_low_spread']) * df['volume']
+    
+    # Calculate Simple Moving Average (SMA) of Close
+    df['sma_close'] = df['close'].rolling(window=N).mean()
+    
+    # Calculate Price Reversal Indicator
+    df['price_reversal_indicator'] = df['high'] - df['low'] - (df['close'] - df['open'])
+    
+    # Integrate Volume into Momentum
+    df['vwap'] = (df['close'] + df['open']) / 2 * df['volume']
+    df['vwap'] = df['vwap'].cumsum() / df['volume'].cumsum()
+    
+    df['integrated_momentum'] = (df['sma_close'] + df['vwap']) / 2
+    
+    # Composite Factor Construction
+    df['final_factor'] = df['high_low_momentum_score'] * df['integrated_momentum'] * df['price_reversal_indicator']
+    
+    return df['final_factor']
+```

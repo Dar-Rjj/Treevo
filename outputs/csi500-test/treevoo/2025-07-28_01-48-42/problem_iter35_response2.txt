@@ -1,0 +1,95 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Open-Close Price Spread
+    spread = df['open'] - df['close']
+    
+    # Determine Lookback Period
+    lookback = 10
+    
+    # Compute Momentum
+    momentum = df['close'] - df['close'].rolling(window=lookback).mean().shift(1)
+    
+    # Adjust Momentum by Absolute Daily Open-Close Spread
+    adjusted_momentum = momentum * (1 / spread.abs())
+    
+    # Weight Adjusted Momentum by Volume
+    weighted_momentum = adjusted_momentum * df['volume']
+    
+    # Calculate daily returns
+    returns = df['close'].pct_change()
+    
+    # Measure the change in volume
+    volume_change = df['volume'].diff()
+    
+    # Examine the ratio of volume change to previous volume
+    volume_ratio = volume_change / df['volume'].shift(1)
+    
+    # Calculate the daily range
+    daily_range = df['high'] - df['low']
+    
+    # Investigate the ratio of daily range to closing price
+    range_to_close_ratio = daily_range / df['close']
+    
+    # Calculate True Range for each day
+    true_range = pd.concat([
+        (df['high'] - df['low']).abs(),
+        (df['high'] - df['close'].shift(1)).abs(),
+        (df['low'] - df['close'].shift(1)).abs()
+    ], axis=1).max(axis=1)
+    
+    # Sum True Range and divide by lookback period to get Average True Range (ATR)
+    atr = true_range.rolling(window=lookback).sum() / lookback
+    
+    # Measure the gap between open and previous close
+    gap_open_close = df['open'] - df['close'].shift(1)
+    
+    # Investigate the ratio of gap to previous close
+    gap_ratio = gap_open_close / df['close'].shift(1)
+    
+    # Calculate the closing gap
+    gap_close_open = df['close'] - df['open']
+    
+    # Compute 5-day, 10-day, and 20-day simple moving averages of closing prices
+    sma_5 = df['close'].rolling(window=5).mean()
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Investigate the difference between short-term and long-term moving averages
+    sma_diff = sma_5 - sma_20
+    
+    # Compute the rate of change over various periods
+    roc_5 = (df['close'] / df['close'].shift(5)) - 1
+    roc_10 = (df['close'] / df['close'].shift(10)) - 1
+    
+    # Compare ROCs over different periods
+    roc_difference = roc_5 - roc_10
+    
+    # Sum daily returns over the lookback period to get cumulative return
+    cumulative_return = returns.rolling(window=lookback).sum()
+    
+    # Calculate the ratio of volume to daily range
+    volume_to_range_ratio = df['volume'] / daily_range
+    
+    # Investigate the ratio of volume to absolute return
+    volume_to_return_ratio = df['volume'] / returns.abs()
+    
+    # Combine all the factors into a single alpha factor
+    alpha_factor = (
+        weighted_momentum +
+        returns +
+        volume_ratio +
+        range_to_close_ratio +
+        atr +
+        gap_ratio +
+        gap_close_open +
+        sma_diff +
+        roc_difference +
+        cumulative_return +
+        volume_to_range_ratio +
+        volume_to_return_ratio
+    )
+    
+    return alpha_factor
+```

@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High and Low
+    lookback_period = 14
+    df['High_Volume'] = df['high'] * df['volume']
+    df['Low_Volume'] = df['low'] * df['volume']
+    
+    df['High_Volume_Sum'] = df['High_Volume'].rolling(window=lookback_period).sum()
+    df['Low_Volume_Sum'] = df['Low_Volume'].rolling(window=lookback_period).sum()
+    df['Total_Volume_Sum'] = df['volume'].rolling(window=lookback_period).sum()
+    
+    df['Volume_Weighted_High'] = df['High_Volume_Sum'] / df['Total_Volume_Sum']
+    df['Volume_Weighted_Low'] = df['Low_Volume_Sum'] / df['Total_Volume_Sum']
+    
+    df['Volume_Weighted_HL_Diff'] = (df['Volume_Weighted_High'] - df['Volume_Weighted_Low']) / df['Total_Volume_Sum']
+    
+    # Compute Dynamic Momentum
+    df['HL_Diff'] = df['high'] - df['low']
+    df['SMA_HL_Diff'] = df['HL_Diff'].rolling(window=lookback_period).mean()
+    df['Raw_Momentum'] = df['HL_Diff'] - df['SMA_HL_Diff']
+    alpha = 0.2
+    df['Dynamic_Momentum'] = df['Raw_Momentum'].ewm(alpha=alpha).mean()
+    
+    # Combine Volume-Weighted High-Low Range and Dynamic Momentum
+    scaling_factor = 0.5
+    df['Combined_Value'] = scaling_factor * (df['Volume_Weighted_HL_Diff'] + df['Dynamic_Momentum'])
+    
+    # Transform to Bounded Range Without Normalization
+    min_value = 0
+    max_value = 100
+    offset = -min_value
+    df['Bounded_Range'] = (df['Combined_Value'] + offset) * (max_value / (max_value + offset))
+    
+    # Compute EMA Components
+    ema_7 = df['Bounded_Range'].ewm(span=7).mean()
+    ema_21 = df['Bounded_Range'].ewm(span=21).mean()
+    
+    # Compute Ratio of EMAs
+    df['EMA_Ratio'] = ema_7 / ema_21
+    
+    # Compute Price Oscillator
+    ema_5_close = df['close'].ewm(span=5).mean()
+    ema_14_close = df['close'].ewm(span=14).mean()
+    df['Price_Oscillator'] = ema_5_close - ema_14_close
+    
+    # Compute Amount-Adjusted Return
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Amount_Adjusted_Return'] = df['Daily_Return'] * df['amount']
+    df['SMA_Amount_Adjusted_Return'] = df['Amount_Adjusted_Return'].rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = df['EMA_Ratio'] * df['SMA_Amount_Adjusted_Return'] + df['Price_Oscillator']
+    
+    return df['Alpha_Factor']
+```

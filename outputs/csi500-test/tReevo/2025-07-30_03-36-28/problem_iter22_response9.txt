@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_sma_lookback=20, long_sma_lookback=100, vol_lookback=20, price_change_lookback=10, 
+                  open_close_roll=10, daily_turnover_roll=20, bullish_weight=0.6, bearish_weight=0.4):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_short'] = df['close'].rolling(window=short_sma_lookback).mean()
+    df['SMA_long'] = df['close'].rolling(window=long_sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['vol_weighted_high_low'] = df['volume'] * df['high_low_diff']
+    df['vol_adjusted_volatility'] = df['vol_weighted_high_low'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['price_momentum'] = (df['close'] - df['SMA_short']) / df['close'].rolling(window=short_sma_lookback).mean()
+    
+    # Incorporate Enhanced Price Change Metrics
+    df['close_pct_change'] = df['close'].pct_change(periods=price_change_lookback)
+    df['high_low_range'] = df['high'] - df['low']
+    df['open_close_diff'] = df['open'] - df['close']
+    df['open_close_roll_avg'] = df['open_close_diff'].rolling(window=open_close_roll).mean()
+    
+    # Consider Refined Market Trend Alignment
+    df['trend_indicator'] = 0
+    df.loc[df['SMA_short'] > df['SMA_long'], 'trend_indicator'] = 1
+    df.loc[df['SMA_short'] < df['SMA_long'], 'trend_indicator'] = -1
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['daily_turnover'] = df['volume'] * df['close']
+    df['roll_avg_daily_turnover'] = df['daily_turnover'].rolling(window=daily_turnover_roll).mean()
+    df['liquidity_weight'] = df['roll_avg_daily_turnover'] / df['roll_avg_daily_turnover'].std()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (bullish_weight * df['trend_indicator'] * df['price_momentum'] + 
+                          bearish_weight * df['vol_adjusted_volatility'] + 
+                          0.5 * df['close_pct_change'] + 
+                          0.3 * df['open_close_roll_avg'] + 
+                          0.2 * df['liquidity_weight'])
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,43 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Ratio
+    high_to_low_ratio = (df['high'] - df['low']) / df['low']
+    
+    # Adjust for Volume Weight
+    volume_weighted_ratio = high_to_low_ratio * df['volume']
+    
+    # Calculate Short-term and Long-term Exponential Moving Averages
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Adaptive Momentum
+    momentum = long_term_ema - short_term_ema
+    adaptive_momentum = pd.cut(momentum, bins=[-np.inf, -0.01, 0.01, np.inf], labels=['Bullish', 'Neutral', 'Bearish'])
+    
+    # Calculate Historical Volatility (20-day standard deviation of returns)
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=20).std()
+    
+    # Adjust Momentum based on Volatility
+    def adjust_momentum(momentum, volatility, factor):
+        if momentum == 'Bullish':
+            if volatility > 0.01:
+                return factor * 1.2  # Amplify Bullish signal in high volatility
+            else:
+                return factor  # Keep original Bullish signal in low volatility
+        elif momentum == 'Bearish':
+            if volatility > 0.01:
+                return factor * 0.8  # Dampen Bearish signal in high volatility
+            else:
+                return factor  # Keep original Bearish signal in low volatility
+        else:  # Neutral
+            return factor
+    
+    # Combine Factors
+    factor = volume_weighted_ratio.apply(lambda x: adjust_momentum(adaptive_momentum[x.name], volatility[x.name], x))
+    
+    return factor

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate simple moving averages to identify trends
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_Diff'] = df['close'] - df['SMA_50']
+    
+    # Utilize high and low prices for volatility measures
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Avg_Daily_Range'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    # Examine the relationship between open and close for market sentiment
+    df['Open_to_Close_Change'] = df['close'] - df['open']
+    df['Sum_Open_to_Close_Change'] = df['Open_to_Close_Change'].rolling(window=10).sum()
+    
+    # Use volume to weigh the importance of price movements
+    total_volume = df['volume'].rolling(window=30).sum()
+    df['Volume_Weighted_Close'] = (df['close'] * df['volume']) / total_volume
+    df['VWAP_Diff'] = df['Volume_Weighted_Close'] - df['Volume_Weighted_Close'].rolling(window=30).mean()
+    
+    # Identify potential support and resistance levels
+    df['Lowest_Low_20'] = df['low'].rolling(window=20).min()
+    df['Highest_High_20'] = df['high'].rolling(window=20).max()
+    df['Support_Resistance_Dist'] = df[['close', 'Lowest_Low_20', 'Highest_High_20']].apply(
+        lambda x: min(abs(x[0] - x[1]), abs(x[0] - x[2])), axis=1)
+    
+    # Incorporate the change in trading volume as a signal
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Vol_Ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Consider the amount traded as an indicator of investor interest
+    df['Amount'] = df['close'] * df['volume']
+    df['MA_Amount_30'] = df['Amount'].rolling(window=30).mean()
+    
+    # Evaluate the impact of large trades on price
+    df['Large_Trade_Indicator'] = (df['volume'] > 2 * df['volume'].rolling(window=10).mean()).astype(int)
+    df['Cum_Sum_Large_Trades'] = df['Large_Trade_Indicator'].rolling(window=10).sum()
+    
+    # Compare short-term and long-term price movements
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_10_200_Diff'] = df['SMA_10'] - df['SMA_200']
+    
+    # Assess the divergence between opening and closing prices
+    df['Open_Close_Divergence'] = df['open'] - df['close']
+    df['Sum_Divergence_20'] = df['Open_Close_Divergence'].rolling(window=20).sum()
+    
+    # Evaluate the consistency of price movement
+    df['Price_Direction'] = df['close'] - df['close'].shift(1)
+    df['Consecutive_Direction'] = (df['Price_Direction'] > 0).astype(int) - (df['Price_Direction'] < 0).astype(int)
+    df['Consecutive_Days'] = df['Consecutive_Direction'].groupby((df['Consecutive_Direction'] != df['Consecutive_Direction'].shift()).cumsum()).cumsum()
+    
+    # Identify hammer and shooting star candlestick patterns
+    df['Hammer_Pattern'] = (df['close'] > df['open']) & (df['low'] < 0.9 * df['open']) & (df['high'] - df['low'] > 2 * (df['close'] - df['open'])).astype(int)
+    df['Shooting_Star_Pattern'] = (df['open'] > df['close']) & (df['high'] > 1.1 * df['close']) & (df['high'] - df['low'] > 2 * (df['open'] - df['close'])).astype(int)
+    
+    # Detect gap up and gap down patterns
+    df['Gap_Up'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['Gap_Down']

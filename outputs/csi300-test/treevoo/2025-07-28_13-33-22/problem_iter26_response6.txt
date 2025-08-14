@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=5):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = (df['volume'] / df['volume'].shift(1) > 1.5).astype(int)
+    
+    # Identify Price Spikes
+    df['price_spike'] = (abs(df['close'] / df['close'].shift(1) - 1) > 0.05).astype(int)
+    
+    # Introduce Volatility Adjustment
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(lambda x: np.log(x))
+    df['std_dev_log_returns'] = df['log_returns'].rolling(window=n).std()
+    
+    # Scale Intraday Momentum
+    df['combined_spikes'] = df['volume_spike'] + df['price_spike']
+    df['scaled_intraday_momentum'] = df['intraday_range'] / (df['combined_spikes'] + 1)
+    df['scaled_intraday_momentum'] = df['scaled_intraday_momentum'].clip(lower=0, upper=3 * df['scaled_intraday_momentum'].median())
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['combined_intraday_feature'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=m).mean()
+    
+    # Adjust for Volume Spikes and Weight by Volume
+    df['volume_spike_factor'] = (df['volume'] / df['volume'].shift(1)).clip(lower=1, upper=3)
+    df['relative_volume'] = df['volume'] / df['volume'].rolling(window=n).mean()
+    df['adjusted_combined_feature'] = (df['combined_intraday_feature'] / df['volume_spike_factor']).clip(lower=-3, upper=3) * df['relative_volume']
+    
+    # Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open'].shift(-1)
+    
+    # Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Enhanced Intraday Factor
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=n).mean()
+    df['enhanced_intraday_factor'] = df['avg_intraday_range'] * (df['close_to_open_return'] + df['price_change']) + df['combined_intraday_feature']
+    
+    # Adjust Intraday Momentum
+    df['adjusted_intraday_momentum'] = df['scaled_intraday_momentum'] / df['std_dev_log_returns'].clip(lower=0.01)
+    
+    # Final Factor
+    df['final_factor'] = df['enhanced_intraday_factor'] * df['avg_abs_price_change'] * df['adjusted_intraday_momentum']
+    
+    # Incorporate Accumulated Volume
+    df['accumulated_volume'] = df['volume'].rolling(window=n).sum()
+    df['normalized_final_factor'] = df['final_factor'] / df['accumulated_volume']
+    
+    # Apply Moving Average Smoothing
+    df['alpha'] = df['normalized_final_factor'].rolling(window=n).mean()
+    
+    return df['alpha']
+```

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['PriceRange'] = df['high'] - df['low']
+    df['IntradayMovement'] = (df['PriceRange'] / (df['open'] - df['close'].shift(1))).fillna(0)
+    
+    # Weight by Volume and Close Difference
+    df['CloseDiff'] = df['close'] - df['close'].shift(1)
+    df['WeightedIntradayMovement'] = df['IntradayMovement'] * df['volume'] * df['CloseDiff']
+    
+    # Integrate Intraday Volatility
+    df['DailyRange'] = df['high'] - df['low']
+    df['VolatilityMA20'] = df['DailyRange'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['ReversalSignal'] = (df['close'] - df['open']) / df['open'].replace(0, 1e-8)
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    weight = (df['volume'] + df['amount']) / 2
+    df['WeightedIntradayReturn'] = weight * df['IntradayMovement']
+    df['WeightedReversalSignal'] = weight * df['ReversalSignal']
+    df['CombinedWeightedSignal'] = df['WeightedIntradayReturn'] + df['WeightedReversalSignal']
+    
+    # Combine Enhanced Factors
+    df['CombinedFactors'] = df['WeightedIntradayMovement'] * df['volume'] * df['VolatilityMA20']
+    
+    # Adjust by Average Volume
+    df['AvgVolume35'] = df['volume'].rolling(window=35).mean()
+    df['AdjustedCombinedFactor'] = df['CombinedFactors'] / df['AvgVolume35'].replace(0, 1e-8)
+    
+    # Incorporate Close Price Momentum
+    df['MomentumMA30'] = df['close'].rolling(window=30).mean()
+    df['MomentumSignal'] = df['MomentumMA30'] * df['VolatilityMA20']
+    
+    # Adjusted Price Momentum
+    df['EMA10D'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['AdjustedMomentum'] = df['EMA10D'] - df['MomentumMA30']
+    
+    # Final Factor Calculation
+    df['FinalAlphaFactor'] = (0.5 * df['AdjustedCombinedFactor']) + (0.275 * df['VolatilityMA20']) + (0.225 * df['AdjustedMomentum'])
+    final_factor = (df['FinalAlphaFactor'] * 0.75) + (df['CombinedWeightedSignal'] * 0.25)
+    
+    return final_factor
+```

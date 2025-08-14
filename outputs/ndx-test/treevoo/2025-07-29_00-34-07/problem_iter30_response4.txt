@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Daily return based on close prices
+    daily_return = df['close'].pct_change()
+    
+    # Measure where the stock closed relative to its daily range
+    high_low_ratio = (df['high'] - df['close']) / (df['high'] - df['low'])
+    
+    # Product of daily return and the percentage change in volume
+    volume_change = df['volume'].pct_change()
+    price_volume_product = daily_return * volume_change
+    
+    # Identify days with significant volume spikes
+    avg_volume = df['volume'].rolling(window=10).mean()
+    volume_spike = (df['volume'] - avg_volume) > 0.5 * avg_volume
+    close_open_diff = (df['close'] - df['open']).where(volume_spike, 0)
+    
+    # Calculate the overnight sentiment
+    overnight_sentiment = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Compute the ratio of transaction amount adjusted by the sign of today's close over yesterday's close
+    amount_ratio = (df['amount'] / df['amount'].shift(1)) * (df['close'] / df['close'].shift(1)).apply(lambda x: 1 if x > 1 else -1)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        daily_return + 
+        (1 - high_low_ratio) + 
+        price_volume_product + 
+        close_open_diff + 
+        overnight_sentiment + 
+        amount_ratio
+    )
+    
+    return alpha_factor
+```

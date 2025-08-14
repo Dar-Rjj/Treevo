@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20):
+    # Calculate Daily Price Movement: High - Low
+    daily_price_movement = df['high'] - df['low']
+    
+    # Calculate Price Gap: Open - Close
+    price_gap = df['open'] - df['close']
+    
+    # Calculate Raw Momentum: Sum of (High - Low) over n days
+    raw_momentum = daily_price_movement.rolling(window=n).sum()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = (df['close'] * df['volume']).rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Incorporate Market Depth: Amount / Volume
+    market_depth = df['amount'] / df['volume']
+    
+    # Calculate Intraday Volatility: High - Low
+    intraday_volatility = daily_price_movement
+    
+    # Adjust Raw Momentum
+    adjusted_momentum = (raw_momentum * (vwap + market_depth) / intraday_volatility).fillna(0)
+    
+    # Calculate Final Volume-Adjusted Momentum
+    average_volume = df['volume'].rolling(window=n).mean()
+    total_average_volume = df['volume'].mean()
+    final_volume_adjusted_momentum = adjusted_momentum * (average_volume / total_average_volume)
+    
+    # Integrate Multi-Day Momentum
+    five_day_return = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    ten_day_return = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    combined_multi_day_momentum = (five_day_return + ten_day_return) / 2
+    final_volume_adjusted_momentum += combined_multi_day_momentum.fillna(0)
+    
+    # Incorporate Liquidity
+    final_volume_adjusted_momentum *= (average_volume / total_average_volume)
+    
+    # Enhance with Dynamic Price and Volume Ratios
+    price_to_volume_ratio = df['close'] / df['volume']
+    ma_price_to_volume_ratio = price_to_volume_ratio.rolling(window=n).mean()
+    average_price_to_volume_ratio = price_to_volume_ratio.mean()
+    final_volume_adjusted_momentum *= (ma_price_to_volume_ratio / average_price_to_volume_ratio).fillna(1)
+    
+    # Consider Volatility Clustering
+    ema_intraday_volatility = intraday_volatility.ewm(span=n, adjust=False).mean()
+    average_intraday_volatility = intraday_volatility.mean()
+    final_volume_adjusted_momentum *= (ema_intraday_volatility / average_intraday_volatility).fillna(1)
+    
+    # Incorporate Short-Term Reversal
+    two_day_return = (df['close'] - df['close'].shift(2)) / df['close'].shift(2)
+    final_volume_adjusted_momentum *= (1 + two_day_return).fillna(1)
+    
+    return final_volume_adjusted_momentum
+```

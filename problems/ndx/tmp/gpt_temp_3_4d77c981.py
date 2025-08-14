@@ -1,0 +1,47 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['High'] * df['Volume'] + df['Low'] * df['Volume']) / (2 * df['Volume'])
+    
+    # Calculate Volume-Adjusted Momentum
+    df['Typical_Price'] = (df['High'] + df['Low'] + df['Close']) / 3
+    df['VAP'] = df['Typical_Price'] * df['Volume']
+    df['VAP_20_EMA'] = df['VAP'].ewm(span=20, adjust=False).mean()
+    df['Momentum'] = df['VAP'] - df['VAP_20_EMA']
+    
+    # Incorporate Recent Volatility
+    df['Daily_Returns'] = (df['Close'] - df['Close'].shift(1)) / df['Close'].shift(1)
+    df['15_Day_Std'] = df['Daily_Returns'].rolling(window=15).std()
+    df['Inverse_Volatility'] = 1 / df['15_Day_Std']
+    df['Adjusted_Momentum'] = df['Momentum'] * df['Inverse_Volatility']
+    
+    # Assess Intraday Volatility
+    df['Intraday_Range'] = df['High'] - df['Low']
+    df['Intraday_Volatility'] = df['Intraday_Range'] / df['Volume'].rolling(window=14).mean()
+    
+    # Integrate High-to-Low Range Momentum
+    df['14_Day_Avg_High_Low'] = df['Intraday_Range'].rolling(window=14).mean()
+    df['VWAP_Adjusted_Intraday'] = (df['VWAP'] - df['VWAP'].shift(1)) * df['Intraday_Volatility'] / df['14_Day_Avg_High_Low']
+    
+    # Volume-Adjusted Smoothed Momentum
+    df['Log_Returns'] = np.log(df['Close'] / df['Close'].shift(1))
+    df['20_EMA_Log_Returns'] = df['Log_Returns'].ewm(span=20, adjust=False).mean()
+    df['Volume_Adjusted_Smoothed_Momentum'] = df['Volume'] * df['20_EMA_Log_Returns']
+    
+    # Calculate Open-Close Range Volatility
+    df['Open_Close_Range'] = np.abs(df['Open'] - df['Close'])
+    df['20_Day_Open_Close_Range_Std'] = df['Open_Close_Range'].rolling(window=20).std()
+    
+    # Combine Adjusted Momentum and Enhanced Composite Volatility
+    df['25_Day_High_Low_Std'] = df['Intraday_Range'].rolling(window=25).std()
+    df['Weighted_Average_Volatility'] = 0.6 * df['25_Day_High_Low_Std'] + 0.4 * df['20_Day_Open_Close_Range_Std']
+    df['Alpha_Factor'] = df['Adjusted_Momentum'] - df['Weighted_Average_Volatility']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Adjusted_Momentum'] - df['20_Day_Open_Close_Range_Std']
+
+    return df['Final_Alpha_Factor']

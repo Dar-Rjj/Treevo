@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    df['50_day_SMA'] = df['close'].rolling(window=50).mean()
+    df['100_day_SMA'] = df['close'].rolling(window=100).mean()
+    df['200_day_SMA'] = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer SMA from Shorter SMA
+    df['100_200_SMA_diff'] = df['100_day_SMA'] - df['200_day_SMA']
+    df['50_100_SMA_diff'] = df['50_day_SMA'] - df['100_day_SMA']
+
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate Reversal Signal
+    df['reversal_signal'] = np.where(df['intraday_return'] > 0, -1, 1)
+
+    # Combine Momentum and Reversal Signals
+    df['combined_100_200'] = df['100_200_SMA_diff'] * df['reversal_signal']
+    df['combined_50_100'] = df['50_100_SMA_diff'] * df['reversal_signal']
+
+    # Compute Average True Range (ATR)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).sum() / 14
+
+    # Integrate ATR with Combined Signal and Smooth with EMA
+    df['atr_combined_100_200'] = df['atr'] * df['combined_100_200']
+    df['ema_atr_combined_100_200'] = df['atr_combined_100_200'].ewm(span=10, adjust=False).mean()
+
+    # High-Low Range Momentum with Volume Adjustment
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['adjusted_high_low_range_momentum'] = df['high_low_range_momentum'] / df['avg_volume']
+
+    # Price Change Momentum
+    df['price_change_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combined Price and Volume Momentum
+    df['combined_price_volume_momentum'] = df['price_change_momentum'] * df['avg_volume']
+
+    # Daily Volatility
+    df['daily_volatility'] = df['high_low_range'].rolling(window=10).mean()
+
+    # Adjusted Daily Volatility
+    df['adjusted_daily_volatility'] = df['daily_volatility'] / df['avg_volume']
+
+    # Final Alpha Factor Combination
+    df['alpha_factor'] = (
+        df['50_100_SMA_diff'] + 
+        df['combined_100_200'] +
+        df['ema_atr_combined_100_200'] +
+        df['adjusted_high_low_range_momentum'] +
+        df['combined_price_volume_momentum'] +
+        df['adjusted_daily_volatility']
+    )
+
+    return df['alpha_factor']
+```

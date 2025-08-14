@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer SMA from Shorter SMA
+    df['SMA_diff_100_200'] = df['SMA_100'] - df['SMA_200']
+    df['SMA_diff_50_100'] = df['SMA_50'] - df['SMA_100']
+
+    # Calculate Intraday Momentum
+    df['intraday_return_high'] = (df['high'] - df['open']) / df['open']
+    df['intraday_return_low'] = (df['low'] - df['open']) / df['open']
+    df['intraday_return_close'] = (df['close'] - df['open']) / df['open']
+    df['avg_intraday_momentum'] = (df['intraday_return_high'] + df['intraday_return_low'] + df['intraday_return_close']) / 3
+
+    # Calculate Daily Volatility
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['daily_volatility'] = df['log_returns'].rolling(window=20).std()
+
+    # Combine Intraday Momentum and Daily Volatility
+    df['combined_factor'] = df['avg_intraday_momentum'] * df['daily_volatility']
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_combined_factor'] = df['combined_factor'] / (df['volume'] / df['volume_ma_20'])
+
+    # Calculate Price Momentum Over 5 Days
+    df['price_momentum_5'] = df['close'] - df['close'].shift(5)
+
+    # Calculate Volume Surge Over 5 Days
+    df['volume_surge_5'] = df['volume'] - df['volume'].shift(5)
+
+    # Combine Momentum and Volume Indicators
+    df['weighted_price_momentum'] = 0.5 * df['price_momentum_5']
+    df['weighted_volume_surge'] = 0.5 * df['volume_surge_5']
+
+    # Sum All Weighted Indicators
+    df['alpha_factor'] = (df['weighted_price_momentum'] + 
+                          df['weighted_volume_surge'] + 
+                          df['SMA_diff_100_200'] + 
+                          df['SMA_diff_50_100'] + 
+                          df['adjusted_combined_factor'])
+
+    return df['alpha_factor']
+```

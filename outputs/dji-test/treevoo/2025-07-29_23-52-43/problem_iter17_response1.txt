@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily price changes
+    df['price_change'] = df['close'].diff()
+    df['abs_price_change'] = df['price_change'].abs()
+    
+    # Determine the direction of price change
+    df['price_direction'] = df['price_change'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Track consecutive days of positive/negative price movement
+    df['consecutive_positive_days'] = (df['price_direction'] == 1).astype(int).groupby((df['price_direction'] != df['price_direction'].shift()).cumsum()).cumsum()
+    df['consecutive_negative_days'] = (df['price_direction'] == -1).astype(int).groupby((df['price_direction'] != df['price_direction'].shift()).cumsum()).cumsum()
+    
+    # Measure distance between high and low
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Evaluate gap at open compared to previous close
+    df['gap_open'] = df['open'] - df['close'].shift()
+    df['significant_gap_up'] = (df['gap_open'] > 0.05 * df['close'].shift()).astype(int)
+    df['significant_gap_down'] = (df['gap_open'] < -0.05 * df['close'].shift()).astype(int)
+    
+    # Compute daily volume changes
+    df['volume_change'] = df['volume'].diff()
+    df['volume_direction'] = df['volume_change'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Track consecutive days of volume increase/decrease
+    df['consecutive_volume_increase'] = (df['volume_direction'] == 1).astype(int).groupby((df['volume_direction'] != df['volume_direction'].shift()).cumsum()).cumsum()
+    df['consecutive_volume_decrease'] = (df['volume_direction'] == -1).astype(int).groupby((df['volume_direction'] != df['volume_direction'].shift()).cumsum()).cumsum()
+    
+    # Identify days with abnormally high volumes
+    df['avg_volume_30'] = df['volume'].rolling(window=30).mean()
+    df['abnormal_volume'] = (df['volume'] > 2 * df['avg_volume_30']).astype(int)
+    
+    # Calculate Volume-Weighted Average Price (VWAP) over a lookback period
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Observe VWAP crossovers with current close price
+    df['vwap_crossover'] = (df['vwap'] - df['close']).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Detect bullish/bearish divergences
+    df['new_low'] = (df['low'] < df['low'].shift(3)).astype(int)
+    df['new_high'] = (df['high'] > df['high'].shift(3)).astype(int)
+    df['new_low_volume'] = (df['volume'] < df['volume'].shift(3)).astype(int)
+    df['new_high_volume'] = (df['volume'] > df['volume'].shift(3)).astype(int)
+    df['bullish_divergence'] = (df['new_low'] == 1) & (df['new_low_volume'] == 0)
+    df['bearish_divergence'] = (df['new_high'] == 1) & (df['new_high_volume'] == 0)
+    
+    # Evaluate momentum shifts
+    df['momentum_shift'] = (df['volume_direction'] == 1) & (df['abs_price_change'] < 0.01 * df['close'])
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['consecutive_positive_days'] - df['consecutive_negative_days'] +
+        df['high_low_range'] + 
+        df['significant_gap_up'] - df['significant_gap_down'] +
+        df['consecutive_volume_increase'] - df['consecutive_volume_decrease'] +
+        df['abnormal_volume'] * df['vwap_crossover'] +
+        df['bullish_divergence'] - df['bearish_divergence'] +
+        df['momentum_shift']
+    )
+    
+    return df['alpha_factor']
+```

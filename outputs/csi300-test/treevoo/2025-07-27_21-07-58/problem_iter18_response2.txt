@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Momentum
+    df['Price_Momentum'] = df['close'].pct_change()
+    
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute Average Price Momentum over 5 Days
+    df['Avg_Price_Momentum_5D'] = df['Daily_Price_Change'].rolling(window=5).mean()
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'].diff()
+    
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    
+    # Compute Average Volume Change over 10 Days
+    df['Avg_Volume_Change_10D'] = df['Daily_Volume_Change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['Volume_Surge_Component'] = (df['volume'] / df['volume'].shift(1) - 1)
+    df['Combined_Price_Volume'] = df['Avg_Price_Momentum_5D'] * df['Volume_Surge_Component']
+    
+    # Combine High-Low Range and Volume
+    df['HL_Volume_Combination'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    n = 20
+    df['Avg_Volume_n'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume_n']
+    
+    # Adjust by Average Amount
+    m = 20
+    df['Avg_Amount_m'] = df['amount'].rolling(window=m).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Avg_Amount_m']
+    
+    # Introduce Weighting Factors
+    w1, w2, w3, w4, w5, w6 = 0.2, 0.2, 0.2, 0.1, 0.1, 0.2
+    
+    # Calculate 1-Period Open-Close Spread
+    df['Open_Close_Spread'] = df['open'] - df['close']
+    
+    # Combine Weighted Components
+    df['Weighted_HL_Volume'] = w1 * df['HL_Volume_Combination']
+    df['Weighted_Price_Momentum'] = w2 * df['Avg_Price_Momentum_5D']
+    df['Weighted_Volume_Surge'] = w3 * df['Volume_Surge_Component']
+    df['Weighted_Volume_Ratio'] = w4 * df['Volume_Ratio']
+    df['Weighted_Amount_Ratio'] = w5 * df['Amount_Ratio']
+    df['Weighted_Open_Close_Spread'] = w6 * df['Open_Close_Spread']
+    
+    # Final Combined Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Weighted_HL_Volume'] +
+        df['Weighted_Price_Momentum'] +
+        df['Weighted_Volume_Surge'] +
+        df['Weighted_Volume_Ratio'] +
+        df['Weighted_Amount_Ratio'] +
+        df['Weighted_Open_Close_Spread']
+    )
+    
+    # Add Volume Adjusted Momentum to Combined Momentum and Volume Adjustment
+    df['Volume_Adjusted_Momentum'] = df['Price_Momentum'] * df['Volume_Ratio']
+    df['Final_Alpha_Factor'] += df['Volume_Adjusted_Momentum'] * df['Amount_Ratio']
+    
+    return df['Final_Alpha_Factor']
+```

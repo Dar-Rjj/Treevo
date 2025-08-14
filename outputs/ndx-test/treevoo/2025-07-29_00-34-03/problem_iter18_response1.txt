@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    weighted_close = df['close'] * df['volume']
+    volume_weighted_price = weighted_close / df['volume'].sum()
+
+    # Calculate Simple Moving Average (SMA) of Volume-Weighted Prices
+    sma_volume_weighted = volume_weighted_price.rolling(window=20).mean()
+
+    # Intraday Volatility Adjustment Factor
+    intraday_volatility = df['high'] - df['low']
+    adjusted_sma = sma_volume_weighted - intraday_volatility
+
+    # Volume Surge Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    volume_surge_threshold = df['volume'].std() * 2
+    volume_surge = (df['volume_change'] > 0) & (df['volume_change'] > volume_surge_threshold)
+
+    # Adjust Final Alpha Factor with Volume Surge
+    adjusted_sma_with_surge = adjusted_sma + (volume_surge * 1)
+
+    # Short-Term Momentum
+    short_term_momentum = df['close'] - df['close'].rolling(window=4).mean()
+
+    # True Average Price
+    true_average_price = (df['high'] + df['low'] + df['close']) / 3
+
+    # Long-Term Price Momentum
+    long_term_momentum = df['close'].rolling(window=20).mean()
+
+    # Determine the Difference between Short and Long-Term Momentum
+    momentum_difference = short_term_momentum - long_term_momentum
+
+    # Calculate Price Range Volatility
+    price_range_volatility = df[['high', 'low']].apply(lambda x: x.rolling(window=20).std(), axis=0).mean(axis=1)
+
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+
+    # Calculate Rolling Average Daily Return
+    rolling_avg_daily_return = daily_return.rolling(window=21).mean()
+
+    # Calculate Rolling Volatility of Close Prices
+    rolling_volatility = df['close'].pct_change().rolling(window=20).std()
+
+    # Adjust Momentum by Volatility
+    adjusted_momentum = rolling_avg_daily_return / rolling_volatility
+
+    # Weighting by Volume and Price Movement
+    volume_price_movement_score = df['volume'] * (df['high'] - df['open'])
+    weighted_score = volume_price_movement_score * (df['high'] - df['low'])
+
+    # Incorporate Volume Trend
+    short_term_avg_volume = df['volume'].rolling(window=5).mean()
+    long_term_avg_volume = df['volume'].rolling(window=20).mean()
+    volume_trend = short_term_avg_volume - long_term_avg_volume
+
+    # Combine Momentum and Volume Trends
+    combined_trends = momentum_difference + volume_trend
+
+    # Adjusted True Average Price
+    adjusted_true_avg_price = true_average_price / price_range_volatility
+
+    # Final Momentum Indicator
+    final_momentum_indicator = adjusted_true_avg_price * weighted_score
+
+    # Integrate with Combined Momentum and Volume Trends
+    alpha_factor = combined_trends * final_momentum_indicator
+
+    return alpha_factor
+```

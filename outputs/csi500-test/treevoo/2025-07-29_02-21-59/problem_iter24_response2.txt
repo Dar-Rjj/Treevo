@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Combine Volume and Amount
+    df['Volume_Amount_Weight'] = (df['volume'] + df['amount']) / 2
+    
+    # Weight by Volume and Amount
+    df['Volume_Amount_Adjusted_Close_to_Open_Return'] = df['Close_to_Open_Return'] * df['Volume_Amount_Weight']
+    
+    # Integrate Intraday High-Low Movement
+    df['Intraday_High_Low_Movement'] = df['high'] - df['low']
+    df['Intraday_High_Low_Ratio'] = df['Intraday_High_Low_Movement'] / df['close']
+    df['Adjusted_Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Adjust by Volume and Amount Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Amount_Change'] = df['amount'] - df['amount'].shift(1)
+    
+    # Include Volatility Component
+    df['Daily_Volatility'] = df['close'].rolling(window=20).std()
+    df['Volatility_Adjusted_Close_to_Open_Return'] = df['Volume_Amount_Adjusted_Close_to_Open_Return'] * df['Daily_Volatility']
+    
+    # Calculate Sum of Recent Returns
+    df['Close_to_Close_Return'] = df['close'].pct_change()
+    df['Sum_of_Recent_Returns'] = df['Close_to_Close_Return'].rolling(window=5).sum()
+    
+    # Calculate Daily Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df[['high', 'low', 'close']].mean(axis=1) * df['volume'])
+    
+    # Calculate 20-Day Moving Average VWAP
+    df['20_Day_MA_VWAP'] = df['VWAP'].rolling(window=20).mean()
+    
+    # Combined Weighted Momentum
+    df['Combined_Weighted_Momentum'] = df['Adjusted_Intraday_Return'] + df['Volume_Amount_Adjusted_Close_to_Open_Return'] + df['Sum_of_Recent_Returns']
+    df['Combined_Weighted_Momentum'] *= df['Volume_Change'] * df['Amount_Change'] * df['Intraday_High_Low_Ratio']
+    
+    # Adjust for Volume Volatility
+    df['Volume_Moving_Average'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Volatility'] = df['volume'].rolling(window=20).std()
+    
+    # Enhanced Combined Weighted Momentum
+    df['Enhanced_Combined_Weighted_Momentum'] = df['Combined_Weighted_Momentum'] * df['Volume_Change'] * df['Amount_Change'] * df['Intraday_High_Low_Ratio']
+    
+    # PMI Score
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Sum_Daily_Price_Changes'] = df['Daily_Price_Change'].rolling(window=20).sum()
+    df['PMI_Score'] = df['Sum_Daily_Price_Changes'] * df['VWAP']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['Enhanced_Combined_Weighted_Momentum'] * df['20_Day_MA_VWAP'] +
+                                 df['Volume_Amount_Adjusted_Close_to_Open_Return'] +
+                                 df['Adjusted_Intraday_Return'] +
+                                 df['Volatility_Adjusted_Close_to_Open_Return'] +
+                                 df['PMI_Score'])
+    
+    return df['Final_Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics(df)
+```

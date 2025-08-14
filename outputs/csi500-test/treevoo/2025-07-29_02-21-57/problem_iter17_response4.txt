@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between close prices of two consecutive days (Momentum)
+    df['Momentum'] = df['close'].diff()
+    
+    # Determine the direction of the last X days' close prices (Trend Direction)
+    window = 10
+    df['Trend_Direction'] = df['close'].rolling(window=window).apply(lambda x: 1 if x[-1] > x[0] else -1, raw=True)
+    
+    # Identify the number of days in the upward trend (Uptrend Days Count)
+    df['Uptrend_Days_Count'] = df['Trend_Direction'].rolling(window=window).apply(lambda x: (x == 1).sum(), raw=True)
+    
+    # Identify the number of days in the downward trend (Downtrend Days Count)
+    df['Downtrend_Days_Count'] = df['Trend_Direction'].rolling(window=window).apply(lambda x: (x == -1).sum(), raw=True)
+    
+    # Measure the standard deviation of daily close-to-close returns over a period (Volatility)
+    df['Volatility'] = df['close'].pct_change().rolling(window=window).std() * (252 ** 0.5)
+    
+    # Summarize the total volume traded in the past X days (Volume Accumulation)
+    df['Volume_Accumulation'] = df['volume'].rolling(window=window).sum()
+    
+    # Calculate the average volume traded over the past X days (Average Volume)
+    df['Average_Volume'] = df['volume'].rolling(window=window).mean()
+    
+    # Determine if today's volume is above or below the average volume (Volume Relative Strength)
+    df['Volume_Relative_Strength'] = df['volume'] / df['Average_Volume']
+    
+    # Compute the number of up and down days, where an up day is defined as close > open (Up/Down Day Count)
+    df['Up_Day'] = (df['close'] > df['open']).astype(int)
+    df['Down_Day'] = (df['close'] < df['open']).astype(int)
+    df['Up_Day_Count'] = df['Up_Day'].rolling(window=window).sum()
+    df['Down_Day_Count'] = df['Down_Day'].rolling(window=window).sum()
+    
+    # Calculate the cumulative sum of the differences between close and open prices (Cumulative Open-Close Difference)
+    df['Open_Close_Diff'] = df['close'] - df['open']
+    df['Cumulative_Open_Close_Diff'] = df['Open_Close_Diff'].rolling(window=window).sum()
+    
+    # Find the average of daily high-low spreads over a lookback period (Average High-Low Spread)
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Average_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=window).mean()
+    
+    # Identify if today's high-low spread is above or below the recent average (Spread Relative Strength)
+    df['Spread_Relative_Strength'] = df['High_Low_Spread'] / df['Average_High_Low_Spread']
+    
+    # Check for specific simple candlestick formations (e.g., doji, marubozu) and their occurrence frequency (Candlestick Pattern Frequency)
+    def is_doji(open, close, high, low):
+        return abs(open - close) / (high - low) < 0.05
+    
+    def is_marubozu(open, close, high, low):
+        return (open == low and close == high) or (open == high and close == low)
+    
+    df['Doji'] = df.apply(lambda row: is_doji(row['open'], row['close'], row['high'], row['low']), axis=1).astype(int)
+    df['Marubozu'] = df.apply(lambda row: is_marubozu(row['open'], row['close'], row['high'], row['low']), axis=1).astype(int)
+    
+    # Determine the strength of these patterns by comparing the size of the real body to the high-low range (Pattern Strength)
+    df['Real_Body_Size'] = abs(df['close'] - df['open'])
+    df['Pattern_Strength'] = df['Real_Body_Size'] / df['High_Low_Spread']
+    
+    # Create a composite score from the momentum, trend direction, and pattern strength (Composite Score)
+    df['Composite_Score'] = (df['Momentum'] + df['Trend_Direction'] * df['Momentum'] + df['Pattern_Strength']) / 3
+    
+    # Evaluate the overall market sentiment using the combined factors (Sentiment

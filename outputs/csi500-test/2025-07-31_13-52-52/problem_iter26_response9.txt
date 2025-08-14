@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low and Close-Open Momentum
+    high_low_range = df['high'] - df['low']
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    five_day_rolling_momentum = price_movement_ratio.rolling(window=5).sum() / high_low_range.rolling(window=5).mean()
+    adjusted_five_day_momentum = five_day_rolling_momentum * np.log(df['volume'] + 1)
+
+    # Compute 10-Day Price and Intraday Momentum
+    ten_day_price_momentum = df['close'].shift(1) - df['close'].shift(10)
+    intraday_return = (df['high'] - df['low']) / df['low']
+
+    # Combine and Adjust Price and Intraday Momentum
+    combined_momentum = ten_day_price_momentum + intraday_return
+    volume_change_indicator = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    combined_momentum_adjusted = combined_momentum * (volume_change_indicator == 1)
+
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+
+    # Calculate Price Trend Indicator
+    short_ema = df['close'].ewm(span=5).mean()
+    long_ema = df['close'].ewm(span=20).mean()
+    price_trend_indicator = np.where(short_ema > long_ema, 1, -1)
+
+    # Combine Factors
+    combined_factors = combined_momentum_adjusted * price_trend_indicator
+
+    # Final Alpha Factor
+    final_alpha_factor = adjusted_five_day_momentum + combined_factors
+    final_alpha_factor = final_alpha_factor.ewm(span=10).mean()
+
+    # Incorporate Volume-Adjusted Momentum and Volatility into Final Factor
+    volume_change = df['volume'] - df['volume'].shift(1)
+    final_alpha_factor *= np.log(df['volume'] + 1)
+    final_alpha_factor *= (df['close'] - df['open']) / df['open']
+    final_alpha_factor /= daily_volatility
+
+    # Calculate Averaged High-to-Low Volatility
+    lookback_period = 20
+    high_to_low_volatility = ((df['high'] - df['low']) / df['low']).rolling(window=lookback_period).mean()
+
+    # Calculate 5-day Moving Average of Close Prices
+    five_day_moving_average = df['close'].rolling(window=5).mean()
+
+    # Calculate Relative Strength
+    relative_strength = (df['close'] - five_day_moving_average) / five_day_moving_average
+
+    # Enhance Final Alpha Factor
+    long_term_trend_indicator = np.where(df['close'] > df['close'].rolling(window=20).mean(), 1, -1)
+    final_alpha_factor *= long_term_trend_indicator
+
+    # Incorporate Long-Term Volatility
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    final_alpha_factor *= 1 / twenty_day_volatility
+
+    # Integrate Recent Volume Trend
+    five_day_ema_volume = df['volume'].ewm(span=5).mean()
+    final_alpha_factor *= five_day_ema_volume
+
+    return final_alpha_factor
+```

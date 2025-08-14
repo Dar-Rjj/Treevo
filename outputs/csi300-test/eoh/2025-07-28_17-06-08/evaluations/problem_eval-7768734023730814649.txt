@@ -1,0 +1,23 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    close_ema = (df['close'] * df['amount']).ewm(span=10, adjust=False).mean()
+    delta = df['volume'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi_vol = 100 - (100 / (1 + rs))
+    
+    corr_close_ema_return = df['close'].pct_change().corr(close_ema.pct_change())
+    corr_rsi_vol_return = df['close'].pct_change().corr(rsi_vol.pct_change())
+    
+    total_corr = corr_close_ema_return + corr_rsi_vol_return
+    if total_corr == 0:
+        weight_close_ema, weight_rsi_vol = 0.5, 0.5
+    else:
+        weight_close_ema = corr_close_ema_return / total_corr
+        weight_rsi_vol = corr_rsi_vol_return / total_corr
+    
+    heuristics_matrix = (weight_close_ema * close_ema + 
+                         weight_rsi_vol * rsi_vol).dropna()
+    return heuristics_matrix

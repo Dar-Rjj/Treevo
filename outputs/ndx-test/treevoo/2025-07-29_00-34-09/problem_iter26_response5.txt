@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Volume-Adjusted Price Movement Factor
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['vol_ema'] = df['log_returns'].ewm(span=20, adjust=False).mean() * df['volume']
+    df['high_low_range'] = df['high'] - df['low']
+    df['range_volatility'] = df['high_low_range'].rolling(window=20).std()
+    df['vol_adjusted_price_movement'] = df['vol_ema'] / df['range_volatility']
+
+    # Determine 10-Day Simple Moving Average (SMA) of the Close Price
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+
+    # Define a Momentum Factor
+    df['momentum_factor'] = df['close'] - df['sma_10']
+    df['momentum_sign'] = np.sign(df['momentum_factor'])
+
+    # Identify High-Activity Days
+    df['volume_sma_30'] = df['volume'].rolling(window=30).mean()
+    df['is_high_activity'] = df['volume'] > df['volume_sma_30']
+
+    # Calculate Percentage Change in Close Price on High-Activity Days
+    df['close_pct_change'] = df['close'].pct_change()
+    df['high_activity_close_pct_change'] = df.apply(lambda row: row['close_pct_change'] if row['is_high_activity'] else 0, axis=1)
+
+    # Adjust the momentum score based on the percentage change
+    df['momentum_adj'] = df['momentum_factor'] + df['high_activity_close_pct_change']
+
+    # Analyze Intraday Market Sentiment
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    df['sentiment'] = np.where(df['close'] > df['midpoint'], 1, -1)
+
+    # Combine Momentum and Sentiment for Composite Signal
+    df['composite_signal'] = df['momentum_adj'] * df['sentiment']
+
+    # Filter by Volume
+    df['filtered_signal'] = np.where(df['volume'] > df['volume_sma_30'], df['composite_signal'], 0)
+
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    df['price_reversal'] = (df['high'] - df['low']) / df['open']
+    df['sum_price_reversal_20'] = df['price_reversal'].rolling(window=20).sum()
+
+    # Assess Volume Impact on Price Movement
+    df['volume_weighted_close'] = (df['close'] * df['volume']).ewm(span=20, adjust=False).mean()
+
+    # Combine Factors for Final Alpha
+    df['final_alpha'] = (
+        0.4 * df['vol_adjusted_price_movement'] +
+        0.1 * df['sum_price_reversal_20'] +
+        0.3 * df['price_reversal'] +
+        0.1 * df['volume_weighted_close'] +
+        0.1 * df['filtered_signal']
+    )
+
+    return df['final_alpha']
+```

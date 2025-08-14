@@ -1,0 +1,45 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute simple moving averages for close price
+    df['sma_10'] = df['close'].rolling(window=10).mean()
+    df['sma_30'] = df['close'].rolling(window=30).mean()
+    
+    # Calculate momentum
+    df['momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Calculate SMA crossover
+    df['sma_crossover'] = df['sma_10'] - df['sma_30']
+    
+    # Volume trend
+    df['volume_trend'] = df['volume'].rolling(window=10).mean() / df['volume'].rolling(window=30).mean()
+
+    # MACD
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['signal_line'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Rolling 30-day historical Information ratios
+    info_ratios_momentum = (df['momentum'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['momentum'].rolling(window=30).std()
+    info_ratios_sma_crossover = (df['sma_crossover'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['sma_crossover'].rolling(window=30).std()
+    info_ratios_volume_trend = (df['volume_trend'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['volume_trend'].rolling(window=30).std()
+    info_ratios_macd = (df['macd'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['macd'].rolling(window=30).std()
+    info_ratios_rsi = (df['rsi'] * df['daily_return'].shift(-1)).rolling(window=30).mean() / df['rsi'].rolling(window=30).std()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['momentum'] * info_ratios_momentum +
+                         df['sma_crossover'] * info_ratios_sma_crossover +
+                         df['volume_trend'] * info_ratios_volume_trend +
+                         df['macd'] * info_ratios_macd +
+                         df['rsi'] * info_ratios_rsi)
+    
+    return heuristics_matrix

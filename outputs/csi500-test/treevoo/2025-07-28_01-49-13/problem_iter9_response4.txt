@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted High-Low Spread
+    df['high_low_vol'] = (df['high'] - df['low']) * df['volume']
+    
+    # Exponential Moving Average (EMA) of Weighted High-Low Spread
+    ema_window = 10
+    df['high_low_ema'] = df['high_low_vol'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Subtract Previous Weighted EMA (e.g., 5 days ago)
+    df['prev_high_low_ema'] = df['high_low_ema'].shift(5)
+    df['high_low_ema_diff'] = df['high_low_ema'] - df['prev_high_low_ema']
+    
+    # Identify Volume Spike
+    M = 30  # Moving average window for volume
+    df['vol_ma'] = df['volume'].rolling(window=M).mean()
+    df['vol_std'] = df['volume'].rolling(window=M).std()
+    df['volume_spike'] = (df['volume'] > (df['vol_ma'] + 2 * df['vol_std'])).astype(int)
+    
+    # Calculate N-day Price Momentum
+    N = 20  # Number of days for momentum
+    df['close_n_days_ago'] = df['close'].shift(N)
+    df['n_day_return'] = (df['close'] / df['close_n_days_ago']) - 1
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = (df['close'] / df['open']) - 1
+    
+    # High-Low Range Adjustment Factor
+    df['high_low_range_adj'] = df['intraday_range'] / df['close']
+    
+    # Close-Open Return Adjustment Factor
+    df['close_open_return_adj'] = df['close_open_return']
+    
+    # Combine Price Momentum, Volume Spike, and Intraday Volatility
+    K = 2  # Amplification factor
+    df['combined_return'] = df['n_day_return'] * (K * df['volume_spike'] + (1 - df['volume_spike']))
+    df['combined_return'] = df['combined_return'] * (1 + df['high_low_range_adj']) * (1 + df['close_open_return_adj'])
+    
+    # Calculate Volume Weighted Adjusted Return
+    df['vol_weighted_adj_return'] = df['combined_return'] * df['volume']
+    
+    # Calculate Moving Average of Volume Weighted Adjusted Return
+    lookback_period = 60
+    df['vol_weighted_adj_return_ma'] = df['vol_weighted_adj_return'].rolling(window=lookback_period).mean()
+    
+    # Calculate Final Alpha Factor
+    df['alpha_factor'] = (df['high_low_ema_diff'] + df['vol_weighted_adj_return']) / df['vol_weighted_adj_return_ma']
+    
+    return df['alpha_factor']
+```

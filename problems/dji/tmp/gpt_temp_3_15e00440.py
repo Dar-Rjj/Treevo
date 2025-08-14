@@ -1,0 +1,64 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ROC_1'] = df['close'].pct_change(periods=1)
+    df['ROC_5'] = df['close'].pct_change(periods=5)
+
+    # Volatility Indicators
+    df['TR'] = np.maximum(np.maximum(df['high'] - df['low'], np.abs(df['high'] - df['close'].shift(1))), 
+                          np.abs(df['low'] - df['close'].shift(1)))
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+
+    # Volume Indicators
+    obv = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    df['OBV'] = obv
+
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    cmf = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['CMF_20'] = cmf
+
+    # Oscillators
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    df['RSI_14'] = rsi
+
+    low_min = df['low'].rolling(window=14).min()
+    high_max = df['high'].rolling(window=14).max()
+    df['%K'] = (df['close'] - low_min) / (high_max - low_min) * 100
+    df['%D'] = df['%K'].rolling(window=3).mean()
+
+    # Trend Following Indicators
+    df['MACD_Line'] = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    df['Signal_Line'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+
+    sma_20 = df['close'].rolling(window=20).mean()
+    std_20 = df['close'].rolling(window=20).std()
+    df['Bollinger_Middle'] = sma_20
+    df['Bollinger_Upper'] = sma_20 + 2 * std_20
+    df['Bollinger_Lower'] = sma_20 - 2 * std_20
+
+    # Market Sentiment Indicators
+    ad_line = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['A/D_Line'] = ad_line.cumsum()
+
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+    df['MFI_14'] = mfi
+
+    return df

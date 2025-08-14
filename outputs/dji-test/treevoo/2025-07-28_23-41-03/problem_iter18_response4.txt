@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the ratio of close to high (C/H) as a measure of day's performance
+    df['C_H'] = df['close'] / df['high']
+    
+    # Incorporate the rolling average of C/H ratios to identify consistent performance
+    df['C_H_rolling_avg'] = df['C_H'].rolling(window=20).mean()
+    
+    # Compute the difference between high and low prices adjusted by volume (VWAP-like metric)
+    df['VWAP_like_metric'] = (df['high'] - df['low']) * df['volume']
+    
+    # Measure the gap between opening and closing prices (O-C) to gauge market momentum
+    df['O_C'] = df['open'] - df['close']
+    
+    # Evaluate the cumulative effect of consecutive O-C gaps on future returns
+    df['O_C_cumulative'] = df['O_C'].cumsum()
+    
+    # Develop a simple moving average (SMA) of close prices
+    df['SMA'] = df['close'].rolling(window=20).mean()
+    
+    # Compare the current close to the SMA to identify deviations
+    df['SMA_deviation'] = df['close'] - df['SMA']
+    
+    # Construct a volume-weighted moving average (VWMA) of close prices
+    df['VWMA'] = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Analyze the interaction between VWMA and standard deviation of close prices for volatility insights
+    df['VWMA_std'] = df['close'].rolling(window=20).std()
+    
+    # Identify significant price levels (support, resistance) using previous high and low points
+    df['support'] = df['low'].rolling(window=20).min()
+    df['resistance'] = df['high'].rolling(window=20).max()
+    
+    # Monitor the volume at these levels to detect potential breakouts or bounces
+    df['volume_at_support'] = (df['low'] == df['support']) * df['volume']
+    df['volume_at_resistance'] = (df['high'] == df['resistance']) * df['volume']
+    
+    # Use the number of volume spikes at support and resistance levels to gauge breakout strength
+    df['volume_spike_count'] = (df['volume'] > df['volume'].shift(1) * 1.5).rolling(window=20).sum()
+    
+    # Combine multiple factors to create a final alpha factor
+    alpha_factor = (
+        df['C_H_rolling_avg'] +
+        df['VWAP_like_metric'] +
+        df['O_C_cumulative'] +
+        df['SMA_deviation'] +
+        df['VWMA'] +
+        df['VWMA_std'] +
+        df['volume_at_support'] +
+        df['volume_at_resistance'] +
+        df['volume_spike_count']
+    )
+    
+    return alpha_factor.dropna()
+```

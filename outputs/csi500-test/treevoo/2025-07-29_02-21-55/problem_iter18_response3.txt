@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10, M=10, P=10, Q=10):
+    # Momentum Indicators
+    df['SMA'] = df['close'].rolling(window=N).mean()
+    df['Momentum'] = df['close'] - df['SMA']
+    
+    # Reversal Indicators
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=N).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=N).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    df['PctChange'] = df['close'].pct_change()
+    
+    # Volume-Based Indicators
+    df['VolumeSum'] = df['volume'].rolling(window=M).sum()
+    df['OBV'] = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if x >= 0 else -1).fillna(0) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Range-Based Indicators
+    df['TrueRange'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['ATR'] = df['TrueRange'].rolling(window=P).mean()
+    
+    # Open, High, Low, Close Combinations
+    df['IntradayRatio'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['CloseAboveOpenPrevClose'] = ((df['close'] > df['open']) & (df['close'] > df['close'].shift(1))).astype(int)
+    
+    # Amount Data for Indicators
+    df['TotalAmount'] = df['amount'].rolling(window=Q).sum()
+    df['AvgTradeSize'] = df['amount'] / df['volume']
+    
+    # Alpha Factor
+    alpha_factor = (
+        df['Momentum'] 
+        - df['RSI'] 
+        + df['OBV'] 
+        + df['ATR'] 
+        + df['IntradayRatio'] 
+        + df['CloseAboveOpenPrevClose'] 
+        + df['TotalAmount'] 
+        + df['AvgTradeSize']
+    )
+    
+    return alpha_factor
+```

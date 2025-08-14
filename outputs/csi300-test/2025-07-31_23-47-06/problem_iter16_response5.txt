@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    df['intraday_price_movement'] = df['high_low_range'] + df['close_open_diff']
+    
+    # Incorporate Volume Influence
+    df['volume_adjusted_momentum'] = df['intraday_price_movement'] * df['volume']
+    df['ema_10_volume_adjusted_momentum'] = df['volume_adjusted_momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['abs_daily_return'] = df['daily_return'].abs()
+    df['market_volatility'] = df['daily_return'].rolling(window=30).std()
+    df['modified_volume_adjusted_momentum'] = df['ema_10_volume_adjusted_momentum'] / df['market_volatility']
+    
+    # Incorporate Trend Reversal Signal
+    df['short_term_momentum'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['long_term_momentum'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['momentum_reversal'] = df['short_term_momentum'] - df['long_term_momentum']
+    df['reversal_signal'] = np.sign(df['momentum_reversal'])
+    
+    # Enhance Reversal Signal with Adaptive Smoothing
+    df['smoothed_reversal_signal'] = df['reversal_signal'].ewm(span=5, adjust=False).mean()
+    df['combined_signal'] = df['smoothed_reversal_signal'] + df['modified_volume_adjusted_momentum']
+    
+    # Integrate Non-Linear Transformation
+    df['sqrt_combined_signal'] = np.sqrt(np.abs(df['combined_signal']))
+    df['log_combined_signal'] = np.log1p(np.abs(df['combined_signal']))
+    
+    # Refine Final Alpha Factor
+    df['interim_alpha_factor'] = df['smoothed_reversal_signal'] + df['sqrt_combined_signal'] + df['log_combined_signal']
+    df['final_alpha_factor'] = df['interim_alpha_factor'].ewm(span=5, adjust=False).mean()
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# data = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(data)
+```

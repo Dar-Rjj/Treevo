@@ -1,0 +1,39 @@
+```python
+import numpy as np
+import pandas as pd
+
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 20-day and 60-day exponential moving averages of the closing price
+    df['close_20_ema'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['close_60_ema'] = df['close'].ewm(span=60, adjust=False).mean()
+    
+    # Calculate the 10-day standard deviation of the closing price
+    df['close_10_std'] = df['close'].rolling(window=10).std()
+    
+    # Calculate the 30-day standard deviation of the volume
+    df['volume_30_std'] = df['volume'].rolling(window=30).std()
+    
+    # Non-linear transformation: Square root of the difference between the closing price and the 20-day EMA
+    factor_1 = ((df['close'] - df['close_20_ema']) / df['close_10_std']).apply(np.sqrt)
+    
+    # Non-linear transformation: Logarithm of the difference between the 20-day EMA and the 60-day EMA
+    factor_2 = ((df['close_20_ema'] - df['close_60_ema']) / df['close_10_std']).apply(np.log1p)
+    
+    # Non-linear transformation: Cube root of the volume divided by its 30-day standard deviation
+    factor_3 = (df['volume'] / df['volume_30_std']).apply(np.cbrt)
+    
+    # Calculate the rate of change over 10 days for the 20-day EMA
+    factor_4 = df['close_20_ema'].pct_change(periods=10)
+    
+    # Calculate the market sentiment as the difference between the 20-day EMA and the 60-day EMA
+    market_sentiment = df['close_20_ema'] - df['close_60_ema']
+    
+    # Dynamic weighting: Use the absolute value of the 10-day percentage change in the 20-day EMA to weight the factors
+    dynamic_weight = abs(factor_4)
+    total_weight = 0.4 * dynamic_weight + 0.3 * dynamic_weight + 0.2 * dynamic_weight + 0.05 * dynamic_weight + 0.05 * dynamic_weight
+    
+    # Combine the factors into a single factor value with dynamically weighted contributions, including market sentiment
+    factor_values = (0.4 * factor_1 + 0.3 * factor_2 + 0.2 * factor_3 + 0.05 * factor_4 + 0.05 * market_sentiment) * (dynamic_weight / total_weight)
+    
+    return factor_values
+```

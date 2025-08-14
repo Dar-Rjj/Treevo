@@ -1,0 +1,53 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor based on liquidity, volatility, momentum, adaptive lookback, and market sentiment.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with index as date and columns as ['open', 'high', 'low', 'close', 'amount', 'volume'].
+    
+    Returns:
+    pd.Series: Factor values indexed by date.
+    """
+    # Calculate daily returns
+    df['return'] = df['close'].pct_change()
+    
+    # Liquidity measures
+    short_term_vol = df['volume'].rolling(window=5).mean()
+    long_term_vol = df['volume'].rolling(window=20).mean()
+    vol_ratio = short_term_vol / long_term_vol
+    
+    # Dynamic volatility
+    short_term_std = df['return'].rolling(window=10).std()
+    long_term_std = df['return'].rolling(window=60).std()
+    std_ratio = short_term_std / long_term_std
+    
+    # Momentum
+    short_term_mom = df['close'].pct_change(5)
+    medium_term_mom = df['close'].pct_change(20)
+    long_term_mom = df['close'].pct_change(100)
+    combined_mom = 0.3 * short_term_mom + 0.4 * medium_term_mom + 0.3 * long_term_mom
+    
+    # Adaptive lookback
+    recent_volatility = df['return'].rolling(window=60).std()
+    adaptive_lookback = np.where(recent_volatility > recent_volatility.median(), 10, np.where(recent_volatility < recent_volatility.quantile(0.25), 30, 20))
+    adaptive_mom = df['close'].pct_change(adaptive_lookback)
+    adaptive_std = df['return'].rolling(window=adaptive_lookback).std()
+    
+    # Market sentiment
+    short_term_sentiment = (df['close'] - df['open']).rolling(window=5).mean() / df['open']
+    long_term_sentiment = (df['close'] - df['open']).rolling(window=20).mean() / df['open']
+    sentiment_ratio = short_term_sentiment / long_term_sentiment
+    
+    # Combine factors
+    factor = 0.2 * vol_ratio + 0.2 * std_ratio + 0.2 * combined_mom + 0.2 * adaptive_mom + 0.2 * sentiment_ratio
+    
+    return factor
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df)

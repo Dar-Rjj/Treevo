@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Identify trends in daily returns
+    df['sum_daily_returns_5d'] = df['daily_return'].rolling(window=5).sum()
+    
+    # Analyze price volatility
+    df['price_volatility_20d'] = df[['high', 'low']].std(axis=1).rolling(window=20).mean()
+    
+    # Explore trading volume patterns
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_10d']
+    
+    # Consider price momentum
+    df['price_momentum_30d'] = df['close'] - df['low'].rolling(window=30).min()
+    
+    # Investigate the relationship between price change and volume
+    df['return_volume_corr_60d'] = df['daily_return'].rolling(window=60).corr(df['volume'])
+    
+    # Examine market strength
+    df['positive_days_10d'] = (df['close'] > df['open']).rolling(window=10).sum()
+    
+    # Look for buying or selling pressure
+    df['close_in_top_third_7d'] = ((df['close'] > df[['high', 'low']].mean(axis=1)).rolling(window=7).mean() > 0.5).astype(int)
+    
+    # Short-term price momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Long-term price momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Price momentum ratio
+    df['momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['volume_weighted_hl'] = df['high_low_range'] * df['volume']
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_weighted_hl_volatility'] = df['volume_weighted_hl'] / df['avg_volume']
+    
+    # Integrate factors
+    factor = (
+        df['sum_daily_returns_5d'] +
+        df['price_volatility_20d'] +
+        df['volume_ratio'] +
+        df['price_momentum_30d'] +
+        df['return_volume_corr_60d'] +
+        df['positive_days_10d'] +
+        df['close_in_top_third_7d'] +
+        df['momentum_ratio'] +
+        df['volume_weighted_hl_volatility']
+    )
+    
+    # Conditionally adjust by volume metrics
+    factor = factor.where(df['volume'] > df['avg_volume'], factor * 1.5)
+    factor = factor.where(df['volume'] <= df['avg_volume'], factor * 0.5)
+    
+    return factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

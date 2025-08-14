@@ -1,0 +1,96 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_threshold = df['volume'].rolling(window=5).mean().std() * 2
+    adjusted_trend = trend_direction * (volume_change.where(volume_change > volume_threshold, 0))
+    
+    # Validate Trend with Price Action
+    price_range = df['high'] - df['low']
+    within_range = (price_range < (short_term_ma - long_term_ma)).astype(int)
+    trend_confidence = adjusted_trend + within_range
+    
+    # Intraday Volatility
+    high_low_range = df['high'] - df['low']
+    
+    # Daily Return
+    daily_return = df['close'] / df['close'].shift(1) - 1
+    
+    # Cumulative Return
+    window = 5
+    cumulative_return = daily_return.rolling(window=window).sum()
+    
+    # Adjust Cumulative Return by Average Volume
+    average_volume = df['volume'].rolling(window=window).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+    
+    # Adjust by Price Volatility
+    std_close = df['close'].rolling(window=window).std()
+    final_adjusted_return = (adjusted_cumulative_return / std_close) + 1
+    
+    # Simple Price Momentum
+    n_days = 5
+    simple_momentum = df['close'] - df['close'].shift(n_days)
+    
+    # RSI Momentum
+    diff = df['close'].diff()
+    up = diff.where(diff > 0, 0).rolling(window=n_days).mean()
+    down = diff.where(diff < 0, 0).rolling(window=n_days).mean().abs()
+    rsi = 100 - (100 / (1 + up / down))
+    
+    # Combine Momentum and RSI
+    combined_momentum = simple_momentum + rsi
+    
+    # Volume Trend
+    volume_ma = df['volume'].rolling(window=n_days).mean()
+    volume_trend = df['volume'] - volume_ma
+    
+    # Volume Volatility
+    volume_volatility = df['volume'].rolling(window=n_days).std()
+    
+    # True Range
+    true_range = df[['high', 'low']].diff(axis=1).iloc[:, 0].abs()
+    prev_close = df['close'].shift(1)
+    true_range = true_range.combine((df['high'] - prev_close).abs(), max, axis=0)
+    true_range = true_range.combine((df['low'] - prev_close).abs(), max, axis=0)
+    
+    # Average True Range (ATR)
+    atr = true_range.rolling(window=n_days).mean()
+    
+    # MACD
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    
+    # Signal Line
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    
+    # Price Oscillator
+    price_oscillator = df['close'] - df['close'].rolling(window=n_days).mean()
+    
+    # Bollinger Bands
+    sma_20 = df['close'].rolling(window=20).mean()
+    std_20 = df['close'].rolling(window=20).std()
+    upper_band = sma_20 + 2 * std_20
+    lower_band = sma_20 - 2 * std_20
+    bollinger_diff = df['close'] - sma_20
+    
+    # Combine Factors
+    factor1 = combined_momentum * volume_trend
+    factor2 = atr * macd_line
+    factor3 = price_oscillator * bollinger_diff
+    
+    # Integrate All Factors
+    alpha_factor = final_adjusted_return + factor1 + factor2 + factor3
+    
+    return alpha_factor
+```

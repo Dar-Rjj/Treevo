@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['Daily_Return'] = df['close'].diff()
+    
+    # Calculate Short-Term (5 days) and Long-Term (30 days) Moving Averages of Daily Returns
+    short_term_window = 5
+    long_term_window = 30
+    df['Short_Term_MA'] = df['Daily_Return'].rolling(window=short_term_window).mean()
+    df['Long_Term_MA'] = df['Daily_Return'].rolling(window=long_term_window).mean()
+    df['MA_Difference'] = df['Short_Term_MA'] - df['Long_Term_MA']
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['Abs_Close_Return'] = df['Daily_Return'].abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['Combined_Range'] = df['High_Low_Range'] - df['Abs_Close_Return']
+    
+    # Calculate Volume Adjusted Intraday Range
+    df['Volume_Adjusted_Range'] = df['High_Low_Range'] * df['volume']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility_window = 10
+    df['Intraday_Volatility'] = df['High_Low_Range'].rolling(window=intraday_volatility_window).mean()
+    
+    # Calculate Close Price Momentum
+    momentum_window = 20
+    df['Close_Momentum'] = (df['close'] / df['close'].shift(1) - 1).rolling(window=momentum_window).sum()
+    
+    # Generate Intermediate Alpha Factor
+    df['Intermediate_Alpha'] = df['MA_Difference'] + df['Combined_Range'] - (df['open'] - df['close'].shift(1))
+    
+    # Adjust Intermediate Alpha Factor Based on Intraday Range Ratio
+    df['Intraday_Range_Ratio'] = df['High_Low_Range'] / (df['high'] + df['low'])
+    df['Adjusted_Intermediate_Alpha'] = df['Intermediate_Alpha'].where(
+        df['Intraday_Range_Ratio'] <= 0.6, 
+        df['Intermediate_Alpha'] * 1.3
+    ).where(
+        df['Intraday_Range_Ratio'] >= 0.4, 
+        df['Intermediate_Alpha'] * 0.7
+    )
+    
+    # Introduce Volume Momentum
+    df['Volume_Momentum'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Calculate Weighted Intraday Volatility
+    df['Weighted_Intraday_Volatility'] = df['Intraday_Volatility'] * (df['volume'] / df['volume'].shift(1))
+    
+    # Calculate Volume-Adjusted Close Price Momentum
+    df['Volume_Adjusted_Close_Momentum'] = df['Close_Momentum'] * (df['volume'] / df['volume'].shift(1))
+    
+    # Generate Final Alpha Factor
+    df['Final_Alpha'] = (df['Short_Term_MA'] - df['Long_Term_MA']) * (
+        df['Adjusted_Intermediate_Alpha'] + 
+        df['Volume_Adjusted_Close_Momentum'] + 
+        df['Volume_Momentum']
+    )
+
+    return df['Final_Alpha']
+```

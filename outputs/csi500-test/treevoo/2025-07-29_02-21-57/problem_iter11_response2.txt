@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['TR3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+    
+    # Calculate Momentum Components
+    df['ShortTermMomentum'] = (df['close'] / df['close'].shift(5)) - 1
+    df['LongTermMomentum'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Integrate Momentum
+    momentum_weights = {'short': 0.7, 'long': 0.3}
+    df['IntegratedMomentum'] = (momentum_weights['short'] * df['ShortTermMomentum']) + (momentum_weights['long'] * df['LongTermMomentum'])
+    
+    # Adjust Momentum by ATR
+    df['ATRAdjustedMomentum'] = df['IntegratedMomentum'] / df['ATR']
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradaySpread'] = df['high'] - df['low']
+    
+    # Calculate Price Momentum
+    df['PriceMomentum'] = (df['close'] - df['close'].shift(14)) / 14
+    
+    # Weight by Volume
+    df['VolumeWeightedMomentum'] = df['Volume'] * df['PriceMomentum']
+    
+    # Calculate Volume-Weighted Average Price
+    df['VWAP'] = (df['open'] * df['Volume'] + df['high'] * df['Volume'] + df['low'] * df['Volume'] + df['close'] * df['Volume']) / (4 * df['Volume'])
+    
+    # Combine Indicators
+    df['CloseToOpenReturn'] = df['close'] - df['open']
+    df['CombinedIndicator'] = (df['IntradaySpread'] + df['CloseToOpenReturn'] + df['VWAP']) / 3
+    df['CombinedIndicatorAdjustment'] = df['VWAP'] - df['CombinedIndicator']
+    
+    # Generate Alpha Factor
+    alpha_weights = {'momentum': 0.6, 'combined': 0.4}
+    df['AlphaFactor'] = (alpha_weights['momentum'] * df['ATRAdjustedMomentum']) + (alpha_weights['combined'] * df['CombinedIndicatorAdjustment'])
+    
+    # Apply Smoothing
+    df['FinalAlphaFactor'] = df['AlphaFactor'].rolling(window=5).mean()
+    
+    return df['FinalAlphaFactor']
+```

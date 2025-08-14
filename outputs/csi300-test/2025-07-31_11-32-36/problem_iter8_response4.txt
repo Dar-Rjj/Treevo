@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_high_low_range = df['high'] - df['low']
+    
+    # Calculate Close to Open Difference
+    close_to_open_diff = df['close'] - df['open']
+    
+    # Compute Intraday Momentum Score
+    sum_of_deltas = intraday_high_low_range + close_to_open_diff
+    intraday_momentum_score = sum_of_deltas * df['volume']
+    
+    # Calculate Volume Weighted Price
+    volume_weighted_price = (df['close'] * df['volume'] + df['open'] * df['volume']) / (2 * df['volume'])
+    
+    # Calculate Volume Weighted Price Change
+    volume_weighted_price_change = volume_weighted_price - volume_weighted_price.shift(1)
+    
+    # Compute Combined Intraday and Daily Momentum
+    combined_momentum = intraday_momentum_score + volume_weighted_price_change
+    
+    # Apply Exponential Moving Average (EMA) to Combined Momentum
+    ema_combined_momentum = combined_momentum.ewm(span=20, adjust=False).mean()
+    
+    # Calculate Intraday Volatility Score
+    high_close_delta = df['high'] - df['close']
+    low_close_delta = df['low'] - df['close']
+    avg_deltas = (high_close_delta + low_close_delta) / 2
+    intraday_volatility_score = avg_deltas * df['amount']
+    
+    # Compute EMA of Squared Returns for Volatility
+    daily_returns = df['close'].pct_change()
+    squared_returns = daily_returns ** 2
+    ema_squared_returns = squared_returns.ewm(span=20, adjust=False).mean()
+    
+    # Calculate Divergence between EMA of Returns and Volatility
+    divergence = (ema_combined_momentum - ema_squared_returns).abs()
+    
+    # Calculate Divergence and Weight Factor
+    divergence_weight_factor = (divergence * df['volume']) / intraday_high_low_range
+    
+    # Integrate Composite Momentum, Volatility, and Volume Trends
+    ema_30_combined_momentum = combined_momentum.ewm(span=30, adjust=False).mean()
+    integrated_scores = (combined_momentum - ema_30_combined_momentum - intraday_volatility_score) * divergence_weight_factor
+    
+    # Introduce Time-Varying Volatility Adjustment
+    long_term_volatility = squared_returns.ewm(span=50, adjust=False).mean()
+    short_term_volatility = squared_returns.ewm(span=10, adjust=False).mean()
+    volatility_ratio = short_term_volatility / long_term_volatility
+    
+    # Adjust Integrated Scores
+    adjusted_scores = integrated_scores * volatility_ratio
+    
+    return adjusted_scores
+```

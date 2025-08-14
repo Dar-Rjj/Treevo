@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'].diff()
+
+    # Calculate Price Momentum Component
+    df['Daily_Price_Change_Pct'] = (df['close'] / df['close'].shift(1) - 1)
+    df['5_Day_Avg_Price_Momentum'] = df['Daily_Price_Change_Pct'].rolling(window=5).mean()
+
+    # Calculate Volume Surge Component
+    df['Daily_Volume_Change_Pct'] = (df['volume'] / df['volume'].shift(1) - 1)
+    df['10_Day_Avg_Volume_Change'] = df['Daily_Volume_Change_Pct'].rolling(window=10).mean()
+
+    # Combine High-Low Range and Volume
+    df['High_Low_Vol'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+
+    # Compare with Recent Volume
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+
+    # Compare with Recent Amount
+    df['Amount_Ratio'] = df['amount'] / df['amount'].rolling(window=10).mean()
+
+    # Introduce Weighting Factors
+    w1, w2, w3, w4, w5 = 0.2, 0.2, 0.2, 0.2, 0.2
+
+    # Combine Weighted Components
+    df['Weighted_Components'] = (w1 * df['High_Low_Vol'] + 
+                                 w2 * df['5_Day_Avg_Price_Momentum'] + 
+                                 w3 * df['10_Day_Avg_Volume_Change'] + 
+                                 w4 * df['Volume_Ratio'] + 
+                                 w5 * df['Amount_Ratio'])
+
+    # Calculate Momentum and Volatility
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Short_Term_Momentum'] = df['Daily_Returns'].rolling(window=5).sum() - df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_Momentum'] = df['Daily_Returns'].rolling(window=20).sum() - df['close'].ewm(span=20, adjust=False).mean()
+    df['True_Range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['ATR_14'] = df['True_Range'].ewm(span=14, adjust=False).mean()
+
+    # Combine Momentum and Volatility
+    df['Combined_Momentum'] = (0.7 * df['Short_Term_Momentum'] + 0.3 * df['Long_Term_Momentum'])
+    df['Momentum_Volatility_Factor'] = df['Combined_Momentum'] / df['ATR_14']
+
+    # Final Synthesized Alpha Factor
+    df['Synthesized_Alpha_Factor'] = df['Weighted_Components'] * df['Momentum_Volatility_Factor']
+    
+    return df['Synthesized_Alpha_Factor'].dropna()
+```

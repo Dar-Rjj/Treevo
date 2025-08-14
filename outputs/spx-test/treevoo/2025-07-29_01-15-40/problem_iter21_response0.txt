@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Exponential Moving Average (EMA) Crossover
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    ema_crossover = ema_12 - ema_26
+    
+    # Linear Weighted Moving Average (LWMA) Crossover
+    lwma_14 = df['close'].rolling(window=14).apply(lambda x: (x * range(1, 15)).sum() / sum(range(1, 15)), raw=True)
+    lwma_28 = df['close'].rolling(window=28).apply(lambda x: (x * range(1, 29)).sum() / sum(range(1, 29)), raw=True)
+    lwma_crossover = lwma_14 - lwma_28
+    
+    # Simple Moving Average (SMA) Difference
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    sma_difference = df['close'] - sma_200
+    
+    # Rate of Change (ROC)
+    roc_10 = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    roc_50 = (df['close'] - df['close'].shift(50)) / df['close'].shift(50)
+    
+    # Momentum
+    momentum_10 = df['close'] - df['close'].shift(10)
+    momentum_50 = df['close'] - df['close'].shift(50)
+    
+    # On-Balance-Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    vwap_difference = df['close'] - vwap
+    
+    # Chaikin Money Flow (CMF)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    cmf_numerator = (money_flow_multiplier * df['volume']).rolling(window=20).sum()
+    cmf_denominator = df['volume'].rolling(window=20).sum()
+    cmf = cmf_numerator / cmf_denominator
+    
+    # True Range (TR)
+    tr = pd.concat([
+        df['high'] - df['low'],
+        (df['high'] - df['close'].shift(1)).abs(),
+        (df['low'] - df['close'].shift(1)).abs()
+    ], axis=1).max(axis=1)
+    
+    # ATR over a period
+    atr = tr.rolling(window=20).mean()
+    
+    # Bollinger Bands
+    sma_20 = df['close'].rolling(window=20).mean()
+    std_dev_20 = df['close'].rolling(window=20).std()
+    bband_upper = sma_20 + 2 * std_dev_20
+    bband_lower = sma_20 - 2 * std_dev_20
+    bband_factor = (df['close'] - sma_20) / (bband_upper - bband_lower)
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Stochastic Oscillator
+    lowest_low = df['low'].rolling(window=14).min()
+    highest_high = df['high'].rolling(window=14).max()
+    stoch_k = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low)
+    
+    # Ultimate Oscillator
+    bp7 = (df['close']

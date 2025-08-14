@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    short_term_return = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    long_term_return = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Relative Strength
+    relative_strength = short_term_return - long_term_return
+    
+    # Identify Volume Spikes
+    mean_volume = df['volume'].rolling(window=20).mean()
+    std_volume = df['volume'].rolling(window=20).std()
+    volume_spike = (df['volume'] > (mean_volume + 2 * std_volume)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    combined_return = relative_strength * volume_spike
+    
+    # Adjusted Integrated Factor
+    volume_average = df['volume'].rolling(window=5).sum() / 5
+    volatility = (df['close'] - df['open']).rolling(window=20).std() / df['open']
+    adjusted_factor = combined_return * (volume_average * volatility)
+    
+    # Incorporate Advanced Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    ema_daily_range = daily_range.ewm(span=10, adjust=False).mean().fillna(daily_range.rolling(window=10).mean())
+    volatility_multiplier = 1 / (ema_daily_range + 1)
+    advanced_volatility_adjusted = adjusted_factor * volatility_multiplier
+    
+    # Integrate Hybrid Factors
+    close_momentum = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    trend_10_sma = df['close'].rolling(window=10).mean()
+    trend_30_sma = df['close'].rolling(window=30).mean()
+    trend_following_adjustment = np.where(trend_10_sma > trend_30_sma, 1.1, 0.9)
+    hybrid_factor = 0.5 * (df['volume'] - df['volume'].shift(1)) + close_momentum
+    hybrid_factor = hybrid_factor * trend_following_adjustment
+    
+    # Include Volume and Price Correlation
+    correlation = df['volume'].rolling(window=10).corr(df['close'])
+    price_volume_adjustment = np.where(correlation > 0, 1.05, 0.95)
+    final_factor = advanced_volatility_adjusted + hybrid_factor * price_volume_adjustment
+    
+    # Apply a Dynamic Weighting Scheme
+    moving_average_final_factor = final_factor.rolling(window=10).mean()
+    is_increasing = moving_average_final_factor > moving_average_final_factor.shift(1)
+    dynamic_weighting = np.where(is_increasing, 1.1, 0.9)
+    final_factor = final_factor * dynamic_weighting
+    
+    return final_factor
+```

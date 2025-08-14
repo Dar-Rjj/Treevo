@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open'].shift(1)) / df['open'].shift(1)
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Adaptive Lookback Periods
+    lookbacks = [5, 10, 20]
+    for lookback in lookbacks:
+        df[f'{lookback}_day_SMA'] = df['Volume_Weighted_Return'].rolling(window=lookback).mean()
+        df[f'{lookback}_day_STD'] = df['Volume_Weighted_Return'].rolling(window=lookback).std()
+    
+    # Combine Multi-Period Volatilities
+    short_term_volatility_weight = 0.4
+    mid_term_volatility_weight = 0.3
+    long_term_volatility_weight = 0.3
+    df['Combined_Volatility'] = (short_term_volatility_weight * df['5_day_STD'] +
+                                 mid_term_volatility_weight * df['10_day_STD'] +
+                                 long_term_volatility_weight * df['20_day_STD'])
+    
+    # Incorporate Dynamic Market Trend Adjustments
+    df['5_day_SMA_close'] = df['close'].rolling(window=5).mean()
+    df['20_day_SMA_close'] = df['close'].rolling(window=20).mean()
+    df['Price_Trend_Indicator'] = (df['5_day_SMA_close'] > df['20_day_SMA_close']).astype(int) * 2 - 1
+    df['Adjusted_Combined_Factor'] = df['Volume_Weighted_Return'] * df['Price_Trend_Indicator']
+    
+    # Integrate Momentum and Volatility
+    df['5_day_momentum'] = df['close'] / df['close'].shift(5) - 1
+    df['20_day_momentum'] = df['close'] / df['close'].shift(20) - 1
+    
+    five_day_momentum_weight = 0.6
+    twenty_day_momentum_weight = 0.4
+    df['Combined_Momentum'] = (five_day_momentum_weight * df['5_day_momentum'] +
+                               twenty_day_momentum_weight * df['20_day_momentum'])
+    
+    df['Final_Alpha_Factor'] = (df['Adjusted_Combined_Factor'] / 
+                                (df['Combined_Volatility'] + df['Combined_Momentum']))
+    
+    return df['Final_Alpha_Factor'].dropna()
+```

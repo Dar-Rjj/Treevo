@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Breakout Ratio
+    price_breakout_ratio = (df['high'] - df['open']) / high_low_range
+    
+    # Calculate Volume Breakout Indicator
+    volume_breakout_indicator = df['volume'] * (df['close'] - df['open'])
+    
+    # Aggregate Breakout Indicators
+    aggregate_breakout_indicators = price_breakout_ratio * df['volume']
+    
+    # Incorporate Price Action Context
+    price_change = df['close'] - df['open']
+    price_action_sign = np.sign(price_change)
+    adjusted_aggregate_breakout = aggregate_breakout_indicators * price_action_sign
+    
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    moving_average_volume = df['volume'].rolling(window=20).mean()
+    volume_adjusted_intraday_return = (df['volume'] - moving_average_volume) * intraday_return
+    
+    # Incorporate Price Volatility
+    close_std_10 = df['close'].rolling(window=10).std()
+    volatility_adjusted_intraday_return = intraday_return * (1.5 if close_std_10[-1] > 0.01 else 0.7)
+    
+    # Determine Daily Return Deviation from VWAP
+    daily_vwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    daily_return_deviation_from_vwap = df['close'] - daily_vwap
+    
+    # Identify Trend Reversal Potential
+    reversal_potential = (daily_return_deviation_from_vwap > daily_return_deviation_from_vwap.shift(1)) & (df['volume'] > df['volume'].rolling(window=14).mean())
+    
+    # Generate Final Alpha Factor
+    smoothed_breakout_ratio = adjusted_aggregate_breakout.ewm(span=5, adjust=False).mean()
+    final_alpha_factor = (
+        (smoothed_breakout_ratio + volatility_adjusted_intraday_return) * 
+        (reversal_potential & (smoothed_breakout_ratio > 0) & (volatility_adjusted_intraday_return > 0))
+    )
+    
+    return final_alpha_factor
+```

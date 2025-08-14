@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum factor
+    df['SMA_14'] = df['close'].rolling(window=14).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['Momentum'] = df['SMA_14'] - df['SMA_50']
+    
+    # Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Volatility'] = df['Daily_Return'].rolling(window=20).std()
+    
+    # Volume
+    df['Volume_7D_MA'] = df['volume'].rolling(window=7).mean()
+    df['Volume_21D_MA'] = df['volume'].rolling(window=21).mean()
+    df['Volume_Ratio'] = df['Volume_7D_MA'] / df['Volume_21D_MA']
+    
+    # Money Flow Index
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Raw_Money_Flow'] = df['Typical_Price'] * df['volume']
+    
+    df['Positive_MF'] = np.where(df['Typical_Price'] > df['Typical_Price'].shift(1), df['Raw_Money_Flow'], 0)
+    df['Negative_MF'] = np.where(df['Typical_Price'] < df['Typical_Price'].shift(1), df['Raw_Money_Flow'], 0)
+    
+    df['14D_Positive_MF'] = df['Positive_MF'].rolling(window=14).sum()
+    df['14D_Negative_MF'] = df['Negative_MF'].abs().rolling(window=14).sum()
+    
+    df['MFR'] = df['14D_Positive_MF'] / df['14D_Negative_MF']
+    df['MFI'] = 100 - (100 / (1 + df['MFR']))
+    
+    # Relative Strength
+    df['EMA_14'] = df['close'].ewm(span=14, adjust=False).mean()
+    df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    df['RS'] = df['EMA_14'] / df['EMA_200']
+    
+    # Open Interest (assuming 'amount' is open interest)
+    df['OI_Change'] = df['amount'].diff()
+    df['OI_Sum_30D'] = df['OI_Change'].rolling(window=30).sum()
+    
+    # Factor combination using a weighted sum
+    weights = {
+        'Momentum': 0.3,
+        'Volatility': -0.2,
+        'Volume_Ratio': 0.1,
+        'MFI': -0.1,
+        'RS': 0.2,
+        'OI_Sum_30D': 0.1
+    }
+    
+    df['Alpha_Factor'] = (
+        df['Momentum'] * weights['Momentum'] +
+        df['Volatility'] * weights['Volatility'] +
+        df['Volume_Ratio'] * weights['Volume_Ratio'] +
+        df['MFI'] * weights['MFI'] +
+        df['RS'] * weights['RS'] +
+        df['OI_Sum_30D'] * weights['OI_Sum_30D']
+    )
+    
+    return df['Alpha_Factor']
+```

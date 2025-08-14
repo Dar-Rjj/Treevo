@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Calculate a novel and interpretable alpha factor using the provided market data.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume']
+                       indexed by date.
+    
+    Returns:
+    pd.Series: Series of alpha factor values indexed by date.
+    """
+    # Calculate the daily return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate the intraday range
+    df['intraday_range'] = df['high'] - df['low']
+
+    # Calculate the intraday midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+
+    # Calculate the volume weighted average price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).cumsum() / (df['volume']).cumsum()
+
+    # Calculate the 5-day moving average of the close price
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+
+    # Calculate the 20-day moving average of the close price
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+
+    # Calculate the 5-day standard deviation of the close price
+    df['std_5'] = df['close'].rolling(window=5).std()
+
+    # Calculate the 20-day standard deviation of the close price
+    df['std_20'] = df['close'].rolling(window=20).std()
+
+    # Calculate the relative strength indicator (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+
+    # Calculate the alpha factor
+    df['alpha_factor'] = (
+        (df['close'] - df['ma_5']) / df['std_5'] +
+        (df['close'] - df['ma_20']) / df['std_20'] +
+        (df['close'] - df['vwap']) / df['intraday_range'] +
+        (df['daily_return'] * df['rsi_14'])
+    ) / 4
+
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 101, 99, 102],
+#     'high': [102, 103, 101, 104],
+#     'low': [98, 99, 97, 100],
+#     'close': [101, 102, 100, 103],
+#     'amount': [10000, 10100, 9900, 10200],
+#     'volume': [100, 101, 99, 102]
+# }, index=pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04']))
+
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    short_term_return = df['close'].pct_change(periods=5)
+    
+    # Calculate Long-Term Return
+    long_term_return = df['close'].pct_change(periods=20)
+    
+    # Calculate Volume-Weighted Short-Term Return
+    volume_weighted_short_return = short_term_return * df['volume']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    volume_weighted_long_return = long_term_return * df['volume']
+    
+    # Calculate Short-Term Volatility (Average True Range over 5 days)
+    tr = df[['high', 'low']].assign(prev_close=df['close'].shift(1)).apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
+    atr = tr.rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    adjusted_return = (volume_weighted_short_return / atr) - volume_weighted_long_return
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    close_to_close_return = df['close'].pct_change(periods=1)
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    combined_factor = intraday_volatility * close_to_close_return
+    
+    # Final Adjustment
+    final_adjustment = adjusted_return + combined_factor
+    
+    # Determine Gain and Loss
+    gain = (df['close'].diff() > 0) * df['close'].diff()
+    loss = (df['close'].diff() < 0) * df['close'].diff().abs()
+    
+    # Aggregate Gains and Losses
+    sum_gains = gain.rolling(window=14).sum()
+    sum_losses = loss.rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    rs = sum_gains / sum_losses
+    
+    # Convert to ARSI
+    arsi = 100 - (100 / (1 + rs))
+    arsi = arsi * df['volume'].rolling(window=14).mean()
+    arsi = arsi * (df['close'] / df['open']) - 1
+    
+    # Calculate Intraday Price Movement Ratio
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['close'] / df['open']
+    movement_ratio = (high_low_ratio + open_close_ratio) / 2
+    
+    # Measure Price-Volatility Alignment
+    intraday_volatility = (df['high'] - df['low']) * df['volume']
+    alignment = movement_ratio - intraday_volatility
+    sentiment = alignment.apply(lambda x: 1 if x > 0 else -1)
+    
+    # Final Adjustment for Sentiment
+    final_alpha = final_adjustment + arsi + sentiment
+    
+    return final_alpha
+```

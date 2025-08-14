@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Combine Intraday and Opening Gaps
+    combined_change = intraday_high_low_spread + close_to_open_change
+    
+    # Weight by Volume
+    weighted_combined_change = combined_change * df['volume']
+    
+    # Compute Volume Adjusted Momentum
+    close_to_close_return = df['close'].pct_change()
+    volume_adjusted_momentum = close_to_close_return * np.log(df['volume'] + 1)
+    
+    # Integrate Intraday Volatility and Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    integrated_volatility = intraday_high_low_spread / np.abs(open_to_close_movement)
+    
+    # Incorporate Advanced Volume Impact
+    advanced_volume_impact = np.log(df['volume'] + 1) * integrated_volatility
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range_stability = (df['high'] - df['low']) / (df['close'] - df['open'])
+    stability_adjusted_metric = advanced_volume_impact / price_range_stability
+    
+    # Synthesize VWAPCHL into the Model
+    vwap_close = (df['close'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    vwap_open = (df['open'] * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    vwapchd = (vwap_close - vwap_open) / (df['high'] - df['low'])
+    vwap_adjusted_metric = vwapchd * stability_adjusted_metric
+    
+    # Combine Factors
+    combined_factors = (
+        volume_adjusted_momentum * vwap_adjusted_metric +
+        weighted_combined_change.rolling(window=5).sum() +
+        advanced_volume_impact.rolling(window=5).sum() +
+        price_range_stability.rolling(window=5).sum()
+    )
+    
+    # Add Relative Strength Index (RSI) to the Model
+    delta = df['close'].diff()
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    roll_up = up.rolling(window=14).mean()
+    roll_down = down.abs().rolling(window=14).mean()
+    rsi = 100.0 - (100.0 / (1.0 + (roll_up / roll_down)))
+    rsi_adjusted_factors = combined_factors * rsi
+    
+    # Include Price Trend Consistency
+    ema_3 = df['close'].ewm(span=3, adjust=False).mean()
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    trend_consistency = np.where(ema_3 > ema_10, 1, -1)
+    
+    # Final Alpha Factor
+    final_alpha_factor = rsi_adjusted_factors * trend_consistency
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['intraday_momentum'] = df['log_return'].rolling(window=5).mean()
+
+    # Adjust by Volume Volatility
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_volatility'] = df['volume_change'].rolling(window=5).std()
+    df['adjusted_intraday_momentum'] = df['intraday_momentum'] / df['volume_volatility']
+
+    # Apply Combined Volume and Amount Shock Filter
+    df['abs_volume_change'] = abs(df['volume'] - df['volume'].shift(1))
+    df['abs_amount_change'] = abs(df['amount'] - df['amount'].shift(1))
+    
+    volume_75th_percentile = df['abs_volume_change'].quantile(0.75)
+    amount_75th_percentile = df['abs_amount_change'].quantile(0.75)
+    
+    df_filtered = df[(df['abs_volume_change'] < volume_75th_percentile) & 
+                     (df['abs_amount_change'] < amount_75th_percentile)]
+
+    # Calculate Intraday Reversal Score
+    df_filtered['close_open_return'] = df_filtered['close'] - df_filtered['open']
+    df_filtered['intraday_volatility'] = (df_filtered['high'] - df_filtered['low']) * df_filtered['volume']
+    df_filtered['vol_weighted_intraday_volatility'] = df_filtered['intraday_volatility'].rolling(window=10).mean()
+    df_filtered['intraday_reversal_score'] = df_filtered['close_open_return'] / df_filtered['vol_weighted_intraday_volatility']
+
+    # Interact Intraday Volatility with Volume
+    df_filtered['close_to_open_ratio'] = df_filtered['close'] / df_filtered['open']
+    df_filtered['intraday_volatility_interacted'] = (df_filtered['high'] - df_filtered['low']) * df_filtered['volume'] * df_filtered['close_to_open_ratio']
+
+    # Final Alpha Factor
+    df_filtered['alpha_factor'] = df_filtered['adjusted_intraday_momentum'] * df_filtered['intraday_reversal_score'] * df_filtered['intraday_volatility_interacted']
+    
+    return df_filtered['alpha_factor']
+```

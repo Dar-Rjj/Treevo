@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, volume_increase_threshold=1.5, amount_increase_threshold=1.5):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate N-Day Moving Average of Price Range
+    df['n_day_price_range_ma'] = df['price_range'].rolling(window=n).mean()
+    
+    # Calculate N-Day RSI
+    df['up_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['down_change'] = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    df['avg_up_change'] = df['up_change'].rolling(window=n).mean()
+    df['avg_down_change'] = df['down_change'].rolling(window=n).mean()
+    df['RS'] = df['avg_up_change'] / df['avg_down_change'].replace(0, 0.0001)  # Avoid division by zero
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = df['high'] - df['low']
+    
+    # Detect Volume and Amount Shock
+    df['volume_change'] = df['volume'].pct_change()
+    df['amount_change'] = df['amount'].pct_change()
+    df['volume_shock'] = (df['volume_change'] > volume_increase_threshold).astype(int)
+    df['amount_shock'] = (df['amount_change'] > amount_increase_threshold).astype(int)
+    
+    # Calculate N-Day Moving Average of Volume
+    df['n_day_volume_ma'] = df['volume'].rolling(window=n).mean()
+    
+    # Calculate Volume Trend
+    df['volume_trend'] = (df['volume'] > df['n_day_volume_ma']).astype(int) * 2 - 1  # 1 for above, -1 for below
+    
+    # Adjust Momentum Factors with Volume and Amount Shock
+    df['vol_adj_n_day_price_range'] = df['n_day_price_range_ma'] * df['volume_shock']
+    df['vol_adj_RSI'] = df['RSI'] * df['volume_shock']
+    df['vol_adj_intraday_momentum'] = df['intraday_momentum'] * df['volume_shock']
+    df['amt_adj_intraday_momentum'] = df['intraday_momentum'] * df['amount_shock']
+    
+    # Calculate N-Day Trade Imbalance
+    mid_price = (df['high'] + df['low']) / 2
+    df['buy_volume'] = df.apply(lambda row: row['volume'] if row['close'] >= mid_price.loc[row.name] else 0, axis=1)
+    df['sell_volume'] = df.apply(lambda row: row['volume'] if row['close'] < mid_price.loc[row.name] else 0, axis=1)
+    df['trade_imbalance'] = df['buy_volume'].rolling(window=n).sum() - df['sell_volume'].rolling(window=n).sum()
+    
+    # Combine All Adjusted Momentum Factors
+    df['combined_factor'] = (
+        df['vol_adj_n_day_price_range'] + 
+        df['vol_adj_RSI'] + 
+        df['vol_adj_intraday_momentum'] + 
+        df['amt_adj_intraday_momentum']
+    ) * df['volume_trend'] * df['trade_imbalance']
+    
+    return df['combined_factor']
+```

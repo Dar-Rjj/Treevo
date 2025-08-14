@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Log Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate 20-Day EMA of Log Returns, Weigh by Volume
+    df['vol_weighted_log_returns'] = df['log_returns'] * df['volume']
+    df['ema_vol_weighted_log_returns'] = df['vol_weighted_log_returns'].ewm(span=20).mean()
+    
+    # Compute Daily High-Low Range and 20-Day Moving Average of High-Low Ranges
+    df['high_low_range'] = df['high'] - df['low']
+    df['ma_high_low_range'] = df['high_low_range'].rolling(window=20).mean()
+    
+    # Adjust by High-Low Range Volatility
+    df['adjusted_ema_vol_weighted_log_returns'] = df['ema_vol_weighted_log_returns'] / df['ma_high_low_range']
+    
+    # Determine 10-Day Simple Moving Average (SMA) of the Close Price
+    df['sma_close_10'] = df['close'].rolling(window=10).mean()
+    
+    # Define a Momentum Factor
+    df['momentum_factor'] = df['close'] - df['sma_close_10']
+    df['momentum_sign'] = np.sign(df['momentum_factor'])
+    
+    # Identify High-Activity Days
+    df['volume_sma_30'] = df['volume'].rolling(window=30).mean()
+    df['is_high_activity_day'] = (df['volume'] > df['volume_sma_30']).astype(int)
+    
+    # Calculate Percentage Change in Close Price on High-Activity Days
+    df['close_pct_change'] = df['close'].pct_change()
+    df['high_activity_pct_change'] = df['close_pct_change'] * df['is_high_activity_day']
+    
+    # Analyze Intraday Market Sentiment
+    df['daily_midpoint'] = (df['high'] + df['low']) / 2
+    df['directional_bias'] = np.where(df['close'] > df['daily_midpoint'], 1, -1)
+    
+    # Combine Momentum and Sentiment for Composite Signal
+    df['composite_signal'] = df['momentum_factor'] * df['directional_bias']
+    
+    # Filter by Volume
+    volume_threshold = df['volume_sma_30'].mean()
+    df['filtered_composite_signal'] = df['composite_signal'] * (df['volume'] > volume_threshold)
+    
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    df['price_reversal'] = (df['high'] - df['low']) / df['open']
+    df['sum_price_reversal_20'] = df['price_reversal'].rolling(window=20).sum()
+    
+    # Assess Volume Impact on Price Movement
+    df['volume_weighted_close'] = (df['close'] * df['volume']).ewm(span=20).mean() / df['volume'].ewm(span=20).mean()
+    
+    # Combine Factors for Final Alpha
+    df['final_alpha'] = (
+        0.4 * df['adjusted_ema_vol_weighted_log_returns'] +
+        0.1 * df['sum_price_reversal_20'] +
+        0.2 * df['price_reversal'] +
+        0.15 * df['volume_weighted_close'] +
+        0.15 * df['filtered_composite_signal']
+    )
+    
+    return df['final_alpha']
+```

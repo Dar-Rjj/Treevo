@@ -1,0 +1,62 @@
+[
+     {
+          "algorithm": "The new algorithm calculates a weighted sum of ATR, MFI, and RSI, where the weights are dynamically adjusted based on the 14-day rolling mean of the close price, to better reflect recent market trends.",
+          "code": "def heuristics_v2(df):\n    df['H-L'] = abs(df['high'] - df['low'])\n    df['H-PC'] = abs(df['high'] - df['close'].shift(1))\n    df['L-PC'] = abs(df['low'] - df['close'].shift(1))\n    df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)\n    atr = df['TR'].rolling(window=14).mean()\n\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi = 100 - (100 / (1 + mfi_ratio))\n\n    delta = df['close'].diff()\n    gain = delta.where(delta > 0, 0)\n    loss = -delta.where(delta < 0, 0)\n    avg_gain = gain.rolling(window=14).mean()\n    avg_loss = loss.rolling(window=14).mean()\n    rs = avg_gain / avg_loss\n    rsi = 100 - (100 / (1 + rs))\n\n    mean_close = df['close'].rolling(window=14).mean()\n    weight_atr = 0.5 * (1 + mean_close / mean_close.max())\n    weight_mfi = 0.2 * (1 + mean_close / mean_close.max())\n    weight_rsi = 0.3 * (1 + mean_close / mean_close.max())\n\n    heuristics_matrix = (weight_atr * atr + weight_mfi * mfi + weight_rsi * rsi)\n\n    return heuristics_matrix",
+          "objective": -0.06151,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a weighted sum of ATR, MFI, and RSI, where the weights are dynamically adjusted based on the 14-day rolling standard deviation of the close price, to better reflect recent market volatility and trends.",
+          "code": "def heuristics_v2(df):\n    df['H-L'] = abs(df['high'] - df['low'])\n    df['H-PC'] = abs(df['high'] - df['close'].shift(1))\n    df['L-PC'] = abs(df['low'] - df['close'].shift(1))\n    df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)\n    atr = df['TR'].rolling(window=14).mean()\n\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi = 100 - (100 / (1 + mfi_ratio))\n\n    delta = df['close'].diff()\n    gain = delta.where(delta > 0, 0)\n    loss = -delta.where(delta < 0, 0)\n    avg_gain = gain.rolling(window=14).mean()\n    avg_loss = loss.rolling(window=14).mean()\n    rs = avg_gain / avg_loss\n    rsi = 100 - (100 / (1 + rs))\n\n    std_close = df['close'].rolling(window=14).std()\n    weight_atr = 0.5 * (1 + std_close / std_close.max())\n    weight_mfi = 0.2 * (1 + std_close / std_close.max())\n    weight_rsi = 0.3 * (1 + std_close / std_close.max())\n\n    heuristics_matrix = (weight_atr * atr + weight_mfi * mfi + weight_rsi * rsi)\n\n    return heuristics_matrix",
+          "objective": -0.03967,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by combining a modified version of the PPO with a smoothed MFI, placing more emphasis on longer-term trends and a slightly different balance between the PPO and MFI components.",
+          "code": "def heuristics_v2(df):\n    short_term_ema = df['close'].ewm(span=20, adjust=False).mean()\n    long_term_ema = df['close'].ewm(span=50, adjust=False).mean()\n    ppo_line = ((short_term_ema - long_term_ema) / long_term_ema) * 100\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi_smoothed = mfi_ratio.ewm(span=9, adjust=False).mean()\n    heuristics_matrix = (ppo_line * 0.6 + mfi_smoothed * 0.4)\n    return heuristics_matrix",
+          "objective": -0.03018,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by averaging the ratio of the current day's volume to the 30-day average volume with the difference between the 100-day and 250-day Exponential Moving Averages (EMAs) of the closing price, providing a signal for trend changes and trading volume variations.",
+          "code": "def heuristics_v2(df):\n    ema_100 = df['close'].ewm(span=100, adjust=False).mean()\n    ema_250 = df['close'].ewm(span=250, adjust=False).mean()\n    avg_volume_30 = df['volume'].rolling(window=30).mean()\n    volume_ratio = df['volume'] / avg_volume_30\n    ema_diff = ema_100 - ema_250\n    heuristics_matrix = (ema_diff + volume_ratio) / 2\n    return heuristics_matrix",
+          "objective": -0.02914,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by weighting the ratio of the current day's volume to the 20-day average volume with a momentum indicator, and then combining it with the difference between the 50-day and 200-day EMAs of the closing price, aiming to capture the impact of recent trading activity and long-term trends.",
+          "code": "def heuristics_v2(df):\n    # Calculate 50-day and 200-day EMA for the closing price\n    ema_50 = df['close'].ewm(span=50, adjust=False).mean()\n    ema_200 = df['close'].ewm(span=200, adjust=False).mean()\n\n    # Calculate the 20-day average volume\n    avg_volume_20 = df['volume'].rolling(window=20).mean()\n\n    # Calculate the ratio of the current day's volume to the 20-day average volume\n    volume_ratio = df['volume'] / avg_volume_20\n\n    # Calculate a simple 10-day momentum (to represent short term trend)\n    momentum = df['close'] - df['close'].shift(10)\n\n    # Weight the volume ratio with the momentum\n    weighted_volume_ratio = volume_ratio * (momentum / df['close'])\n\n    # Combine the EMA difference and the weighted volume ratio\n    ema_diff = ema_50 - ema_200\n    heuristics_matrix = (ema_diff + weighted_volume_ratio) / 2\n\n    return heuristics_matrix",
+          "objective": -0.02819,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by combining the ratio of the current day's volume to the 20-day average volume with the difference between the 50-day and 200-day Exponential Moving Averages (EMAs) of the closing price, emphasizing changes in trading activity and long-term trend reversal.",
+          "code": "def heuristics_v2(df):\n    # Calculate 50-day and 200-day EMA for the closing price\n    ema_50 = df['close'].ewm(span=50, adjust=False).mean()\n    ema_200 = df['close'].ewm(span=200, adjust=False).mean()\n\n    # Calculate the 20-day average volume\n    avg_volume_20 = df['volume'].rolling(window=20).mean()\n\n    # Calculate the ratio of the current day's volume to the 20-day average volume\n    volume_ratio = df['volume'] / avg_volume_20\n\n    # Combine the EMA difference and the volume ratio\n    ema_diff = ema_50 - ema_200\n    heuristics_matrix = (ema_diff + volume_ratio) / 2\n\n    return heuristics_matrix",
+          "objective": -0.0279,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by combining a modified version of the PPO with a smoothed MFI, emphasizing recent price action and buying/selling pressure.",
+          "code": "def heuristics_v2(df):\n    short_term_ema = df['close'].ewm(span=12, adjust=False).mean()\n    long_term_ema = df['close'].ewm(span=26, adjust=False).mean()\n    ppo_line = ((short_term_ema - long_term_ema) / long_term_ema) * 100\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi_smoothed = mfi_ratio.ewm(span=7, adjust=False).mean()\n    heuristics_matrix = (ppo_line * 0.5 + mfi_smoothed * 0.5)\n    return heuristics_matrix",
+          "objective": -0.02781,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm combines the volatility measured by the Average True Range (ATR) and the Money Flow Index (MFI) to assess both price volatility and money flow, generating a composite signal.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    # Calculate the Average True Range (ATR) for a 14-day period\n    df['H-L'] = abs(df['high'] - df['low'])\n    df['H-PC'] = abs(df['high'] - df['close'].shift(1))\n    df['L-PC'] = abs(df['low'] - df['close'].shift(1))\n    df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)\n    atr = df['TR'].rolling(window=14).mean()\n    \n    # Calculate the Money Flow Index (MFI) for a 14-day period\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi = 100 - (100 / (1 + mfi_ratio))\n    \n    # Combine ATR and MFI into a single heuristic measure\n    heuristics_matrix = (atr + mfi) / 2\n    \n    return heuristics_matrix",
+          "objective": -0.0271,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates an alpha factor by weighting the PPO and MFI differently, using a 0.7 weight for PPO and 0.3 for MFI, to emphasize momentum over buying/selling pressure.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    # Calculate the Percentage Price Oscillator (PPO)\n    short_term_ema = df['close'].ewm(span=12, adjust=False).mean()\n    long_term_ema = df['close'].ewm(span=26, adjust=False).mean()\n    ppo_line = ((short_term_ema - long_term_ema) / long_term_ema) * 100\n    \n    # Calculate the Money Flow Index (MFI)\n    typical_price = (df['high'] + df['low'] + df['close']) / 3\n    money_flow = typical_price * df['volume']\n    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)\n    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)\n    mfi_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()\n    mfi = 100 - (100 / (1 + mfi_ratio))\n    \n    # Combine PPO and MFI into a single heuristics measure with different weights\n    heuristics_matrix = (ppo_line * 0.7 + mfi * 0.3)\n    return heuristics_matrix",
+          "objective": -0.02675,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm combines the rate of change (ROC) of the closing price with the Chaikin Money Flow (CMF) to assess both momentum and money flow, using custom weights for each component.",
+          "code": "def heuristics_v2(df):\n    # Calculate the Rate of Change (ROC) for a 14-day period\n    roc = ((df['close'] - df['close'].shift(14)) / df['close'].shift(14)) * 100\n    \n    # Calculate the Chaikin Money Flow (CMF) for a 14-day period\n    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])\n    money_flow_volume = mf_multiplier * df['volume']\n    cmf = money_flow_volume.rolling(window=14).sum() / df['volume'].rolling(window=14).sum()\n    \n    # Combine ROC and CMF into a single heuristic measure with weights\n    heuristics_matrix = (0.5 * roc + 0.5 * cmf)\n    \n    return heuristics_matrix",
+          "objective": -0.02647,
+          "other_inf": null
+     }
+]

@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Logarithmic Volume Difference
+    df['log_volume'] = np.log(df['volume'])
+    df['log_volume_diff'] = df['log_volume'].diff().fillna(0)
+    df['smoothed_vol_diff'] = df['log_volume_diff'].ewm(alpha=0.2).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_spread'] = df['high'] - df['low']
+    
+    # Weigh by Intraday Volume Activity
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_ma_20']
+    df['weighted_intraday_spread'] = df['intraday_spread'] * df['volume_ratio']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['weight_intraday'] = np.abs(df['intraday_return'])
+    df['weight_close_to_open'] = np.abs(df['close_to_open_return'])
+    
+    # Integrate Volume Change and Intraday Volatility
+    df['adjusted_weight_intraday'] = df['weight_intraday'] * df['smoothed_vol_diff'] * df['weighted_intraday_spread']
+    df['adjusted_weight_close_to_open'] = df['weight_close_to_open'] * df['smoothed_vol_diff'] * df['weighted_intraday_spread']
+    
+    # Apply 5-Day Exponential Moving Average
+    df['ema_5_weight_intraday'] = df['adjusted_weight_intraday'].ewm(span=5, adjust=False).mean()
+    df['ema_5_weight_close_to_open'] = df['adjusted_weight_close_to_open'].ewm(span=5, adjust=False).mean()
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['daily_return'] * (df['ema_5_weight_intraday'] + df['ema_5_weight_close_to_open'])
+    
+    return df['final_factor']
+```

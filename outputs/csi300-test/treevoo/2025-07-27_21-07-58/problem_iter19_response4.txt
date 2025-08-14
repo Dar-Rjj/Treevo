@@ -1,0 +1,33 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate Short-Term Momentum (5-day sum of daily returns)
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum()
+
+    # Calculate Long-Term Momentum (20-day sum of daily returns)
+    df['long_term_momentum'] = df['daily_return'].rolling(window=20).sum()
+
+    # Determine True Range
+    df['true_range'] = df[['high', 'low', 'close']].join(df['close'].shift(1), rsuffix='_prev').apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close_prev']), abs(x['low'] - x['close_prev'])), axis=1)
+
+    # Calculate 14-day Simple Moving Average of True Range
+    df['avg_true_range'] = df['true_range'].rolling(window=14).mean()
+
+    # Combine Momentum and Volatility
+    df['weighted_momentum'] = 0.6 * df['short_term_momentum'] + 0.4 * df['long_term_momentum']
+
+    # Apply Trend Multiplier
+    df['trend_multiplier'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['trend_multiplier'] = np.where(df['close'] > df['trend_multiplier'], 1.5, 1.0)
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['weighted_momentum'] * df['trend_multiplier'] / df['avg_true_range']
+
+    return df['alpha_factor']
+```

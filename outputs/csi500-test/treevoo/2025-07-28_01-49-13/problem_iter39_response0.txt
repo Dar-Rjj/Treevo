@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Evaluate Intraday Dynamics
+    df['intraday_range'] = df['high'] - df['low']
+    df['adjusted_close_to_open'] = (df['close'] - df['open']) / df['intraday_range']
+
+    # Analyze Trend and Momentum
+    df['roc_5'] = df['close'].pct_change(periods=5)
+    df['roc_20'] = df['close'].pct_change(periods=20)
+
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['ma_crossover_5_20'] = (df['ma_5'] > df['ma_20']).astype(int)
+
+    df['ma_10'] = df['close'].rolling(window=10).mean()
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    df['ma_crossover_10_50'] = (df['ma_10'] > df['ma_50']).astype(int)
+
+    df['close_to_high_ratio'] = df['close'] / df['high']
+    df['close_to_low_ratio'] = df['close'] / df['low']
+
+    # Introduce Volatility and Volume Factors
+    df['volatility_20'] = df['close'].rolling(window=20).std()
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+
+    # Combine Intraday and Cumulative Metrics
+    df['daily_price_change'] = df['close'].diff()
+    df['cumulative_price_change'] = df['daily_price_change'].cumsum()
+
+    # Intraday Midpoint to Open Ratio
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+
+    # Volume Weighted Average Price (VWAP)
+    df['vwap'] = df['amount'] / df['volume']
+
+    # Close-to-Next Day Open Return
+    df['close_to_next_day_open_return'] = (df['vwap'].shift(-1) - df['open']) / df['open']
+
+    # Weighted Sum of Returns by Volume
+    df['weighted_sum_returns'] = df['close_to_next_day_open_return'] * df['volume']
+
+    # Close-to-Open Envelope
+    df['max_close'] = df['close'].rolling(window=20, min_periods=1).max()
+    df['min_open'] = df['open'].rolling(window=20, min_periods=1).min()
+
+    # Adjusted Close-to-Open Envelope
+    df['adjusted_close'] = df['close'] / df['close'].rolling(window=20, min_periods=1).max()
+    df['max_adjusted_close'] = df['adjusted_close'].rolling(window=20, min_periods=1).max()
+    df['min_open_envelope'] = df['open'].rolling(window=20, min_periods=1).min()
+
+    # Introduce Volatility Factor
+    df['daily_volatility'] = (df['high'] - df['low']) / df['close'].shift(1)
+    df['smoothed_volatility'] = df['daily_volatility'].ewm(span=20, adjust=False).mean()
+
+    # Integrate Market Sentiment
+    df['open_close_diff'] = df['close'] - df['open']
+    df['positive_negative_diff'] = (df['open_close_diff'] > 0).astype(int)
+
+    # Combine Factors
+    df['intraday_midpoint_weighted_returns'] = df['midpoint_to_open_ratio'] * df['weighted_sum_returns']
+    df['combined_envelopes'] = (df['max_close'] + df['min_open'] + df['max_adjusted_close'] + df['min_open_envelope']) / 4
+    df['final_factor'] = df['intraday_midpoint_weighted_returns'] / df['combined_envelopes'] * df['smoothed_volatility'] + df['positive_negative_diff']
+
+    # Final Factor Adjustment
+    df['final_factor'] += (df['close_to_next_day_open_return'] * df['volume']) / df['combined_envelopes']
+
+    # Compute Cumulative Price Momentum
+    df['price_momentum'] = df['daily_price_change'].ewm(span=20, adjust=False).mean()
+
+    return df['final_factor']
+```

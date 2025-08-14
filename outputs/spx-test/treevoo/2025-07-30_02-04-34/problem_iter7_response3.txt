@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=50, m=20, spike_threshold=2.0):
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'].diff()
+
+    # Identify Volume Spikes
+    df['volume_ma'] = df['volume'].rolling(window=m).mean()
+    df['volume_spike'] = df['volume'] > (spike_threshold * df['volume_ma'])
+
+    # Adjust Momentum by Volume Spike
+    momentum_adjustment = 0.8  # Multiplier for volume spike
+    df['adjusted_momentum'] = df['raw_momentum']
+    df.loc[df['volume_spike'], 'adjusted_momentum'] *= momentum_adjustment
+
+    # Combine Intraday Factors
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    df['close_to_open_return'] = df['close'] - df['open']
+    df['combined_intraday_factor'] = df['intraday_high_low_spread'] + df['close_to_open_return']
+
+    # Calculate Weighted Price Movement
+    df['weighted_price_movement'] = (df['close'] - df['open']) * df['volume']
+    df['avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['weighted_price_movement'] /= df['avg_volume']
+
+    # Final Alpha Factor
+    df['final_alpha'] = df['adjusted_momentum'] * df['combined_intraday_factor'] * df['weighted_price_movement']
+
+    # Adjust for Volatility
+    df['volatility'] = df['close'].rolling(window=10).std()
+    df['final_alpha'] /= (1 + df['volatility'])
+
+    return df['final_alpha']
+```

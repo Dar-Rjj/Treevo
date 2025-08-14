@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_range_ratio = df['close'] / intraday_range
+    
+    # Calculate Volume Weighted Momentum
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    volume_factor = df['volume'] / avg_5d_volume
+    volume_weighted_momentum = volume_factor * close_to_range_ratio
+    
+    # Cumulative Sum of Volume Weighted Momentum
+    cumulative_momentum = volume_weighted_momentum.rolling(window=5).sum()
+    
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Volume Adjusted High-Low Spread
+    volume_adjusted_high_low_spread = high_low_spread * (df['volume'] / avg_5d_volume)
+    
+    # Calculate Price Momentum
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    price_momentum = df['close'] - ema_10
+    
+    # Calculate Volume Trend
+    sum_20d_volume = df['volume'].rolling(window=20).sum()
+    volume_trend = df['volume'] / sum_20d_volume
+    
+    # Calculate Range Expansion
+    true_range = np.maximum(df['high'] - df['low'], np.abs(df['high'] - df['close'].shift(1)), np.abs(df['low'] - df['close'].shift(1)))
+    atr_10 = true_range.rolling(window=10).mean()
+    range_expansion = true_range / atr_10
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    obv = pd.Series(obv, index=df.index)
+    
+    # Composite Factor
+    composite_factor = (cumulative_momentum + volume_adjusted_high_low_spread + price_momentum + volume_trend + range_expansion + obv) / 6
+    
+    # Smooth the Composite Factor
+    smoothed_composite_factor = composite_factor.rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = smoothed_composite_factor
+    
+    return alpha_factor
+```

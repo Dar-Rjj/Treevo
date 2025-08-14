@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Intraday_Return'] = df['Intraday_Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight_Return'] = (df['open'].shift(-1) - df['close']) / df['close']
+
+    # Combine Intraday and Overnight Returns
+    df['Combined_Return'] = df['Intraday_Return'] + df['Overnight_Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume_Weighted_Typical_Price'] = df['Typical_Price'] * df['volume']
+    df['VWAP'] = df['Volume_Weighted_Typical_Price'].cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal_Indicator'] = (df['VWAP'] > df['close']).astype(int) * 2 - 1
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated_Reversal_Return'] = df['Combined_Return'] * df['Reversal_Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Return'] = (df['Return'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial_Alpha_Factor'] = df['Integrated_Reversal_Return'] + df['Volume_Weighted_Return']
+
+    # Calculate Rolling Averages
+    df['5_day_MA'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Dynamic Volatility
+    df['Daily_Return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['20_day_STD'] = df['Daily_Return'].rolling(window=20).std()
+    df['60_day_STD'] = df['Daily_Return'].rolling(window=60).std()
+    df['Dynamic_Volatility'] = (df['20_day_STD'] + df['60_day_STD']) / 2
+
+    # Adjust for Dynamic Volatility
+    df['Volatility_Adjusted_Alpha_Factor'] = df['Initial_Alpha_Factor'] / df['Dynamic_Volatility']
+
+    # Incorporate Market Trend
+    df['50_day_MA'] = df['close'].rolling(window=50).mean()
+    df['200_day_MA'] = df['close'].rolling(window=200).mean()
+    df['Market_Trend_Indicator'] = (df['50_day_MA'] > df['200_day_MA']).astype(int) * 2 - 1
+
+    # Adjust for Market Trend
+    df['Trend_Adjusted_Alpha_Factor'] = df['Volatility_Adjusted_Alpha_Factor'] * df['Market_Trend_Indicator']
+
+    # Incorporate Transaction Amount
+    df['Amount_Weighted_Return'] = (df['close'] - df['open']) / df['open'] * df['amount']
+    df['Amount_Weighted_Return'] = df['Amount_Weighted_Return'].cumsum() / df['amount'].cumsum()
+
+    # Integrate Amount-Weighted Return with Trend-Adjusted Alpha Factor
+    df['Final_Alpha_Factor'] = df['Trend_Adjusted_Alpha_Factor'] + df['Amount_Weighted_Return']
+
+    return df['Final_Alpha_Factor']
+```

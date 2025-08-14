@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range Percentage
+    daily_high_low_range = (df['high'] - df['low']) / df['open']
+    
+    # Confirm Momentum with Volume-Weighted Difference
+    volume_weighted_momentum = (df['close'] - df['open']) * (df['volume'] / df['volume'].max())
+    intraday_high_low_spread = df['high'] - df['low']
+    combined_intraday_indicator = daily_high_low_range * volume_weighted_momentum
+    
+    # Calculate Momentum Difference
+    momentum_difference = intraday_high_low_spread - intraday_high_low_spread.shift(1)
+    
+    # Calculate VWAP Difference
+    daily_vwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    prev_day_vwap = daily_vwap.shift(1)
+    vwap_difference = daily_vwap - prev_day_vwap
+    
+    # Calculate Open-Close Spread Difference
+    open_close_spread_difference = (df['close'] - df['open']) - ((df['close'].shift(1) - df['open'].shift(1)))
+    
+    # Final Combined Indicator
+    final_combined_indicator = (momentum_difference + vwap_difference + open_close_spread_difference)
+    
+    # Adjust for Price Trend
+    short_term_trend = df['close'].rolling(window=5).mean()
+    long_term_trend = df['close'].rolling(window=20).mean()
+    trend_adjustment = long_term_trend - short_term_trend
+    adjusted_combined_indicator = final_combined_indicator + trend_adjustment
+    
+    # Adjust for Volatility
+    rolling_volatility = (df['high'] - df['low']).rolling(window=20).std()
+    volatility_adjusted_indicator = adjusted_combined_indicator / rolling_volatility
+    
+    # Calculate Cumulative Log Return
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    cumulative_log_return = log_returns.rolling(window=20).sum()
+    
+    # Identify Volume Shock
+    volume_shock = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Introduce New Factor: Intraday Price Efficiency
+    intraday_efficiency_ratio = (df['close'] - df['open']) / (df['high'] - df['low'])
+    efficiency_adjusted_indicator = volatility_adjusted_indicator * intraday_efficiency_ratio
+    
+    # Introduce New Factor: Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    positive_money_flow = (typical_price > typical_price.shift(1)) * (typical_price * df['volume'])
+    negative_money_flow = (typical_price < typical_price.shift(1)) * (typical_price * df['volume'])
+    money_flow_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Combine All Factors
+    alpha_factor = (cumulative_log_return + volume_shock + efficiency_adjusted_indicator + mfi) / 4
+    return alpha_factor
+```

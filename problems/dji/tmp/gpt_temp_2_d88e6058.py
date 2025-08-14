@@ -1,0 +1,62 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily log returns
+    df['log_return_close'] = np.log(df['close'] / df['close'].shift(1))
+    df['log_return_open_close'] = np.log(df['close'] / df['open'])
+    df['log_return_high_low'] = np.log(df['high'] / df['low'])
+
+    # Momentum indicators - Simple Moving Averages (SMA)
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum indicators - Exponential Moving Averages (EMA)
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Volatility measures - True Range and Average True Range (ATR)
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'], x['close'].shift(1)) - min(x['low'], x['close'].shift(1)), axis=1)
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+
+    # Volatility measures - Historical Volatility
+    df['hist_vol_30'] = df['log_return_close'].rolling(window=30).std() * np.sqrt(252)
+
+    # Volume-based Alpha Factors - On-Balance Volume (OBV)
+    df['obv'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] + (df['close'] < df['close'].shift(1)).astype(int) * (-df['volume'])
+    df['obv'] = df['obv'].cumsum()
+
+    # Volume-based Alpha Factors - Chaikin Money Flow (CMF)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['cmf_20'] = money_flow_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Volume-based Alpha Factors - Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow * (typical_price > typical_price.shift(1)).astype(int)
+    negative_money_flow = raw_money_flow * (typical_price < typical_price.shift(1)).astype(int)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    df['mfi_14'] = 100 - 100 / (1 + money_ratio)
+
+    # Volume-based Alpha Factors - Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+
+    # Generate the final alpha factor
+    df['alpha_factor'] = (
+        df['log_return_close'] +
+        df['log_return_open_close'] -
+        df['log_return_high_low'] +
+        (df['sma_5'] - df['sma_20']) / df['close'] +
+        (df['ema_12'] - df['ema_26']) / df['close'] +
+        df['atr_14'] +
+        df['hist_vol_30'] +
+        df['obv'].pct_change() +
+        df['cmf_20'] +
+        df['mfi_14'].pct_change() +
+        df['vwap'].pct_change()
+    ).fillna(0)
+
+    return df['alpha_factor']

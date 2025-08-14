@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['price_momentum'] = df['log_return'].rolling(window=5).sum()
+
+    # Apply Volume Shock Filter
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['abs_volume_change'] = abs(df['volume_change'])
+    volume_threshold = df['abs_volume_change'].quantile(0.90)
+    df = df[df['abs_volume_change'] < volume_threshold]
+
+    # Calculate Intraday Price Movement
+    df['intraday_high_low'] = (df['high'] - df['low']) / df['open']
+    df['intraday_close_open'] = (df['close'] - df['open']) / df['open']
+    df['intraday_movement'] = (df['intraday_high_low'] + df['intraday_close_open']) / 2
+
+    # Smooth the Average using a 5-day Simple Moving Average
+    df['smoothed_intraday_movement'] = df['intraday_movement'].rolling(window=5).mean()
+
+    # Confirm with Volume
+    df['volume_change_percentage'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+
+    # Calculate Close to High and Low Ratios
+    df['close_to_high_ratio'] = df['close'] / df['high']
+    df['close_to_low_ratio'] = df['close'] / df['low']
+
+    # Combine Ratios
+    df['combined_ratio'] = 0.6 * df['close_to_high_ratio'] + 0.4 * df['close_to_low_ratio']
+
+    # Calculate Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(1)) * np.sqrt(df['volume'])
+
+    # Calculate Price Volatility
+    df['price_volatility'] = df[['open', 'high', 'low', 'close']].std(axis=1)
+
+    # Weighted Final Alpha Factor
+    df['alpha_factor'] = (
+        df['smoothed_intraday_movement'] * df['volume_change_percentage'] +
+        df['combined_ratio'] +
+        df['volume_adjusted_momentum'] +
+        df['price_volatility']
+    )
+
+    return df['alpha_factor']
+```

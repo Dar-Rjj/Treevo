@@ -1,0 +1,58 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day Exponential Moving Averages (EMAs) of the closing price
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Calculate the difference between the 5-day and 20-day EMAs as a short-term momentum factor
+    short_momentum_factor = ema_5 - ema_20
+
+    # Calculate the 50-day and 200-day EMAs of the closing price
+    ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+    ema_200 = df['close'].ewm(span=200, adjust=False).mean()
+
+    # Calculate the long-term momentum factor
+    long_momentum_factor = ema_50 - ema_200
+
+    # Integrate multi-period analysis by combining short and long momentum factors
+    combined_momentum = (short_momentum_factor + long_momentum_factor).rolling(window=5).mean()
+
+    # Calculate the Average True Range (ATR) with a 14-day window
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift())
+    tr3 = abs(df['low'] - df['close'].shift())
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    smoothed_atr = atr.rolling(window=5).mean()
+
+    # Calculate the Relative Strength Index (RSI) with a 14-day window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the trade signal based on the RSI
+    trade_signal = (rsi < 30).astype(int) - (rsi > 70).astype(int)
+    smoothed_trade_signal = trade_signal.rolling(window=5).mean()
+
+    # Calculate the volume spike factor
+    volume_spike = (df['volume'] > df['volume'].rolling(window=20).mean() * 2).astype(int)
+
+    # Dynamic weighting based on recent performance
+    recent_performance = df['close'].pct_change().rolling(window=5).sum()
+    adaptive_weights = (recent_performance + 1).clip(lower=0.5, upper=1.5)
+
+    # Combine all factors into a single alpha factor with dynamic weights
+    alpha_factor = (
+        combined_momentum * 0.4 +
+        smoothed_atr * 0.1 +
+        smoothed_trade_signal * 0.15 +
+        volume_spike * 0.35
+    ).rolling(window=5).mean()
+
+    # Apply adaptive weights to the alpha factor
+    alpha_factor *= adaptive_weights
+
+    return alpha_factor
+```

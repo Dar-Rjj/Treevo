@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def heuristics_v2(df):
+    # Calculate 20-day metrics
+    df['hl_vol_20'] = (df['high'] - df['low']) * df['volume']
+    df['weighted_price_diff_20'] = df['hl_vol_20'].rolling(window=20).sum()
+    df['total_volume_20'] = df['volume'].rolling(window=20).sum()
+    df['cumulative_weighted_avg_20'] = df['weighted_price_diff_20'] / df['total_volume_20']
+    df['long_term_momentum_20'] = df['close'] - df['open'].shift(20)
+    df['avg_daily_return_20'] = df['close'].diff().rolling(window=20).mean()
+    df['daily_returns_20'] = df['close'].pct_change()
+    df['volatility_20'] = df['daily_returns_20'].rolling(window=20).std()
+    df['alpha_factor_20'] = (df['cumulative_weighted_avg_20'] - df['avg_daily_return_20']) / df['volatility_20']
+
+    # Calculate 5-day metrics
+    df['hl_vol_5'] = (df['high'] - df['low']) * df['volume']
+    df['weighted_price_diff_5'] = df['hl_vol_5'].rolling(window=5).sum()
+    df['total_volume_5'] = df['volume'].rolling(window=5).sum()
+    df['cumulative_weighted_avg_5'] = df['weighted_price_diff_5'] / df['total_volume_5']
+    df['short_term_momentum_5'] = df['close'] - df['open'].shift(5)
+    df['avg_daily_return_5'] = df['close'].diff().rolling(window=5).mean()
+    df['daily_returns_5'] = df['close'].pct_change()
+    df['volatility_5'] = df['daily_returns_5'].rolling(window=5).std()
+    df['alpha_factor_5'] = (df['cumulative_weighted_avg_5'] - df['avg_daily_return_5']) / df['volatility_5']
+
+    # Machine Learning for Dynamic Weighting
+    X = df[['alpha_factor_20', 'alpha_factor_5']].dropna()
+    y = df['close'].pct_change().shift(-1).dropna()[X.index]
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    weights = model.predict(X)
+    df.loc[X.index, 'ml_weight_20'] = 1 - weights
+    df.loc[X.index, 'ml_weight_5'] = weights
+    df['combined_alpha_factor'] = df['ml_weight_20'] * df['alpha_factor_20'] + df['ml_weight_5'] * df['alpha_factor_5']
+
+    # Adjust for 5-Day Average Volume
+    df['avg_volume_5'] = df['volume'].rolling(window=5).mean()
+    df['combined_alpha_factor'] *= df['avg_volume_5']
+
+    # Adjust for 3-Day Average Return
+    df['3_day_avg_return'] = (df['close'] - df['open']).rolling(window=3).mean() / 3
+    df['combined_alpha_factor'] += df['3_day_avg_return']
+
+    # Placeholder for sentiment scores (positive and negative)
+    df['positive_sentiment_score'] = 0.5  # Example placeholder
+    df['negative_sentiment_score'] = -0.5  # Example placeholder
+    df['combined_alpha_factor'] += df['positive_sentiment_score'] - df['negative_sentiment_score']
+
+    return df['combined_alpha_factor']
+```

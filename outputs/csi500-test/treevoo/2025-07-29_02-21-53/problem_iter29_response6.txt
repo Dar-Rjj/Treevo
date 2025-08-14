@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Differences
+    df['Open_Close'] = df['close'] - df['open']
+    df['High_Low'] = df['high'] - df['low']
+    df['Day_to_Day_Close'] = df['close'].diff()
+
+    # Identify Trend Indicators
+    # Simple Moving Averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Exponential Moving Averages (EMA)
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Price Momentum
+    df['Rate_of_Change'] = df['close'].pct_change()
+    df['RSI'] = 100 - (100 / (1 + (df['close'].diff() > 0).rolling(window=14).sum() / (df['close'].diff() < 0).rolling(window=14).sum()))
+
+    # Analyze Volume and Amount Data
+    # Volume Trends
+    df['Avg_Volume_5'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Changes'] = df['volume'].diff()
+    
+    # Volume Weighted Average Price (VWAP)
+    df['Cum_Volume'] = df['volume'].cumsum()
+    df['Cum_Amount'] = (df['close'] * df['volume']).cumsum()
+    df['VWAP'] = df['Cum_Amount'] / df['Cum_Volume']
+
+    # Amount Analysis
+    df['Total_Amount'] = df['amount']
+    df['Amount_Changes'] = df['amount'].diff()
+    df['Accumulation_Distribution'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['Accumulation_Distribution'] = df['Accumulation_Distribution'].cumsum()
+
+    # Combine Price and Volume
+    # On-Balance Volume (OBV)
+    df['OBV'] = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0).mul(df['volume']).cumsum()
+    
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where((typical_price - typical_price.shift(1)) > 0, 0.0)
+    negative_money_flow = money_flow.where((typical_price - typical_price.shift(1)) < 0, 0.0)
+    positive_sum = positive_money_flow.rolling(window=14).sum()
+    negative_sum = negative_money_flow.rolling(window=14).sum()
+    df['MFI'] = 100 - (100 / (1 + (positive_sum / negative_sum)))
+
+    # Volume-Price Trend (VPT)
+    df['VPT'] = ((df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']).cumsum()
+
+    # Detect Market Sentiment
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Bollinger Bands Width
+    bb_middle = df['close'].rolling(window=20).mean()
+    bb_std = df['close'].rolling(window=20).std()
+    df['Bollinger_Bands_Width'] = (bb_middle + 2 * bb_std) - (bb_middle - 2 * bb_std)
+    
+    # Average True Range (ATR)
+    df['True_Range'] = df[['high' - 'low', abs('high' - 'close').shift(1), abs('low' - 'close').shift(1)]].max(axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+
+    # Keltner Channels
+    df['KC_Middle'] = df['close'].rolling(window=20).mean()
+    df['KC_Upper'] = df['KC_Middle'] + 2 * df['ATR']
+    df['KC_Lower'] = df['KC_Middle'] - 2 * df['ATR']
+    df['Keltner_Channels_Width']

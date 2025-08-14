@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Momentum Component
+    intraday_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = intraday_return * df['volume']
+
+    # Historical Momentum Component
+    historical_momentum = df['close'] - df['close'].shift(15)
+
+    # Combine Momentum Components
+    combined_momentum = intraday_momentum + historical_momentum
+    
+    # Smooth Combined Momentum
+    smoothed_momentum = combined_momentum.ewm(span=5).mean()
+
+    # Weighted Average Volume
+    volume_weighted_avg = df['volume'].rolling(window=20).apply(lambda x: (x * (1/len(x))).sum(), raw=True)
+
+    # Incorporate Volume Influence
+    momentum_volume_influence = smoothed_momentum * volume_weighted_avg
+
+    # Advanced Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    ema_daily_range = daily_range.ewm(span=10).mean()
+    volatility_multiplier = 1 / (ema_daily_range + 1)
+    adjusted_momentum = momentum_volume_influence * volatility_multiplier
+
+    # Price Range and Volatility
+    price_volatility = (df['high'] - df['low']) * (df['close'] - df['open']) / df['volume']
+
+    # Volume Difference
+    volume_diff = df['volume'] - df['volume'].shift(1)
+
+    # Average High-Low Range
+    avg_high_low_range = (df['high'] - df['low']).rolling(window=7).mean()
+
+    # Close Price Change
+    close_price_change = df['close'] - df['close'].shift(1)
+
+    # Integrate Hybrid Factors
+    hybrid_factor = (volume_diff * 0.6) + (avg_high_low_range * 0.4) + close_price_change
+
+    # Final Factor
+    final_factor = (hybrid_factor * adjusted_momentum).dropna()
+
+    return final_factor
+```

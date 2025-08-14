@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Momentum Indicator
+    df['returns'] = df['close'].pct_change()
+    df['short_momentum'] = df['returns'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    df['long_momentum'] = df['returns'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Calculate Average True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))), 
+        axis=1
+    )
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Combine Momentum and Volatility
+    df['weighted_momentum'] = 0.7 * df['short_momentum'] + 0.3 * df['long_momentum']
+    df['momentum_volatility'] = df['weighted_momentum'] / df['atr_14']
+    
+    # Adjust by Volume and Amount
+    n = 10  # Number of periods for volume average
+    m = 10  # Number of periods for amount average
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['avg_amount'] = df['amount'].rolling(window=m).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+    df['amount_ratio'] = df['amount'] / df['avg_amount']
+    df['adjusted_momentum'] = df['momentum_volatility'] * df['volume_ratio'] * df['amount_ratio']
+    
+    # Add Trend Following Component
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['trend_multiplier'] = 1.25 if df['close'] > df['sma_50'] else 1.0
+    df['trend_adjusted_momentum'] = df['adjusted_momentum'] * df['trend_multiplier']
+    
+    # Incorporate Price Oscillator
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['price_oscillator'] = df['ema_12'] - df['ema_26']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['change_high_low_range'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Calculate Price Momentum Component
+    df['price_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Volume Surge Component
+    df['volume_surge'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Combine High-Low Range and Volume
+    df['high_low_volume'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Combined Components
+    df['combined_adjustment'] = df['price_momentum'] * df['volume_surge'] + df['high_low_volume']
+    df['final_factor'] = df['trend_adjusted_momentum'] + df['price_oscillator'] + df['combined_adjustment']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

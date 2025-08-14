@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    intraday_mid_open_ratio = intraday_midpoint / df['open']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_close_to_open_return = close_to_open_return / intraday_range
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = df['amount'] / df['volume']
+    
+    # Calculate Close-to-Next Day Open Return over a period
+    next_day_open = df['open'].shift(-1)
+    close_to_next_open_return = vwap - next_day_open
+    weighted_sum_returns = (close_to_next_open_return * df['volume']).rolling(window=5).sum()
+    
+    # Calculate Close-to-Open Envelope
+    max_close = df['close'].rolling(window=5).max()
+    min_open = df['open'].rolling(window=5).min()
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    max_adjusted_close_to_open_return = adjusted_close_to_open_return.rolling(window=5).max()
+    
+    # Combine Factors
+    combined_factor = intraday_mid_open_ratio * weighted_sum_returns
+    combined_envelopes = (max_close + min_open + max_adjusted_close_to_open_return + min_open) / 4
+    combined_factors_adj = combined_factor / combined_envelopes
+    
+    # Introduce Intraday Momentum Indicator
+    intraday_momentum = intraday_midpoint - intraday_midpoint.shift(1)
+    
+    # Introduce Intraday Range to Volume Ratio
+    intraday_range_to_volume_ratio = intraday_range / df['volume']
+    
+    # Introduce Volatility Factor
+    daily_volatility = (df['high'] - df['low'])
+    smoothed_volatility = daily_volatility.ewm(span=5).mean()
+    
+    # Combine Metrics
+    weighted_intraday_range = intraday_range * (weighted_sum_returns / df['volume'])
+    adjusted_by_close_to_open = weighted_intraday_range + adjusted_close_to_open_return
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Cumulative Price Change
+    cumulative_price_change = daily_price_change.cumsum()
+    
+    # Compute Cumulative Price Momentum
+    cumulative_price_momentum = daily_price_change.ewm(span=5).mean()
+    
+    # Final Factor Adjustment
+    final_factor = combined_factors_adj * cumulative_price_momentum
+    
+    return final_factor
+```

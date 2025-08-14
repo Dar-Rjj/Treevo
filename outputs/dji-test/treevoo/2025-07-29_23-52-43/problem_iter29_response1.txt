@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate High-Low Breakout Intensity
+    breakout_intensity = (df['high'] - df['low']) / df['close']
+    breakout_intensity[breakout_intensity < 0] = 0
+    
+    # Combine Metrics
+    combined_metrics = intraday_return + close_to_open_return + breakout_intensity
+    weighted_combined_metrics = df['volume'] * combined_metrics
+    
+    # Adjust for Volatility
+    rolling_volatility = df['high'].rolling(window=21).std() - df['low'].rolling(window=21).std()
+    adjusted_metrics = weighted_combined_metrics / rolling_volatility
+    
+    # Incorporate Momentum
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    momentum_adjusted_metrics = adjusted_metrics + short_term_momentum + long_term_momentum
+    
+    # Enhance Weighting with Trade Activity
+    avg_volume = df['volume'].rolling(window=10).mean()
+    trade_activity_weight = df['volume'] / avg_volume
+    enhanced_metrics = trade_activity_weight * momentum_adjusted_metrics
+    
+    # Measure Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / (df['close'] - df['open'])
+    
+    # Evaluate High and Low Prices
+    high_to_low_ratio = df['high'] / df['low']
+    price_range = df['high'] - df['low']
+    
+    # Analyze Trading Volume Changes
+    volume_change_ratio = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['volume'].pct_change().rolling(window=21).quantile(0.75) * 1.5
+    volume_spike = (volume_change_ratio > spike_threshold).astype(int)
+    
+    # Integrate Intraday Volatility and High-Low Evaluation into Combined Metrics
+    final_metrics = (enhanced_metrics / intraday_volatility) + (high_to_low_ratio * price_range)
+    
+    return final_metrics
+```

@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Day Range
+    df['day_range'] = df['high'] - df['low']
+    
+    # Measure Relative Day Range to Previous Close
+    df['relative_day_range'] = df['day_range'] / df['close'].shift(1)
+    
+    # Evaluate Day Range Volatility Over a Fixed Period (e.g., 20 days)
+    df['day_range_volatility'] = df['day_range'].rolling(window=20).std()
+    
+    # Compute Average Volume over a Fixed Period (e.g., 20 days)
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Determine if Volume is Above or Below its Average
+    df['volume_above_avg'] = (df['volume'] > df['avg_volume']).astype(int)
+    
+    # Assess the Impact of Volume on Daily Returns
+    df['daily_return'] = df['close'].pct_change()
+    df['volume_impact_returns'] = df['daily_return'] * df['volume_above_avg']
+    
+    # Calculate Volume-Weighted Returns
+    df['volume_weighted_returns'] = df['daily_return'] * df['volume']
+    
+    # Calculate Simple Moving Averages (SMA) for Different Periods
+    df['sma_short'] = df['close'].rolling(window=5).mean()
+    df['sma_long'] = df['close'].rolling(window=20).mean()
+    
+    # Generate Buy/Sell Signal
+    df['sma_signal'] = (df['sma_short'] > df['sma_long']).astype(int)
+    
+    # Count Number of Crossovers in a Given Period (e.g., 20 days)
+    df['sma_crossover'] = (df['sma_signal'].diff() != 0).astype(int)
+    df['num_crossovers'] = df['sma_crossover'].rolling(window=20).sum()
+    
+    # Determine Price Trend Consistency Over Time
+    df['consecutive_positive_returns'] = (df['daily_return'] > 0).groupby((df['daily_return'] < 0).cumsum()).cumcount()
+    df['consecutive_negative_returns'] = (df['daily_return'] < 0).groupby((df['daily_return'] > 0).cumsum()).cumcount()
+    
+    # Calculate Rate of Change (ROC) for Price
+    df['roc'] = df['close'].pct_change(periods=20)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).cumsum()
+    
+    # Compare VWAP with Closing Price
+    df['vwap_close_diff'] = df['vwap'] - df['close']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Classify Gaps as Up, Down, or No Gap
+    df['gap_type'] = 'No Gap'
+    df.loc[df['open'] > df['close'].shift(1), 'gap_type'] = 'Up Gap'
+    df.loc[df['open'] < df['close'].shift(1), 'gap_type'] = 'Down Gap'
+    
+    # Calculate Gap Size
+    df['gap_size'] = df['open'] - df['close'].shift(1)
+    
+    # Evaluate the Sustainability of Gaps Over the Next Few Days (e.g., 5 days)
+    df['gap_sustainability'] = (df['gap_size'] * df['gap_size'].shift(-5)).clip(lower=0)
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        df['relative_day_range'] + 
+        df['day_range_volatility'] + 
+        df['volume_impact_returns'] + 
+        df['volume_weighted_returns'] + 
+        df['sma_signal'] + 
+        df['num_crossovers'] + 
+        df['consecutive_positive_returns'] - 
+        df['consecutive_negative_returns'] + 
+        df['roc'] + 
+        df['vwap_close_diff'] + 
+        df['gap_sustainability']
+    )
+    
+    return alpha_factor
+```

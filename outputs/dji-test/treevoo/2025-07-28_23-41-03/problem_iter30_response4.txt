@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer SMA from Shorter SMA
+    sma_diff_100_200 = sma_100 - sma_200
+    sma_diff_50_100 = sma_50 - sma_100
+
+    # Calculate 20-Day Weighted Moving Average of Returns
+    daily_return = df['close'].pct_change()
+    weighted_avg_return = (daily_return * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Adjust for Price Volatility: 20-Day Average True Range (ATR)
+    tr = pd.concat([df['high'] - df['low'], abs(df['high'] - df['close'].shift()), abs(df['low'] - df['close'].shift())], axis=1).max(axis=1)
+    atr_20 = tr.rolling(window=20).mean()
+    adjusted_weighted_avg_return = weighted_avg_return - atr_20
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Determine Reversal Signal
+    reversal_signal = intraday_return.apply(lambda x: -1 if x > 0 else 1)
+
+    # Multiply Subtracted SMA by Reversal Signal
+    sma_diff_100_200_reversal = sma_diff_100_200 * reversal_signal
+    sma_diff_50_100_reversal = sma_diff_50_100 * reversal_signal
+
+    # Compute Combined Signal
+    combined_signal = atr_20 * (sma_diff_100_200_reversal + sma_diff_50_100_reversal)
+
+    # Smooth Result with Exponential Moving Average (EMA)
+    ema_combined_signal = combined_signal.ewm(span=20, adjust=False).mean()
+
+    # High-Low Range Momentum with Volume Adjustment
+    high_low_range = df['high'] - df['low']
+    high_low_momentum = high_low_range.diff()
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    high_low_momentum_vol_adjusted = high_low_momentum / avg_volume_30
+
+    # Final Alpha Factor Combination
+    combined_price_intraday_reversal_momentum = (sma_diff_50_100_reversal + sma_diff_100_200_reversal) + ema_combined_signal
+    final_alpha_factor = (combined_price_intraday_reversal_momentum * 0.4) + \
+                         (high_low_momentum_vol_adjusted * 0.3) + \
+                         (adjusted_weighted_avg_return * 0.3)
+
+    return final_alpha_factor
+```

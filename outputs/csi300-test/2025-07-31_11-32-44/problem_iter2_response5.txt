@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility using Average True Range (ATR)
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Calculate Intraday Momentum
+    df['previous_high_low_spread'] = df['high_low_spread'].shift(1)
+    df['intraday_momentum'] = df['high_low_spread'] - df['previous_high_low_spread']
+    
+    # Calculate Intraday Reversal
+    df['previous_close_open_diff'] = (df['close'].shift(1) - df['open'].shift(1))
+    df['intraday_reversal'] = (df['close'] - df['open']) - df['previous_close_open_diff']
+    df['intraday_reversal'] *= df['intraday_momentum']
+    
+    # Calculate Volume Trend using Exponential Moving Average (EMA)
+    df['volume_ema'] = df['volume'].ewm(span=14, adjust=False).mean()
+    
+    # Compute Volume Reversal Component
+    df['volume_reversal_sentiment'] = np.where(df['volume'] > df['volume_ema'], 1, -1)
+    df['volume_reversal_component'] = df['intraday_return'] * df['volume_reversal_sentiment']
+    
+    # Combine All Components
+    df['factor'] = (df['intraday_return'] * df['intraday_range'] * df['atr'] + 
+                    df['intraday_reversal'] + 
+                    df['volume_reversal_component'])
+    
+    return df['factor']
+```

@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+
+    # Calculate Open-to-Close Momentum
+    df['Open_To_Close_Momentum'] = df['close'] - df['open']
+
+    # Combine Intraday Indicators
+    df['Combined_Intraday_Indicators'] = (df['Intraday_High_Low_Spread'] * df['Open_To_Close_Momentum']) + df['Open_To_Close_Momentum']
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Close-to-Range Ratio
+    df['Close_To_Range_Ratio'] = df['close'] / df['High_Low_Range']
+
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    df['Volume_Weighted_Close_To_Range_Momentum'] = df['Close_To_Range_Ratio'] * df['volume']
+
+    # Final Combination
+    df['Intermediate_Alpha_Factor'] = df['Combined_Intraday_Indicators'] * df['Volume_Weighted_Close_To_Range_Momentum']
+
+    # Adjust for Volume Impact, Price Volatility, RSI, and Accumulation Distribution
+    # Calculate Volume Trend
+    df['Volume_Trend'] = df['volume'] - df['volume'].shift(1)
+
+    # Calculate Average True Range Over 20 Days
+    df['True_Range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['Average_True_Range'] = df['True_Range'].rolling(window=20).mean()
+
+    # Calculate Accumulation Distribution Line
+    df['Accum_Dist_Line'] = (((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])) * df['volume']
+    df['Accum_Dist_Line_20'] = df['Accum_Dist_Line'].rolling(window=20).sum()
+
+    # Calculate Price Volatility
+    df['Price_Volatility'] = df['close'].rolling(window=20).std()
+
+    # Calculate N-Day RSI (using 14 days for example)
+    n = 14
+    df['Upward_Change'] = np.maximum(df['close'] - df['close'].shift(1), 0)
+    df['Downward_Change'] = np.maximum(df['close'].shift(1) - df['close'], 0)
+    df['EMA_Up'] = df['Upward_Change'].ewm(span=n, adjust=False).mean()
+    df['EMA_Down'] = df['Downward_Change'].ewm(span=n, adjust=False).mean()
+    df['RS'] = df['EMA_Up'] / df['EMA_Down']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+
+    # Final Adjustment
+    df['Final_Combination'] = df['Intermediate_Alpha_Factor'] * df['Volume_Trend']
+    df['Final_Combination'] = df['Final_Combination'] * (df['Average_True_Range'] + df['Price_Volatility'])
+    df['Final_Combination'] = df['Final_Combination'] * df['Accum_Dist_Line_20']
+    df['Final_Combination'] = df['Final_Combination'] * df['Price_Volatility']
+    df['Final_Combination'] = df['Final_Combination'] * df['RSI']
+
+    # Additional Momentum and Volume-Weighted Enhancements
+    # Calculate Volume-Weighted Open-to-Close Momentum
+    df['Volume_Weighted_Open_To_Close_Momentum'] = df['Open_To_Close_Momentum'] * df['volume']
+    df['Volume_Weighted_Open_To_Close_Momentum_20'] = df['Volume_Weighted_Open_To_Close_Momentum'].rolling(window=20).sum()
+
+    # Calculate Volume-Weighted Intraday High-Low Spread
+    df['Volume_Weighted_Intraday_High_Low_Spread'] = df['Intraday_High_Low_Spread'] * df['volume']
+    df['Volume_Weighted_Intraday_High_Low_Spread_20'] = df['Volume_Weighted_Intraday_High_Low_Spread'].rolling(window=20).sum()
+
+    # Combine Enhanced Indicators
+    df['Enhanced_Intermediate_Alpha_Factor'] = (df['Volume_Weighted_Open_To_Close_Momentum_2

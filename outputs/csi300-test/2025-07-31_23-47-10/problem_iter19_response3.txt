@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import rankdata
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_trend = df['volume'] - df['volume'].rolling(window=10).mean()
+    volume_trend_positive = volume_trend > 0
+    
+    # Calculate Short-Term Price Trend
+    short_term_ema = df['close'].ewm(span=10, adjust=False).mean()
+    short_term_trend = df['close'] - short_term_ema
+    short_term_trend_positive = short_term_trend > 0
+    
+    # Calculate Medium-Term Price Trend
+    medium_term_ema = df['close'].ewm(span=30, adjust=False).mean()
+    medium_term_trend = df['close'] - medium_term_ema
+    medium_term_trend_positive = medium_term_trend > 0
+    
+    # Calculate Long-Term Price Trend
+    long_term_ema = df['close'].ewm(span=50, adjust=False).mean()
+    long_term_trend = df['close'] - long_term_ema
+    long_term_trend_positive = long_term_trend > 0
+    
+    # Calculate Dynamic Volatility
+    dynamic_volatility = df['close'].rolling(window=10).std()
+    volatility_high = dynamic_volatility > np.percentile(dynamic_volatility, 50)
+    
+    # Integrate Momentum and Relative Strength
+    short_term_ema_momentum = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema_momentum = df['close'].ewm(span=20, adjust=False).mean()
+    relative_strength = short_term_ema_momentum / long_term_ema_momentum
+    
+    # Adjust High-Low Spread by Volume Trend
+    adjusted_spread = high_low_spread.copy()
+    adjusted_spread[volume_trend_positive] *= 1.5
+    adjusted_spread[~volume_trend_positive] *= 0.5
+    
+    # Incorporate Short-Term Price Trend
+    adjusted_spread[short_term_trend_positive] *= 1.2
+    adjusted_spread[~short_term_trend_positive] *= 0.8
+    
+    # Incorporate Medium-Term Price Trend
+    adjusted_spread[medium_term_trend_positive] *= 1.1
+    adjusted_spread[~medium_term_trend_positive] *= 0.9
+    
+    # Incorporate Long-Term Price Trend
+    adjusted_spread[long_term_trend_positive] *= 1.3
+    adjusted_spread[~long_term_trend_positive] *= 0.7
+    
+    # Incorporate Dynamic Volatility
+    adjusted_spread[volatility_high] *= 1.4
+    adjusted_spread[~volatility_high] *= 0.6
+    
+    # Incorporate Momentum and Relative Strength
+    adjusted_spread[relative_strength > 1] *= 1.7
+    adjusted_spread[relative_strength <= 1] *= 0.3
+    
+    # Final Alpha Factor
+    alpha_factor = adjusted_spread
+    return alpha_factor
+```

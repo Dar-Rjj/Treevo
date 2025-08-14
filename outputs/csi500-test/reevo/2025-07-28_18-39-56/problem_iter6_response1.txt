@@ -1,0 +1,36 @@
+```txt
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low, which represents the daily price range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate the buying pressure by looking at the amount of money that moved the price from open to close
+    buying_pressure = (df['close'] - df['open']) * df['volume']
+    
+    # Smooth the buying pressure over 5 days to reduce noise
+    smooth_buying_pressure = buying_pressure.rolling(window=5).mean()
+    
+    # Calculate the volume-weighted average price (VWAP) over a 10-day period
+    vwap = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Calculate the change in VWAP from the previous day
+    vwap_change = vwap.diff(1)
+    
+    # Calculate the 10-day simple moving average of the close price
+    sma_close = df['close'].rolling(window=10).mean()
+    
+    # Calculate the 10-day standard deviation of the close price for volatility
+    std_close = df['close'].rolling(window=10).std()
+    
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Final alpha factor, which is the smoothed buying pressure divided by the daily range, adjusted by the change in VWAP,
+    # further adjusted by the ratio of the current close price to its 10-day SMA, the 10-day standard deviation, and the RSI
+    alpha_factor = (smooth_buying_pressure / daily_range) * vwap_change * (df['close'] / sma_close) * (1 / std_close) * (rsi / 100)
+    
+    return alpha_factor
+```

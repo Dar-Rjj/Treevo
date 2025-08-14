@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['high_low_diff'] = df['high'] - df['low']
+    df['high_prev_close_diff'] = df['high'] - df['prev_close']
+    df['prev_close_low_diff'] = df['prev_close'] - df['low']
+    df['true_range'] = df[['high_low_diff', 'high_prev_close_diff', 'prev_close_low_diff']].max(axis=1)
+    
+    # Smooth True Range with 20-day EMA
+    df['smoothed_true_range'] = df['true_range'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate Long-Term True Range with 50-day High and Low
+    df['long_term_high'] = df['high'].rolling(window=50).max()
+    df['long_term_low'] = df['low'].rolling(window=50).min()
+    df['long_term_true_range'] = df['long_term_high'] - df['long_term_low']
+    
+    # Compute Momentum of True Ranges
+    df['range_momentum'] = df['long_term_true_range'] - df['smoothed_true_range']
+    
+    # Weight by Volume
+    df['weighted_range_momentum'] = df['range_momentum'] * df['volume']
+    
+    # Integrate Intraday Price Movements
+    df['daily_high_low_diff'] = df['high'] - df['low']
+    df['daily_close_open_diff'] = df['close'] - df['open']
+    
+    # Aggregate and Smooth Intraday Price Movements
+    df['aggregated_high_low_diff'] = df['daily_high_low_diff'].rolling(window=20).sum()
+    df['aggregated_close_open_diff'] = df['daily_close_open_diff'].rolling(window=20).sum()
+    df['smoothed_aggregated_high_low_diff'] = df['aggregated_high_low_diff'].ewm(span=20, adjust=False).mean()
+    df['smoothed_aggregated_close_open_diff'] = df['aggregated_close_open_diff'].ewm(span=20, adjust=False).mean()
+    
+    # Combine True Range and Intraday Price Movements
+    df['combined_factor'] = (df['smoothed_true_range'] + 
+                             df['smoothed_aggregated_high_low_diff'] + 
+                             df['smoothed_aggregated_close_open_diff'])
+    
+    # Evaluate Volume Activity
+    df['average_volume'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['high_volume_indicator'] = (df['volume'] > df['average_volume']).astype(int)
+    
+    # Integrate Combined Factors
+    df['final_factor'] = (df['combined_factor'] * df['weighted_range_momentum'] * 
+                          df['high_volume_indicator'])
+    
+    # Final Alpha Factor with 14-day EMA
+    df['alpha_factor'] = df['final_factor'].ewm(span=14, adjust=False).mean()
+    
+    return df['alpha_factor']
+```

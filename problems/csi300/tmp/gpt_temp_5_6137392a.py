@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Determine Volatility
+    df['Volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    
+    # Calculate MACD and Signal Line
+    fast_ema = df['close'].ewm(span=12, adjust=False).mean()
+    slow_ema = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = fast_ema - slow_ema
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    
+    # Adjust Window Size
+    window_size = 20  # Initial window size
+    df['Adaptive_Window_Size'] = window_size
+    df.loc[df['Volatility'] > df['Volatility'].mean(), 'Adaptive_Window_Size'] = max(10, window_size - 5)
+    df.loc[df['Volatility'] < df['Volatility'].mean(), 'Adaptive_Window_Size'] = min(30, window_size + 5)
+    df.loc[df['MACD'] > df['MACD_Signal'], 'Adaptive_Window_Size'] = min(30, df['Adaptive_Window_Size'] + 5)
+    df.loc[df['MACD'] < df['MACD_Signal'], 'Adaptive_Window_Size'] = max(10, df['Adaptive_Window_Size'] - 5)
+    
+    # Rolling Statistics
+    def rolling_stats(group):
+        return pd.Series({
+            'Rolling_Mean': group.rolling(window=int(group.name)).mean(),
+            'Rolling_Std': group.rolling(window=int(group.name)).std()
+        })
+    
+    df['Rolling_Stats'] = df.groupby('Adaptive_Window_Size')['Volume_Weighted_Return'].apply(rolling_stats)
+    
+    # Extract the mean and standard deviation from the Rolling_Stats column
+    df['Rolling_Mean'] = df['Rolling_Stats'].apply(lambda x: x['Rolling_Mean'])
+    df['Rolling_Std'] = df['Rolling_Stats'].apply(lambda x: x['Rolling_Std'])
+    
+    # Final Alpha Factor (Z-Score of Volume Weighted Close-to-Open Return)
+    df['Alpha_Factor'] = (df['Volume_Weighted_Return'] - df['Rolling_Mean']) / df['Rolling_Std']
+    
+    return df['Alpha_Factor']

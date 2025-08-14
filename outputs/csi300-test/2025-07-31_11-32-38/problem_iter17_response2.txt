@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute 10-Day Exponential Moving Average of Daily Price Changes
+    df['10_Day_EMA_Price_Change'] = df['Daily_Price_Change'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = df['close'] - df['open']
+    df['5_Day_Mean_Intraday_Return'] = df['Intraday_Return'].rolling(window=5).mean()
+    df['Intraday_Return_Adjusted'] = df['Intraday_Return'] - df['5_Day_Mean_Intraday_Return']
+    
+    # Calculate Volume Weighted Daily Return
+    df['Volume_Weighted_Return'] = (df['close'] / df['open']) * df['volume']
+    
+    # Compute 20-Day Exponential Moving Average of Volume Weighted Returns
+    df['20_Day_EMA_Volume_Weighted_Return'] = df['Volume_Weighted_Return'].ewm(span=20, adjust=False).mean()
+    
+    # Weigh by Intraday Volume Activity
+    df['20_Day_MA_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Intraday_Volume_Activity'] = df['Intraday_High_Low_Spread'] * (df['volume'] / df['20_Day_MA_Volume'])
+    
+    # Calculate True Range (TR)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1))
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    
+    # Calculate Average True Range (ATR) over 14 periods
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Positive Directional Movement (+DM)
+    df['+DM'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] >= df['low'].shift(1)), 
+                         df['high'] - df['high'].shift(1), 0)
+    
+    # Calculate Negative Directional Movement (-DM)
+    df['-DM'] = np.where((df['low'] < df['low'].shift(1)) & (df['high'] <= df['high'].shift(1)), 
+                         df['low'].shift(1) - df['low'], 0)
+    
+    # Calculate +DM Smoothed Over 14 Periods
+    df['+DM_Smoothed'] = df['+DM'].rolling(window=14).mean()
+    
+    # Calculate -DM Smoothed Over 14 Periods
+    df['-DM_Smoothed'] = df['-DM'].rolling(window=14).mean()
+    
+    # Calculate +DI
+    df['+DI'] = 100 * (df['+DM_Smoothed'] / df['ATR'])
+    
+    # Calculate -DI
+    df['-DI'] = 100 * (df['-DM_Smoothed'] / df['ATR'])
+    
+    # Calculate ADMI
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+    
+    # Combine Intraday and Interday Momentum
+    df['Combined_Momentum'] = df['10_Day_EMA_Price_Change'] + df['Intraday_Return_Adjusted'] - df['20_Day_EMA_Volume_Weighted_Return']
+    
+    # Adjust for Price Volatility
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['30_Day_MA_Price_Range'] = df['Daily_Price_Range'].rolling(window=30).mean()
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum'] / df['30_Day_MA_Price_Range']
+    
+    # Smooth the Result
+    df['Smoothed_Factor'] = df['Adjusted_Combined_Momentum'].ewm(span=5, adjust=False).mean()
+    
+    # Synthesize Final Alpha Factor
+    df['Alpha_Factor'] = df

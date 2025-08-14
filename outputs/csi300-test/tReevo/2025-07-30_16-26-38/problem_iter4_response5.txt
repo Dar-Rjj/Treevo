@@ -1,0 +1,27 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_range'] = (df['high'] - df['low']) / df['low']
+    df['true_intraday_movement'] = (df['close'] - df['open']) / df['open']
+
+    # Measure Overnight Return
+    df['overnight_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Construct Composite Factor
+    df['intraday_weighted'] = df['true_intraday_movement'].apply(lambda x: 1.5 * x if x > 0.01 else x)
+    df['onr_adjusted'] = df['overnight_return'].apply(lambda x: -1 if x > 0.03 else 0.5)
+    df['composite_score'] = df['intraday_weighted'] + df['onr_adjusted']
+
+    # Incorporate Volatility
+    df['rolling_std'] = df['true_intraday_movement'].rolling(window=20).std()
+    df['volatility_adjusted_score'] = df['composite_score'] / df['rolling_std']
+
+    # Adjust for Volume
+    df['volume_weighted_avg'] = ((df['open'] + df['close']) / 2) * df['volume']
+    volume_threshold = df['volume_weighted_avg'].mean()
+    df['final_factor'] = df['volatility_adjusted_score'] * df['volume_weighted_avg'].apply(lambda x: 1.2 if x > volume_threshold else 1)
+
+    return df['final_factor'].dropna()
+```

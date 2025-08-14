@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Log Returns
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate 20-Day Exponential Moving Average of Log Returns
+    df['ema_log_returns'] = df['log_returns'].ewm(span=20, adjust=False).mean()
+    
+    # Weight by Volume
+    df['volume_adjusted_momentum'] = df['ema_log_returns'] * df['volume']
+    
+    # Compute Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute 20-Day Moving Standard Deviation of High-Low Ranges
+    df['high_low_volatility'] = df['high_low_range'].rolling(window=20).std()
+    
+    # Calculate Intermediate Alpha Factor
+    df['intermediate_alpha'] = df['volume_adjusted_momentum'] - df['high_low_volatility']
+    
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['open']
+    
+    # Compute 5-Day Moving Average of Price Change
+    df['ma_5_price_change'] = df['price_change'].rolling(window=5).mean()
+    
+    # Compute 10-Day Moving Average of Price Change
+    df['ma_10_price_change'] = df['price_change'].rolling(window=10).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = 0
+    df.loc[df['ma_5_price_change'] > df['ma_10_price_change'], 'reversal_signal'] = 1
+    df.loc[df['ma_5_price_change'] < df['ma_10_price_change'], 'reversal_signal'] = -1
+    
+    # Integrate Reversal Signal with Intermediate Alpha Factor
+    df['final_alpha'] = df['intermediate_alpha'] + df['reversal_signal'] * 0.5 * df['intermediate_alpha'].abs()
+    
+    return df['final_alpha']
+```

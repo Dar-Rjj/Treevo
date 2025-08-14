@@ -1,0 +1,26 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Intraday High-Low Spread
+    intraday_high_low_spread = df['High'] - df['Low']
+    
+    # Compute Previous Day's Close-to-Open Return
+    close_to_open_return = df['Close'].shift(1) - df['Open']
+    
+    # Calculate Intraday Momentum
+    intraday_momentum = (intraday_high_low_spread + close_to_open_return)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    daily_vwap = (df['High'] * df['Volume'] + df['Low'] * df['Volume'] + df['Close'] * df['Volume'] + df['Open'] * df['Volume']) / df['Volume'].sum()
+    
+    # Combine Intraday Momentum and VWAP
+    combined_value = daily_vwap - intraday_momentum
+    weighted_value = combined_value * df['Volume']
+    
+    # Smooth the Factor using Exponential Moving Average (EMA)
+    smoothed_factor = weighted_value.ewm(span=7, adjust=False).mean()
+    
+    return smoothed_factor

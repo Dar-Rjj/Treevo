@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Compute the 5-day and 20-day moving average of daily returns
+    df['5d_mavg_returns'] = df['daily_return'].rolling(window=5).mean()
+    df['20d_mavg_returns'] = df['daily_return'].rolling(window=20).mean()
+    
+    # Calculate Exponential Moving Average (EMA) using Close prices over a 10-day window
+    df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Weighted Moving Average (WMA) using Close prices over a 15-day window
+    weights = np.arange(1, 16)
+    df['wma_15'] = df['close'].rolling(window=15).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['ema_10']
+    
+    # Calculate Integrated Momentum
+    df['integrated_momentum'] = df['close'] - df['wma_15'] + df['20d_mavg_returns']
+    
+    # Intraday range
+    df['intraday_range'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Upper and lower shadow lengths
+    df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
+    df['shadow_ratio'] = df['upper_shadow'] / df['lower_shadow']
+    
+    # Volume Adjusted High-Low Range
+    df['vol_adj_high_low'] = (df['high'] - df['low']) * np.sqrt(np.log(df['volume'] + 1))
+    
+    # 10-day Historical Volatility
+    df['log_close'] = np.log(df['close'])
+    df['log_returns'] = df['log_close'] - df['log_close'].shift(1)
+    df['10d_vol'] = df['log_returns'].rolling(window=10).std() * np.sqrt(252)
+    
+    # Change in volume from the previous day
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Ratio of volume to the 20-day moving average of volume
+    df['vol_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+    
+    # Daily Log Return
+    df['daily_log_return'] = df['log_close'] - df['log_close'].shift(1)
+    
+    # Accumulated Product of Daily Log Return and Volume Change over 10 days
+    df['integrated_log_return'] = (df['daily_log_return'] * df['volume_change']).rolling(window=10).sum()
+    
+    # Enhanced Volume Thrust
+    df['upward_thrust'] = (df['close'] > df['open']) * (df['volume'] * (df['close'] - df['open']))
+    df['downward_thrust'] = (df['close'] <= df['open']) * (df['volume'] * (df['open'] - df['close']))
+    df['enhanced_volume_thrust'] = (df['upward_thrust'] - df['downward_thrust']) + (df['high'] - df['low']) / df['open']
+    
+    # 5-day and 20-day Exponential Moving Averages
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Crossover Signal
+    df['crossover_signal'] = np.where(df['ema_5'] > df['ema_20'], 1, np.where(df['ema_5'] < df['ema_20'], -1, 0))
+    
+    # Final Composite Alpha Factor
+    df['alpha_factor'] = (
+        df['price_momentum'] +
+        df['integrated_momentum'] -
+        df['vol_adj_high_low'] +
+        df['integrated_log_return'] +
+        df['crossover_signal'] +
+        df['enhanced_volume_thrust'] +
+        df['shadow_ratio'] * df['10d_vol'] +
+        df['10d_vol'] *

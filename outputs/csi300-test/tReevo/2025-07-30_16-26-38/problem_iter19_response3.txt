@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    
+    # Adjust Window Size based on Volatility
+    def adjust_window_size(volatility, low_vol_threshold=0.05, high_vol_threshold=0.15, min_window=10, max_window=50):
+        if volatility < low_vol_threshold:
+            return max_window
+        elif volatility > high_vol_threshold:
+            return min_window
+        else:
+            return int((max_window - min_window) * (volatility - low_vol_threshold) / (high_vol_threshold - low_vol_threshold)) + min_window
+    
+    df['window_size'] = df['volatility'].apply(adjust_window_size)
+    
+    # Rolling Statistics with Adaptive Window
+    df['rolling_mean'] = df.apply(lambda x: df.loc[:x.name, 'volume_weighted_return'].rolling(window=x['window_size']).mean().iloc[-1], axis=1)
+    df['rolling_std'] = df.apply(lambda x: df.loc[:x.name, 'volume_weighted_return'].rolling(window=x['window_size']).std().iloc[-1], axis=1)
+    
+    # Final Alpha Factor: Standardized Rolling Mean
+    df['alpha_factor'] = (df['rolling_mean'] - df['rolling_mean'].mean()) / df['rolling_mean'].std()
+    
+    return df['alpha_factor']
+```

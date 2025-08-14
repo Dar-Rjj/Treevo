@@ -1,0 +1,7 @@
+def heuristics_v2(df):
+    avg_vol_50 = df['volume'].rolling(window=50).mean()
+    avg_vol_200 = df['volume'].rolling(window=200).mean()
+    close_change_60 = df['close'].pct_change(periods=60)
+    adjustment_factor = (1 + close_change_60.abs().apply(np.log))
+    heuristics_matrix = (avg_vol_50 / avg_vol_200) * adjustment_factor
+    return heuristics_matrix

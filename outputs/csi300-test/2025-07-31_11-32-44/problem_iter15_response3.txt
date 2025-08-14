@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate N-day Close Price Percent Change
+    N = 10
+    close_price_pct_change = df['close'].pct_change(periods=N)
+    
+    # Compute M-day Average of N-day Close Price Percent Change
+    M = 5
+    momentum = close_price_pct_change.rolling(window=M).mean()
+    
+    # Combine Intraday High-Low Spread and Momentum
+    combined_momentum = intraday_high_low_spread * momentum
+    
+    # Adjust with Volume
+    volume_weight = df['volume'].shift(1) / df['volume'].shift(1).rolling(window=5).mean()
+    smoothed_volume_weight = volume_weight.ewm(span=5, adjust=False).mean()
+    adjusted_momentum = combined_momentum * smoothed_volume_weight
+    
+    # Calculate Intraday Reversal
+    intraday_reversal = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Introduce Intraday Range Volatility
+    P = 5
+    intraday_range = df['high'] - df['low']
+    intraday_range_volatility = intraday_range.rolling(window=P).std()
+    
+    # Incorporate Intraday Opening Gap
+    Q = 5
+    daily_opening_gap = df['open'] - df['close'].shift(1)
+    opening_gap_volatility = daily_opening_gap.rolling(window=Q).std()
+    
+    # Combine Adjusted Momentum, Intraday Reversal, Intraday Range Volatility, and Opening Gap
+    combined_factor = (adjusted_momentum * intraday_reversal) * (1 + intraday_range_volatility) * (1 + opening_gap_volatility)
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor.ewm(span=5, adjust=False).mean()
+    
+    return final_alpha_factor
+```

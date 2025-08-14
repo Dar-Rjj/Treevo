@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics(data: pd.DataFrame) -> pd.Series:
+    # Calculate Intraday Return
+    intraday_return = (data['close'] - data['open']) / data['open']
+    
+    # Calculate Volume Impact Score
+    sum_volume_10d = data['volume'].rolling(window=10).sum()
+    avg_high_10d = data['high'].rolling(window=10).mean()
+    avg_low_10d = data['low'].rolling(window=10).mean()
+    volume_impact_score = (avg_high_10d - avg_low_10d) / sum_volume_10d
+    
+    # Generate Factor 1
+    factor_1 = intraday_return * volume_impact_score
+    
+    # Calculate Intraday Volume Proportion
+    overnight_volume = data['volume'].shift(1)
+    intraday_volume_proportion = data['volume'] - overnight_volume
+    
+    # Calculate Intraday Volume Intensity
+    high_low_range = data['high'] - data['low']
+    intraday_volume_intensity = intraday_volume_proportion / high_low_range
+    
+    # Calculate Weighted Intraday Volume Intensity
+    weighted_intraday_volume_intensity = intraday_volume_intensity * intraday_return
+    
+    # Calculate Intraday and Breakout Momentum
+    high_low_spread = data['high'] - data['low']
+    prev_close = data['close'].shift(1)
+    breakout_momentum = high_low_spread / prev_close
+    
+    # Adjust by Cumulative Volume
+    cumulative_volume = data['volume'].rolling(window=10).sum()
+    adjusted_momentum = breakout_momentum / cumulative_volume
+    
+    # Calculate Volume-Adjusted Momentum
+    volume_adjusted_momentum = adjusted_momentum * intraday_volume_proportion
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    cumulative_vol_weighted_momentum = (volume_adjusted_momentum * data['volume']).rolling(window=10).sum()
+    
+    # Aggregate Momentum Over M Days
+    aggregated_momentum = cumulative_vol_weighted_momentum.rolling(window=5).sum()
+    
+    # Confirm with Volume Trend
+    avg_volume_5d = data['volume'].rolling(window=5).mean()
+    current_volume = data['volume']
+    volume_ratio = current_volume / avg_volume_5d
+    factor_2 = intraday_return.where(volume_ratio > 1, 0)
+    
+    # Final Factor
+    final_factor = factor_1 * factor_2
+    
+    return final_factor
+```

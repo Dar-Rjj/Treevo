@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate Previous Day Overnight Return
+    prev_day_close = df['close'].shift(1)
+    overnight_return = (df['close'] - prev_day_close) / prev_day_close
+
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+
+    # Weight by Intraday Volatility
+    weighted_adjusted_returns = intraday_volatility * volume_adjusted_returns
+
+    # Smoothed Moving Average
+    sma_weighted_returns = weighted_adjusted_returns.rolling(window=5).mean()
+    ema_sma_weighted_returns = sma_weighted_returns.ewm(span=5, adjust=False).mean()
+
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(7)
+
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(25)
+
+    # Compute Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+
+    # Integrate Intraday and Previous Day's Returns
+    integrated_returns = intraday_return * overnight_return
+
+    # Combine Price Momentum and Intraday Reversal
+    combined_momentum_reversal = price_momentum_ratio * integrated_returns
+
+    # Conditionally Adjust by Volume Surge
+    avg_volume_7_days = df['volume'].rolling(window=7).mean()
+    volume_above_avg = df['volume'] > avg_volume_7_days
+    conditionally_adjusted_momentum = combined_momentum_reversal.where(volume_above_avg, combined_momentum_reversal * 0.7) \
+                                                            .where(~volume_above_avg, combined_momentum_reversal * 1.8)
+
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(1)
+
+    # Confirm Momentum with Volume and Amount
+    positive_volume_filter = (volume_change > 0).astype(int)
+    amount_change = df['amount'] - df['amount'].shift(1)
+    positive_amount_filter = (amount_change > 0).astype(int)
+    final_momentum_factor = positive_volume_filter * positive_amount_filter
+
+    # Generate Final Alpha Factor
+    final_alpha_factor = ema_sma_weighted_returns * conditionally_adjusted_momentum * final_momentum_factor
+
+    return final_alpha_factor
+```

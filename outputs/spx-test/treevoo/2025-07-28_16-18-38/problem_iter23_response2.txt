@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate daily range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Calculate ATR over 14 days
+    df['tr'] = df[['high', 'low']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate distance to 200-day moving average
+    df['ma_200'] = df['close'].rolling(window=200).mean()
+    df['distance_to_ma_200'] = df['close'] - df['ma_200']
+    
+    # Calculate short, medium, and long-term trends
+    df['ma_5'] = df['close'].rolling(window=5).mean()
+    df['ma_20'] = df['close'].rolling(window=20).mean()
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Trend indicator
+    df['trend_indicator'] = df['ma_5'] - df['ma_20']
+    
+    # Simple Momentum Factor
+    df['simple_momentum_factor'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Daily volume change
+    df['daily_volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Daily amount
+    df['daily_amount'] = df['close'] * df['volume']
+    
+    # Daily amount change
+    df['daily_amount_change'] = (df['daily_amount'] - df['daily_amount'].shift(1)) / df['daily_amount'].shift(1)
+    
+    # Construct composite factors
+    df['price_volume_momentum'] = (df['daily_return'] + df['daily_range'] / df['close'].shift(1)) * df['daily_volume_change']
+    df['trend_confirmation'] = df['trend_indicator'] * df['daily_amount_change']
+    df['sentiment_volatility'] = (df['atr'].rolling(window=5).mean() + df['daily_amount'].rolling(window=5).mean()) * df['trend_indicator']
+    df['reversion_to_mean'] = (df['close'] - df['ma_200']) / df['ma_200']
+    df['reversal_indicator'] = df['low'] / df['high'].shift(1)
+    df['open_close_gap'] = df['open'] - df['close'].shift(1)
+    df['integrated_volume_trend'] = (df['trend_indicator'] * df['rsi']) * (df['daily_volume_change'] + df['daily_amount_change'])
+    df['combined_momentum_reversion'] = (df['simple_momentum_factor'] + df['reversion_to_mean']) * (df['daily_range'] / df['close'].shift(1))
+    
+    # Final factor
+    df['alpha_factor'] = (df['price_volume_momentum'] + df['trend_confirmation'] + df['sentiment_volatility'] + 
+                          df['reversion_to_mean'] + df['reversal_indicator'] + df['open_close_gap'] + 
+                          df['integrated_volume_trend'] + df['combined_momentum_reversion'])
+    
+    return df['alpha_factor']
+```

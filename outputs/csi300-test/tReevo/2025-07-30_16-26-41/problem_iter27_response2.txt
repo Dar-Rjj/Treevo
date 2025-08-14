@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+
+def heuristics_v2(df):
+    # Define liquidity measures
+    df['avg_vol_30'] = df['volume'].rolling(window=30).mean()
+    df['trading_range'] = df['high'] - df['low']
+    
+    # Define dynamic volatility measures
+    df['historical_volatility_30'] = df['close'].pct_change().rolling(window=30).std()
+    df['intraday_volatility'] = (df['high'] - df['low']) / ((df['high'] + df['low']) / 2)
+    
+    # Combine liquidity and volatility
+    liquidity_weight = 0.5  # Adjust based on recent market conditions
+    volatility_weight = 0.5  # Adjust based on recent market conditions
+    df['liquidity_volatility'] = (liquidity_weight * df['avg_vol_30'] + 
+                                 volatility_weight * df['historical_volatility_30'])
+    
+    # Volume adjustments
+    df['volume_weighted_return'] = (df['close'].pct_change() * df['volume']) / df['volume'].rolling(window=30).mean()
+    df['relative_volume'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Calculate short-term momentum
+    df['sma_short'] = df['close'].rolling(window=10).mean()
+    df['roc_short'] = df['close'].pct_change(periods=10)
+    
+    # Calculate long-term momentum
+    df['sma_long'] = df['close'].rolling(window=200).mean()
+    df['roc_long'] = df['close'].pct_change(periods=200)
+    
+    # Combine short- and long-term momentum
+    df['momentum_diff'] = df['sma_short'] - df['sma_long']
+    df['momentum_ratio'] = df['roc_short'] / df['roc_long']
+    
+    # Define adaptive lookback period
+    df['adaptive_lookback'] = np.where(df['historical_volatility_30'] > df['historical_volatility_30'].quantile(0.75), 60, 30)
+    
+    # Recalculate momentum and volatility using the adaptive lookback
+    df['sma_short_adaptive'] = df['close'].rolling(window=df['adaptive_lookback']).mean()
+    df['roc_short_adaptive'] = df['close'].pct_change(periods=int(df['adaptive_lookback']))
+    df['historical_volatility_adaptive'] = df['close'].pct_change().rolling(window=df['adaptive_lookback']).std()
+    
+    # Measure market sentiment
+    df['cumulative_open_close'] = df['close'] - df['open']
+    df['sentiment'] = df['cumulative_open_close'].rolling(window=30).sum()
+    
+    # Combine market sentiment with other factors
+    sentiment_weight = 0.2  # Adjust based on sentiment
+    df['combined_factor'] = (liquidity_weight * df['avg_vol_30'] + 
+                             volatility_weight * df['historical_volatility_adaptive'] + 
+                             sentiment_weight * df['sentiment'])
+    
+    # Simplify to avoid overfitting
+    df['simplified_factor'] = 0.4 * df['liquidity_volatility'] + \
+                              0.3 * df['momentum_diff'] + \
+                              0.3 * df['sentiment']
+    
+    # Leverage Machine Learning for Dynamic Weighting
+    X = df[['sma_short', 'sma_long', 'roc_short', 'roc_long', 'historical_volatility_30', 'avg_vol_30']].dropna()
+    y = df['close'].pct_change().shift(-1).dropna()
+    X, y = X.align(y, join='inner')
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    feature_importances = model.feature_importances_
+    df['ml_weighted_factor'] = (feature_importances[0] * df['sma_short'] + 
+                                feature_importances[1] * df['sma_long'] + 
+                                feature_importances[2] * df['roc_short'] + 
+                                feature_importances[3] * df['roc_long'] + 
+                                feature_importances[4] * df['historical_volatility_30'] + 
+                                feature_importances

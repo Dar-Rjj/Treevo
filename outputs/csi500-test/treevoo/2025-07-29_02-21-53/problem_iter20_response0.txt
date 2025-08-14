@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute True Range and Intraday Price Movement
+    df['True_Range'] = df[['High', 'Low']].max(axis=1) - df[['High', 'Low']].min(axis=1)
+    df['Intraday_Price_Movement'] = (df['High'] - df['Low']) + (df['Close'] - df['Open'])
+    
+    # Adjust for Volume Impact on Price
+    df['True_Range_Volume'] = df['True_Range'] * df['Volume']
+    df['Intraday_Price_Movement_Volume'] = df['Intraday_Price_Movement'] * df['Volume']
+    
+    # Compute High-Low Difference and Close-Open Difference
+    df['High_Low_Diff'] = df['High'] - df['Low']
+    df['Close_Open_Diff'] = df['Close'] - df['Open']
+    
+    # Smooth High-Low Range and Aggregate Price Movements
+    df['EMA_High_Low_20'] = df['High_Low_Diff'].ewm(span=20).mean()
+    df['Sum_High_Low_20'] = df['High_Low_Diff'].rolling(window=20).sum()
+    df['Sum_Close_Open_20'] = df['Close_Open_Diff'].rolling(window=20).sum()
+    df['EMA_Daily_High_Low_20'] = df['High_Low_Diff'].ewm(span=20).mean()
+    
+    # Calculate Long-Term High-Low Range
+    df['Long_Term_High_Low_Range_50'] = df['High_Low_Diff'].rolling(window=50).max()
+    
+    # Compute Combined Price and High-Low Range Momentum
+    df['Momentum_Score'] = df['Sum_Close_Open_20'] - (df['EMA_High_Low_20'] - df['Long_Term_High_Low_Range_50'])
+    df['Price_Volatility'] = df['Close'].rolling(window=20).std()
+    df['Weighted_Momentum_Score'] = df['Momentum_Score'] * (df['Price_Volatility'] / df['Price_Volatility'].mean())
+    
+    # Evaluate Volume Activity
+    df['EMA_Volume_20'] = df['Volume'].ewm(span=20).mean()
+    df['High_Volume'] = df['Volume'] > df['EMA_Volume_20']
+    
+    # Integrate Price, High-Low Range, and Volume Factors
+    df['Volume_Ratio'] = df['Volume'] / df['EMA_Volume_20']
+    df['Volume_Adjusted_Momentum'] = df['Weighted_Momentum_Score'] * df['Volume_Ratio']
+    
+    # Final Alpha Factor
+    alpha_factor = df['Volume_Adjusted_Momentum']
+    
+    return alpha_factor
+```

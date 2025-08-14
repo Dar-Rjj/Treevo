@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+
+    # Calculate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+
+    # Combine Intraday Measures
+    combined_intraday = (intraday_high_low_spread + close_open_diff) * df['volume']
+
+    # Calculate Short-Term Price Momentum
+    daily_price_change = df['close'].diff()
+    short_term_ema_5 = daily_price_change.ewm(span=5, adjust=False).mean()
+    short_term_ema_10 = daily_price_change.ewm(span=10, adjust=False).mean()
+    short_term_momentum = short_term_ema_5 - short_term_ema_10
+
+    # Calculate Long-Term Price Momentum
+    long_term_sma_20 = daily_price_change.rolling(window=20).mean()
+    long_term_sma_50 = daily_price_change.rolling(window=50).mean()
+    long_term_momentum = long_term_sma_20 - long_term_sma_50
+
+    # Calculate Volume Indicator
+    volume_change = df['volume'].diff()
+    positive_volume_days = (volume_change > 0).rolling(window=20).sum()
+    negative_volume_days = (volume_change < 0).rolling(window=20).sum()
+
+    # Adjust Combined Measure by Momentum
+    volume_momentum = df['volume'].ewm(span=5, adjust=False).mean() - df['volume'].ewm(span=10, adjust=False).mean()
+    adjusted_combined_measure = short_term_momentum * volume_momentum / combined_intraday
+
+    # Combine Short-Term Price Momentum and Volume Indicator
+    short_term_factor = short_term_momentum * positive_volume_days * volume_momentum
+
+    # Combine Long-Term Price Momentum and Volume Indicator
+    long_term_factor = long_term_momentum * negative_volume_days * volume_momentum
+
+    # Final Alpha Factor
+    alpha_factor = short_term_factor - long_term_factor
+
+    return alpha_factor
+```

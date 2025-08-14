@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Adjust by Volume Change and Price Level
+    df['VolumeChange'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['PriceLevelRatio'] = df['close'] / df['open']
+    df['AdjustedRange'] = df['IntradayRange'] * df['VolumeChange'] * df['PriceLevelRatio']
+    
+    # Integrate Intraday Price Movement and Volume
+    df['IntradayMomentumScore'] = df['IntradayRange'] * df['VolumeChange']
+    
+    # Calculate 5-Day Average High-Low Spread
+    df['5DayAvgHighLowSpread'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['5DayMomentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['HighLowSpreadMomentum'] = df['5DayAvgHighLowSpread'] * df['5DayMomentum']
+    df['IntegratedMomentumFactor'] = df['IntradayMomentumScore'] + df['HighLowSpreadMomentum']
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    df['CloseToCloseReturn'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['VolumeWeightedAveragePrice'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VolumeAdjustedTrend'] = (df['CloseToCloseReturn'] * df['IntradayRange']) / df['VolumeWeightedAveragePrice']
+    
+    # Introduce Volume Trend
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['VolumeTrendAdjustedFactor'] = df['IntegratedMomentumFactor'] * df['VolumeRatio']
+    
+    # Utilize High and Low Prices for Volatility Measures
+    df['DailyRange'] = df['high'] - df['low']
+    df['RelativeRange'] = df['DailyRange'] / df['close']
+    df['20DayAvgDailyRange'] = df['DailyRange'].rolling(window=20).mean()
+    df['VolatilitySpike'] = (df['DailyRange'] > 1.5 * df['20DayAvgDailyRange']).astype(int)
+    
+    # Generate Complex Alpha Factors from Basic Components
+    df['MomentumVolatilityScore'] = df['IntegratedMomentumFactor'] * (1 + df['VolatilitySpike'])
+    df['ComprehensiveAlphaFactor'] = (df['VolumeAdjustedTrend'] * df['VolumeTrendAdjustedFactor']) + (df['RelativeRange'] * df['VolumeRatio'])
+    df['MultiIndicatorAlpha'] = (df['IntegratedMomentumFactor'] * df['VolumeRatio'] * df['VolatilitySpike']) + (df['VolumeAdjustedTrend'] * df['VolumeTrendAdjustedFactor'])
+    
+    # Final Factor Calculation
+    df['FinalFactor'] = (0.2 * df['AdjustedRange'] + 
+                         0.3 * df['5DayMomentum'] + 
+                         0.2 * df['IntegratedMomentumFactor'] + 
+                         0.3 * df['VolumeTrendAdjustedFactor'])
+    
+    return df['FinalFactor'].dropna()
+```

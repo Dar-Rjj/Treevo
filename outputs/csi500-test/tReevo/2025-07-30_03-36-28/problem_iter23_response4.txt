@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_lookback=20, momentum_lookback=10, pct_change_lookback=5, long_sma_lookback=60, turnover_lookback=20):
+    # Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_lookback).mean()
+    
+    # Price Momentum
+    df['Close_Avg_N'] = df['close'].rolling(window=momentum_lookback).mean()
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['Close_Avg_N']
+    
+    # Additional Price Change Metrics
+    df['Pct_Change_Close'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Market Trend Alignment
+    df['Long_SMA'] = df['close'].rolling(window=long_sma_lookback).mean()
+    df['Trend_Indicator'] = (df['SMA'] > df['Long_SMA']).astype(int)
+    
+    # Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=turnover_lookback).mean()
+    df['Liquidity_Weight'] = df['Avg_Daily_Turnover'] / df['Avg_Daily_Turnover'].max()
+    
+    # Weights for the components
+    weights = {
+        'Price_Momentum': 0.4,
+        'Volume_Adjusted_Volatility': -0.3,
+        'Pct_Change_Close': 0.1,
+        'High_Low_Range': 0.1,
+        'Liquidity_Weight': 0.1
+    }
+    
+    # Adjust Weights Dynamically Based on Market Trend
+    df['Dynamic_Weight_Price_Momentum'] = df['Trend_Indicator'] * weights['Price_Momentum'] * 1.2 + (1 - df['Trend_Indicator']) * weights['Price_Momentum'] * 0.8
+    df['Dynamic_Weight_Volume_Adjusted_Volatility'] = df['Trend_Indicator'] * weights['Volume_Adjusted_Volatility'] * 0.8 + (1 - df['Trend_Indicator']) * weights['Volume_Adjusted_Volatility'] * 1.2
+    df['Dynamic_Weight_Pct_Change_Close'] = df['Trend_Indicator'] * weights['Pct_Change_Close'] * 1.1 + (1 - df['Trend_Indicator']) * weights['Pct_Change_Close'] * 0.9
+    df['Dynamic_Weight_High_Low_Range'] = df['Trend_Indicator'] * weights['High_Low_Range'] * 1.1 + (1 - df['Trend_Indicator']) * weights['High_Low_Range'] * 0.9
+    df['Dynamic_Weight_Liquidity_Weight'] = df['Trend_Indicator'] * weights['Liquidity_Weight'] * 1.2 + (1 - df['Trend_Indicator']) * weights['Liquidity_Weight'] * 0.8
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Price_Momentum'] * df['Dynamic_Weight_Price_Momentum'] +
+        df['Volume_Adjusted_Volatility'] * df['Dynamic_Weight_Volume_Adjusted_Volatility'] +
+        df['Pct_Change_Close'] * df['Dynamic_Weight_Pct_Change_Close'] +
+        df['High_Low_Range'] * df['Dynamic_Weight_High_Low_Range'] +
+        df['Liquidity_Weight'] * df['Dynamic_Weight_Liquidity_Weight']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

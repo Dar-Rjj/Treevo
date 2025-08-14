@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range and Daily Range
+    df['Prev_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['Prev_Close']).abs()
+    df['TR3'] = (df['low'] - df['Prev_Close']).abs()
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    df['Daily_Range'] = df['high'] - df['low']
+
+    # Calculate 14-Period Average True Range (ATR) and 20-Day Moving Average of Daily Range
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    df['Avg_Daily_Range_20'] = df['Daily_Range'].rolling(window=20).mean()
+
+    # Identify Breakouts
+    df['Upward_Breakout'] = df['close'] > df['high'].shift(1)
+    df['Downward_Breakout'] = df['close'] < df['low'].shift(1)
+
+    # Calculate Breakout Strength
+    df['Breakout_Strength'] = 0.0
+    df.loc[df['Upward_Breakout'], 'Breakout_Strength'] = (df['close'] - df['high'].shift(1)) / df['Avg_Daily_Range_20']
+    df.loc[df['Downward_Breakout'], 'Breakout_Strength'] = (df['low'].shift(1) - df['close']) / df['Avg_Daily_Range_20']
+
+    # Cumulate Breakout Strength
+    df['Positive_Breakout_Sum'] = df['Breakout_Strength'].where(df['Breakout_Strength'] > 0, 0).rolling(window=10).sum()
+    df['Negative_Breakout_Sum'] = df['Breakout_Strength'].where(df['Breakout_Strength'] < 0, 0).rolling(window=10).sum()
+    df['Cumulated_Breakout_Strength'] = df['Positive_Breakout_Sum'] - df['Negative_Breakout_Sum']
+
+    # Calculate Price Momentum
+    df['Weighted_Momentum'] = (df['close'] - df['close'].shift(14)) * df['volume']
+
+    # Adjust Momentum by ATR
+    df['ATR_Adjusted_Momentum'] = df['Weighted_Momentum'] / df['ATR_14']
+
+    # Generate Alpha Factor
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Alpha_Factor'] = df['Intraday_High_Low_Spread'] + df['Close_to_Open_Return'] + df['Cumulated_Breakout_Strength'] + df['ATR_Adjusted_Momentum']
+
+    # Incorporate Volume Trend
+    df['Volume_MA_10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Surge'] = df['volume'] > df['Volume_MA_10']
+    df['Volume_Decline'] = df['volume'] < df['Volume_MA_10']
+    df['Alpha_Factor'] = df.apply(lambda row: row['Alpha_Factor'] * 1.5 if row['Volume_Surge'] else row['Alpha_Factor'] * 0.5, axis=1)
+
+    return df['Alpha_Factor']
+```

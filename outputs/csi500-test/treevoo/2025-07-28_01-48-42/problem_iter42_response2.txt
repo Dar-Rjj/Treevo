@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, momentum_lookback=10, atr_lookback=14, price_consistency_lookback=20):
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['open'] - df['close']
+    
+    # Calculate Momentum
+    momentum = df['close'] - df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Adjust Momentum by Absolute Daily Open-Close Spread
+    adjusted_momentum = momentum * open_close_spread.abs()
+    
+    # Calculate Daily High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Further Adjust Momentum by High-Low Range
+    final_momentum = adjusted_momentum / high_low_range
+    
+    # Weight Final Adjusted Momentum by Volume
+    weighted_momentum = final_momentum * df['volume']
+    
+    # Final Alpha Factor Component 1
+    total_volume = df['volume'].rolling(window=momentum_lookback).sum()
+    component_1 = weighted_momentum.rolling(window=momentum_lookback).sum() / total_volume
+    
+    # Calculate Intraday Volatility (High-Low Difference)
+    high_low_volatility = df['high'] - df['low']
+    
+    # Calculate True Range
+    true_range = pd.concat([
+        (df['high'] - df['low']),
+        (df['high'] - df['close'].shift()).abs(),
+        (df['low'] - df['close'].shift()).abs()
+    ], axis=1).max(axis=1)
+    
+    # Average True Range (ATR) over a lookback period
+    atr = true_range.rolling(window=atr_lookback).mean()
+    
+    # Weight Intraday Volatility by Volume
+    weighted_intradays_volatility = (high_low_volatility + atr) * df['volume']
+    
+    # Final Alpha Factor Component 2
+    component_2 = weighted_intradays_volatility.rolling(window=momentum_lookback).sum() / total_volume
+    
+    # Calculate Price Movement Consistency
+    ema_close = df['close'].ewm(span=price_consistency_lookback, adjust=False).mean()
+    daily_returns = df['close'].pct_change()
+    std_daily_returns = daily_returns.rolling(window=price_consistency_lookback).std()
+    
+    # Final Alpha Factor Component 3
+    component_3 = std_daily_returns / ema_close
+    
+    # Combine Final Alpha Factors
+    alpha_factor = component_1 + component_2 + component_3
+    
+    return alpha_factor
+```

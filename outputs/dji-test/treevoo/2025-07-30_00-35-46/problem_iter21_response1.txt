@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, m=10):
+    # Calculate Close Price Change Over Period
+    df['close_change'] = df['close'].diff(periods=n)
+    df['cumulative_price_change'] = df['close_change'].rolling(window=m).sum()
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['close_volume_product'] = df['close'] * df['volume']
+    df['vwap_numerator'] = df['close_volume_product'].rolling(window=n).sum()
+    df['vwap_denominator'] = df['volume'].rolling(window=n).sum()
+    df['vwap'] = df['vwap_numerator'] / df['vwap_denominator']
+
+    # Combine Momentum and VWAP
+    df['vwap_change'] = df['vwap'].diff(periods=n)
+    df['combined_momentum'] = df['cumulative_price_change'] * df['vwap_change']
+
+    # Determine the Significance of Price Movement
+    df['price_movement_significance'] = df['combined_momentum'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Use Low and High Prices to Measure Volatility
+    df['range'] = df['high'] - df['low']
+    df['average_range'] = df['range'].rolling(window=n).mean()
+    df['volatility_factor'] = df['range'] / df['average_range']
+
+    # Incorporate Trading Volume Trends
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_trend_factor'] = df['volume'] / df['average_volume']
+
+    # Final Alpha Factor Calculation
+    df['alpha_factor'] = (df['combined_momentum'] 
+                          + df['price_movement_significance'] 
+                          + (df['volatility_factor'] - 1) 
+                          + (df['volume_trend_factor'] - 1))
+    
+    return df['alpha_factor']
+```

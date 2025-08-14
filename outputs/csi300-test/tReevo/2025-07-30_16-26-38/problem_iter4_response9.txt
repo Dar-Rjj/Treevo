@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_range = (df['high'] - df['low']) / df['low']
+    true_intraday_movement = (df['close'] - df['open']) / df['open']
+
+    # Measure Overnight Return
+    onr = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Construct Composite Factor
+    # Combine Intraday with Momentum
+    momentum_adjusted_score = true_intraday_movement.apply(lambda x: 1.5 * x if x > 0.01 else x)
+
+    # Combine ONR with Reversal Expectation
+    reversal_adjusted_score = onr.apply(lambda x: x - 1 if x > 0.03 else x + 0.5)
+
+    # Incorporate Volume-Adjusted Momentum
+    volume_weighted_price = (df['open'] + df['close']) / 2
+    volume_adjusted_momentum = volume_weighted_price * df['volume']
+    threshold = volume_adjusted_momentum.quantile(0.75)
+    volume_momentum_factor = volume_adjusted_momentum.apply(lambda x: 1.2 * x if x > threshold else x)
+
+    # Sum of both Adjusted Scores and Volume-Adjusted Momentum
+    composite_score = momentum_adjusted_score + reversal_adjusted_score + volume_momentum_factor
+
+    # Enhance with Intraday Volatility
+    intraday_volatility = ((df['high'] - df['low']) / 2 + 
+                           (df['high'] - df['close']) / 2 + 
+                           (df['low'] - df['close']) / 2 + 
+                           (df['high'] - df['open']) / 2 + 
+                           (df['low'] - df['open']) / 2) / 5
+    adjusted_intraday_momentum = true_intraday_movement / intraday_volatility
+
+    # Apply the adjusted intraday momentum in the composite factor
+    final_composite_score = composite_score * adjusted_intraday_momentum
+
+    return final_composite_score
+```

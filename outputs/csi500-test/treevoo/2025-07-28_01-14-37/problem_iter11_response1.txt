@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open'] - 1
+    
+    # Calculate Logarithmic Return
+    log_return = np.log(1 + intraday_return + 1e-8)
+    
+    # Calculate High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Difference
+    close_diff = df['close'].diff()
+    
+    # Smoothing the Momentum (Moving Average of the Difference over m days, e.g., m=5)
+    smoothed_momentum = close_diff.rolling(window=5).mean()
+    
+    # Volume Weighing Process
+    mean_volume = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / mean_volume
+    adjusted_momentum = smoothed_momentum * volume_ratio
+    
+    # Calculate Intraday Movement
+    intraday_movement = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    close_open_return = df['close'] - df['open']
+    
+    # Calculate Price Range Ratio
+    price_range_ratio = (df['high'] - df['low']) / df['high'] * 100
+    
+    # Combine Factors
+    combined_factor = (intraday_movement + close_open_return) * price_range_ratio
+    
+    # Integrate Volume Adjusted Momentum
+    integrated_factor = combined_factor + adjusted_momentum
+    
+    # Calculate Weighted Momentum
+    vwp = (df['close'] + df['high'] + df['low']) / 3
+    weighted_momentum = close_diff / vwp
+    
+    # Adjust for Volatility
+    volatility_adjusted_momentum = weighted_momentum / high_low_range
+    
+    # Combine Intraday and Volatility-Adjusted Momentum
+    decay_factor = 0.9
+    intraday_exp_smoothed = log_return * volume_ratio.ewm(alpha=decay_factor).mean()
+    vol_adj_exp_smoothed = volatility_adjusted_momentum * volume_ratio.ewm(alpha=decay_factor).mean()
+    combined_weighted_sum = 0.5 * intraday_exp_smoothed + 0.5 * vol_adj_exp_smoothed
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = np.where(short_term_ma > long_term_ma, 1, -1)
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    adjusted_momentum_by_vol_change = trend_direction * volume_change
+    final_factor = (integrated_factor + adjusted_momentum_by_vol_change) / 2
+    
+    return final_factor
+```

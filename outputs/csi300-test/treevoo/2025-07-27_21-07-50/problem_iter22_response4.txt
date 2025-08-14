@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the momentum factor using closing prices
+    df['10_day_return'] = df['close'].pct_change(10)
+    df['20_day_return'] = df['close'].pct_change(20)
+    df['50_day_return'] = df['close'].pct_change(50)
+    df['momentum_score'] = 0.5 * df['10_day_return'] + 0.3 * df['20_day_return'] + 0.2 * df['50_day_return']
+
+    # Calculate the price-volume trend
+    df['avg_volume_10'] = df['volume'].rolling(window=10).mean()
+    df['price_change'] = df['close'].pct_change()
+    df['price_volume_indicator'] = df['price_change'] * (df['volume'] / df['avg_volume_10'])
+
+    # Calculate the volatility factor
+    df['log_returns'] = np.log(df['close']).diff()
+    df['volatility'] = df['log_returns'].rolling(window=30).std()
+
+    # Calculate the relative strength index (RSI)
+    df['gain'] = df['close'].diff().clip(lower=0)
+    df['loss'] = -df['close'].diff().clip(upper=0)
+    df['avg_gain'] = df['gain'].rolling(window=14).mean()
+    df['avg_loss'] = df['loss'].rolling(window=14).mean()
+    df['rs'] = df['avg_gain'] / df['avg_loss']
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+
+    # Calculate the money flow index (MFI)
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['raw_money_flow'] = df['typical_price'] * df['volume']
+    df['positive_money_flow'] = df[df['typical_price'] > df['typical_price'].shift(1)]['raw_money_flow']
+    df['negative_money_flow'] = df[df['typical_price'] < df['typical_price'].shift(1)]['raw_money_flow']
+    df['positive_money_flow_sum'] = df['positive_money_flow'].rolling(window=14).sum()
+    df['negative_money_flow_sum'] = df['negative_money_flow'].rolling(window=14).sum()
+    df['money_flow_ratio'] = df['positive_money_flow_sum'] / df['negative_money_flow_sum']
+    df['mfi'] = 100 - (100 / (1 + df['money_flow_ratio']))
+
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['momentum_score'] 
+        + df['price_volume_indicator'] 
+        - df['volatility'] 
+        + (50 - df['rsi']) 
+        + (50 - df['mfi'])
+    )
+
+    return df['alpha_factor']
+```

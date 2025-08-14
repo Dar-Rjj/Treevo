@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low and Close-Open Momentum
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Price_Movement_Ratio'] = (df['close'] - df['open']) / df['open']
+    df['5D_Price_Movement_Ratio_Sum'] = df['Price_Movement_Ratio'].rolling(window=5).sum()
+    df['5D_High_Low_Range_Sum'] = df['High_Low_Range'].rolling(window=5).sum()
+    df['5D_Rolling_Momentum'] = df['5D_Price_Movement_Ratio_Sum'] / df['5D_High_Low_Range_Sum']
+    
+    # Adjust for Volume
+    df['Volume_Change_Indicator'] = (df['volume'] > df['volume'].shift(1)).astype(int) * 2 - 1
+    df['Adjusted_5D_Rolling_Momentum'] = df['5D_Rolling_Momentum'] * df['Volume_Change_Indicator']
+
+    # Calculate 10-Day Price and Intraday Momentum
+    df['10D_Price_Momentum'] = df['close'] - df['close'].shift(10)
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    df['Combined_Momentum'] = df['10D_Price_Momentum'] + df['Intraday_Return']
+    
+    # Adjust by Volume
+    df['Combined_Momentum_Adjusted'] = df['Combined_Momentum'] * (df['Volume_Change_Indicator'] == 1)
+
+    # Calculate Daily Volatility
+    df['Daily_Volatility'] = abs(df['high'] - df['low'])
+
+    # Calculate Price Trend Indicator
+    df['Short_EMA'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Trend_Indicator'] = (df['Short_EMA'] > df['Long_EMA']).astype(int) * 2 - 1
+
+    # Incorporate Volatility into Momentum
+    df['Normalized_10D_Momentum'] = df['10D_Price_Momentum'] / df['Daily_Volatility']
+    df['Adjusted_Combined_Momentum'] = df['Combined_Momentum_Adjusted'] * df['Trend_Indicator']
+
+    # Combine Factors
+    df['Combined_Factor'] = df['Adjusted_5D_Rolling_Momentum'] + df['Adjusted_Combined_Momentum']
+    
+    # Smooth the Result
+    df['EMA_Smoothed'] = df['Combined_Factor'].ewm(span=10, adjust=False).mean()
+    df['SMA_Smoothed'] = df['Combined_Factor'].rolling(window=10).mean()
+
+    # Final Adjustment for Volume
+    df['Final_Alpha_Factor'] = (df['EMA_Smoothed'] + df['SMA_Smoothed']) * (df['volume'] + 1)
+
+    # Integrate Volume-Adjusted Momentum and Volatility into Final Factor
+    df['Close_Open_Return'] = (df['close'] - df['open']) / df['open']
+    df['Final_Alpha_Factor_Adjusted'] = df['Final_Alpha_Factor'] * df['Close_Open_Return'] / df['Daily_Volatility']
+
+    # Calculate Averaged High-to-Low Volatility
+    df['Averaged_High_Low_Volatility'] = (df['high'] - df['low']).rolling(window=20).mean()
+
+    # Calculate 5-day Moving Average of Close Prices
+    df['5D_MA_Close'] = df['close'].rolling(window=5).mean()
+
+    # Calculate Relative Strength
+    df['Relative_Strength'] = (df['close'] - df['5D_MA_Close']) / df['5D_MA_Close']
+
+    # Enhance Final Alpha Factor
+    df['Enhanced_Final_Alpha_Factor'] = df['Final_Alpha_Factor_Adjusted'] * df['Trend_Indicator']
+
+    # Incorporate Long-Term Volatility
+    df['20D_Std_Dev'] = df['close'].rolling(window=20).std()
+    df['Enhanced_Final_Alpha_Factor'] /= df['20D_Std_Dev']
+
+    # Integrate Recent Volume Trend
+    df['5D_EMA_Volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['Final_Alpha_Factor'] = df['Enhanced_Final_Alpha_Factor'] * df['

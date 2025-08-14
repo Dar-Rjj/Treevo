@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    df['Crossover_Signal'] = (df['SMA_10'] > df['SMA_30']).astype(int) - (df['SMA_10'] < df['SMA_30']).astype(int)
+    
+    df['ROC_14'] = (df['close'] / df['close'].shift(14) - 1) * 100
+    
+    # Volatility
+    df['True_Range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Accumulation/Distribution
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where((typical_price > typical_price.shift(1)), other=0, axis=0)
+    negative_money_flow = raw_money_flow.where((typical_price < typical_price.shift(1)), other=0, axis=0)
+    df['MFI_21'] = 100 - (100 / (1 + (positive_money_flow.rolling(window=21).sum() / negative_money_flow.rolling(window=21).sum())))
+    
+    # Support and Resistance
+    pp = (df['high'] + df['low'] + df['close']) / 3
+    df['S1'] = (pp * 2) - df['high']
+    df['S2'] = pp - (df['high'] - df['low'])
+    df['S3'] = df['low'] - 2 * (df['high'] - pp)
+    df['R1'] = (pp * 2) - df['low']
+    df['R2'] = pp + (df['high'] - df['low'])
+    df['R3'] = df['high'] + 2 * (pp - df['low'])
+    
+    # Volume and Price Trends
+    vpt_change = df['volume'] * ((df['close'] - df['close'].shift(1)) / df['close'].shift(1))
+    df['VPT'] = vpt_change.cumsum()
+    
+    # Market Sentiment
+    df['Up_Gap'] = (df['open'] > df['high'].shift(1)).astype(int)
+    df['Down_Gap'] = (df['open'] < df['low'].shift(1)).astype(int)
+    
+    # Intraday Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['High_Close_Ratio'] = (df['high'] - df['close']) / df['High_Low_Range']
+    df['Close_Low_Ratio'] = (df['close'] - df['low']) / df['High_Low_Range']
+    df['Intraday_Momentum'] = (df['close'] - df['open']) / df['High_Low_Range']
+    df['Intraday_Volatility'] = df['Intraday_Momentum'].rolling(window=21).std()
+    
+    # Trend Consistency
+    dm_pos = df['high'].diff().where(lambda x: x > 0, other=0)
+    dm_neg = -df['low'].diff().where(lambda x: x < 0, other=0)
+    tr = df['True_Range']
+    di_pos = 100 * (dm_pos.rolling(window=14).sum() / tr.rolling(window=14).sum())
+    di_neg = 100 * (dm_neg.rolling(window=14).sum() / tr.rolling(window=14).sum())
+    df['ADX'] = 100 * (di_pos - di_neg).abs() / (di_pos + di_neg)
+    
+    # Construct the alpha factor
+    factor = (
+        df['Crossover_Signal'] +
+        df['ROC_14'] / 100 +
+        (

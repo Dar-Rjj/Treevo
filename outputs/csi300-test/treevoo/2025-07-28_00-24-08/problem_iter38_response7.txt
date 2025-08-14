@@ -1,0 +1,94 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Daily Returns
+    df['simple_daily_return'] = df['close'].pct_change()
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Open-Close Spread
+    df['open_close_spread'] = df['close'] - df['open']
+    
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Previous Day's Close-to-Open Return
+    df['prev_day_close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Previous Day Overnight Return
+    df['prev_day_overnight_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['prev_day_overnight_return']
+    
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    df['momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Daily Volume Changes
+    df['daily_volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Volume Confirmation
+    df['volume_confirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Moving Averages Crossover
+    df['ma_50'] = df['close'].rolling(window=50).mean()
+    df['ma_200'] = df['close'].rolling(window=200).mean()
+    df['ma_crossover'] = df['ma_50'] - df['ma_200']
+    
+    # Generate Final Momentum Factor
+    df['log_returns'] = np.log(df['close']).diff()
+    df['final_momentum_factor'] = df['log_returns'].rolling(window=20).sum() * df['volume_confirmation']
+    
+    # Standard Deviation of Returns
+    df['std_returns'] = df['simple_daily_return'].rolling(window=60).std()
+    
+    # High-Low Volatility
+    df['high_low_volatility'] = (df['high'] - df['low']) * df['std_returns']
+    
+    # Daily Amount Changes
+    df['daily_amount_change'] = df['amount'] - df['amount'].shift(1)
+    
+    # Amount to Volume Ratio
+    df['amount_to_volume_ratio'] = df['amount'] / df['volume']
+    
+    # Weighted Sum of Factors
+    weighted_sum = (
+        0.1 * df['simple_daily_return'] +
+        0.1 * df['high_low_range'] +
+        0.1 * df['open_close_spread'] +
+        0.1 * df['daily_volume_change'] +
+        0.1 * df['ma_crossover'] +
+        0.1 * df['final_momentum_factor'] +
+        0.1 * df['std_returns'] +
+        0.1 * df['high_low_volatility'] +
+        0.1 * df['daily_amount_change'] +
+        0.1 * df['amount_to_volume_ratio']
+    )
+    
+    # Smoothed Moving Average
+    df['vol_adj_returns'] = df['simple_daily_return'] * df['volume_confirmation']
+    df['sma_vol_adj_returns'] = df['vol_adj_returns'].rolling(window=5).mean()
+    df['smoothed_ma'] = df['sma_vol_adj_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Adjust for Combined Volatility
+    df['adjusted_aggregate_returns'] = df['aggregate_returns'] * (df['high_low_range'] * df['volume'] / df['volume'].rolling(window=20).mean())
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        weighted_sum * 
+        df['smoothed_ma'] * 
+        df['final_momentum_factor'] * 
+        df['high_low_volatility']
+    )
+    
+    return df['alpha_factor']
+```

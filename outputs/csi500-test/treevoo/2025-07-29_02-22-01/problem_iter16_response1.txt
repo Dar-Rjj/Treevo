@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, short_span=10, long_span=50, N=10, M=20):
+    # Calculate Price Momentum
+    df['short_ema'] = df['close'].ewm(span=short_span, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=long_span, adjust=False).mean()
+    df['price_momentum'] = df['short_ema'] - df['long_ema']
+    
+    # Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Momentum Calculation
+    df['momentum'] = df['daily_price_change'].rolling(window=N).sum()
+    
+    # Volume Confirmation
+    df['daily_volume_change'] = df['volume'].diff()
+    df['positive_volume_days'] = (df['daily_volume_change'] > 0).astype(int)
+    df['volume_increase_sum'] = df[df['daily_volume_change'] > 0]['daily_volume_change'].rolling(window=M).sum()
+    df['volume_confirmation'] = df['volume_increase_sum'] / df['positive_volume_days'].rolling(window=M).sum()
+    
+    # Volume Reversal Indicator
+    df['volume_roc'] = df['volume'].pct_change()
+    df['smoothed_volume_roc'] = df['volume_roc'].rolling(window=short_span).mean()
+    df['volume_reversal_indicator'] = df['price_momentum'] / (df['smoothed_volume_roc'] + 1e-6)  # Adding small value to avoid division by zero
+    
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Proportional Movement Index
+    df['proportional_movement_index'] = df['intraday_return'] / (df['close'] + 1e-6)  # Adding small value to avoid division by zero
+    
+    # Cumulative Daily Price Change
+    df['cumulative_daily_price_change'] = df['daily_price_change'].rolling(window=N).sum()
+    
+    # Average Volume
+    df['average_volume'] = df['volume'].rolling(window=N).mean()
+    
+    # Weighted Cumulative Daily Price Change
+    df['weighted_cumulative_daily_price_change'] = df['cumulative_daily_price_change'] * df['average_volume']
+    
+    # Incorporate High-Low Range
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['high_low_range'] = (df['high'] - df['low']) / (df['typical_price'] + 1e-6)  # Adding small value to avoid division by zero
+    df['cumulative_momentum_impact'] = df['price_momentum'].rolling(window=N).sum()
+    df['scaled_high_low_range'] = df['high_low_range'] * df['cumulative_momentum_impact']
+    
+    # Incorporate Open-Close Spread
+    df['open_close_spread'] = df['close'] - df['open']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['weighted_cumulative_daily_price_change'] 
+                          + df['volume_reversal_indicator'] 
+                          + df['proportional_movement_index'] 
+                          + df['scaled_high_low_range'] 
+                          + df['open_close_spread'])
+    
+    return df['alpha_factor']
+```

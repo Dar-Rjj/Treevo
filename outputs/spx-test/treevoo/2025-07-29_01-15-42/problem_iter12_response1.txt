@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) - df['open']
+    
+    # Smooth with Exponential Moving Average (EMA)
+    ema_window = 10  # Example window length
+    df['smoothed_return'] = df['close_to_open_return'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    df['total_volume_ema'] = df['volume'].rolling(window=ema_window).sum()
+    df['total_amount_ema'] = df['amount'].rolling(window=ema_window).sum()
+    df['combined_volume_amount'] = df['total_volume_ema'] + df['total_amount_ema']
+    df['adjusted_momentum'] = df['smoothed_return'] / df['combined_volume_amount']
+    
+    # Calculate Daily Price Range
+    df['daily_price_range'] = df['high'] - df['low']
+    
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = df['daily_price_range'] / df['close']
+    
+    # Compute Relative True Strength Index (RTSI)
+    df['gain_loss'] = df['close'].diff()
+    df['gains'] = df['gain_loss'].apply(lambda x: x if x > 0 else 0)
+    df['losses'] = df['gain_loss'].apply(lambda x: -x if x < 0 else 0)
+    
+    rtsi_window = 14  # Example window length for RTSI
+    df['smoothed_gains'] = df['gains'].ewm(span=rtsi_window, adjust=False).mean()
+    df['smoothed_losses'] = df['losses'].ewm(span=rtsi_window, adjust=False).mean()
+    df['rtsi'] = (df['smoothed_gains'] / (df['smoothed_gains'] + df['smoothed_losses'])) * 100
+    
+    # Calculate Daily Volume Momentum
+    df['daily_volume_change'] = df['volume'].diff()
+    volume_momentum_window = 5  # Example window length for volume momentum
+    df['volume_momentum'] = df['daily_volume_change'].ewm(span=volume_momentum_window, adjust=False).mean()
+    
+    # Combine Factors
+    df['combined_factor'] = (df['price_range_ratio'] * df['rtsi']) + df['adjusted_momentum'] + df['volume_momentum']
+    df['alpha_factor'] = df['combined_factor'] * df['adjusted_momentum']
+    
+    return df['alpha_factor']
+```

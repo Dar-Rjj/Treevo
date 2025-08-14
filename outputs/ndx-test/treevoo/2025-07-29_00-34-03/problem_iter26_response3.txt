@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # SMA Crossover Signal
+    df['SMA_Signal'] = 0
+    df.loc[df['SMA_50'] > df['SMA_200'], 'SMA_Signal'] = 1
+    df.loc[df['SMA_50'] < df['SMA_200'], 'SMA_Signal'] = -1
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # RSI Signal
+    df['RSI_Signal'] = 0
+    df.loc[df['RSI'] > 70, 'RSI_Signal'] = -1
+    df.loc[df['RSI'] < 30, 'RSI_Signal'] = 1
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = ((df['close'] > df['close'].shift(1)) * df['volume']).cumsum() - ((df['close'] < df['close'].shift(1)) * df['volume']).cumsum()
+    
+    # OBV Trend Signal
+    df['OBV_SMA'] = df['OBV'].rolling(window=20).mean()
+    df['OBV_Trend_Signal'] = (df['OBV_SMA'] > df['OBV_SMA'].shift(1)).astype(int) - (df['OBV_SMA'] < df['OBV_SMA'].shift(1)).astype(int)
+    
+    # Volume Price Trend (VPT)
+    df['VPT'] = (df['close'].pct_change() * df['volume']).cumsum()
+    
+    # VPT Trend Signal
+    df['VPT_Trend_Signal'] = (df['VPT'] > df['VPT'].shift(1)).astype(int) - (df['VPT'] < df['VPT'].shift(1)).astype(int)
+    
+    # Combined Momentum and Volume Factor
+    df['Combined_Signal'] = df[['SMA_Signal', 'RSI_Signal', 'OBV_Trend_Signal', 'VPT_Trend_Signal']].sum(axis=1)
+    df['Alpha_Factor'] = 0
+    df.loc[df['Combined_Signal'] == 4, 'Alpha_Factor'] = 1
+    df.loc[df['Combined_Signal'] >= 2, 'Alpha_Factor'] = 0.5
+    df.loc[df['Combined_Signal'] < 2, 'Alpha_Factor'] = -1
+    
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Price Momentum
+    df['price_diff'] = df['close'] - df['low'].shift(1)
+    ema_smooth_factor = 5
+    df['adjusted_momentum_ema'] = df['price_diff'].ewm(span=ema_smooth_factor, adjust=False).mean()
+
+    # Combine Adjusted Momentum and Simple Price Momentum
+    lookback_period = 10
+    df['simple_momentum'] = df['close'] - df['close'].shift(1)
+    df['simple_momentum_ema'] = df['simple_momentum'].ewm(span=lookback_period, adjust=False).mean()
+    df['combined_momentum'] = df['adjusted_momentum_ema'] + df['simple_momentum_ema']
+
+    # Adjust by Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=5).mean()
+    sma_length = 10
+    df['volume_ratio_sma'] = df['volume_ratio'].rolling(window=sma_length).mean()
+    df['combined_momentum_adjusted'] = df['combined_momentum'] * df['volume_ratio_sma']
+
+    # Compute Volume Influence Ratio
+    df['upward_volume'] = df.apply(lambda row: row['volume'] if row['close'] > row['open'] else 0, axis=1).cumsum()
+    df['downward_volume'] = df.apply(lambda row: row['volume'] if row['close'] < row['open'] else 0, axis=1).cumsum()
+    df['volume_influence_ratio'] = (df['upward_volume'] + 1) / (df['downward_volume'] + 1)
+
+    # Integrate Combined Momentum, Volume Ratio, and Directional Volume Impact
+    df['integrated_momentum'] = df['combined_momentum_adjusted'] * np.cbrt(df['volume_influence_ratio'])
+
+    # Calculate Adjusted Intraday Reversal
+    df['intraday_reversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    df['momentum_adjustment'] = 1 + (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+    df['adjusted_intraday_reversal'] = df['intraday_reversal'] * df['momentum_adjustment']
+
+    # Calculate Close to Midpoint Deviation
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    df['close_to_midpoint_deviation'] = df['close'] - df['midpoint']
+
+    # Generate Preliminary Alpha Factor
+    df['preliminary_alpha_factor'] = df['adjusted_intraday_reversal'] * df['close_to_midpoint_deviation']
+    df['day_to_day_open_price_change'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['preliminary_alpha_factor'] += df['day_to_day_open_price_change']
+
+    # Calculate Daily Volume Surprise
+    df['volume_moving_average_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_surprise'] = df['volume'] - df['volume_moving_average_10']
+
+    # Combine Price Momentum and Volume Surprise
+    df['price_momentum_10'] = df['close'] - df['close'].shift(10)
+    df['combined_momentum_volume_surprise'] = df['price_momentum_10'] * df['volume_surprise']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = df['preliminary_alpha_factor'] * df['combined_momentum_volume_surprise'] * np.cbrt(df['volume_influence_ratio'])
+
+    # Integrate High-Low Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    df['final_alpha_factor'] = df['alpha_factor'] + df['high_low_diff'] * np.cbrt(df['volume_influence_ratio'])
+
+    return df['final_alpha_factor']
+```

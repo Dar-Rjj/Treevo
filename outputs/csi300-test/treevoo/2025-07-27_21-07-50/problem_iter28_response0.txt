@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Calculate Volume-Weighted Close-Open Difference
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    
+    # Integrate Both Factors
+    integrated_factors = high_low_spread_ratio * volume_weighted_close_open_diff
+    
+    # Composite Alpha Factor
+    ema_period = 21
+    ema_close = df['close'].ewm(span=ema_period, adjust=False).mean()
+    volume_weighted_close = df['close'] * df['volume']
+    composite_alpha_factor = volume_weighted_close - ema_close
+    
+    # Add medium-term reversal
+    daily_returns = df['close'] / df['open'] - 1
+    m_day_reversal = daily_returns.rolling(window=10).sum()
+    composite_alpha_factor += m_day_reversal
+    
+    # Generate Adjusted Return
+    intraday_log_return = np.log(df['close'] / df['open'])
+    
+    # Incorporate Intraday Volatility
+    true_range = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    true_range = true_range.fillna(0)
+    adjusted_return = intraday_log_return / true_range
+    
+    # Incorporate Volume Impact
+    volume_change = df['volume'] / df['volume'].shift(1) - 1
+    adjusted_return *= volume_change
+    
+    # Final Integration
+    final_factor = integrated_factors + composite_alpha_factor + adjusted_return
+    
+    return final_factor
+```

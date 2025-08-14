@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Calculate Close to Close Return
+    df['CloseToCloseReturn'] = df['close'].pct_change()
+    
+    # Calculate Volume Change
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    
+    # Integrate Intraday Price Movement and Volume
+    df['IntradayMomentumScore'] = (df['IntradayRange'] * df['VolumeChange']).clip(lower=0)
+    
+    # Calculate 5-Day Average High-Low Spread
+    df['HighLowSpread'] = df['high'] - df['low']
+    df['5DayAvgHighLowSpread'] = df['HighLowSpread'].rolling(window=5).mean()
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['5DayMomentum'] = (df['close'] / df['close'].shift(5) - 1)
+    df['HighLowSpreadMomentum'] = df['5DayAvgHighLowSpread'] * df['5DayMomentum']
+    df['IntegratedMomentumFactor'] = df['IntradayMomentumScore'] + df['HighLowSpreadMomentum']
+    
+    # Calculate Volume Weighted Average Price
+    df['VWAP'] = (df[['open', 'high', 'low', 'close']].mean(axis=1) * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    df['CombinedFactor'] = (df['CloseToCloseReturn'] * df['IntradayRange']) / df['VWAP']
+    
+    # Filter for Recent Price Trend
+    df['5DayMA'] = df['close'].rolling(window=5).mean()
+    df['RecentPriceTrend'] = df['close'] - df['5DayMA']
+    
+    # Introduce Volume Trend
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['FinalFactor'] = df['CombinedFactor'] * df['VolumeRatio'] + df['RecentPriceTrend']
+    
+    return df['FinalFactor']
+```

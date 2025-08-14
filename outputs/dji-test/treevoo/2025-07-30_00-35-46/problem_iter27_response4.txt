@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Short-term EMA (5 days) and Long-term EMA (20 days)
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Calculate the difference between the short-term and long-term EMAs
+    ema_crossover = short_ema - long_ema
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    relative_strength = gain / loss
+    rsi = 100 - (100 / (1 + relative_strength))
+    
+    # On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Volume Price Trend (VPT)
+    vpt = (df['close'].pct_change() * df['volume']).cumsum()
+    
+    # True Range
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Average True Range (ATR)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Directional Movement Index (DMI)
+    up_move = df['high'] - df['high'].shift(1)
+    down_move = df['low'].shift(1) - df['low']
+    plus_dm = up_move.gt(down_move) & up_move.gt(0)
+    minus_dm = down_move.gt(up_move) & down_move.gt(0)
+    tr14 = true_range.rolling(window=14).sum()
+    plus_di = 100 * (plus_dm * tr14).ewm(alpha=1/14, adjust=False).mean()
+    minus_di = 100 * (minus_dm * tr14).ewm(alpha=1/14, adjust=False).mean()
+    dmi = plus_di - minus_di
+    
+    # Donchian Channels
+    n = 20
+    highest_high = df['high'].rolling(window=n).max()
+    lowest_low = df['low'].rolling(window=n).min()
+    donchian_channel = (highest_high + lowest_low) / 2
+    
+    # Keltner Channels
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    sma_typical_price = typical_price.rolling(window=n).mean()
+    keltner_upper_band = sma_typical_price + 2 * atr
+    keltner_lower_band = sma_typical_price - 2 * atr
+    keltner_channel = (keltner_upper_band + keltner_lower_band) / 2
+    
+    # Price Momentum
+    price_momentum = df['close'] - df['close'].shift(20)
+    
+    # Price Change Ratio
+    price_change_ratio = df['close'] / df['close'].shift(20)
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (ema_crossover * 0.2 +
+                    rsi * 0.1 +
+                    obv * 0.1 +
+                    vpt * 0.1 +
+                    atr * 0.1 +
+                    dmi * 0.1 +
+                    donchian_channel * 0.1 +
+                    keltner_channel * 0.1 +
+                    price_momentum * 0.1 +
+                    price_change_ratio * 0.1)
+    
+    return alpha_factor
+```

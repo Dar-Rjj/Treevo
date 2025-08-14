@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (df['volume'] * typical_price).cumsum() / df['volume'].cumsum()
+    
+    # Combine Indicators for Predictive Factor
+    high_low_to_open_close_ratio = high_low_range / open_close_movement.abs()
+    
+    # VWAP Deviation from Close
+    vwap_deviation = df['close'] - vwap
+    
+    # Identify Trend Strength and Reversal Signals
+    positive_momentum = high_low_range > 1.5 * open_close_movement.abs()
+    potential_reversal = (open_close_movement.abs() > 0.8 * high_low_range) & (vwap_deviation < 0) & (open_close_movement < 0)
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Integrate Volume Activity Ratio
+    n_period_volume = df['volume'].rolling(window=10).sum()
+    volume_activity_ratio = n_period_volume / df['volume'].rolling(window=10).mean()
+    
+    # Calculate Intraday Volume Intensity
+    recent_median_volume = df['volume'].rolling(window=10).median()
+    volume_intensity = df['volume'] / recent_median_volume
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    ema_adjustment = df['close'] - ema_20
+    
+    # Incorporate Recent Volatility
+    recent_volatility = df['close'].rolling(window=20).std()
+    ema_adjustment_volatility = ema_adjustment / recent_volatility
+    
+    # Composite Alpha Factor
+    weighted_sum = (high_low_to_open_close_ratio * 0.3 +
+                    vwap_deviation * 0.3 +
+                    volume_intensity * 0.2 +
+                    closing_position * 0.2)
+    
+    trend_adjustment = ema_adjustment_volatility
+    final_alpha_factor = weighted_sum + trend_adjustment
+    
+    return final_alpha_factor
+```

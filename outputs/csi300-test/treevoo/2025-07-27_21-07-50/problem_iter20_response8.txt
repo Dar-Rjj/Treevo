@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum factor
+    ret_10 = df['close'].pct_change(10)
+    ret_20 = df['close'].pct_change(20)
+    ret_50 = df['close'].pct_change(50)
+    momentum_score = 0.5 * ret_10 + 0.3 * ret_20 + 0.2 * ret_50
+    
+    # Price-Volume trend
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    price_change = df['close'].pct_change()
+    price_vol_indicator = price_change * (df['volume'] / avg_volume_10)
+    price_vol_trend = price_vol_indicator.rolling(window=20).mean()
+    
+    # Volatility factor
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    volatility = log_returns.rolling(window=30).std()
+    
+    # Combine momentum, price-volume, and volatility factors
+    composite_factor_1 = (momentum_score + price_vol_trend - volatility) / 3
+    
+    # RSI factor
+    gain = df['close'].diff().clip(lower=0).rolling(window=14).mean()
+    loss = df['close'].diff().clip(upper=0).abs().rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi_smoothed = rsi.ewm(span=14, adjust=False).mean()
+    
+    # MFI factor
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_flow_ratio = positive_flow.rolling(window=14).sum() / negative_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Combine RSI and MFI factors
+    composite_factor_2 = (rsi_smoothed + mfi) / 2
+    
+    # Final synthesized factor
+    final_factor = (composite_factor_1 + composite_factor_2) / 2
+    
+    return final_factor
+```

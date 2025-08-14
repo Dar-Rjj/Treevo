@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) of closing prices over a 50-day period
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Relative Strength Index (RSI) based on closing prices over a 14-day period
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # Daily price movement
+    df['Daily_Price_Movement'] = df['close'].diff()
+    
+    # Cumulative sum of daily price movements over the past 20 days
+    df['Cumulative_Sum_20'] = df['Daily_Price_Movement'].rolling(window=20).sum()
+    
+    # Volume ratio: current day's volume to SMA of volume over a 20-day period
+    df['SMA_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['volume'] / df['SMA_Volume_20']
+    
+    # Volatility measure using True Range
+    df['True_Range'] = df[['high', 'low']].join(df.shift(1)['close']).apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close']), abs(x['low'] - x['close'])), axis=1)
+    df['Average_True_Range_14'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Price gaps: difference between the current day's open and the previous day's close
+    df['Price_Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Tally up-gaps and down-gaps in the past month
+    df['Up_Gap'] = df['Price_Gap'].apply(lambda x: 1 if x > 0 else 0)
+    df['Down_Gap'] = df['Price_Gap'].apply(lambda x: 1 if x < 0 else 0)
+    df['Total_Up_Gaps_30'] = df['Up_Gap'].rolling(window=30).sum()
+    df['Total_Down_Gaps_30'] = df['Down_Gap'].rolling(window=30).sum()
+    
+    # Rate of Change (ROC) between the current close and the close from 10 days ago
+    df['ROC_10'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10) * 100
+    
+    # Modified Accumulation/Distribution Line
+    df['Median_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    money_flow_multiplier = (df['Median_Price'] - df['low']) - (df['high'] - df['Median_Price']) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    df['A/D_Line'] = money_flow_volume.cumsum()
+    
+    # Generate the alpha factor
+    alpha_factor = (
+        df['SMA_50'] +
+        df['RSI_14'] +
+        df['Cumulative_Sum_20'] +
+        df['Volume_Ratio'] +
+        df['Average_True_Range_14'] +
+        df['Total_Up_Gaps_30'] -
+        df['Total_Down_Gaps_30'] +
+        df['ROC_10'] +
+        df['A/D_Line']
+    )
+    
+    return alpha_factor
+```

@@ -34,7 +34,7 @@ def solve(market_data):
         daily = market_data.xs(date, level='date')
         factors = daily['factor']
         returns = daily['future_return_6d']
-        mask = factors.notna() & returns.notna()
+        mask = factors.notna() & returns.notna() & np.isfinite(factors) & np.isfinite(returns)
         if mask.sum() >= 10:
             ic, _ = spearmanr(factors[mask], returns[mask])
             if not np.isnan(ic):

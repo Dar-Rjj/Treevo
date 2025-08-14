@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = df['close'] / df['open'] - 1
+    
+    # Combine High-Low Range and Close-Open Return
+    df['combined_return'] = df['high_low_range'] * df['close_open_return']
+    
+    # Calculate Volume-Weighted High-Low Spread
+    df['volume_weighted_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Exponential Moving Average (EMA) of Weighted High-Low Spread
+    df['ema_weighted_spread'] = df['volume_weighted_spread'].ewm(span=10).mean()
+    df['prev_ema_weighted_spread'] = df['ema_weighted_spread'].shift(5)
+    df['weighted_spread_diff'] = df['ema_weighted_spread'] - df['prev_ema_weighted_spread']
+    
+    # Identify Volume Spike
+    df['volume_moving_avg'] = df['volume'].rolling(window=30).mean()
+    df['volume_std'] = df['volume'].rolling(window=30).std()
+    df['volume_spike'] = (df['volume'] > df['volume_moving_avg'] + 2 * df['volume_std']).astype(int)
+    
+    # Calculate N-day Price Momentum
+    df['n_day_return'] = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Volume Weighted Adjusted Return
+    df['adjusted_return'] = df['volume'] * df['combined_return']
+    
+    # Calculate Moving Average of Adjusted Return
+    df['adj_return_moving_avg'] = df['adjusted_return'].rolling(window=20).mean()
+    
+    # Calculate Intraday Range to Open Ratio
+    df['intraday_range_to_open'] = df['high_low_range'] / df['open']
+    
+    # Calculate Volume Momentum
+    df['close_to_close_return'] = df['close'] / df['close'].shift(1) - 1
+    df['volume_momentum'] = df['volume'] * df['close_to_close_return']
+    
+    # Calculate High-Low Envelope
+    df['max_high'] = df['high'].rolling(window=20).max()
+    df['min_low'] = df['low'].rolling(window=20).min()
+    
+    # Introduce Trend Strength Indicator
+    df['trend_strength'] = df['close'].rolling(window=20).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0], raw=False)
+    
+    # Introduce Price Envelope Breakout Indicator
+    df['upper_band'] = df['high'].rolling(window=20).max()
+    df['lower_band'] = df['low'].rolling(window=20).min()
+    df['bullish_breakout'] = (df['close'] > df['upper_band']).astype(int)
+    df['bearish_breakout'] = (df['close'] < df['lower_band']).astype(int)
+    
+    # Combine Factors
+    df['factor_ratio'] = df['adjusted_return'] / df['adj_return_moving_avg']
+    K = 1.5  # Amplification factor for volume spike
+    L = 1.2  # Amplification factor for bullish breakout
+    M = 0.8  # Dampening factor for bearish breakout
+    
+    df['factor'] = df['n_day_return']
+    df.loc[df['volume_spike'] == 1, 'factor'] *= K
+    df['factor'] *= df['high_low_range'] * df['close_open_return'] * df['intraday_range_to_open'] * df['volume_momentum']
+    df['factor'] *= df['max_high'] - df['min_low']
+    df['factor'] *= df['trend_strength']
+    df.loc[df['bullish_breakout'] == 1, 'factor'] *= L
+    df.loc[df['bearish_breakout'] == 1, 'factor'] *= M
+    
+    return df['factor']
+```

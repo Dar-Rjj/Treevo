@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_intraday_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Volume Weighted Momentum
+    volume_weighted_momentum = df['volume'] * close_to_intraday_range_ratio
+    
+    # Integrate Short-Term Price and Volume Changes
+    df['5_day_price_change'] = df['close'].pct_change(periods=5)
+    avg_volume_20_days = df['volume'].rolling(window=20).mean().shift(1)
+    df['5_day_volume_change'] = df['volume'].pct_change(periods=5)
+    df['volume_trend_indicator'] = df['5_day_volume_change'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Volume Trend Score
+    avg_volume_10_days = df['volume'].rolling(window=10).mean()
+    volume_change_rate = df['volume'] / avg_volume_10_days
+    df['volume_trend_score'] = volume_change_rate.apply(lambda x: 1.5 * x if x > 1 else -1.2 * x)
+    
+    # Final VAPM Factor
+    df['final_vapm_factor'] = (df['5_day_price_change'] * df['volume_trend_indicator']) / avg_volume_20_days
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Integrate Price Trend
+    moving_avg_close = df['close'].rolling(window=20).mean()
+    price_trend = df['close'] - moving_avg_close
+    
+    # Combine and Cumulate
+    combined_momentum = volume_weighted_momentum + price_trend + df['final_vapm_factor']
+    cumulated_combined_momentum = combined_momentum.rolling(window=20).sum()
+    
+    # Composite Alpha Factor
+    composite_factor = cumulated_combined_momentum + df['volume_weighted_close_to_open_return']
+    
+    # Smooth the Composite Factor
+    smoothed_composite_factor = composite_factor.rolling(window=5).mean()
+    
+    return smoothed_composite_factor
+```

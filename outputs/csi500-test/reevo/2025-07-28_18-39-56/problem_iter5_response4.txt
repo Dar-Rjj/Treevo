@@ -1,0 +1,29 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the volume-weighted average price (VWAP)
+    vwap = (df['amount'] / df['volume']).rolling(window=7).mean()
+    
+    # Calculate the exponential moving average of the VWAP with a dynamic window based on volatility
+    vol_window = df['close'].rolling(window=7).std().fillna(method='bfill')
+    ema_vwap = vwap.ewm(span=7 + 3 * vol_window, adjust=False).mean()
+    
+    # Calculate the logarithmic returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate the Relative Strength Index (RSI) with a dynamic window
+    rsi_window = int(14 / (1 + vol_window.mean()))
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the momentum of the close price with a dynamic window
+    mom_window = int(5 + 2 * vol_window.mean())
+    momentum = df['close'].pct_change(periods=mom_window)
+    
+    # Combine the factors to create the final alpha factor
+    factor = (log_returns - ema_vwap.diff()) * rsi * momentum
+
+    return factor
+```

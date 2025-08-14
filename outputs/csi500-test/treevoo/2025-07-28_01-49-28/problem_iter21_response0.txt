@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, threshold=0.5):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Movement
+    open_to_close_movement = df['close'] - df['open']
+    
+    # Adjust for Volume
+    volume_adjusted_breakout_strength = (daily_range * df['volume']) + open_to_close_movement
+    
+    # Volume-Weighted Average Spread
+    spread = df['high'] - df['low']
+    weighted_average_volume = df['volume'].rolling(window=n).sum() / n
+    volume_weighted_avg_spread = spread * weighted_average_volume
+    
+    # Integrated Momentum Factor
+    simple_momentum = df['close'] - df['close'].shift(n)
+    adjusted_momentum = simple_momentum * weighted_average_volume
+    
+    # High-Low Return
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    
+    # Combined Momentum and High-Low Return
+    combined_momentum_high_low = adjusted_momentum + high_low_return
+    
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    volatility = pd.concat([open_high_diff, open_low_diff], axis=1).max(axis=1)
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_volatility = volatility * volume_change
+    
+    # Amount per Unit Close Price Rate of Change
+    amount_sum = df['amount'].rolling(window=n).sum()
+    amount_per_unit_close = amount_sum / df['close']
+    previous_amount_sum = df['amount'].shift(n+1).rolling(window=n).sum()
+    previous_amount_per_unit_close = previous_amount_sum / df['close'].shift(n+1)
+    rate_of_change = amount_per_unit_close - previous_amount_per_unit_close
+    
+    # Price Change Ratio
+    price_change_ratio = df['close'] / df['open']
+    
+    # Combine Factors
+    integrated_alpha_factor = (
+        volume_adjusted_breakout_strength + 
+        volume_weighted_avg_spread + 
+        combined_momentum_high_low + 
+        adjusted_volatility + 
+        rate_of_change) * price_change_ratio
+    
+    # Filter for Strong Moves
+    strong_moves = (integrated_alpha_factor > threshold).astype(int)
+    
+    return strong_moves
+```

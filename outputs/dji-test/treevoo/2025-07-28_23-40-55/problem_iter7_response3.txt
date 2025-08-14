@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Price Movement Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Evaluate Weighted Average Volume Over 20 Days
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Base Price Momentum (Close price t - Close price t-20)
+    df['base_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Adjust for Volume Impact
+    df['adjusted_momentum'] = df.apply(
+        lambda row: row['base_momentum'] * 1.1 if row['volume'] > row['avg_volume_20'] else row['base_momentum'],
+        axis=1
+    )
+    
+    # Calculate Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(20)) / df['avg_volume_20']
+    
+    # Assess Positive vs Negative Momentum Contribution
+    df['final_momentum'] = df.apply(
+        lambda row: row['volume_adjusted_momentum'] * 1.5 if (row['close'] - row['close'].shift(20)) > 0 
+        else row['volume_adjusted_momentum'],
+        axis=1
+    )
+    
+    # Integrate Accumulated Momentum Impact from Multiple Time Horizons
+    df['momentum_10'] = (df['close'] - df['close'].shift(10)) / df['avg_volume_20']
+    df['momentum_30'] = (df['close'] - df['close'].shift(30)) / df['avg_volume_20']
+    df['momentum_60'] = (df['close'] - df['close'].shift(60)) / df['avg_volume_20']
+    
+    # Assign greater weight to longer time horizons
+    df['accumulated_momentum'] = 0.2 * df['momentum_10'] + 0.3 * df['momentum_30'] + 0.5 * df['momentum_60']
+    
+    # Final factor
+    df['alpha_factor'] = df['final_momentum'] * df['accumulated_momentum']
+    
+    return df['alpha_factor']
+```

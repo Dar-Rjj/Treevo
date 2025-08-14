@@ -1,0 +1,22 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Price
+    df['volume_weighted_price'] = (df['High'] * df['Volume'] + df['Low'] * df['Volume'] + df['Close'] * df['Volume']) / (3 * df['Volume'])
+    
+    # Compute Intraday Range Volatility
+    df['intraday_range'] = df['High'] - df['Low']
+    avg_volume = df['Volume'].rolling(window=10).mean()
+    df['intraday_volatility'] = df['intraday_range'] / avg_volume
+    
+    # Incorporate Price Momentum
+    df['price_change'] = df['Close'].diff()
+    df['momentum'] = df['price_change'].rolling(window=10).sum()
+    
+    # Combine Volume-Weighted Price, Intraday Range Volatility, and Momentum
+    df['vw_price_diff'] = df['volume_weighted_price'].diff()
+    df['adjusted_diff'] = df['vw_price_diff'] * df['intraday_volatility']
+    df['alpha_factor'] = df['adjusted_diff'] + df['momentum']
+    
+    return df['alpha_factor']

@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Adjust for Volume
+    volume_adjusted_returns = aggregate_returns * df['volume']
+    
+    # Weight by Intraday Volatility
+    weighted_returns = intraday_volatility * volume_adjusted_returns
+    
+    # Smoothed Moving Average
+    sma = weighted_returns.rolling(window=5).mean()
+    ema = sma.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(7)
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].shift(25)
+    
+    # Compute Price Momentum Ratio
+    momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Integrate Intraday and Previous Day's Returns
+    integrated_returns = intraday_return * (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Price Momentum and Intraday Reversal
+    combined_momentum_reversal = momentum_ratio * integrated_returns
+    
+    # Conditionally Adjust by Volume Surge
+    avg_volume_7d = df['volume'].rolling(window=7).mean()
+    volume_surge_multiplier = np.where(df['volume'] > avg_volume_7d, 1.8, 0.7)
+    conditionally_adjusted_momentum = combined_momentum_reversal * volume_surge_multiplier
+    
+    # Incorporate High-Low Volatility into Final Factor
+    high_low_volatility = intraday_volatility * (df['high'] - df['low'])
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = ema + conditionally_adjusted_momentum + high_low_volatility
+    
+    return final_alpha_factor
+```

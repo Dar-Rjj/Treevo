@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Delta
+    close_to_open_delta = df['close'] - df['open']
+    
+    # Volume-Weighted Intraday Reversal Score
+    reversal_score = (df['close'] - df['open']) / intraday_range * df['volume']
+    
+    # Intraday Momentum Adjusted Reversal Score
+    prev_close = df['close'].shift(1)
+    adjusted_reversal_score = (df['close'] - df['open']) / intraday_range * (df['volume'] * (df['close'] - prev_close))
+    adjusted_reversal_score = adjusted_reversal_score + (df['close'] - df['open']).where(close_to_open_delta > 0, -(df['open'] - df['close']))
+    
+    # Identify High-Low Range Ratio
+    daily_high_low_range = df['high'] - df['low']
+    rolling_sum_high_low = daily_high_low_range.rolling(window=21).sum()
+    rolling_sum_volume = df['volume'].rolling(window=21).sum()
+    high_low_range_ratio = daily_high_low_range / (rolling_sum_high_low / rolling_sum_volume)
+    
+    # Calculate Breakout Strength
+    breakout_strength = daily_high_low_range / rolling_sum_high_low
+    
+    # Calculate Volume Weighted Momentum
+    price_change = df['close'] - df['close'].shift(1)
+    volume_weighted_momentum = price_change * df['volume']
+    
+    # Combine Breakout Strength with Volume Weighted Momentum
+    combined_breakout_momentum = (breakout_strength + volume_weighted_momentum) / 2
+    
+    # Calculate Price Momentum
+    seven_day_return = (df['close'] / df['close'].shift(7)) - 1
+    twenty_one_day_return = (df['close'] / df['close'].shift(21)) - 1
+    combined_return = seven_day_return + twenty_one_day_return
+    
+    # Calculate Volume Activity
+    seven_day_avg_volume = df['volume'].rolling(window=7).mean()
+    twenty_one_day_avg_volume = df['volume'].rolling(window=21).mean()
+    volume_activity = seven_day_avg_volume / twenty_one_day_avg_volume
+    
+    # Final Alpha Factor
+    final_factor = (adjusted_reversal_score + combined_breakout_momentum) / df['close'].rolling(window=21).std()
+    final_factor = final_factor * (combined_return * volume_activity)
+    
+    return final_factor
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Moving Averages of Daily Price Changes
+    df['ma_20_price_change'] = df['price_change'].rolling(window=20).mean()
+    df['ma_50_price_change'] = df['price_change'].rolling(window=50).mean()
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # 5-day Exponential Moving Average (EMA) of High-Low Range
+    alpha = 2 / (5 + 1)
+    df['ema_high_low_range'] = df['high_low_range'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # Daily Volatility in EMA
+    df['ema_volatility'] = df['ema_high_low_range'] - df['ema_high_low_range'].shift(1)
+    
+    # Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Positive and Negative Volume Days
+    df['positive_volume_days'] = (df['volume_change'] > 0).rolling(window=20).sum()
+    df['negative_volume_days'] = (df['volume_change'] < 0).rolling(window=20).sum()
+    
+    # Significant Volume Changes
+    threshold = 0.5
+    df['significant_volume_change'] = (df['volume_change'].abs() > (threshold * df['volume'].shift(1)))
+    
+    # Combine Indicators
+    df['long_term_momentum_volume'] = df['ma_50_price_change'] * df['positive_volume_days']
+    df['short_term_momentum_volume'] = df['ma_20_price_change'] * df['negative_volume_days']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['long_term_momentum_volume'] + df['short_term_momentum_volume']) * df['ema_volatility'] * df['significant_volume_change']
+    
+    return df['alpha_factor']
+```

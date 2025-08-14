@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low, to gauge the day's volatility
+    daily_volatility = df['high'] - df['low']
+    
+    # Adaptive Exponential Moving Average (EMA) for the close price, using a shorter span (3 days) for more reactivity
+    ema_3 = df['close'].ewm(span=3, adjust=False).mean()
+    
+    # Determine if today's close is above the 3-day EMA, indicating an upward momentum
+    momentum = (df['close'] > ema_3).astype(int)
+    
+    # Calculate the volume-weighted return of the last 5 days
+    weighted_return = (df['close'].pct_change().fillna(0) * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate the RSI (Relative Strength Index) for the last 10 days using EMA
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(span=10, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(span=10, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the ATR (Average True Range) for the last 10 days using EMA
+    true_range = df[['high', 'low', 'close']].apply(lambda x: max(x[0], x[2]) - min(x[1], x[2]), axis=1)
+    atr = true_range.ewm(span=10, adjust=False).mean()
+    
+    # Calculate the dynamic weighting based on the ratio of the current day's volume to the 10-day average volume
+    avg_volume_10 = df['volume'].ewm(span=10, adjust=False).mean()
+    volume_ratio = df['volume'] / avg_volume_10
+    
+    # Introduce a macroeconomic sentiment indicator (simplified as a moving average of the close price over 30 days)
+    macro_sentiment = df['close'].rolling(window=30).mean()
+    
+    # Create a factor combining volatility (as inverse, higher volatility might lead to reversion), momentum, RSI, ATR, volume ratio, and macro sentiment
+    factor = (1 / (daily_volatility + 1e-7)) * momentum * (rsi / 100) * (1 / (atr + 1e-7)) * weighted_return * volume_ratio * (macro_sentiment / df['close'])
+    
+    # Add a sector-specific indicator (simplified as a 60-day moving average of the close price)
+    sector_indicator = df['close'].rolling(window=60).mean()
+    
+    # Incorporate the sector-specific indicator into the factor
+    factor *= (sector_indicator / df['close'])
+    
+    # Add a longer-term market sentiment indicator (simplified as a 120-day moving average of the close price)
+    long_term_sentiment = df['close'].rolling(window=120).mean()
+    
+    # Incorporate the longer-term market sentiment into the factor
+    factor *= (long_term_sentiment / df['close'])
+    
+    return factor
+```

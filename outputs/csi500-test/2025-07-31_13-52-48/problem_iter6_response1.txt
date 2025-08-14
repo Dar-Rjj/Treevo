@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Momentum
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    df['Price_Momentum'] = df['Log_Return'].rolling(window=5).sum()
+
+    # Apply Volume-Adjusted Momentum Filter
+    df['Volume_Adjusted_Momentum'] = (df['volume'] - df['volume'].shift(1)) * df['Price_Momentum']
+    df['Volume_Adjusted_Rolling_Sum'] = df['Volume_Adjusted_Momentum'].rolling(window=20).sum()
+    
+    # Determine Threshold for High Volume-Adjusted Momentum
+    threshold = df['Volume_Adjusted_Rolling_Sum'].abs().quantile(0.75)
+    df_filtered = df[df['Volume_Adjusted_Rolling_Sum'].abs() < threshold]
+    
+    # Compute Dynamic Price Momentum Oscillator
+    df_filtered['Oscillator'] = df_filtered['Volume_Adjusted_Rolling_Sum'] - df_filtered['Volume_Adjusted_Rolling_Sum'].rolling(window=60).mean()
+    
+    # Add Trend Confirmation Filter
+    df_filtered['5D_SMA'] = df_filtered['close'].rolling(window=5).mean()
+    df_filtered['30D_SMA'] = df_filtered['close'].rolling(window=30).mean()
+    df_filtered['Long_Term_Trend'] = df_filtered['5D_SMA'] - df_filtered['30D_SMA']
+    
+    # Apply Trend Confirmation
+    conditions = [
+        (df_filtered['Long_Term_Trend'] > 0) & (df_filtered['Oscillator'] > 0),
+        (df_filtered['Long_Term_Trend'] < 0) & (df_filtered['Oscillator'] < 0)
+    ]
+    choices = [df_filtered['Oscillator'], df_filtered['Oscillator']]
+    df_filtered['Trend_Confirmed_Oscillator'] = np.select(conditions, choices, default=np.nan)
+    
+    return df_filtered['Trend_Confirmed_Oscillator'].dropna()
+```

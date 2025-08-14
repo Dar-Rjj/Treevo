@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_lookback = 20
+    vol_adj_lookback = 30
+    momentum_lookback = 10
+    trend_lookback = 200
+    liquidity_lookback = 60
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_adj_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Close_Percent_Change'] = df['close'].pct_change(momentum_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Open_Close_Diff'] = df['open'] - df['close']
+    df['Open_High_Diff'] = df['open'] - df['high']
+    df['Open_Low_Diff'] = df['open'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Long_Term_SMA'] = df['close'].rolling(window=trend_lookback).mean()
+    df['Trend_Indicator'] = (df['SMA'] > df['Long_Term_SMA']).astype(int)
+    
+    # Incorporate Enhanced Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Avg_Turnover'] = df['Daily_Turnover'].rolling(window=liquidity_lookback).mean()
+    df['Average_Dollar_Volume'] = (df['volume'] * df['close']).rolling(window=liquidity_lookback).mean()
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    df['Rolling_Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_lookback).mean()
+    
+    # Define weights for the components
+    price_momentum_weight = 0.3
+    vol_adj_volatility_weight = 0.2
+    trend_indicator_weight = 0.1
+    turnover_weight = 0.2
+    avg_dollar_volume_weight = 0.1
+    liquidity_ratio_weight = 0.1
+    
+    # Dynamically adjust weights based on market conditions
+    df['Weighted_Price_Momentum'] = df['Price_Momentum'] * price_momentum_weight
+    df['Weighted_Vol_Adj_Volatility'] = df['Volume_Adjusted_Volatility'] * vol_adj_volatility_weight
+    df['Weighted_Trend_Indicator'] = df['Trend_Indicator'] * trend_indicator_weight
+    df['Weighted_Turnover'] = df['Rolling_Avg_Turnover'] * turnover_weight
+    df['Weighted_Avg_Dollar_Volume'] = df['Average_Dollar_Volume'] * avg_dollar_volume_weight
+    df['Weighted_Liquidity_Ratio'] = df['Rolling_Avg_Liquidity_Ratio'] * liquidity_ratio_weight
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Weighted_Price_Momentum'] +
+        df['Weighted_Vol_Adj_Volatility'] +
+        df['Weighted_Trend_Indicator'] +
+        df['Weighted_Turnover'] +
+        df['Weighted_Avg_Dollar_Volume'] +
+        df['Weighted_Liquidity_Ratio']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage
+# df = pd.read_csv('your_market_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

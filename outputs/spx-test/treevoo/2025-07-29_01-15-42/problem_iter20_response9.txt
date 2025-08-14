@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'].pct_change(periods=28)
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].pct_change(periods=10)
+    
+    # Combine Long-Term and Short-Term Momentum
+    combined_momentum = long_term_momentum + short_term_momentum
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].rolling(window=20).std()
+    
+    # Calculate Intraday High-Low Spread
+    high_low_spread = (df['high'] - df['low']) / df['close']
+    
+    # Calculate EMA Smoothed Close-to-Open Return
+    close_to_open_return = df['close'] - df['open'].shift(-1)
+    ema_close_to_open = close_to_open_return.ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    total_volume = df['volume'].rolling(window=10).sum()
+    total_amount = (df['close'] * df['volume']).rolling(window=10).sum()
+    volume_amount_adjusted_return = ema_close_to_open / (total_volume + total_amount)
+    
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate Price Range Ratio
+    price_range_ratio = daily_price_range / df['close']
+    
+    # Compute Relative True Strength Index (RTSI)
+    gains = (df['close'].diff(1) > 0) * df['close'].diff(1)
+    losses = (df['close'].diff(1) < 0) * df['close'].diff(1).abs()
+    smoothed_gains = gains.ewm(span=14, adjust=False).mean()
+    smoothed_losses = losses.ewm(span=14, adjust=False).mean()
+    rtsi = (smoothed_gains / (smoothed_gains + smoothed_losses)) * 100
+    
+    # Calculate EMA Smoothed Daily Volume Change
+    daily_volume_change = df['volume'].diff(1)
+    ema_volume_change = daily_volume_change.ewm(span=5, adjust=False).mean()
+    
+    # Weighted Average of Combined Components
+    weighted_average = (
+        combined_momentum * 0.3 +
+        high_low_spread * 0.2 +
+        volume_amount_adjusted_return * 0.1 +
+        realized_volatility * 0.1 +
+        price_range_ratio * 0.15 +
+        rtsi * 0.15
+    )
+    
+    # Final Factor
+    volume_acceleration = df['volume'].pct_change(periods=10)
+    final_factor = weighted_average * volume_acceleration
+    
+    return final_factor
+```

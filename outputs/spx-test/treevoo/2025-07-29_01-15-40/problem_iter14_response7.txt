@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate 5-Day Momentum
+    df['5D_Momentum'] = df['close'].diff(5)
+    
+    # Calculate Intraday High-Low Range
+    df['Intraday_HL_Range'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Range over past N days (N=10)
+    N = 10
+    df['Avg_Intraday_HL_Range'] = df['Intraday_HL_Range'].rolling(window=N).mean()
+    
+    # Compute Intraday High-Low Range Score
+    df['HL_Range_Score'] = np.where(df['Intraday_HL_Range'] > df['Avg_Intraday_HL_Range'], 1, -1)
+    
+    # Adjust Intraday High-Low Range Score by 5-Day Momentum
+    df['Adj_HL_Range_Score'] = df['HL_Range_Score'] * df['5D_Momentum']
+    
+    # Calculate 20-Day Volume Moving Average
+    df['20D_Volume_MA'] = df['volume'].rolling(window=20).mean()
+    
+    # Compute Volume Deviation from MA
+    df['Volume_Dev'] = df['volume'] - df['20D_Volume_MA']
+    
+    # Adjust by Volume
+    df['Volume_Adjusted_HL'] = df['Adj_HL_Range_Score'] * df['volume']
+    
+    # Calculate 5-Day Close Price Standard Deviation
+    df['5D_Close_STD'] = df['close'].rolling(window=5).std()
+    
+    # Adjust by Price Volatility
+    df['Price_Vol_Adjusted_HL'] = df['Volume_Adjusted_HL'] / df['5D_Close_STD']
+    
+    # Apply Weighted Moving Average Smoothing (window=5, weights=[0.1, 0.2, 0.3, 0.2, 0.1])
+    weights = np.array([0.1, 0.2, 0.3, 0.2, 0.1])
+    df['WMA_Smoothed'] = df['Price_Vol_Adjusted_HL'].rolling(window=5).apply(lambda x: np.sum(weights*x), raw=False)
+    
+    # Calculate Log Return
+    df['Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # EWMA of Log Return (21-day lookback period)
+    df['EWMA_Log_Return'] = df['Log_Return'].ewm(span=21).mean()
+    
+    # Integrate Price and Volume
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Combined_Momentum'] = df['EWMA_Log_Return'] * df['Volume_Change']
+    
+    # Calculate Intraday Price Movements and Directional Changes
+    df['Range'] = df['high'] - df['low']
+    df['Spread'] = df['close'] - df['open']
+    df['High_Minus_Prior_High'] = df['high'] - df['high'].shift(1)
+    df['Low_Minus_Prior_Low'] = df['low'] - df['low'].shift(1)
+    
+    # Determine Net Intraday and Directional Movements
+    df['Net_Movement'] = np.where(df['High_Minus_Prior_High'] > df['Low_Minus_Prior_Low'], 
+                                  df['High_Minus_Prior_High'], df['Low_Minus_Prior_Low'])
+    df['Weighted_Net_Movement'] = (df['Range'] + df['Spread'] + df['Net_Movement']) * df['volume'].rolling(window=N).mean()
+    
+    # Adjust for Volume Activity
+    df['Volume_Activity_Adjusted'] = np.where(df['volume'] > df['volume'].shift(1), 
+                                              df['Weighted_Net_Movement'] * (df['volume'] / df['volume'].shift(1)), 
+                                              df['Weighted_Net_Movement'] * (df['volume'].shift(1) / df['volume']))
+    
+    # Calculate Price Reversal Indicator
+    df['Price_Reversal_Indicator'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Calculate Cumulative Directional Movement Adjusted (CDMA)
+    df['CDMA'] = df['Net_Movement'].rolling(window=N).sum() * df['volume']
+    
+    # Calculate Volume-Weighted Price Reversal
+    df['Volume_Weighted_Price

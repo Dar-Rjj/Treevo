@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_high_to_low = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Change Ratio
+    volume_change_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Compute Combined Indicator
+    combined_indicator = intraday_high_to_low * volume_change_ratio
+    
+    # Apply Threshold to Identify Significant Movements
+    fixed_threshold = 1.5
+    moving_std = df['close'].pct_change().rolling(window=20).std()
+    normalized_threshold = fixed_threshold * moving_std
+    significant_movements = combined_indicator > normalized_threshold
+    
+    # Calculate Intraday Price Movement
+    intraday_range = df['high'] - df['low']
+    intraday_direction = df['close'] - df['open']
+    
+    # Calculate Weighted Volume Activity
+    n = 20
+    average_volume = df['volume'].rolling(window=n).mean()
+    relative_volume = df['volume'] / average_volume
+    
+    # Combine Intraday Price and Volume Metrics
+    weighted_intraday_range = intraday_range * relative_volume
+    weighted_intraday_direction = intraday_direction * relative_volume
+    combined_metric = weighted_intraday_range + weighted_intraday_direction
+    
+    # Apply Moving Averages to Intraday High-to-Low Momentum
+    fast_ema_period = 12
+    slow_ema_period = 26
+    fast_ema = intraday_high_to_low.ewm(span=fast_ema_period, adjust=False).mean()
+    slow_ema = intraday_high_to_low.ewm(span=slow_ema_period, adjust=False).mean()
+    
+    # Generate Final Alpha Factor
+    macd_line = fast_ema - slow_ema
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    final_alpha_factor = combined_metric + macd_line - signal_line
+    
+    return final_alpha_factor
+```

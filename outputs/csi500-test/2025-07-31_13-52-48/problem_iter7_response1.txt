@@ -1,0 +1,31 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    price_momentum = df['log_return'].rolling(window=3).sum()
+
+    # Apply Volume Shock Filter
+    df['abs_volume_change'] = np.abs(df['volume'] - df['volume'].shift(1))
+    volume_shock_threshold = df['abs_volume_change'].quantile(0.75)
+    volume_filtered_days = df[df['abs_volume_change'] < volume_shock_threshold].index
+
+    # Calculate Intraday Price Movement
+    df['intraday_high_low'] = (df['high'] - df['low']) / df['open']
+    df['intraday_close_open'] = (df['close'] - df['open']) / df['open']
+    intraday_movement = (df['intraday_high_low'] + df['intraday_close_open']) / 2
+
+    # Smooth the Average using a 3-day Exponential Moving Average
+    smoothed_intraday_movement = intraday_movement.ewm(span=3, adjust=False).mean()
+
+    # Weighted Final Alpha Factor
+    df['volume_change_pct'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    final_alpha_factor = smoothed_intraday_movement * df['volume_change_pct']
+
+    # Apply the volume shock filter
+    final_alpha_factor = final_alpha_factor[final_alpha_factor.index.isin(volume_filtered_days)]
+
+    return final_alpha_factor
+```

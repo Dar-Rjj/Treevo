@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the Simple Moving Average (SMA) of closing prices for 50 days
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Generate a binary signal; 1 if the current close is above the SMA, 0 otherwise
+    df['Trend_Signal'] = (df['close'] > df['SMA_50']).astype(int)
+    
+    # Calculate the difference between today’s high and the previous day’s high
+    df['High_Diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day’s low
+    df['Low_Diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    df['Momentum_Score'] = df['High_Diff'] + df['Low_Diff']
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    df['Momentum_Signal'] = (df['Momentum_Score'] > 0).astype(int)
+    
+    # Evaluate the percentage change in volume from the previous day
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Assign a value indicating strong buying (positive change) or selling (negative change) pressure
+    df['Volume_Signal'] = (df['Volume_Change'] > 0).astype(int)
+    
+    # Multiply the return (close to close) by the volume traded
+    df['Intensity_Factor'] = (df['close'] / df['close'].shift(1) - 1) * df['volume']
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_Spread'] = df['high'] - df['low']
+    
+    # Calculate High-Close to Open-High Ratio
+    df['High_Close_Ratio'] = (df['high'] - df['close']) / (df['high'] - df['open'])
+    
+    # Adjust Intraday High-Low Spread by Volume
+    df['Adjusted_Spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Combine Adjusted Spread and Ratio
+    df['Volume_Adjusted_Spread'] = df['open'] + df['Adjusted_Spread']
+    
+    # Final combined factor
+    df['Combined_Factor'] = (df['Trend_Signal'] + 
+                             df['Momentum_Signal'] + 
+                             df['Volume_Signal'] + 
+                             df['Intensity_Factor'] + 
+                             df['Volume_Adjusted_Spread'])
+    
+    # Return the final alpha factor
+    return df['Combined_Factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

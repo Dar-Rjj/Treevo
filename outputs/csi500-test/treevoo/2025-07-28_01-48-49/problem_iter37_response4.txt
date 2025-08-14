@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['IntradayRange'] = df['high'] - df['low']
+
+    # Adjust by Volume Change and Price Level
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['PriceLevelRatio'] = df['close'] / df['open']
+    df['AdjustedRange'] = df['IntradayRange'] * df['VolumeChange'] * df['PriceLevelRatio']
+
+    # Integrate Intraday Price Movement and Volume
+    df['IntradayMomentumScore'] = df['IntradayRange'] * df['VolumeChange']
+
+    # Calculate 5-Day Average High-Low Spread
+    df['HighLowSpread'] = df['high'] - df['low']
+    df['5DayAvgHighLowSpread'] = df['HighLowSpread'].rolling(window=5).mean()
+
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['5DayMomentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['HighLowSpreadMomentum'] = df['5DayAvgHighLowSpread'] * df['5DayMomentum']
+    df['IntegratedMomentumFactor'] = df['IntradayMomentumScore'] + df['HighLowSpreadMomentum']
+
+    # Introduce Volume Trend
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['VolumeTrendAdjustedFactor'] = df['IntegratedMomentumFactor'] * df['VolumeRatio']
+
+    # Final Factor Calculation
+    df['FinalFactor'] = (
+        0.2 * df['AdjustedRange'] +
+        0.3 * df['5DayMomentum'] +
+        0.2 * df['IntegratedMomentumFactor'] +
+        0.3 * df['VolumeTrendAdjustedFactor']
+    )
+
+    return df['FinalFactor']
+```

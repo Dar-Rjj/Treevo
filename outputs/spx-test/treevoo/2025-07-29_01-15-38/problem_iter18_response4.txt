@@ -1,0 +1,89 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # 5-Day Price Momentum
+    df['5_day_momentum'] = df['close'].rolling(window=5).mean()
+    
+    # 5-Day Average Volume
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    
+    # Relative Volume
+    df['relative_volume'] = df['volume'] / df['5_day_avg_volume']
+    
+    # Adjusted 5-Day Price Momentum
+    df['adjusted_5_day_momentum'] = df['5_day_momentum'] * df['relative_volume']
+    
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Intraday Momentum (High-Low Spread)
+    df['intraday_momentum'] = df['high'] - df['low']
+    
+    # Volume Adjustment
+    df['volume_adjustment'] = df['volume'] / df['volume'].mean()
+    
+    # Weighted High-Low Spread
+    df['weighted_high_low_spread'] = df['intraday_momentum'] * df['volume_adjustment']
+    
+    # Combined Indicators
+    df['combined_indicators'] = (df['intraday_return'] + 
+                                 df['weighted_high_low_spread'] + 
+                                 df['adjusted_5_day_momentum'])
+    
+    # Apply a Threshold for Filtering
+    threshold = 0.1
+    df['filtered_combined_indicators'] = (df['combined_indicators'] > threshold).astype(int)
+    
+    # Short-Term Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=5).mean()
+    
+    # Long-Term Momentum
+    df['long_term_momentum'] = df['close'].rolling(window=20).mean()
+    
+    # Momentum Oscillator
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Calculate Volume Ratio and Volume Surge
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    conditions = [
+        (df['volume_ratio'] > 1.5),
+        (df['volume_ratio'] > 1) & (df['volume_ratio'] <= 1.5),
+        (df['volume_ratio'] <= 1)
+    ]
+    choices = [1.5, 1.2, 1]
+    df['volume_surge_weight'] = pd.np.select(conditions, choices, default=1)
+    
+    # Introduce High-Low Range Indicator
+    df['daily_high_low_range'] = df['high'] - df['low']
+    df['5_day_avg_high_low_range'] = df['daily_high_low_range'].rolling(window=5).mean()
+    df['normalized_high_low_range'] = df['daily_high_low_range'] / df['5_day_avg_high_low_range']
+    
+    # Analyze Volume Change
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    volume_trend_conditions = [
+        (df['volume_change'] > 1.5),
+        (df['volume_change'] >= 0.5) & (df['volume_change'] <= 1.5),
+        (df['volume_change'] < 0.5)
+    ]
+    volume_trend_choices = [2, 0, -2]
+    df['volume_trend'] = pd.np.select(volume_trend_conditions, volume_trend_choices, default=0)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['adjusted_combined_returns'] = (df['intraday_return'] + 
+                                       df['weighted_high_low_spread'] + 
+                                       df['adjusted_5_day_momentum']) * df['volume_trend']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['adjusted_combined_returns'] * 
+                          df['momentum_oscillator'] * 
+                          df['volume_surge_weight'] * 
+                          df['normalized_high_low_range'])
+    
+    # Introduce Cumulative Movement
+    df['cumulative_alpha_factor'] = df['alpha_factor'].rolling(window=5).sum() / 5
+    
+    return df['cumulative_alpha_factor']
+```

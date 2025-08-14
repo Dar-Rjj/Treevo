@@ -1,0 +1,88 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Price Movement Ratio
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-day Rolling Sum of Price Movement Ratio
+    rolling_sum_price_movement = price_movement_ratio.rolling(window=5).sum()
+    
+    # Calculate 5-day Rolling Sum of High-Low Range
+    rolling_sum_high_low_range = high_low_range.rolling(window=5).sum()
+    
+    # Compute Momentum Indicator
+    momentum_indicator = rolling_sum_price_movement / rolling_sum_high_low_range
+    
+    # Adjust for Volume
+    adjusted_momentum = momentum_indicator * df['volume']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Volume Change Indicator
+    volume_change_indicator = df['volume'].diff().apply(lambda x: 1 if x > 0 else -1)
+    
+    # Combine Intraday and Volume-Amount Indicators
+    combined_indicators = intraday_return * volume_change_indicator
+    
+    # Apply Exponential Moving Average for Smoothing
+    smoothing_factor = 0.5
+    ema_combined_indicators = combined_indicators.ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Calculate Daily Volatility
+    daily_volatility = (df['high'] - df['low']).abs()
+    
+    # Combine Factors
+    combined_factors = (intraday_return * df['volume']) / daily_volatility
+    
+    # Calculate 5-day Moving Average of Close Prices
+    moving_avg_5_close = df['close'].rolling(window=5).mean()
+    
+    # Calculate Relative Strength
+    relative_strength = df['close'] / moving_avg_5_close
+    
+    # Final Alpha Factor
+    final_alpha_factor = adjusted_momentum + combined_factors * relative_strength
+    
+    # Calculate Averaged High-to-Low Volatility
+    lookback_period = 20
+    high_low_volatility = (df['high'] - df['low']).pct_change().rolling(window=lookback_period).sum() / lookback_period
+    
+    # Integrate Both Metrics
+    weight_adjusted_momentum = 0.6
+    weight_high_low_volatility = 0.4
+    integrated_factor = (weight_adjusted_momentum * adjusted_momentum) + (weight_high_low_volatility * high_low_volatility)
+    
+    # Output Final Alpha Factor
+    final_alpha_factor = integrated_factor * final_alpha_factor
+    
+    # Calculate 20-day Moving Average of Close Prices
+    moving_avg_20_close = df['close'].rolling(window=20).mean()
+    
+    # Calculate Long-Term Trend Indicator
+    long_term_trend_indicator = df['close'] / moving_avg_20_close
+    
+    # Enhance Final Alpha Factor
+    final_alpha_factor *= long_term_trend_indicator
+    
+    # Calculate 10-day Price Momentum
+    moving_avg_10_close = df['close'].rolling(window=10).mean()
+    
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] / moving_avg_10_close
+    
+    # Incorporate Short-Term Price Momentum
+    final_alpha_factor *= short_term_momentum
+    
+    # Calculate 5-day Standard Deviation of Intraday Returns
+    std_intraday_returns = intraday_return.rolling(window=5).std()
+    
+    # Adjust for Risk
+    final_alpha_factor /= std_intraday_returns
+    
+    return final_alpha_factor
+```

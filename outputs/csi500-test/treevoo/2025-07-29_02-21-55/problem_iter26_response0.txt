@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 50-day Simple Moving Average (SMA)
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate the 20-day Exponential Moving Average (EMA)
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Dual-moving-average crossover strategy
+    df['SMA_Crossover'] = (df['close'] > df['SMA_50']).astype(int) - (df['close'] < df['SMA_50']).astype(int)
+    df['EMA_Crossover'] = (df['close'] > df['EMA_20']).astype(int) - (df['close'] < df['EMA_20']).astype(int)
+    
+    # Calculate daily range
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Rolling volatility measure (sum of daily ranges over the past 30 days)
+    df['Rolling_Volatility'] = df['Daily_Range'].rolling(window=30).sum()
+    
+    # High and low volatility days
+    threshold = df['Daily_Range'].quantile(0.75)
+    df['High_Volatility'] = (df['Daily_Range'] > threshold).astype(int)
+    
+    # Percentage change from open to close for high volatility days
+    df['Pct_Change_Open_Close'] = (df['close'] - df['open']) / df['open']
+    
+    # Position of closing price relative to the day's high and low for low volatility days
+    df['Close_to_High'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    
+    # Calculate the 14-day Average True Range (ATR)
+    df['TR'] = df[['high' - 'low', abs('high' - 'close').shift(), abs('low' - 'close').shift()]].max(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = ((df['close'] > df['close'].shift()).astype(int) - (df['close'] < df['close'].shift()).astype(int)) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Volume trends
+    df['Volume_Trend'] = (df['volume'] > df['volume'].rolling(window=10).mean()).astype(int)
+    
+    # Amount traded
+    df['Amount_Trend'] = (df['amount'] > df['amount'].rolling(window=10).mean()).astype(int)
+    
+    # Difference between today's and yesterday's closing price
+    df['Price_Diff'] = df['close'] - df['close'].shift()
+    df['Bullish_Bearish'] = (df['Price_Diff'] > 0).astype(int) - (df['Price_Diff'] < 0).astype(int)
+    
+    # Ratio of close to open for bullish signals
+    df['Bullish_Ratio'] = df['close'] / df['open']
+    
+    # Ratio of open to close for bearish signals
+    df['Bearish_Ratio'] = df['open'] / df['close']
+    
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(), 0)
+    df['MFI'] = 100 - (100 / (1 + (positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum())))
+    
+    # Combine factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['SMA_Crossover'] + 
+        df['EMA_Crossover'] + 
+        df['High_Volatility'] * df['Pct_Change_Open_Close'] + 
+        (1 - df['High_Volatility']) * (df['Close_to_High'] - 0.5) + 
+        df['ATR_14'] + 
+        df['OBV'].pct_change() + 
+        df['Volume_Trend'] + 
+        df['Amount_Trend'] + 
+        df['Bullish_Ratio'] - df['Bearish_Ratio'] + 
+        (df['M

@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # Calculate Exponential Moving Averages
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Identify Crossovers
+    df['SMA_Crossover'] = (df['SMA_50'] > df['SMA_200']).astype(int) - (df['SMA_50'] < df['SMA_200']).astype(int)
+    df['EMA_Crossover'] = (df['EMA_12'] > df['EMA_26']).astype(int) - (df['EMA_12'] < df['EMA_26']).astype(int)
+
+    # True Range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    
+    # Average True Range
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Rate of Change
+    df['ROC_12'] = (df['close'] - df['close'].shift(12)) / df['close'].shift(12) * 100
+    
+    # Relative Strength Index
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+
+    # On-Balance Volume
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+
+    # Money Flow Index
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    mf = tp * df['volume']
+    df['MF_Positive'] = 0
+    df['MF_Negative'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'MF_Positive'] = mf
+    df.loc[df['close'] < df['close'].shift(1), 'MF_Negative'] = mf
+    mfr = df['MF_Positive'].rolling(window=14).sum() / df['MF_Negative'].rolling(window=14).sum()
+    df['MFI_14'] = 100 - (100 / (1 + mfr))
+
+    # Combine all signals into a single alpha factor
+    df['Alpha_Factor'] = (df['SMA_Crossover'] + df['EMA_Crossover'] + df['ATR_14'] + 
+                          df['ROC_12'] + df['RSI_14'] + df['OBV'] + df['MFI_14'])
+    
+    return df['Alpha_Factor']
+```

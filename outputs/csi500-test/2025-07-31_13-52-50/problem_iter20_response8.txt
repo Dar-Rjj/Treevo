@@ -1,0 +1,83 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Movement Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Determine Daily Return Deviation from Close
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Identify Trend Reversal Potential
+    df['prev_daily_return'] = df['daily_return'].shift(1)
+    df['trend_reversal'] = (df['daily_return'] > df['prev_daily_return']).astype(int)
+    
+    # Check for Volume Increase
+    df['volume_14day_ma'] = df['volume'].rolling(window=14).mean()
+    df['volume_increase'] = (df['volume'] > df['volume_14day_ma']).astype(int)
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Determine Daily Return Deviation from VWAP
+    df['return_deviation_from_vwap'] = df['close'] - df['vwap']
+    
+    # Compute Price Momentum Factor
+    n = 5
+    df['price_momentum'] = df['daily_return'].rolling(window=n).sum()
+    
+    # Compute Volume Momentum Factor
+    m = 5
+    df['volume_momentum'] = df['volume'].pct_change().rolling(window=m).sum()
+    
+    # Combine Price and Volume Momentum
+    k1 = 0.7
+    k2 = 0.3
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+    
+    # Adjust Combined Momentum for Volume Volatility
+    df['volume_20day_ma'] = df['volume'].rolling(window=20).mean()
+    df['volume_deviation'] = df['volume'] - df['volume_20day_ma']
+    df['volume_adjustment_factor'] = df['volume_deviation'] + 1e-6
+    df['adjusted_combined_momentum'] = df['combined_momentum'] / df['volume_adjustment_factor']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Adjust for Volume
+    df['volume_7day_ma'] = df['volume'].rolling(window=7).mean()
+    df['volume_diff'] = df['volume'] - df['volume_7day_ma']
+    df['adjusted_intraday_return'] = df['intraday_return'] * df['volume_diff']
+    
+    # Incorporate Price Volatility
+    df['close_7day_std'] = df['close'].rolling(window=7).std()
+    df['volatility_adjusted_intraday_return'] = np.where(
+        df['close_7day_std'] > df['close_7day_std'].median(),
+        df['adjusted_intraday_return'] * 1.5,
+        df['adjusted_intraday_return'] * 0.5
+    )
+    
+    # Incorporate Momentum Shift
+    df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    momentum_shift = np.where(
+        (df['ema_5'] > df['ema_20']) & (df['ema_5'].shift(1) <= df['ema_20'].shift(1)),
+        0.8,
+        np.where(
+            (df['ema_5'] < df['ema_20']) & (df['ema_5'].shift(1) >= df['ema_20'].shift(1)),
+            -0.8,
+            0
+        )
+    )
+    df['momentum_shift'] = momentum_shift
+    
+    # Combine Indicators
+    df['indicators_score'] = (df['trend_reversal'] * 0.5 + df['volume_increase'] * 0.5) * df['volatility_adjusted_intraday_return']
+    df['indicators_score'] += df['momentum_shift']
+    
+    # Final Composite Factor Calculation
+    df['final_factor'] = (df['trend_reversal'] * 0.5 + df['volume_increase'] * 0.5) * df['indicators_score'] + df['adjusted_combined_momentum']
+    
+    return df['final_factor']
+```

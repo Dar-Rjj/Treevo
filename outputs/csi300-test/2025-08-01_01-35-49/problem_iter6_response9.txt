@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    combined_factor = intraday_return * high_low_range
+    
+    # Smooth using Dynamic EMA (e.g., based on 20-day rolling standard deviation of intraday returns)
+    rolling_std = intraday_return.rolling(window=20).std()
+    ema_period = 5 + 10 * (rolling_std / rolling_std.mean())  # Adjust the EMA period dynamically
+    ema_period = ema_period.round().astype(int)
+    
+    def dynamic_ema(series, periods):
+        return series.ewm(span=periods, adjust=False).mean()
+    
+    smoothed_factor = df.groupby(level=0, group_keys=False).apply(lambda x: dynamic_ema(x['combined_factor'], ema_period))
+    
+    # Apply Volume Weighting
+    volume_weighted_factor = smoothed_factor * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    closing_gap = df['open'] - df['close'].shift(1)
+    volume_weighted_factor_gap = volume_weighted_factor + closing_gap
+    
+    # Integrate Long-Term Momentum
+    long_term_return = df['close'] - df['close'].shift(50)
+    normalized_long_term_return = long_term_return / high_low_range
+    
+    # Include Volatility Component
+    rolling_volatility = intraday_return.rolling(window=20).std()
+    volume_adjusted_volatility = rolling_volatility * df['volume']
+    
+    # Incorporate Liquidity Measures
+    turnover_ratio = df['volume'] / df['market_capitalization']
+    liquidity_adjusted_factor = volume_weighted_factor * turnover_ratio
+    
+    # Sector-Specific Adjustments
+    sector_performance_index = df['sector_performance_index']
+    sector_adjusted_factor = volume_weighted_factor * sector_performance_index
+    
+    # Final Factor Calculation
+    final_factor = (
+        volume_weighted_factor_gap +
+        normalized_long_term_return +
+        volume_adjusted_volatility +
+        liquidity_adjusted_factor +
+        sector_adjusted_factor
+    )
+    
+    # Apply Non-Linear Transformation
+    final_factor = np.log1p(final_factor)
+    
+    return final_factor
+```

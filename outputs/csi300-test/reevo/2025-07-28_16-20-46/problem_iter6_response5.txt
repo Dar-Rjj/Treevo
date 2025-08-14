@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day simple moving average of closing prices to capture momentum
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Momentum factor: difference between 5-day and 20-day moving averages
+    df['momentum_factor'] = df['SMA_5'] - df['SMA_20']
+
+    # Calculate the 20-day standard deviation of closing prices to capture volatility
+    df['volatility_factor'] = df['close'].rolling(window=20).std()
+
+    # Calculate the 5-day rolling sum of volume to capture liquidity
+    df['liquidity_factor'] = df['volume'].rolling(window=5).sum()
+
+    # Calculate relative strength as the ratio of current close to 20-day SMA
+    df['relative_strength'] = df['close'] / df['SMA_20']
+
+    # Calculate market breadth: difference between 5-day and 20-day moving averages of (high - low)
+    df['range_5'] = df['high'].rolling(window=5).mean() - df['low'].rolling(window=5).mean()
+    df['range_20'] = df['high'].rolling(window=20).mean() - df['low'].rolling(window=20).mean()
+    df['market_breadth'] = df['range_5'] - df['range_20']
+
+    # Calculate the 5-day and 20-day exponential moving average of closing prices for trend confirmation
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    # Trend confirmation factor: difference between 5-day and 20-day EMA
+    df['trend_confirmation'] = df['EMA_5'] - df['EMA_20']
+
+    # Calculate the 5-day and 20-day rate of change (ROC) for momentum confirmation
+    df['ROC_5'] = df['close'].pct_change(periods=5)
+    df['ROC_20'] = df['close'].pct_change(periods=20)
+
+    # Momentum confirmation factor: difference between 5-day and 20-day ROC
+    df['momentum_confirmation'] = df['ROC_5'] - df['ROC_20']
+
+    # Combine the factors: momentum, volatility, liquidity, relative strength, market breadth, trend confirmation, and momentum confirmation
+    heuristic_factor = (
+        (df['momentum_factor'] + df['momentum_confirmation']) / 
+        (df['volatility_factor'] + 1e-7) * 
+        (df['liquidity_factor'] + 1e-7) * 
+        df['relative_strength'] * 
+        df['market_breadth'] * 
+        df['trend_confirmation']
+    )
+
+    return heuristic_factor
+```

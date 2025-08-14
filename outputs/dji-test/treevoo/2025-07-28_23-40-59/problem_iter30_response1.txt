@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Evaluate IRWAP Difference
+    irwap_diff = df['close'] - irwap
+    
+    # Adjust Daily Return by Intraday Volatility
+    daily_return = (df['close'] / df['open']) - 1
+    adjusted_return = daily_return / intraday_spread
+    
+    # Smooth the Adjusted Return
+    smoothed_adjusted_return = adjusted_return.ewm(span=5).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = np.log(df['close']).pct_change().rolling(window=7).mean()
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = np.log(df['close']).pct_change().rolling(window=25).mean()
+    
+    # Combine Short and Long-Term Momentum
+    combined_momentum = short_term_momentum - long_term_momentum
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_combined_momentum = combined_momentum * (1 / price_volatility)
+    
+    # Confirm with Volume Trends
+    avg_volume_30_days = df['volume'].rolling(window=30).mean()
+    volume_trend = np.where(df['volume'] > avg_volume_30_days, 1, -1)
+    
+    # Calculate Intraday Strength
+    intraday_strength = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Smooth Intraday Strength
+    smoothed_intraday_strength = intraday_strength.ewm(span=5).mean()
+    
+    # Compute Intraday Balance
+    intraday_balance = (df['high'] + df['low']) / 2 - df['close']
+    
+    # Smooth Intraday Balance
+    smoothed_intraday_balance = intraday_balance.ewm(span=5).mean()
+    
+    # Calculate Intraday Power
+    intraday_power = (df['high'] - df['low']) / df['open']
+    
+    # Smooth Intraday Power
+    smoothed_intraday_power = intraday_power.ewm(span=5).mean()
+    
+    # Final Factor Calculation
+    final_factor = (
+        irwap_diff +
+        smoothed_adjusted_return +
+        adjusted_combined_momentum +
+        smoothed_intraday_strength +
+        smoothed_intraday_balance +
+        smoothed_intraday_power +
+        volume_trend
+    )
+    
+    return final_factor
+```

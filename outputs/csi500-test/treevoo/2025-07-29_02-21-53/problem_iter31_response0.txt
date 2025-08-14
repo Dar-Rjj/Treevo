@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_change'] = df['close'] - df['open']
+    
+    # Aggregate Price Movements over a Period (e.g., 20 days)
+    period = 20
+    df['sum_high_low_range'] = df['high_low_range'].rolling(window=period).sum()
+    df['sum_close_open_change'] = df['close_open_change'].rolling(window=period).sum()
+    
+    # Smooth High-Low Range with EMA (e.g., 20-day)
+    df['ema_high_low_range'] = df['high_low_range'].ewm(span=period, adjust=False).mean()
+    
+    # Compute Momentum of High-Low Ranges
+    df['momentum_high_low_range'] = df['high_low_range'].rolling(window=period * 2).mean() - df['ema_high_low_range']
+    
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = df[['high', 'low']].sub(df['prev_close'], axis=0).abs().max(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    atr_period = 14
+    df['atr'] = df['true_range'].rolling(window=atr_period).sum() / atr_period
+    
+    # Adjust Price Momentum by ATR
+    df['weighted_high_low_range'] = df['sum_high_low_range'] / df['atr']
+    df['weighted_close_open_change'] = df['sum_close_open_change'] / df['atr']
+    df['adjusted_momentum_score'] = (df['weighted_high_low_range'] + df['weighted_close_open_change']) / 2
+    
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=period).mean()
+    df['high_volume_day'] = df['volume'] > df['avg_volume'] * 2
+    
+    # Detect Volume Spike
+    df['5d_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_spike'] = df['volume'] > df['5d_avg_volume'] * 2
+    
+    # Adjust Momentum Based on Volume
+    df['adjusted_momentum'] = df['adjusted_momentum_score']
+    df.loc[df['volume_spike'], 'adjusted_momentum'] *= 0.7
+    
+    # Combine ATR and Price Momentum
+    df['price_momentum'] = df['momentum_high_low_range'] + df['adjusted_momentum']
+    
+    # Incorporate Recent Price Trend
+    df['recent_price_trend'] = df['close'].rolling(window=period).mean()
+    df['recent_price_trend_multiplier'] = 1
+    df.loc[df['recent_price_trend'] > 0, 'recent_price_trend_multiplier'] = 1.2
+    df.loc[df['recent_price_trend'] < 0, 'recent_price_trend_multiplier'] = 0.8
+    df['alpha_factor'] = df['price_momentum'] * df['recent_price_trend_multiplier']
+    
+    # Incorporate Volume Trend
+    df['volume_trend'] = df['volume'].rolling(window=period).mean()
+    df['volume_trend_multiplier'] = 1
+    df.loc[df['volume_trend'] > 0, 'volume_trend_multiplier'] = 1.1
+    df.loc[df['volume_trend'] < 0, 'volume_trend_multiplier'] = 0.9
+    df['alpha_factor'] *= df['volume_trend_multiplier']
+    
+    return df['alpha_factor']
+```

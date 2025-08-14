@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, m=10, p=20):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate N-Day Moving Average of Price Range
+    df['avg_price_range'] = df['price_range'].rolling(window=n).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    df['upward_change'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['downward_change'] = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    avg_upward = df['upward_change'].rolling(window=n).mean()
+    avg_downward = df['downward_change'].rolling(window=n).mean()
+    rs = avg_upward / avg_downward.replace(0, 1)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate Volume Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['avg_price_range'] * df['volume']) + (df['rsi'] * df['volume'])
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Average True Range
+    true_range = pd.concat([
+        df['high'] - df['low'],
+        (df['high'] - df['close'].shift(1)).abs(),
+        (df['low'] - df['close'].shift(1)).abs()
+    ], axis=1).max(axis=1)
+    df['atr'] = true_range.rolling(window=n).mean()
+    
+    # Determine Volume Trend
+    df['volume_trend'] = df['volume'].rolling(window=m).sum().diff().apply(lambda x: 1 if x > 0 else -1)
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].rolling(window=p).mean()
+    
+    # Combine Factors
+    df['alpha_factor'] = (df['high_low_range'] * df['atr'] * df['volume_trend']) + \
+                          df['volume_adjusted_momentum'] + \
+                          df['price_momentum']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    intraday_midpoint_to_open_ratio = intraday_midpoint / df['open']
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_close_to_open_return = close_to_open_return / intraday_range
+    
+    # Calculate Volume-Weighted Volatility
+    volume_weighted_volatility = intraday_range / df['volume'].sum()
+    
+    # Combine Adjusted Return and Volume-Weighted Volatility
+    combined_adjusted_return_volatility = adjusted_close_to_open_return * volume_weighted_volatility
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = df['amount'] / df['volume']
+    
+    # Calculate Volume Weighted Momentum
+    vwap_next_day_open_return = (vwap.shift(-1) - df['open'].shift(-1)) / df['volume']
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    max_adjusted_close_to_open_return = adjusted_close_to_open_return.rolling(window=5).max()
+    min_open = df['open'].rolling(window=5).min()
+    
+    # Calculate Volume-Adjusted Intraday Momentum
+    volume_adjusted_intraday_momentum = intraday_midpoint * df['volume']
+    
+    # Combine Factors
+    combined_factors = (intraday_midpoint_to_open_ratio * vwap_next_day_open_return) * (max_adjusted_close_to_open_return - min_open)
+    
+    # Calculate Price Change Momentum
+    price_change_momentum = ((intraday_midpoint - intraday_midpoint.shift(1)) * intraday_range)
+    
+    # Detect Volume Spike
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike_indicator = (daily_volume_change > df['volume'].std()).astype(int)
+    
+    # Introduce New Factor: Intraday Reversal Signal
+    intraday_reversal = (df['high'] - df['open']) / (df['high'] - df['low'])
+    intraday_reversal_signal = combined_factors * (1 - 0.2 * (intraday_reversal > 0.5).astype(int))
+    
+    # Integrate MACD into Final Factor
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    macd = short_ema - long_ema
+    final_factor_with_macd = intraday_reversal_signal * macd
+    
+    # Incorporate Volatility into Final Factor
+    volatility = df['high'] - df['low']
+    final_factor_with_volatility = final_factor_with_macd * volatility
+    
+    # Introduce New Factor: Intraday Volume-Weighted Return
+    intraday_volume_weighted_return = (df['close'] - df['open']) * df['volume']
+    
+    # Final Factor Calculation
+    final_factor = (
+        final_factor_with_volatility * 
+        price_change_momentum * 
+        volume_spike_indicator * 
+        intraday_volume_weighted_return
+    )
+    
+    return final_factor
+```

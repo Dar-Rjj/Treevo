@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Smoothed Momentum
+    df['Raw_Momentum'] = df['close'].pct_change(7)
+    df['Smoothed_Momentum'] = (df['close'] - df['close'].shift(14)) / 2 + df['Raw_Momentum']
+    
+    # Incorporate Volume Change
+    average_volume_14 = df['volume'].rolling(window=14).mean()
+    df['Volume_Factor'] = df['volume'] / average_volume_14
+    
+    # Adjust for Volatility
+    volatility_14 = df['close'].rolling(window=14).std()
+    df['Smoothed_Momentum_Adjusted'] = df['Smoothed_Momentum'] * (1 / volatility_14) * df['Volume_Factor']
+
+    # Calculate Long-Term Moving Average (LMA)
+    df['LMA'] = df['close'].rolling(window=200).mean()
+
+    # Calculate Short-Term Moving Average (SMA)
+    df['SMA'] = df['close'].rolling(window=50).mean()
+
+    # Calculate Difference Between LMA and SMA
+    df['LMA_SMA_Diff'] = (df['LMA'] - df['SMA']) * df['volume']
+    df['LMA_SMA_Volume_Filter'] = df['LMA_SMA_Diff'].ewm(span=10).mean()
+
+    # Calculate Intraday Range Indicator
+    df['Intraday_Range'] = (df['high'] - df['low']) * df['Volume_Factor']
+
+    # Integrate Volume Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['VWAP_Diff'] = (df['close'] - df['VWAP']) * (1 / volatility_14)
+
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].pct_change()
+
+    # Adjust Daily Return by Intraday Volatility
+    df['Adjusted_Daily_Return'] = df['Daily_Return'] / df['Intraday_Range']
+
+    # Smooth the Adjusted Return
+    df['Smoothed_Adjusted_Return'] = df['Adjusted_Daily_Return'].rolling(window=5).mean()
+
+    # Combine Indicators
+    df['Alpha_Factor'] = (
+        df['Smoothed_Momentum_Adjusted'] +
+        df['LMA_SMA_Volume_Filter'] +
+        df['VWAP_Diff'] +
+        df['Smoothed_Adjusted_Return']
+    )
+
+    return df['Alpha_Factor']
+```

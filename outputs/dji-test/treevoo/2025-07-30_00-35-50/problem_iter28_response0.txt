@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Return
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * np.exp(-np.log(2))
+    
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Price Range Momentum
+    df['price_range_momentum'] = df['high_low_range'] / df['high_low_range'].shift(1)
+    
+    # Calculate Adjusted High-Low Spread
+    volume_diff = df['volume'] - df['volume'].shift(1)
+    df['adjusted_high_low_spread'] = (df['high'] - df['low']) * np.where(volume_diff > 0, volume_diff, 0)
+    
+    # Apply Simple Moving Average (SMA) to Adjusted High-Low Spread
+    df['sma_high_low_spread'] = df['adjusted_high_low_spread'].rolling(window=5).mean()
+    
+    # Calculate 10-Day Price Momentum
+    df['10_day_price_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Adjust for Volume Trend
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_trend_adjustment'] = df['volume'] - df['10_day_avg_volume']
+    
+    # Combine Price Momentum and Volume Trend Adjustment
+    df['combined_momentum'] = df['10_day_price_momentum'] * df['volume_trend_adjustment']
+    df['combined_momentum'] = np.where(df['combined_momentum'] < 0, 0, df['combined_momentum'])
+    
+    # Calculate Daily Log Return
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Identify Positive and Negative Returns
+    positive_returns = df[df['daily_log_return'] > 0]
+    negative_returns = df[df['daily_log_return'] <= 0]
+    
+    # Calculate Sum of Upward and Downward Volumes
+    sum_upward_volume = positive_returns['volume'].sum()
+    sum_downward_volume = negative_returns['volume'].sum()
+    
+    # Compute Trend Reversal Signal
+    total_volume = df['volume'].sum()
+    upward_ratio = sum_upward_volume / total_volume
+    downward_ratio = sum_downward_volume / total_volume
+    reversal_signal = (upward_ratio > downward_ratio) * df['daily_log_return']
+    
+    # Synthesize Final Alpha Factor
+    df['alpha_factor'] = (
+        df['adjusted_daily_return'] + 
+        df['price_range_momentum'] + 
+        df['sma_high_low_spread'] + 
+        df['combined_momentum'] + 
+        reversal_signal
+    )
+    df['alpha_factor'] = np.where(df['alpha_factor'] < 0, 0, df['alpha_factor'])
+    
+    return df['alpha_factor']
+```

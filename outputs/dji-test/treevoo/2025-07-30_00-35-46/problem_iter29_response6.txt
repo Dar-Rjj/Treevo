@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum Components
+    high_low_diff = (df['high'] - df['low']) / df['open']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Compute Daily Volatility (High, Low, Close)
+    daily_volatility = (df['high'] - df['low']) / df['close']
+    daily_volatility = daily_volatility.rolling(window=5).std()
+    
+    # Weighted Average based on Volatility
+    weighted_high_low = high_low_diff * daily_volatility
+    weighted_open_close = open_close_return * daily_volatility
+    
+    # Non-Linear Transformation (e.g., x^2)
+    transformed_high_low = weighted_high_low ** 2
+    transformed_open_close = weighted_open_close ** 2
+    
+    # Combine High-Low and Open-Close Returns
+    combined_momentum = (transformed_high_low + transformed_open_close) / 2
+    
+    # Adjust for Volume and Amount Impact
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    combined_momentum_adjusted = combined_momentum * volume_ratio * amount_ratio
+    
+    # Apply Volume and Price Shock Filter
+    price_shock = abs(df['close'] - df['close'].shift(1))
+    historical_price_range = (df['high'].max() - df['low'].min())
+    price_shock_ratio = price_shock / historical_price_range
+    
+    volume_shock_threshold = 1.5
+    amount_shock_threshold = 1.5
+    price_shock_threshold = 0.05
+    
+    shock_filter = (volume_ratio > volume_shock_threshold) & \
+                  (amount_ratio > amount_shock_threshold) & \
+                  (price_shock_ratio > price_shock_threshold)
+    
+    combined_momentum_filtered = combined_momentum_adjusted.where(shock_filter, other=0)
+    
+    # Smoothing
+    smoothed_momentum = combined_momentum_filtered.ewm(span=5, adjust=False).mean()
+    
+    # Measure Volume Synchronization
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    volume_synchronization = (volume_change * price_change).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Calculate EMAs and Determine Momentum
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    momentum = (short_ema > long_ema).astype(int) * 2 - 1
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - \
+          (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Calculate MACD Line and Signal Line
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    
+    # Weight OBV by MACD Line and Signal Line Difference
+    weight = abs(macd_line - signal_line)
+    final_obv_factor = obv * weight
+    
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = smoothed_momentum * final_obv_factor
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,40 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's close and yesterday's close
+    df['close_diff'] = df['close'].diff()
+    
+    # Calculate the average volume over an adaptive window, here it is 10 days for demonstration
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the weighted moving average of the close price using a dynamic window (e.g., 15 days)
+    weights = [i for i in range(1, 16)]
+    df['wma_15d'] = df['close'].rolling(window=15).apply(lambda prices: sum(w * p for w, p in zip(weights, prices)) / sum(weights), raw=True)
+    
+    # Calculate the ratio of today's volume to the average volume over the past 10 days
+    df['vol_ratio'] = df['volume'] / df['avg_volume_10d']
+    
+    # Calculate the trend component by taking the difference between the current close and the weighted moving average
+    df['trend'] = df['close'] - df['wma_15d']
+    
+    # Integrate market sentiment by calculating the average amount over the past 5 days
+    df['avg_amount_5d'] = df['amount'].rolling(window=5).mean()
+    
+    # Calculate the realized volatility (standard deviation of log returns) over the past 20 days
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['realized_volatility'] = df['log_returns'].rolling(window=20).std()
+    
+    # Calculate the dynamic price change as the 5-day percentage change in the close price
+    df['dynamic_price_change'] = df['close'].pct_change(5)
+    
+    # Calculate the volume spike as the ratio of today's volume to the average volume over the past 20 days
+    df['avg_volume_20d'] = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = df['volume'] / df['avg_volume_20d']
+    
+    # Adjust for market liquidity using the amount and volume
+    df['liquidity_adjustment'] = df['amount'] / df['volume']
+    
+    # Combine the close price difference, dynamic price change, volume spike, volume ratio, trend, market sentiment, realized volatility, and liquidity adjustment into a single factor
+    factor = (df['close_diff'] + df['dynamic_price_change']) * df['volume_spike'] + (df['amount'] * df['vol_ratio']) - df['trend'] + (df['amount'] / df['avg_amount_5d']) * df['realized_volatility'] + df['liquidity_adjustment']
+    
+    return factor.dropna()
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday High-to-Low Range
+    daily_range = df['high'] - df['low']
+    adjusted_range = daily_range / df['open']
+
+    # Open to Close Momentum
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    otc_ema_5 = open_to_close_return.ewm(span=5, adjust=False).mean()
+
+    # Volume-Weighted Open-to-Close Return
+    vol_weighted_otc_return = (df['close'] - df['open']) / df['open'] * df['volume']
+    vol_weighted_otc_ema_5 = vol_weighted_otc_return.ewm(span=5, adjust=False).mean()
+
+    # Price-Volume Trend Indicator
+    price_change = df['close'].diff()
+    price_volume_trend = (price_change * df['volume']).rolling(window=30).sum()
+
+    # Volume-Adjusted Intraday Movement
+    intraday_movement = df['close'] - df['open']
+    avg_vol_20 = df['volume'].rolling(window=20).mean()
+    vol_adjusted_intraday_movement = intraday_movement / avg_vol_20
+
+    # Combined Momentum and Volatility Factor
+    sentiment = (df['close'] - df['open']) / df['open']  # Example market sentiment
+    weight_intraday_range = 1 / (1 + np.exp(-sentiment))
+    weight_otc_momentum = 1 / (1 + np.exp(sentiment))
+    combined_factor = (weight_intraday_range * adjusted_range +
+                       weight_otc_momentum * otc_ema_5 +
+                       (1 - weight_intraday_range - weight_otc_momentum) * vol_weighted_otc_ema_5)
+
+    # Volume-Sensitive Momentum Factor
+    weight_price_volume_trend = 1 / (1 + np.exp(-sentiment))
+    weight_vol_weighted_otc = 1 / (1 + np.exp(sentiment))
+    volume_sensitive_factor = (weight_price_volume_trend * price_volume_trend +
+                               weight_vol_weighted_otc * vol_weighted_otc_ema_5 +
+                               (1 - weight_price_volume_trend - weight_vol_weighted_otc) * vol_adjusted_intraday_movement)
+
+    # Final Alpha Factor
+    weight_combined_factor = 1 / (1 + np.exp(-sentiment))
+    final_alpha_factor = (weight_combined_factor * combined_factor +
+                          (1 - weight_combined_factor) * volume_sensitive_factor)
+    final_alpha_factor = final_alpha_factor.ewm(span=5, adjust=False).mean()
+
+    return final_alpha_factor
+```

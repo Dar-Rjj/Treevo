@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range and High-Low Spread
+    df['Previous_Close'] = df['close'].shift(1)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['high'] - df['Previous_Close']).abs()
+    df['TR3'] = (df['low'] - df['Previous_Close']).abs()
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+
+    # Calculate 14-Period Average True Range (ATR)
+    df['ATR_14'] = df['True_Range'].rolling(window=14).mean()
+
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['close'].shift(14)
+
+    # Weight by Volume
+    df['Volume_Weighted_Momentum'] = df['Price_Momentum'] * df['volume']
+
+    # Adjust Momentum by ATR
+    df['ATR_Adjusted_Momentum'] = df['Volume_Weighted_Momentum'] / df['ATR_14']
+
+    # Generate Alpha Factor
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Average_High_Low_Spread_14'] = df['High_Low_Spread'].rolling(window=14).mean()
+    df['Spread_Relative_Strength'] = df['High_Low_Spread'] / df['Average_High_Low_Spread_14']
+    df['Alpha_Factor'] = df['ATR_Adjusted_Momentum'] + df['Close_to_Open_Return'] + df['Spread_Relative_Strength']
+
+    # Explore Trend and Volatility Characteristics
+    df['Trend_Direction'] = (df['close'] > df['close'].shift(1)).rolling(window=14).sum()
+    df['Volatility'] = df['close'].pct_change().rolling(window=30).std()
+    df['Volume_Accumulation'] = df['volume'].rolling(window=14).sum()
+
+    # Examine Opening and Closing Prices
+    df['Up_Day'] = (df['close'] > df['open']).astype(int)
+    df['Down_Day'] = (df['close'] < df['open']).astype(int)
+    df['Up_Day_Count'] = df['Up_Day'].rolling(window=14).sum()
+    df['Down_Day_Count'] = df['Down_Day'].rolling(window=14).sum()
+
+    # Use Candlestick Patterns for Predictive Insights
+    df['Candlestick_Pattern_Frequency'] = ((df['high'] - df['low']) == 0).astype(int)
+    df['Pattern_Strength'] = (df['close'] - df['open']).abs() / (df['high'] - df['low'])
+
+    # Explore Historical Price Patterns
+    df['MA_5'] = df['close'].rolling(window=5).mean()
+    df['MA_20'] = df['close'].rolling(window=20).mean()
+    df['MA_100'] = df['close'].rolling(window=100).mean()
+    df['Short_Long_MA_Diff'] = df['MA_5'] - df['MA_100']
+    df['ROC_14'] = df['close'].pct_change(periods=14)
+    df['ROC_28'] = df['close'].pct_change(periods=28)
+
+    # Examine Volume and Amount Data
+    df['OBV'] = (df['close'] - df['close'].shift(1)).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0)) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    df['MFI'] = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).rolling(window=14).mean()
+
+    # Identify Volatility-Based Factors
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Avg_Daily_Range_20'] = df['Daily_Range'].rolling(window=20).mean()
+
+    # Investigate Momentum and Acceleration
+    df['RSI'] = 100 - (100 / (1 + df['close'].diff().rolling(window=14).mean() / df['close'].diff().abs().rolling(window=14).mean()))
+    df['CM

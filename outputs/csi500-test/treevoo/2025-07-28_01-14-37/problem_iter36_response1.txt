@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, window=5, lookback=20, short_term_ma=5, long_term_ma=20):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Cumulative Return
+    df['cumulative_return'] = df['daily_return'].rolling(window=window).sum()
+    
+    # Adjust by Volume
+    df['average_volume'] = df['volume'].rolling(window=window).mean()
+    df['adjusted_cumulative_return'] = df['cumulative_return'] * df['average_volume']
+    
+    # Calculate Intraday Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['high_low_range'].rolling(window=window).mean()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday Momentum and Volatility
+    df['weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    df['weighted_intraday_volatility'] = df['high_low_range'] * df['volume']
+    df['combined_intraday_factor'] = df['weighted_intraday_return'] + df['weighted_intraday_volatility']
+    
+    # Calculate Price Momentum
+    df['log_return'] = np.log(df['close'] / df['close'].shift(lookback))
+    df['price_momentum'] = df['log_return'].rolling(window=window).sum()
+    
+    # Adjust by Intraday Volatility and Volume
+    df['adjusted_price_momentum'] = (df['price_momentum'] * df['volume']) / df['intraday_volatility']
+    
+    # Determine Trend Direction
+    df['short_term_ma'] = df['close'].rolling(window=short_term_ma).mean()
+    df['long_term_ma'] = df['close'].rolling(window=long_term_ma).mean()
+    df['trend_direction'] = np.where(df['short_term_ma'] > df['long_term_ma'], 1, -1)
+    
+    # Confirm with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['confirmed_trend'] = df['trend_direction'] * df['volume_change']
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['relative_strength'] = df['confirmed_trend'] + df['adjusted_cumulative_return']
+    df['volume_weighted_price_movement'] = df['combined_intraday_factor'] + df['adjusted_price_momentum']
+    df['final_rescaled_factor'] = (df['relative_strength'] + df['volume_weighted_price_movement']) / 2
+    
+    # Synthesize Final Alpha Factor
+    df['final_alpha_factor'] = df['final_rescaled_factor'] + df['confirmed_trend']
+    
+    # Incorporate Volume-Weighted Momentum
+    df['volume_weighted_momentum'] = df['log_return'] * df['volume']
+    df['final_alpha_factor'] += df['volume_weighted_momentum']
+    
+    return df['final_alpha_factor'].dropna()
+```

@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    
+    # Adjust for Volume Fluctuations
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    volume_adjusted_momentum = short_term_momentum * (df['volume'] / avg_volume_5)
+    
+    # Weight by Volume Surge
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    volume_surge_weight = pd.Series(1, index=df.index)
+    volume_surge_weight[df['volume'] > 1.5 * avg_volume_10] = 1.5
+    volume_surge_weight[df['volume'] > avg_volume_10] = 1.2
+    volume_weighted_momentum = volume_adjusted_momentum * volume_surge_weight
+    
+    # Apply Price Range Filter
+    daily_price_range = df['high'] - df['low']
+    avg_daily_price_range_20 = daily_price_range.rolling(window=20).mean()
+    price_range_filter = (daily_price_range <= 1.5 * avg_daily_price_range_20)
+    
+    # Apply Volatility Filter
+    daily_returns = df['close'].pct_change()
+    std_dev_daily_returns_20 = daily_returns.rolling(window=20).std()
+    volatility_filter = (std_dev_daily_returns_20 <= 0.03)
+    
+    # Combine Indicators and Apply Filters
+    factor = volume_weighted_momentum
+    factor[~price_range_filter] = 0
+    factor[~volatility_filter] = 0
+    
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    open_to_close_returns = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = 0.6 * intraday_returns + 0.4 * open_to_close_returns
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    volume_trend_classification = pd.Series(0, index=df.index)
+    volume_trend_classification[volume_ratio > 2] = 3
+    volume_trend_classification[(volume_ratio >= 0.5) & (volume_ratio <= 2)] = 1
+    volume_trend_classification[volume_ratio < 0.5] = -3
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend_classification
+    
+    # Integrate Volume with Intraday Dynamics
+    high_low_spread = (df['high'] - df['low'])
+    integrated_indicator = 0.5 * adjusted_combined_returns + 0.5 * high_low_spread * volume_trend_classification
+    
+    # Compute Hybrid Factor
+    factor = integrated_indicator
+    factor[factor == 0] = 0  # Ensure any filter or condition sets the factor to 0
+    
+    return factor
+```

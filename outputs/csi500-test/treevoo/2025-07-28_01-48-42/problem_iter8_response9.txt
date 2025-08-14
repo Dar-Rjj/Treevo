@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['open']
+    
+    # Invert Intraday Return for Reversal
+    intraday_reversal_score = 1 / (1 + intraday_return)
+    
+    # Adjust for Volume
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    high_low_range_vol_adj = high_low_range / avg_volume_5d
+    
+    # Integrate Momentum and Reversal
+    high_low_diff = high_low_range - high_low_range.shift(1)
+    integrated_momentum_reversal = high_low_diff * intraday_reversal_score
+    
+    # Combine High-Low Range and Intraday Reversal Score
+    combined_hl_reversal = high_low_range * intraday_reversal_score
+    
+    # Calculate Price Change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Price Change Momentum
+    price_change_momentum = df['close'] - df['open'].shift(1)
+    
+    # Calculate Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(1)
+    
+    # Compute High-Low Range Adjusted by Volume
+    high_low_range_vol_adj = high_low_range * volume_delta
+    
+    # Integrate Price Momentum and Volume Delta
+    price_mom_vol_delta = price_change_momentum * volume_delta
+    
+    # Confirm with Volume, Amount, and Close-to-Open Movement
+    daily_volume_rank = df['volume'].rank(pct=True, method='dense')
+    daily_amount_rank = df['amount'].rank(pct=True, method='dense')
+    close_open_diff = df['close'] - df['open']
+    
+    # Multiply by Combined High-Low and Reversal
+    combined_signal = combined_hl_reversal * daily_volume_rank * daily_amount_rank * close_open_diff
+    
+    # Apply a Smoothing Filter to the Combined Signal
+    final_factor = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    return final_factor
+```

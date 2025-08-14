@@ -1,0 +1,33 @@
+def heuristics_v2(df):
+    # Calculate ADX
+    def ATR(df, n):
+        df['h-l'] = abs(df['high'] - df['low'])
+        df['h-pc'] = abs(df['high'] - df['close'].shift(1))
+        df['l-pc'] = abs(df['low'] - df['close'].shift(1))
+        df['tr'] = df[['h-l', 'h-pc', 'l-pc']].max(axis=1)
+        df['atr'] = df['tr'].rolling(window=n).mean()
+        return df['atr']
+
+    def DMI(df, n):
+        df['up'] = df['high'] - df['high'].shift(1)
+        df['down'] = df['low'].shift(1) - df['low']
+        df['+dm'] = df.apply(lambda x: x['up'] if x['up'] > x['down'] and x['up'] > 0 else 0, axis=1)
+        df['-dm'] = df.apply(lambda x: x['down'] if x['down'] > x['up'] and x['down'] > 0 else 0, axis=1)
+        df['+di'] = 100 * (df['+dm'].rolling(window=n).sum() / ATR(df, n).rolling(window=n).sum())
+        df['-di'] = 100 * (df['-dm'].rolling(window=n).sum() / ATR(df, n).rolling(window=n).sum())
+        return df
+
+    df = DMI(df, 14)
+    df['adx'] = 100 * (abs(df['+di'] - df['-di']) / (df['+di'] + df['-di']))
+
+    # Percentage change in volume
+    df['volume_change'] = df['volume'].pct_change()
+
+    # EMA crossover
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    df['ema_crossover'] = ema_12 - ema_26
+
+    # Composite heuristic
+    heuristics_matrix = (df['adx'] + df['volume_change'] + df['ema_crossover']) / 3
+    return heuristics_matrix

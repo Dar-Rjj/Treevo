@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day's Overnight Return
+    df['overnight_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return'] + df['overnight_return']
+    
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum'].replace(0, np.nan)
+    
+    # Volume Change Indicator
+    df['volume_change'] = df['volume'] - df['volume'].shift(5)
+    
+    # Integrate Factors
+    df['integrated_factor'] = df['intraday_return'] * df['overnight_return'] * df['price_momentum_ratio']
+    df['integrated_factor'] = df['integrated_factor'] * np.where(df['volume'] > df['volume'].mean(), 1.7, 0.3)
+    
+    # Weight High-Low Range by Volume
+    df['high_low_range_weighted'] = (df['high'] - df['low']) * df['volume']
+    
+    # Adjust for Combined Volatility
+    df['adjusted_returns'] = df['aggregate_returns'] * df['high_low_range_weighted']
+    
+    # Smoothed Moving Average
+    df['sma_5'] = df['adjusted_returns'].rolling(window=5).mean()
+    df['ema_smoothed'] = df['sma_5'].ewm(alpha=0.1).mean()
+    
+    # Explore Momentum Factors
+    df['sma_5_price'] = df['close'].rolling(window=5).mean()
+    df['sma_20_price'] = df['close'].rolling(window=20).mean()
+    df['momentum_sma'] = df['sma_5_price'] - df['sma_20_price']
+    
+    # Exponential Moving Average (EMA)
+    df['ema_10'] = df['close'].ewm(alpha=0.1).mean()
+    df['momentum_ema'] = df['ema_10'] - df['ema_10'].shift(5)
+    
+    # Analyze Volatility
+    df['true_range'] = df['high'] - df['low']
+    df['atr_5'] = df['true_range'].rolling(window=5).mean()
+    
+    # Investigate Volume-Based Indicators
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Consider Transaction Amounts
+    df['amount_change'] = df['amount'] - df['amount'].shift(1)
+    df['transaction_intensity'] = df['amount_change'] / df['volume_change'].replace(0, np.nan)
+    
+    # Combine Multiple Factors
+    df['composite_factor'] = 0.3 * df['momentum_sma'] + 0.2 * df['atr_5'] + 0.2 * df['vwap_deviation'] + 0.3 * df['transaction_intensity']
+    
+    # Incorporate Volume Change Indicator
+    df['composite_factor'] = df['composite_factor'] * np.where(df['volume_change'] > 0, 1.5, 0.8)
+    
+    # Final Factor
+    df['final_factor'] = df['composite_factor'] * df['integrated_factor'] * df['ema_smoothed']
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close Price Change
+    close_change = df['close'].diff()
+    
+    # Compute Weighted Momentum
+    weighted_price = (df['high'] + df['low'] + 2 * df['close']) / 4
+    weighted_momentum = close_change / (weighted_price * df['volume'])
+    
+    # Adjust for Volatility
+    volatility_adjusted_momentum = weighted_momentum / high_low_range
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Smoothing the Momentum
+    smoothed_momentum = volatility_adjusted_momentum.rolling(window=5).mean()
+    
+    # Volume Weighing Process
+    daily_volume_ratio = df['volume'] / df['volume'].rolling(window=20).mean()
+    volume_adjusted_momentum = smoothed_momentum * daily_volume_ratio
+    
+    # Calculate Intraday Movement and Close-to-Open Return
+    intraday_movement = df['high'] - df['low']
+    close_open_return = df['close'] - df['open']
+    
+    # Calculate Price Range Ratio
+    price_range_ratio = ((df['high'] - df['low']) / df['high']) * 100
+    
+    # Combine Factors
+    combined_factor = (intraday_movement + close_open_return) * price_range_ratio
+    
+    # Integrate Volume Adjusted Momentum
+    integrated_momentum = combined_factor + volume_adjusted_momentum
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = high_low_range.rolling(window=5).mean()
+    
+    # Momentum
+    log_return = np.log(df['close'] / df['close'].shift(5))
+    sum_log_returns = log_return.rolling(window=5).sum()
+    momentum = sum_log_returns / intraday_volatility
+    
+    # Volume-Adjusted Intraday Return
+    intraday_return = np.log(df['close'] / df['open'])
+    winsorized_return = np.clip(intraday_return, a_min=np.percentile(intraday_return, 5), a_max=np.percentile(intraday_return, 95))
+    volume_weighted_return = winsorized_return * daily_volume_ratio
+    
+    # Confirm with Volume and Range
+    volume_change = df['volume'] - df['volume'].shift(1)
+    average_daily_range = high_low_range.rolling(window=5).mean()
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df['high'] + df['low'] + df['close']) / 3 * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Final Alpha Factor
+    final_factor = (integrated_momentum + momentum + volume_weighted_return) * (volume_change * trend_direction * average_daily_range) + vwap
+    
+    return final_factor
+```

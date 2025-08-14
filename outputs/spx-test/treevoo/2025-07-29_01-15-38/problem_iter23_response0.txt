@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, window_size=10, n_days=5, w1=0.1, w2=0.1, w3=0.1, w4=0.1, w5=0.1, w6=0.1, w7=0.1, w8=0.1, w9=0.1, w10=0.1):
+    # Calculate Price Change
+    df['price_change'] = df['close'].diff()
+
+    # Calculate Price Range
+    df['price_range'] = df['high'] - df['low']
+
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].diff()
+
+    # Calculate Average Volume
+    df['avg_volume'] = df['volume'].rolling(window=window_size).mean()
+
+    # Create Price-Volume Factor
+    df['price_volume_factor'] = df['price_change'] * df['volume_change']
+
+    # Create Price-Range to Volume Ratio
+    df['pricerange_volume_ratio'] = df['price_range'] / df['avg_volume']
+
+    # Calculate N-Day Return
+    df['n_day_return'] = (df['close'] / df['close'].shift(n_days)) - 1
+
+    # Identify Short-Term Reversals
+    df['short_term_reversal'] = (df['close'].shift(1) / df['close'].shift(2)) - 1
+
+    # Calculate Number of Positive and Negative Closes
+    positive_closes = (df['price_change'] > 0).sum()
+    negative_closes = (df['price_change'] < 0).sum()
+
+    # Create Sentiment Score
+    sentiment_score = positive_closes - negative_closes
+    df['sentiment_score'] = sentiment_score
+
+    # Calculate Simple Moving Average (SMA)
+    df['sma'] = df['close'].rolling(window=window_size).mean()
+
+    # Calculate Exponential Moving Average (EMA)
+    ema_alpha = 2 / (window_size + 1)
+    df['ema'] = df['close'].ewm(alpha=ema_alpha, adjust=False).mean()
+
+    # Calculate Gains and Losses for RSI
+    df['gains'] = df['price_change'].apply(lambda x: max(x, 0)).rolling(window=window_size).mean()
+    df['losses'] = df['price_change'].apply(lambda x: abs(min(x, 0))).rolling(window=window_size).mean()
+
+    # Calculate RSI
+    df['rsi'] = 100 - (100 / (1 + (df['gains'] / df['losses'])))
+
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['price_range'] / df['close'].shift(1)
+
+    # Calculate Volume Spike Indicator
+    df['volume_spike'] = (df['volume'] - df['avg_volume']) / df['avg_volume']
+
+    # Combine All Factors
+    df['alpha_factor'] = (
+        w1 * df['price_volume_factor'] +
+        w2 * df['pricerange_volume_ratio'] +
+        w3 * df['n_day_return'] +
+        w4 * df['short_term_reversal'] +
+        w5 * df['sentiment_score'] +
+        w6 * (df['sma'] - df['close']) +
+        w7 * (df['ema'] - df['close']) +
+        w8 * df['rsi'] +
+        w9 * df['intraday_volatility'] +
+        w10 * df['volume_spike']
+    )
+
+    return df['alpha_factor']
+```

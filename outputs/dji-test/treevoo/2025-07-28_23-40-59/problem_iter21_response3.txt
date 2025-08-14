@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Evaluate IRWAP Difference
+    irwap_diff = df['close'] - irwap
+    
+    # Adjust Daily Return by Intraday Volatility
+    daily_return = df['close'].pct_change()
+    adj_daily_return = daily_return / intraday_spread
+    
+    # Smooth the Adjusted Return
+    smooth_adj_return = adj_daily_return.rolling(window=5).mean()
+    
+    # Calculate Short-Term Momentum
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    short_term_mom = log_returns.rolling(window=7).sum()
+    
+    # Calculate Long-Term Momentum
+    long_term_mom = log_returns.rolling(window=25).sum()
+    
+    # Combine Short and Long-Term Momentum
+    combined_mom = short_term_mom - long_term_mom
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adj_combined_mom = combined_mom / price_volatility
+    
+    # Confirm with Volume Trends
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_trend_score = np.where(df['volume'] > avg_volume, 1, -1)
+    
+    # Calculate Intraday Strength
+    intraday_strength = (df['close'] - df['open']) / intraday_spread
+    
+    # Smooth Intraday Strength
+    smooth_intraday_strength = intraday_strength.rolling(window=5).mean()
+    
+    # Incorporate Intraday High-Low Ratio
+    high_low_ratio = df['high'] / df['low']
+    smooth_high_low_ratio = high_low_ratio.rolling(window=5).mean()
+    
+    # Final Factor Calculation
+    final_factor = (irwap_diff + smooth_adj_return + adj_combined_mom 
+                    + smooth_intraday_strength + smooth_high_low_ratio) * volume_trend_score
+    
+    return final_factor
+```

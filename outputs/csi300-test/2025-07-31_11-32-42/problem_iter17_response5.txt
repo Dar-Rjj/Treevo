@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20):
+    # Calculate Intraday High-Low Spread
+    intraday_spread = df['high'] - df['low']
+    
+    # Evaluate Open-to-Close Movement
+    open_to_close = df['close'] - df['open']
+    
+    # Integrate Intraday and Opening Gaps
+    integrated_gap = intraday_spread - open_to_close
+    
+    # Incorporate Advanced Volume Impact
+    log_volume = np.log(df['volume'] + 1)
+    volume_impact = integrated_gap * log_volume
+    
+    # Factor in Adjusted Price Range as a Stability Measure
+    price_range_stability = (df['high'] - df['low']) / (df['open'] + df['close'])
+    stability_adjusted_metric = volume_impact / price_range_stability
+    
+    # Calculate Volume-Weighted Prices
+    df['vwap_close'] = df['close'] * df['volume']
+    df['vwap_open'] = df['open'] * df['volume']
+    vwap_close_sum = df['vwap_close'].rolling(window=n).sum()
+    vwap_open_sum = df['vwap_open'].rolling(window=n).sum()
+    vwap_close = vwap_close_sum / df['volume'].rolling(window=n).sum()
+    vwap_open = vwap_open_sum / df['volume'].rolling(window=n).sum()
+    
+    # Synthesize VWAPCHL into the Model
+    vwap_chl = (vwap_close - vwap_open) / (df['high'] - df['low'])
+    
+    # Introduce Momentum Component
+    sma_close = df['close'].rolling(window=n).mean()
+    momentum = df['close'] - sma_close
+    
+    # Integrate Momentum with Volume-Adjusted Metrics
+    momentum_integrated = momentum * stability_adjusted_metric
+    
+    # Final Integration
+    final_factor = stability_adjusted_metric * vwap_chl + momentum_integrated
+    
+    return final_factor
+```

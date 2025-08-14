@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Compute Volume Adjusted Intraday Range Ratio
+    volume_adjusted_intraday_range_ratio = intraday_range_ratio * df['volume']
+    
+    # Calculate Previous Day's Close-to-Open Change
+    close_to_open_change = df['open'].shift(-1) - df['close']
+    
+    # Calculate Daily High-Low Range
+    daily_high_low_range = df['high'] - df['low']
+    
+    # Calculate High-Low Range Volatility
+    n = 10  # n-period
+    high_low_range_volatility = daily_high_low_range.rolling(window=n).sum() / n
+    
+    # Smooth High-Low Range Volatility
+    ema_window_size = 15
+    smoothed_high_low_range_volatility = high_low_range_volatility.ewm(span=ema_window_size, adjust=False).mean()
+    
+    # Incorporate Close-Open Difference
+    close_open_diff = df['close'] - df['open']
+    weighted_close_open_diff = 0.5 * close_open_diff  # Fixed weight
+    combined_volatility = smoothed_high_low_range_volatility + weighted_close_open_diff
+    
+    # Generate Combined Alpha Factor
+    combined_alpha_factor = volume_adjusted_intraday_range_ratio - close_to_open_change.shift(1)
+    
+    # Dynamic Threshold
+    dynamic_threshold = smoothed_high_low_range_volatility.ewm(span=30, adjust=False).mean()
+    
+    # Adjust Combined Alpha Factor based on Signal
+    signal = (smoothed_high_low_range_volatility > dynamic_threshold).astype(int)
+    adjusted_combined_alpha_factor = combined_alpha_factor * (signal * 1.6 + (1 - signal) * 0.4)
+    
+    # Enhance Alpha Factor with Volume-Adjusted High-Low Range
+    avg_volume = df['volume'].rolling(window=n).mean()
+    volume_adjusted_high_low_range = daily_high_low_range * avg_volume
+    
+    # Calculate Absolute Close-to-Close Return
+    abs_close_to_close_return = np.abs(df['close'] - df['close'].shift(1))
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_value = daily_high_low_range - abs_close_to_close_return
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = daily_high_low_range.rolling(window=10).mean()
+    
+    # Calculate Combined Value Momentum
+    combined_value_momentum = combined_value - combined_value.shift(1)
+    
+    # Calculate Close Price Momentum
+    close_price_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Momentum
+    intraday_range_momentum = daily_high_low_range - daily_high_low_range.shift(1)
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = (volume_adjusted_high_low_range + combined_value_momentum - 
+                                 (df['close'] - df['open']) / (df['high'] - df['low']) + 
+                                 intraday_range_ratio - close_to_open_change.shift(1))
+    
+    # Adjust Intermediate Alpha Factor based on Signal
+    adjusted_intermediate_alpha_factor = intermediate_alpha_factor * (signal * 1.5 + (1 - signal) * 0.5)
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = (intraday_volatility * (adjusted_intermediate_alpha_factor + 
+                                                 close_price_momentum + intraday_range_momentum))
+    
+    # Final Adjustment
+    final_adjustment_signal = (smoothed_high_low_range_volatility > 0.8).astype(int)
+    final_alpha_factor = final_alpha_factor * (final_adjustment_signal * 1.6 + (1 - final_adjustment_signal) * 0.4)
+    
+    return final_alpha_factor
+```

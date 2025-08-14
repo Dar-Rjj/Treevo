@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['daily_price_range'] = df['high'] - df['low']
+    
+    # Calculate Average Price
+    df['average_price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute Volume Adjusted Range
+    df['volume_adjusted_range'] = (df['daily_price_range'] / df['average_price']).fillna(0) * df['volume']
+    
+    # Calculate Short-Term Rolling Average
+    short_term_avg = df['volume_adjusted_range'].rolling(window=7).mean()
+    
+    # Calculate Long-Term Rolling Average
+    long_term_avg = df['volume_adjusted_range'].rolling(window=21).mean()
+    
+    # Calculate High-Low Range Momentum
+    N = 5
+    alpha = 2 / (N + 1)
+    df['ema_high_low_range'] = df['daily_price_range'].ewm(alpha=alpha, adjust=False).mean()
+    df['daily_change_ema'] = df['ema_high_low_range'].diff().fillna(0)
+    
+    # Calculate Volume Shock
+    df['volume_percentage_change'] = df['volume'].pct_change().fillna(0)
+    threshold = 0.60
+    df['volume_shock_flag'] = (df['volume_percentage_change'].abs() > threshold).astype(int)
+    
+    # Combine Indicators
+    df['combined_momentum_volume_shock'] = df['daily_change_ema'] * df['volume_shock_flag']
+    df['difference_averages'] = short_term_avg - long_term_avg
+    
+    # Generate Alpha Factor
+    df['alpha_factor'] = df['combined_momentum_volume_shock'] + df['difference_averages']
+    
+    return df['alpha_factor']
+```

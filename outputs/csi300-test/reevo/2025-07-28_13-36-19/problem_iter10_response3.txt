@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Calculate the relative strength index (RSI) for the close prices
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Calculate the exponential moving average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Calculate the seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Calculate the dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Calculate the adaptive weights based on the recent performance of each factor
+    window = 30
+    factor_returns = {
+        'price_movement': price_movement.pct_change(),
+        'rsi': rsi.pct_change(),
+        'volume_trend': volume_trend,
+        'dynamic_indicator': dynamic_indicator.pct_change(),
+        'seasonal_adj_price_movement': seasonal_adj_price_movement.pct_change()
+    }
+
+    adaptive_weights = {}
+    for key, value in factor_returns.items():
+        recent_performance = value.rolling(window=window).mean()
+        adaptive_weights[key] = recent_performance / recent_performance.sum()
+
+    # Synthesize the final factor using the adaptive weights
+    factor = (
+        adaptive_weights['price_movement'] * price_movement +
+        adaptive_weights['rsi'] * rsi +
+        adaptive_weights['volume_trend'] * volume_trend +
+        adaptive_weights['dynamic_indicator'] * dynamic_indicator +
+        adaptive_weights['seasonal_adj_price_movement'] * seasonal_adj_price_movement
+    )
+
+    return factor
+```

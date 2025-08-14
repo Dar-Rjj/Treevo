@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=14, M=5):
+    # Calculate Intraday Returns
+    intraday_returns = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    open_to_close_returns = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    combined_returns = intraday_returns + open_to_close_returns
+    
+    # Analyze Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    volume_trend_classification = pd.Series(index=df.index, data=0)
+    volume_trend_classification[volume_ratio > 1.5] = 2
+    volume_trend_classification[(volume_ratio >= 0.8) & (volume_ratio <= 1.5)] = 1
+    volume_trend_classification[(volume_ratio >= 0.3) & (volume_ratio < 0.8)] = 0
+    volume_trend_classification[volume_ratio < 0.3] = -2
+    
+    # Adjust Combined Returns Based on Volume Classification
+    adjusted_combined_returns = combined_returns * volume_trend_classification
+    
+    # Calculate Enhanced Price Momentum
+    average_close = df['close'].rolling(window=N).mean()
+    momentum_signal = df['close'] - average_close
+    sma_high = df['high'].rolling(window=14).mean()
+    sma_low = df['low'].rolling(window=14).mean()
+    intraday_momentum_oscillator = (sma_high - sma_low) / (sma_high - sma_low).abs()
+    enhanced_price_momentum = momentum_signal + intraday_momentum_oscillator
+    
+    # Incorporate Volume Influence
+    avg_5_day_volume = df['volume'].rolling(window=5).mean()
+    relative_volume = df['volume'] / avg_5_day_volume
+    adjusted_5_day_momentum = momentum_signal * relative_volume
+    
+    # Compute 5-Day Price Momentum
+    five_day_price_momentum = df['close'].rolling(window=5).mean()
+    
+    # Compute Enhanced Volume Volatility
+    avg_volume_M_days = df['volume'].rolling(window=M).mean()
+    volatility_signal = df['volume'] - avg_volume_M_days
+    rolling_std_volume = df['volume'].rolling(window=5).std()
+    enhanced_volume_volatility = volatility_signal * rolling_std_volume
+    
+    # Compute Hybrid Factor
+    hybrid_factor = (
+        adjusted_combined_returns +
+        five_day_price_momentum +
+        enhanced_price_momentum +
+        enhanced_volume_volatility
+    )
+    
+    # Apply Cumulative Movement
+    cumulative_hybrid_factor = hybrid_factor.rolling(window=5).sum()
+    
+    return cumulative_hybrid_factor
+```

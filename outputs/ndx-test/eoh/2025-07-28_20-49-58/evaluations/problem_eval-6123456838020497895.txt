@@ -1,0 +1,34 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    def calculate_rsi(column, n=14):
+        delta = column.diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=n, min_periods=1).mean()[:n+1]
+        avg_loss = loss.rolling(window=n, min_periods=1).mean()[:n+1]
+        avg_gain = gain.rolling(window=n, min_periods=1).mean()[n+1:].combine_first(avg_gain)
+        avg_loss = loss.rolling(window=n, min_periods=1).mean()[n+1:].combine_first(avg_loss)
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def calculate_atr(df, n=14):
+        high_low = df['high'] - df['low']
+        high_close = (df['high'] - df['close'].shift()).abs()
+        low_close = (df['low'] - df['close'].shift()).abs()
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = ranges.max(axis=1)
+        atr = true_range.rolling(window=n, min_periods=1).mean()
+        return atr
+
+    # Calculate RSI over a 14-day period
+    rsi = calculate_rsi(df['close'])
+    
+    # Calculate ATR over a 14-day period
+    atr = calculate_atr(df)
+
+    # Combine factors
+    heuristics_matrix = rsi * atr
+    
+    return heuristics_matrix

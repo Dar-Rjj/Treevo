@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Range
+    df['intraday_range'] = df['high'] - df['low']
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_range'] = df['intraday_range'] / df['avg_volume_20']
+
+    # Calculate Close Price Momentum
+    df['momentum'] = df['close'] / df['close'].shift(5) - 1
+
+    # Calculate 5-Day Average High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['5_day_avg_high_low_spread'] = df['high_low_spread'].rolling(window=5).mean()
+
+    # Calculate 10-Day EMA of High-Low Spread
+    df['ema_10_high_low_spread'] = df['high_low_spread'].ewm(span=10, adjust=False).mean()
+
+    # Multiply 5-Day Average High-Low Spread by Momentum
+    df['weighted_spread_momentum'] = df['5_day_avg_high_low_spread'] * df['momentum']
+
+    # Add 10-Day EMA of High-Low Spread to 20-Day Price Return
+    df['20_day_price_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['enhanced_ema_spread'] = df['ema_10_high_low_spread'] + df['20_day_price_return']
+
+    # Calculate Open Adjustment Factor
+    df['open_adj_factor'] = df['open'] - df['open'].shift(1)
+
+    # Adjust High-to-Low Movement by Open Adjustment
+    df['adjusted_high_low_movement'] = df['high_low_spread'] / df['open_adj_factor']
+
+    # Weight by Volume and Close Difference
+    df['close_diff'] = df['close'] - df['close'].shift(1)
+    df['weighted_high_low_movement'] = df['adjusted_high_low_movement'] * (df['volume'] * df['close_diff'])
+
+    # Integrate Intraday Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['daily_range'].rolling(window=20).mean()
+
+    # Incorporate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] / df['open'] - 1
+
+    # Calculate Volume-Weighted Return
+    df['volume_weighted_return'] = df['volume'] * df['close_to_open_return']
+
+    # Calculate Open Price Impact
+    df['relative_open_price_change'] = df['open'] / df['open'].shift(1) - 1
+
+    # Final Factor Calculation
+    df['final_factor'] = (
+        0.20 * df['adjusted_range'] +
+        0.20 * df['momentum'] +
+        0.20 * df['weighted_high_low_movement'] +
+        0.15 * df['intraday_volatility'] +
+        0.15 * df['volume_weighted_return'] +
+        0.10 * df['relative_open_price_change']
+    )
+
+    return df['final_factor'].dropna()
+```

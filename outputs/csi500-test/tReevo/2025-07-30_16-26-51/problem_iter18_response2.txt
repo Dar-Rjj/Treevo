@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Volume_Weighted_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+    
+    # Multi-Period Momentum Indicators
+    short_term_sma = df['Volume_Weighted_Return'].rolling(window=5).mean()
+    short_term_ema = df['Volume_Weighted_Return'].ewm(span=5, adjust=False).mean()
+    mid_term_sma = df['Volume_Weighted_Return'].rolling(window=10).mean()
+    mid_term_ema = df['Volume_Weighted_Return'].ewm(span=10, adjust=False).mean()
+    long_term_sma = df['Volume_Weighted_Return'].rolling(window=20).mean()
+    long_term_ema = df['Volume_Weighted_Return'].ewm(span=20, adjust=False).mean()
+    
+    # Adaptive Volatility Stabilization
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    short_term_vol = log_returns.rolling(window=5).std()
+    long_term_vol = log_returns.rolling(window=20).std()
+    adaptive_volatility = 0.6 * short_term_vol + 0.4 * long_term_vol
+    
+    # Advanced Market Regime Detection
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_10 = df['close'].rolling(window=10).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+    
+    price_trend_indicator = np.where(ma_5 > ma_20, 1, 
+                                     np.where(ma_10 > ma_20, 0.5, -1))
+    
+    # Market Regime Adjustment
+    combined_momentum = 0.5 * (short_term_sma + short_term_ema) + \
+                        0.3 * (mid_term_sma + mid_term_ema) + \
+                        0.2 * (long_term_sma + long_term_ema)
+    
+    bullish_factor = 1.2 * combined_momentum
+    neutral_factor = 1.0 * combined_momentum
+    bearish_factor = 0.8 * combined_momentum
+    
+    regime_adjusted_factor = np.where(price_trend_indicator == 1, bullish_factor, 
+                                       np.where(price_trend_indicator == 0.5, neutral_factor, bearish_factor))
+    
+    # Final Alpha Factor
+    alpha_factor = regime_adjusted_factor / adaptive_volatility
+    
+    return alpha_factor
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted Price Movement
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volume_adjusted_ema'] = (df['log_returns'] * df['volume']).ewm(span=20).mean()
+    df['high_low_volatility'] = df['high'] - df['low']
+    df['volatility_ma'] = df['high_low_volatility'].rolling(window=20).std()
+    volume_adjusted_price_movement = (df['volume_adjusted_ema'] / df['volatility_ma']).fillna(0)
+    
+    # Determine Reversal Signal
+    close_open_diff = df['close'] - df['open']
+    df['5_day_ma'] = close_open_diff.rolling(window=5).mean()
+    df['10_day_ma'] = close_open_diff.rolling(window=10).mean()
+    reversal_signal = np.where(df['5_day_ma'] > df['10_day_ma'], 1, 
+                               np.where(df['5_day_ma'] < df['10_day_ma'], -1, 0))
+    high_low_range = df['high'] - df['low']
+    rolling_high_low_avg = high_low_range.rolling(window=14).mean()
+    reversal_signal_amplified = reversal_signal * rolling_high_low_avg
+    
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    price_reversals = (df['high'] - df['low']) / df['open']
+    price_reversals_sum = price_reversals.rolling(window=20).sum().fillna(0)
+    
+    # Assess Volume Impact on Price Movement
+    volume_weighted_close = (df['close'] * df['volume']).ewm(span=20).mean() / df['volume'].ewm(span=20).mean()
+    
+    # Combine Factors for Final Alpha
+    final_alpha = (0.3 * volume_adjusted_price_movement +
+                   0.2 * reversal_signal_amplified +
+                   0.3 * price_reversals_sum +
+                   0.2 * volume_weighted_close)
+    
+    return pd.Series(final_alpha, index=df.index)
+
+# Example usage:
+# df = pd.DataFrame(data, columns=['open', 'high', 'low', 'close', 'volume'])
+# alpha_values = heuristics_v2(df)
+```

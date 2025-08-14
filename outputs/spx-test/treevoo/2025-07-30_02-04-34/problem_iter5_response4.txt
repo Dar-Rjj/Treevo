@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Intraday_Momentum'] = (df['High_Low_Diff'] - df['open']).shift(1)
+    
+    # Compute Next Day Open to Current Day Close
+    df['Next_Open'] = df['open'].shift(-1)
+    df['Open_Close_Diff'] = df['Next_Open'] - df['close']
+    
+    # Combine for Initial Alpha Signal
+    df['Initial_Alpha_Signal'] = (df['Intraday_Momentum'] + df['Open_Close_Diff']) * df['volume']
+    
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Compute Smoothed Price Momentum
+    df['Smoothed_Price_Momentum'] = df['Daily_Price_Change'].rolling(window=5).sum() / 5
+    
+    # Compute Weighted Volume Indicator
+    df['Weighted_Volume_Indicator'] = (df['Volume_Change'] * df['Volume_Change'].apply(np.sign)).rolling(window=5).mean()
+    
+    # Final Intraday Alpha Component
+    df['Final_Intraday_Alpha_Component'] = df['Smoothed_Price_Momentum'] * df['Weighted_Volume_Indicator'] + df['Initial_Alpha_Signal']
+    
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate 7-day Price Momentum
+    df['7_Day_Price_Momentum'] = df['close'].shift(1) - df['close'].shift(7)
+    
+    # Calculate 7-day Volume Momentum
+    df['7_Day_Volume_Momentum'] = df['volume'].shift(1) - df['volume'].shift(7)
+    
+    # Adjust Momentum by Volume
+    df['Volume_Adjusted_Momentum'] = df['7_Day_Price_Momentum'] * df['7_Day_Volume_Momentum']
+    
+    # Apply Volume-Adjusted Momentum to High-Low Range
+    df['Weighted_High_Low_Range'] = df['High_Low_Range'] * df['Volume_Adjusted_Momentum']
+    
+    # Sum product for each day in the period
+    df['Sum_Weighted_High_Low_Range'] = df['Weighted_High_Low_Range'].rolling(window=7).sum()
+    
+    # Combine Final Alpha Signal
+    df['Final_Alpha_Signal'] = df['Final_Intraday_Alpha_Component'] + df['Sum_Weighted_High_Low_Range']
+    
+    return df['Final_Alpha_Signal'].dropna()
+```

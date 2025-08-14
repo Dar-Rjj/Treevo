@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the Close-to-Close Return for 5 Days
+    df['5_day_return'] = df['close'].pct_change(5)
+    
+    # Compute the Close-to-Close Return for 20 Days
+    df['20_day_return'] = df['close'].pct_change(20)
+    
+    # Calculate True Range (TR) for each day
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], 
+                                                                        abs(x['high'] - df.shift(1)['close']), 
+                                                                        abs(x['low'] - df.shift(1)['close'])), axis=1)
+    
+    # Calculate Average True Range (ATR) over 14 Days
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    
+    # Standardize by ATR
+    df['5_day_return_std'] = df['5_day_return'] / df['atr_14']
+    df['20_day_return_std'] = df['20_day_return'] / df['atr_14']
+    
+    # Calculate Rolling Average Volume over 20 Days
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    
+    # Weight Returns by Rolling Average Volume
+    df['5_day_weighted_return'] = df['5_day_return_std'] * df['avg_volume_20']
+    df['20_day_weighted_return'] = df['20_day_return_std'] * df['avg_volume_20']
+    
+    # Combine Multi-Period Returns with Weights
+    weight_5_day = 0.6
+    weight_20_day = 0.4
+    df['combined_return'] = (weight_5_day * df['5_day_weighted_return'] + 
+                             weight_20_day * df['20_day_weighted_return'])
+    
+    # Apply Volume Filter
+    median_volume = df['volume'].median()
+    df['alpha_factor'] = df.apply(lambda x: x['combined_return'] if x['volume'] > median_volume else 0, axis=1)
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame(data, index=pd.to_datetime(date_index), columns=['open', 'high', 'low', 'close', 'amount', 'volume'])
+# alpha_factor = heuristics_v2(df)
+```

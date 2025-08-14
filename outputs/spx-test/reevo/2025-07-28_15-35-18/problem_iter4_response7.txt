@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the multi-period momentum as the difference between today's close and the 10-day simple moving average of the close
+    multi_period_momentum = df['close'] - df['close'].rolling(window=10).mean()
+    
+    # Compute the exponential moving average (EMA) of the volume over 10 days for a more responsive liquidity measure
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the ratio of the high to the 10-day EMA of the high to capture relative strength
+    relative_high_ema = df['high'] / df['high'].ewm(span=10, adjust=False).mean()
+    
+    # Incorporate a measure of volatility using the standard deviation of the last 10 days' log returns
+    log_returns = np.log(df['close']) - np.log(df['close'].shift(1))
+    volatility = log_returns.rolling(window=10).std()
+    
+    # Include a price pattern indicator: difference between the highest and lowest price over the past 10 days
+    price_range = df['high'].rolling(window=10).max() - df['low'].rolling(window=10).min()
+    
+    # Consider bid-ask spread: if 'bid' and 'ask' are available in the DataFrame
+    bid_ask_spread = df['ask'] - df['bid'] if 'ask' in df and 'bid' in df else 0
+    
+    # Incorporate market depth: use the ratio of the 5-day EMA of volume to the 10-day EMA of volume
+    market_depth = df['volume'].ewm(span=5, adjust=False).mean() / df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Additional trend and momentum indicators: 20-day RSI (Relative Strength Index)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=20).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=20).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Combine the components into a single factor
+    factor_values = (multi_period_momentum * ema_volume * relative_high_ema * market_depth * rsi) / (volatility + price_range + bid_ask_spread + 1e-6)
+    
+    return factor_values
+```

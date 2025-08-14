@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Volume Proportion
+    df['intraday_volume'] = df['volume'] - (df['close'].shift(1) * df['open'])
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Intensity
+    df['intraday_vol_intensity'] = df['intraday_volume'] / (df['high'] - df['low'])
+    
+    # Calculate Volume Impact Score
+    n_days = 10
+    df['avg_high_low'] = (df['high'].rolling(window=n_days).mean() - df['low'].rolling(window=n_days).mean())
+    df['sum_volume'] = df['volume'].rolling(window=n_days).sum()
+    df['vol_impact_score'] = df['avg_high_low'] / df['sum_volume']
+    
+    # Calculate Weighted Intraday Volume Intensity
+    df['weighted_intraday_vol_intensity'] = df['intraday_vol_intensity'] * df['intraday_return']
+    
+    # Calculate Intraday and Breakout Momentum
+    df['high_low_spread'] = (df['high'] - df['low']) / df['close'].shift(1)
+    
+    # Adjust by Cumulative Volume
+    N_days = 20
+    df['cumulative_vol'] = df['volume'].rolling(window=N_days).sum()
+    df['adjusted_momentum'] = df['high_low_spread'] / df['cumulative_vol']
+    
+    # Generate Factor 1
+    df['factor_1'] = df['intraday_return'] * df['vol_impact_score']
+    
+    # Confirm with Volume Trend
+    df['avg_vol_5d'] = df['volume'].rolling(window=5).mean()
+    df['vol_ratio'] = df['volume'] / df['avg_vol_5d']
+    df['factor_2'] = df['high_low_spread'] * df['intraday_return'] * (df['vol_ratio'] > 1)
+    
+    # Adjust by Enhanced Volume Trend
+    M_days = 15
+    df['avg_vol_15d'] = df['volume'].rolling(window=M_days).mean()
+    df['enhanced_vol_ratio'] = df['volume'] / df['avg_vol_15d']
+    
+    df['adjusted_momentum_aggregated'] = df['adjusted_momentum'].where(df['enhanced_vol_ratio'] > 1.5, 0).rolling(window=M_days).sum()
+    df['final_factor'] = df['factor_1'] * df['adjusted_momentum_aggregated'] + df['factor_2']
+    
+    return df['final_factor']
+```

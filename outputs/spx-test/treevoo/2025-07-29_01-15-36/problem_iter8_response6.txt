@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close prices for the last 20 days
+    sma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Factor
+    momentum = sma_20 - df['close']
+    
+    # Calculate Average Volume Over 20 Days
+    avg_volume_20 = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average High-Low Range Over 20 Days
+    avg_high_low_range_20 = (df['high'] - df['low']).rolling(window=20).mean()
+    
+    # Combine Volume and Price Volatility
+    combined_volatility = avg_volume_20 * avg_high_low_range_20
+    
+    # Weight Momentum by Combined Volume & Price Volatility
+    weighted_momentum = momentum * combined_volatility
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday Volatility
+    high_low_diff = df['high'] - df['low']
+    mean_high_low = high_low_diff.rolling(window=20).mean()
+    std_high_low = high_low_diff.rolling(window=20).std()
+    intraday_volatility = (high_low_diff - mean_high_low) / std_high_low
+    
+    # Adjust Intraday Return by Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Determine Range-to-Range Ratio
+    previous_high_low_range = (df['high'].shift(1) - df['low'].shift(1))
+    current_high_low_range = (df['high'] - df['low'])
+    range_to_range_ratio = current_high_low_range / previous_high_low_range
+    
+    # Integrate Volume Sensitivity
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    adjusted_range_to_range_ratio = range_to_range_ratio * volume_ratio
+    
+    # Detect Volume Shock
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_shock = (volume_change > 0.5 * df['volume'].shift(1)).astype(int)  # Threshold for volume shock
+    
+    # Combine Adjusted Intraday Return, Adjusted Range-to-Range Ratio, and Momentum
+    combined_factor = adjusted_intraday_return * adjusted_range_to_range_ratio * weighted_momentum
+    
+    # Final Factor Calculation
+    final_factor = combined_factor * volume_shock
+    
+    return final_factor
+```

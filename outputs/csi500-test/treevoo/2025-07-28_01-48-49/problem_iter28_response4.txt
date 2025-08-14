@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Average High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    df['avg_high_low_spread_5d'] = df['high_low_spread'].rolling(window=5).mean()
+    
+    # Calculate 5-Day Momentum
+    df['momentum_5d'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Multiply High-Low Spread and Momentum
+    df['hl_momentum'] = df['avg_high_low_spread_5d'] * df['momentum_5d']
+    
+    # Calculate Enhanced Intraday Price Movement
+    df['open_diff'] = df['open'] - df['open'].shift(1)
+    df['enhanced_intraday_movement'] = (df['high'] - df['low']) / df['open_diff']
+    
+    # Weight by Volume and Close Difference
+    df['close_diff'] = df['close'] - df['close'].shift(1)
+    df['weighted_intraday_movement'] = df['enhanced_intraday_movement'] * (df['volume'] * df['close_diff'])
+    
+    # Generate IntradayMomentumScore
+    df['intraday_momentum_score'] = df['weighted_intraday_movement'].abs()
+    
+    # Integrate Intraday Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['volatility_20d'] = df['daily_range'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['reversal_signal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['volume_weighted_return'] = df['volume'] * df['reversal_signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['intraday_return_weight'] = df['amount']
+    df['reversal_weight'] = df['volume']
+    df['weighted_intraday_return_and_reversal'] = (df['intraday_return_weight'] * df['reversal_signal']) + (df['reversal_weight'] * df['reversal_signal'])
+    
+    # Combine Enhanced Factors
+    df['combined_factors'] = 0.3 * df['intraday_momentum_score'] + 0.3 * df['volatility_20d'] + 0.4 * df['momentum_5d']
+    
+    # Final Factor Calculation
+    df['final_factor'] = 0.5 * df['combined_factors'] + 0.5 * df['weighted_intraday_return_and_reversal']
+    
+    # Apply Price Level Adjustment
+    df['price_level_ratio'] = df['close'] / df['open']
+    df['adjusted_final_factor'] = df['final_factor'] * df['price_level_ratio']
+    
+    return df['adjusted_final_factor']
+```

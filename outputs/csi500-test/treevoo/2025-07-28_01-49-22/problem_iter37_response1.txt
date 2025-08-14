@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['daily_return'] = df['close'].diff()
+    
+    # Calculate Short-Term (5 days) and Long-Term (30 days) Moving Averages of Daily Returns
+    df['short_term_ma'] = df['daily_return'].rolling(window=5).mean()
+    df['long_term_ma'] = df['daily_return'].rolling(window=30).mean()
+    df['ma_diff'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Absolute Close-to-Close Return
+    df['abs_close_to_close'] = df['daily_return'].abs()
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    df['range_combined'] = df['high_low_range'] - df['abs_close_to_close']
+    
+    # Generate Intermediate Alpha Factor
+    df['intermediate_alpha'] = (df['range_combined'] + df['ma_diff']) - (df['open'] - df['close'].shift(1))
+    
+    # Adjust Intermediate Alpha Factor Based on Intraday Range Ratio
+    intraday_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    df['adj_intermediate_alpha'] = df['intermediate_alpha']
+    df.loc[intraday_ratio > 0.6, 'adj_intermediate_alpha'] *= 1.3
+    df.loc[intraday_ratio < 0.4, 'adj_intermediate_alpha'] *= 0.7
+    
+    # Introduce Volume Momentum
+    df['volume_momentum'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Calculate Volume-Adjusted Close Price Momentum
+    df['volume_adj_close_momentum'] = df['daily_return'] * (df['volume'] / df['volume'].shift(1))
+    
+    # Generate Final Alpha Factor
+    df['final_alpha'] = df['ma_diff'] * (df['adj_intermediate_alpha'] + df['volume_adj_close_momentum'] + df['volume_momentum'])
+    
+    return df['final_alpha'].dropna()
+```

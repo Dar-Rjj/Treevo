@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['Intraday Range'] = df['high'] - df['low']
+    df['Intraday Return'] = df['Intraday Range'] / df['close']
+
+    # Calculate Overnight Return
+    df['Overnight Return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday and Overnight Returns
+    df['Combined Return'] = df['Intraday Return'] + df['Overnight Return']
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['Typical Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volume-Weighted Price'] = df['Typical Price'] * df['volume']
+    df['VWAP'] = df['Volume-Weighted Price'].cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    df['Reversal Indicator'] = (df['VWAP'] > df['close']).astype(int) * 2 - 1
+
+    # Integrate Reversal Indicator with Combined Return
+    df['Integrated Reversal Return'] = df['Combined Return'] * df['Reversal Indicator']
+
+    # Calculate Volume-Weighted Return
+    df['Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume-Weighted Return'] = (df['Return'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    df['Initial Alpha Factor'] = df['Integrated Reversal Return'] + df['Volume-Weighted Return']
+
+    # Calculate Rolling Averages
+    df['5-day MA'] = df['close'].rolling(window=5).mean()
+    df['20-day MA'] = df['close'].rolling(window=20).mean()
+
+    # Calculate Volatility
+    df['Daily Returns'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['Volatility'] = df['Daily Returns'].rolling(window=20).std()
+
+    # Adjust for Volatility
+    df['Volatility-Adjusted Alpha Factor'] = df['Initial Alpha Factor'] / df['Volatility']
+
+    # Incorporate Transaction Amount
+    df['Amount-Weighted Return'] = (df['close'] - df['open']) / df['open'] * df['amount']
+    df['Amount-Weighted Return'] = (df['Amount-Weighted Return'] * df['amount']).cumsum() / df['amount'].cumsum()
+
+    # Integrate Amount-Weighted Return with Volatility-Adjusted Alpha Factor
+    df['Final Alpha Factor'] = df['Volatility-Adjusted Alpha Factor'] + df['Amount-Weighted Return']
+
+    # Incorporate Momentum Signal
+    df['50-day MA'] = df['close'].rolling(window=50).mean()
+    df['200-day MA'] = df['close'].rolling(window=200).mean()
+    df['Momentum Indicator'] = (df['50-day MA'] > df['200-day MA']).astype(int) * 2 - 1
+
+    # Integrate Momentum Indicator with Final Alpha Factor
+    df['Momentum-Adjusted Alpha Factor'] = df['Final Alpha Factor'] * df['Momentum Indicator']
+
+    # Incorporate Mean Reversion Signal
+    df['10-day Avg'] = df['close'].rolling(window=10).mean()
+    df['50-day Avg'] = df['close'].rolling(window=50).mean()
+    df['Mean Reversion Indicator'] = (df['10-day Avg'] < df['50-day Avg']).astype(int) * 2 - 1
+
+    # Integrate Mean Reversion Indicator with Momentum-Adjusted Alpha Factor
+    df['Final Alpha Factor'] = df['Momentum-Adjusted Alpha Factor'] * df['Mean Reversion Indicator']
+
+    return df['Final Alpha Factor']
+```

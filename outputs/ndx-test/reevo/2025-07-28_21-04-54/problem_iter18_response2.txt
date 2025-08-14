@@ -1,0 +1,64 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's close and yesterday's close for daily return
+    daily_return = df['close'].diff()
+    
+    # Calculate the 10-day exponential moving average of daily returns for volatility
+    ema_volatility = daily_return.ewm(span=10, adjust=False).std()
+    
+    # Calculate a momentum factor as the 30-day cumulative return
+    momentum = (df['close'] / df['close'].shift(30)) - 1
+    
+    # Exponential smoothing for the momentum to add more stability
+    smoothed_momentum = momentum.ewm(span=5, adjust=False).mean()
+    
+    # Volume dynamics: calculate the 10-day exponential moving average of volume
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Market sentiment: ratio of volume to its 10-day EMA
+    market_sentiment = df['volume'] / ema_volume
+    
+    # Price range: calculate the 10-day exponential moving average of the high-low range
+    price_range = df['high'] - df['low']
+    ema_price_range = price_range.ewm(span=10, adjust=False).mean()
+    
+    # Adaptive weight for market sentiment based on the 10-day EMA of the close price
+    adaptive_weight = (df['close'].ewm(span=10, adjust=False).mean() / df['close'])
+    
+    # Relative Strength Index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd_line - signal_line
+    
+    # Volume-weighted price
+    vwp = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Volume-weighted moving average of the close price
+    vwma_close = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Combine the smoothed momentum, EMA volatility, market sentiment, and price range
+    # Higher volatility reduces the score, indicating higher risk
+    # Market sentiment adjusts the factor, higher sentiment increases the score
+    # Price range adds a measure of intraday volatility
+    # Adaptive weight modifies the market sentiment impact
+    # Incorporate RSI, MACD, VWP, and VWMA into the factor
+    factor = (smoothed_momentum 
+              - (ema_volatility / ema_volatility.mean()) 
+              + (market_sentiment - 1) * adaptive_weight 
+              - (ema_price_range / ema_price_range.mean())
+              + rsi / 100
+              + macd_histogram / df['close'].mean()
+              + (vwp - df['close']) / df['close'].mean()
+              + (vwma_close - df['close']) / df['close'].mean())
+    
+    return factor
+```

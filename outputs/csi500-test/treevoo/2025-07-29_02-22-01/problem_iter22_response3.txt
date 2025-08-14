@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted High-Low Spread
+    df['Volume_Adjusted_High_Low_Spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    df['10D_Sum_Volume_Adjusted_High_Low_Spread'] = df['Volume_Adjusted_High_Low_Spread'].rolling(window=10).sum()
+    
+    # Short-Term and Long-Term EMAs
+    df['5D_EMA_Close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['20D_EMA_Close'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Daily Price Change
+    df['Daily_Price_Change'] = df['close'].pct_change()
+    
+    # Cumulative Daily Price Change over 14 days
+    df['Cumulative_Daily_Price_Change'] = df['Daily_Price_Change'].rolling(window=14).sum()
+    
+    # Average Volume over 14 days
+    df['Average_Volume'] = df['volume'].rolling(window=14).mean()
+    
+    # Weighted Cumulative Daily Price Change
+    df['Weighted_Cumulative_Momentum'] = df['Cumulative_Daily_Price_Change'] * df['Average_Volume']
+    
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    df['Combined_Vol_Adj_High_Low_Spread_and_Momentum'] = df['10D_Sum_Volume_Adjusted_High_Low_Spread'] + df['Cumulative_Daily_Price_Change']
+    
+    # Volume-Weighted Adjusted Return
+    df['Intraday_Return'] = (df['close'] - df['open']) / df['open']
+    df['Volume_Weighted_Adjusted_Return'] = df['volume'] * df['Intraday_Return']
+    
+    # Volume Reversal Indicator
+    df['Volume_Rate_of_Change'] = df['volume'].pct_change(periods=10)
+    df['Smoothed_Volume_Rate_of_Change'] = df['Volume_Rate_of_Change'].rolling(window=5).mean()
+    df['Volume_Reversal_Indicator'] = df['Cumulative_Daily_Price_Change'] / (df['Smoothed_Volume_Rate_of_Change'] + 1e-6)  # Avoid division by zero
+    
+    # Volume Confirmation
+    df['Daily_Volume_Change'] = df['volume'].pct_change()
+    df['Positive_Volume_Difference'] = np.where(df['Daily_Volume_Change'] > 0, df['Daily_Volume_Change'], 0)
+    df['Sum_Positive_Volume_Differences'] = df['Positive_Volume_Difference'].rolling(window=10).sum()
+    df['Count_Positive_Volume'] = df['Positive_Volume_Difference'].rolling(window=10).count()
+    df['Volume_Confirmation'] = (df['Sum_Positive_Volume_Differences'] / df['Count_Positive_Volume']) * df['Cumulative_Daily_Price_Change']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Combined_Vol_Adj_High_Low_Spread_and_Momentum'] +
+        df['Cumulative_Daily_Price_Change'] +
+        df['Weighted_Cumulative_Momentum'] +
+        df['Volume_Weighted_Adjusted_Return'] +
+        df['Volume_Reversal_Indicator'] +
+        df['Intraday_Return'] +
+        df['Volume_Confirmation']
+    )
+    
+    return df['Alpha_Factor']
+```

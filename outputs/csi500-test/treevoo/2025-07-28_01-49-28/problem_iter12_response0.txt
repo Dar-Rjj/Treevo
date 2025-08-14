@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    spread = df['high'] - df['low']
+    
+    # Incorporate Volume to get Volume-Adjusted High-Low Spread
+    volume_adjusted_spread = spread * df['volume']
+    
+    # Calculate Weighted Momentum
+    momentum = df['close'] - df['close'].shift(1)
+    volume_weighted_momentum = momentum * df['volume']
+    
+    # Calculate Exponential Moving Average of Momentum with a 10-day span
+    ema_momentum = volume_weighted_momentum.ewm(span=10, adjust=False).mean()
+    
+    # Calculate Price Change Ratio
+    price_change_ratio = df['close'] / df['open']
+    
+    # Calculate Relative Strength Index (RSI)
+    daily_returns = df['close'].pct_change()
+    positive_returns = daily_returns[daily_returns > 0]
+    negative_returns = daily_returns[daily_returns < 0] * -1
+    average_gains = positive_returns.ewm(alpha=1/14, adjust=False).mean()
+    average_losses = negative_returns.ewm(alpha=1/14, adjust=False).mean()
+    relative_strength = average_gains / average_losses
+    rsi = 100 - (100 / (1 + relative_strength))
+    
+    # Proximity to 10-Day Range
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    dist_to_high = ten_day_high - df['close']
+    dist_to_low = df['close'] - ten_day_low
+    min_proximity = np.minimum(dist_to_high, dist_to_low)
+    volatility = df['close'].pct_change().rolling(window=20).std()
+    adjusted_proximity = min_proximity / volatility
+    
+    # Combine Factors
+    factor = (
+        (volume_adjusted_spread + volume_weighted_momentum) * 
+        price_change_ratio * 
+        ema_momentum * 
+        adjusted_proximity * 
+        rsi
+    )
+    
+    return factor
+```

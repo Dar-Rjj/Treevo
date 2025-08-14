@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate 10-Day Moving Average of Daily Price Changes
+    df['ma_10'] = df['price_change'].rolling(window=10).mean()
+    
+    # Calculate 20-Day Moving Average of Daily Price Changes
+    df['ma_20'] = df['price_change'].rolling(window=20).mean()
+    
+    # Combine Moving Averages
+    df['ma_diff'] = df['ma_10'] - df['ma_20']
+    df['combined_ma'] = df['ma_diff'].rolling(window=5).mean()
+    
+    # Calculate Volume and Amount Weighted Daily Return
+    df['daily_return'] = df['close'] / df['open']
+    df['weighted_return'] = df['daily_return'] * df['volume'] * df['amount']
+    
+    # Summarize Volume and Amount Weighted Daily Returns
+    df['sum_weighted_return'] = df['weighted_return'].rolling(window=20).mean()
+    
+    # Integrate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['preliminary_factor'] = df['sum_weighted_return'] * df['volume_change']
+    
+    # Calculate Intraday and Close-to-Open Returns
+    df['intraday_return'] = df['high'] - df['low']
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['intraday_weight'] = df['intraday_return'].abs()
+    df['close_to_open_weight'] = df['close_to_open_return'].abs()
+    df['log_volume_t'] = np.log(df['volume'])
+    df['log_volume_t-1'] = np.log(df['volume'].shift(1))
+    df['volume_diff'] = df['log_volume_t'] - df['log_volume_t-1']
+    df['smoothed_volume_diff'] = df['volume_diff'].ewm(span=5, adjust=False).mean()
+    
+    df['intraday_combined'] = (df['intraday_return'] * df['intraday_weight'] + 
+                               df['close_to_open_return'] * df['close_to_open_weight']) * df['smoothed_volume_diff']
+    
+    # Calculate True Range (TR)
+    df['tr_1'] = df['high'] - df['low']
+    df['tr_2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['tr_3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['tr'] = df[['tr_1', 'tr_2', 'tr_3']].max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    n = 14
+    df['atr'] = df['tr'].rolling(window=n).mean()
+    
+    # Calculate Positive and Negative Directional Movement (+DM, -DM)
+    df['+dm'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)), 
+                         df['high'] - df['high'].shift(1), 0)
+    df['-dm'] = np.where((df['low'] < df['low'].shift(1)) & (df['high'] > df['high'].shift(1)), 
+                         df['low'].shift(1) - df['low'], 0)
+    
+    # Calculate +DI and -DI
+    df['+di'] = 100 * (df['+dm'] / df['atr']).rolling(window=n).mean()
+    df['-di'] = 100 * (df['-dm'] / df['atr']).rolling(window=n).mean()
+    
+    # Calculate ADMI
+    df['admi'] = (df['+di'] - df['-di']) / (df['+di'] + df['-di'])
+    
+    # Synthesize Final Alpha Factor
+    df['alpha_factor'] = (df['combined_ma'] * df['admi'] + 
+                          df['preliminary_factor'] * df['admi'] + 
+                          df['intraday_combined'] * df['admi'])
+    
+    return df['alpha_factor']
+```

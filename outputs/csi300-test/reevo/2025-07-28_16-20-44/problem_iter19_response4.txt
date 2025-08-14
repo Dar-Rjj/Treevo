@@ -1,0 +1,50 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days)
+    momentum_10 = np.log(df['close']).diff(periods=10)
+    momentum_20 = np.log(df['close']).diff(periods=20)
+    momentum_30 = np.log(df['close']).diff(periods=30)
+    momentum = 0.2 * momentum_10 + 0.3 * momentum_20 + 0.5 * momentum_30
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days)
+    liquidity_10 = df['volume'].rolling(window=10).mean()
+    liquidity_20 = df['volume'].rolling(window=20).mean()
+    liquidity_30 = df['volume'].rolling(window=30).mean()
+    liquidity_40 = df['volume'].rolling(window=40).mean()
+    liquidity = 0.1 * liquidity_10 + 0.2 * liquidity_20 + 0.3 * liquidity_30 + 0.4 * liquidity_40
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment_5 = money_flow_ratio.rolling(window=5).mean()
+    market_sentiment_10 = money_flow_ratio.rolling(window=10).mean()
+    market_sentiment_15 = money_flow_ratio.rolling(window=15).mean()
+    market_sentiment = 0.2 * market_sentiment_5 + 0.3 * market_sentiment_10 + 0.5 * market_sentiment_15
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility_20 = np.log(df['close']).diff().rolling(window=20).std()
+    volatility_40 = np.log(df['close']).diff().rolling(window=40).std()
+    volatility_60 = np.log(df['close']).diff().rolling(window=60).std()
+    volatility = 0.2 * volatility_20 + 0.3 * volatility_40 + 0.5 * volatility_60
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5-10 days
+    intraday_dynamics_5 = (df['high'] / df['low']).rolling(window=5).mean()
+    intraday_dynamics_10 = (df['high'] / df['low']).rolling(window=10).mean()
+    intraday_dynamics = 0.5 * intraday_dynamics_5 + 0.5 * intraday_dynamics_10
+    
+    # Calculate the RSI and MACD factors
+    delta = df['close'].diff(1)
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    roll_up = up.rolling(window=14).mean()
+    roll_down = down.abs().rolling(window=14).mean()
+    rsi = 100.0 - (100.0 / (1.0 + (roll_up / roll_down)))
+    macd_line = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd = macd_line - signal_line
+
+    # Combine the factors multiplicatively
+    factor = (momentum + 1) * (liquidity + 1) * (market_sentiment + 1) * (intraday_dynamics + 1) * (rsi + 1) * (macd + 1) / (volatility + 1e-6)
+    
+    return factor
+```

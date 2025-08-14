@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA)
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate Weighted Moving Average (WMA)
+    weights = np.arange(1, 16)
+    df['WMA_15'] = df['close'].rolling(window=15).apply(lambda x: np.sum(weights * x) / np.sum(weights), raw=True)
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['EMA_10']
+    
+    # Calculate Integrated Momentum
+    df['Integrated_Momentum'] = df['close'] - df['WMA_15'] + df['Price_Momentum']
+    
+    # Calculate Intraday Reversal
+    df['Intraday_Reversal'] = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Calculate Volume Momentum
+    df['Volume_Momentum'] = df['volume'].diff()
+    
+    # Composite Factor
+    df['Composite_Factor'] = (df['Intraday_Reversal'] * df['Volume_Momentum']) + df['close'].diff()
+    
+    # Volume Adjusted High-Low Range
+    df['Vol_Adjusted_High_Low_Range'] = (df['high'] - df['low']) * np.sqrt(np.log(df['volume']))
+    
+    # Calculate Daily Log Return
+    df['Daily_Log_Return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Integrate Log Return with Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Integrated_Log_Return'] = df['Daily_Log_Return'] * df['Volume_Change']
+    df['Integrated_Log_Return'] = df['Integrated_Log_Return'].rolling(window=10).sum()
+    
+    # Enhance with Moving Average Crossover
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Crossover_Signal'] = np.where(df['EMA_5'] > df['EMA_20'], 1, -1)
+    df['Enhanced_Crossover_Signal'] = df['Crossover_Signal'] * df['Integrated_Momentum']
+    
+    # Calculate Enhanced Volume Thrust
+    df['Upward_Thrust'] = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    df['Downward_Thrust'] = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    df['Price_Range_Factor'] = (df['high'] - df['low']) / df['open']
+    df['Enhanced_Volume_Thrust'] = df['Upward_Thrust'] - df['Downward_Thrust'] + df['Price_Range_Factor']
+    
+    # Final Integration
+    df['Final_Alpha_Factor'] = (df['Price_Momentum'] + 
+                                 df['Integrated_Momentum'] + 
+                                 df['Composite_Factor'] - 
+                                 df['Vol_Adjusted_High_Low_Range'] + 
+                                 df['Integrated_Log_Return'] + 
+                                 df['Enhanced_Crossover_Signal'] + 
+                                 df['Enhanced_Volume_Thrust'])
+    
+    return df['Final_Alpha_Factor']
+```

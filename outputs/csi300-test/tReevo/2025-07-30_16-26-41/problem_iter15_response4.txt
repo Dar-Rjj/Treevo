@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Adaptive window sizes based on recent market volatility
+    def adaptive_window(volatility, min_win=5, max_win=30, threshold=0.1):
+        if volatility < threshold:
+            return max_win
+        else:
+            return min_win
+
+    # Calculate simple moving average
+    def sma(series, window):
+        return series.rolling(window=window).mean()
+
+    # Calculate returns from the current close price to the SMA
+    def momentum(close, sma):
+        return (close - sma) / sma
+
+    # Volume-weighted exponential smoothing
+    def volume_weighted_smoothing(close, volume, alpha=0.5):
+        weights = volume / volume.rolling(window=20).sum()
+        smoothed_prices = [close[0]]
+        for i in range(1, len(close)):
+            sp = alpha * (close[i] * weights[i]) + (1 - alpha) * smoothed_prices[-1]
+            smoothed_prices.append(sp)
+        return pd.Series(smoothed_prices, index=close.index)
+
+    # Adjust for volatility
+    def adjust_for_volatility(momentum, std):
+        return momentum / std
+
+    # Incorporate sentiment
+    def incorporate_sentiment(momentum, high, low):
+        sentiment = (high - low) / close
+        return momentum + sentiment
+
+    # Main calculation
+    close = df['close']
+    high = df['high']
+    low = df['low']
+    volume = df['volume']
+
+    # Calculate short- and long-term SMAs with adaptive windows
+    volatility = close.rolling(window=20).std()
+    short_window = adaptive_window(volatility.iloc[-1])
+    long_window = 4 * short_window  # Make long_window 4 times the short_window
+
+    sma_short = sma(close, short_window)
+    sma_long = sma(close, long_window)
+
+    # Calculate short- and long-term momentum
+    mom_short = momentum(close, sma_short)
+    mom_long = momentum(close, sma_long)
+
+    # Volume-weighted exponential smoothing
+    smoothed_prices = volume_weighted_smoothing(close, volume)
+
+    # Adjust for volatility
+    mom_short_vol_adjusted = adjust_for_volatility(mom_short, volatility)
+    mom_long_vol_adjusted = adjust_for_volatility(mom_long, volatility)
+
+    # Combine momentum factors
+    combined_momentum = (mom_short_vol_adjusted + mom_long_vol_adjusted) / 2
+
+    # Incorporate sentiment
+    alpha_factor = incorporate_sentiment(combined_momentum, high, low)
+
+    # Simplify and return the alpha factor
+    return alpha_factor
+```

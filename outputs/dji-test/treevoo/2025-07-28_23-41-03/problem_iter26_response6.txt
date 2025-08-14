@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum and Volume-Weighted Price Movement Factors
+    df['10_day_SMA'] = df['close'].rolling(window=10).mean()
+    df['20_day_SMA'] = df['close'].rolling(window=20).mean()
+    df['momentum_factor'] = df['10_day_SMA'] - df['20_day_SMA']
+    
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['10_day_EMA_VWAP'] = df['VWAP'].ewm(span=10, adjust=False).mean()
+    df['50_day_EMA_VWAP'] = df['VWAP'].ewm(span=50, adjust=False).mean()
+    df['VWAP_ratio'] = df['10_day_EMA_VWAP'] / df['50_day_EMA_VWAP']
+    
+    df['momentum_VWAP_factor'] = df['momentum_factor'] * df['VWAP_ratio']
+
+    # Hybrid Volatility and RSI Factor
+    df['ATR'] = df['high'] - df['low']
+    df['14_day_SMA_ATR'] = df['ATR'].rolling(window=14).mean()
+    
+    df['daily_price_change'] = df['close'].diff()
+    df['gains'] = df['daily_price_change'].apply(lambda x: x if x > 0 else 0)
+    df['losses'] = df['daily_price_change'].apply(lambda x: abs(x) if x < 0 else 0)
+    
+    df['14_day_avg_gain'] = df['gains'].rolling(window=14).mean()
+    df['14_day_avg_loss'] = df['losses'].rolling(window=14).mean()
+    df['RSI'] = 100 - (100 / (1 + (df['14_day_avg_gain'] / df['14_day_avg_loss'])))
+    
+    df['volatility_factor'] = df['14_day_SMA_ATR'] / df['ATR'].max() * 100
+    df['hybrid_vol_RSI_factor'] = df['volatility_factor'] + df['RSI']
+
+    # Combined MFI and Momentum Factor
+    df['TP'] = (df['high'] + df['low'] + df['close']) / 3
+    df['MF'] = df['TP'] * df['volume']
+    
+    df['PMF'] = df['MF'].where(df['TP'] > df['TP'].shift(1), 0)
+    df['NMF'] = df['MF'].where(df['TP'] < df['TP'].shift(1), 0)
+    
+    df['14_day_PMF'] = df['PMF'].rolling(window=14).sum()
+    df['14_day_NMF'] = df['NMF'].rolling(window=14).sum()
+    df['MR'] = df['14_day_PMF'] / df['14_day_NMF']
+    df['MFI'] = 100 - (100 / (1 + df['MR']))
+    
+    df['combined_MFI_momentum_factor'] = df['MFI'] * df['momentum_factor']
+
+    # Composite Factor
+    df['composite_factor'] = (df['momentum_VWAP_factor'] + 
+                              df['hybrid_vol_RSI_factor'] + 
+                              df['combined_MFI_momentum_factor']) / 3
+    
+    return df['composite_factor']
+```

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Return Volatility
+    intraday_returns_high = df['high'] - df['open']
+    intraday_returns_low = df['open'] - df['low']
+    intraday_return_volatility = (intraday_returns_high + intraday_returns_low).rolling(window=15).std()
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['open'] - df['close']
+    
+    # Compute Price Change
+    price_change = df['close'].diff()
+    
+    # Adjust for Volume
+    volume_adjusted_high_low_range = df['volume'] * high_low_range
+    
+    # Compute Momentum
+    momentum = price_change.rolling(window=15).sum()
+    
+    # Adjust Momentum by Open-Close Spread
+    adjusted_momentum = momentum * open_close_spread.abs()
+    
+    # Combine Volume-Adjusted Momentum and Spread
+    combined_signal = adjusted_momentum / volume_adjusted_high_low_range
+    
+    # Enhance Combined Signal with Smoothing
+    enhanced_combined_signal = combined_signal.ewm(span=5, min_periods=5).mean()
+    
+    # Calculate 15-Day High-Low Price Momentum
+    high_low_price_momentum = high_low_range.rolling(window=15).sum()
+    
+    # Calculate 15-Day Volume Moving Average
+    volume_moving_avg = df['volume'].rolling(window=15).mean()
+    
+    # Combine 15-Day High-Low Price Momentum and 15-Day Volume Moving Average
+    combined_high_low_volume = high_low_price_momentum * volume_moving_avg
+    
+    # Generate Factor Value
+    factor_value = combined_high_low_volume / df['close']
+    
+    # Combine All Factors
+    combined_factors = (
+        0.3 * intraday_return_volatility +
+        0.45 * combined_high_low_volume +
+        0.15 * enhanced_combined_signal +
+        0.1 * factor_value
+    )
+    
+    # Calculate Day-to-Day Volume Change
+    volume_change = df['volume'].diff()
+    
+    # Indicate Significant Volume Increase
+    volume_spike = (volume_change > 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factors * enhanced_combined_signal * volume_spike
+    
+    return final_alpha_factor
+```

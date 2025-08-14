@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day moving averages of the closing price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+
+    # Calculate the difference between the 5-day and 20-day moving averages as a momentum factor
+    momentum_factor = ma_5 - ma_20
+
+    # Calculate the volatility (standard deviation) of the closing price over the last 20 days
+    volatility = df['close'].rolling(window=20).std()
+
+    # Calculate the relative strength index (RSI) with a 14-day window
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the trade signal based on the RSI
+    trade_signal = (rsi < 30).astype(int) - (rsi > 70).astype(int)
+
+    # Calculate the Money Flow Index (MFI) with a 14-day window
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.rolling(window=14).apply(lambda x: x[x > 0].sum(), raw=False)
+    negative_money_flow = money_flow.rolling(window=14).apply(lambda x: x[x < 0].sum(), raw=False)
+    mfi = 100 - (100 / (1 + (positive_money_flow / (negative_money_flow + 1e-7))))
+
+    # Calculate the Chaikin Oscillator
+    adl = ((2 * df['close'] - df['high'] - df['low']) / (df['high'] - df['low'])) * df['volume']
+    chaikin_oscillator = adl.rolling(window=3).mean() - adl.rolling(window=10).mean()
+
+    # Dynamic weighting for each factor
+    w_momentum = 0.4
+    w_volatility = 0.3
+    w_rsi = 0.2
+    w_mfi = 0.1
+
+    # Combine all factors into a single alpha factor
+    alpha_factor = (w_momentum * momentum_factor +
+                    w_volatility * volatility +
+                    w_rsi * trade_signal +
+                    w_mfi * (mfi - 50))  # Center MFI around 0
+
+    return alpha_factor
+```

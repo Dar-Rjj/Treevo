@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Compute Close to Intraday Range Ratio
+    close_to_intraday_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = (df['high'] - df['low']) / df['low'] * df['volume']
+    
+    # Detect Volume Spikes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike_indicator = (volume_change > 0.5 * df['volume'].rolling(window=20).mean()).astype(int)
+    
+    # Integrate Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    price_trend = df['close'] - ema_20
+    
+    # Combine Components
+    combined_components = volume_weighted_intraday_return + price_trend + volume_spike_indicator
+    
+    # Adjust for Volume Activity
+    volume_change_5_day = df['volume'] - df['volume'].shift(5)
+    average_volume_10_day = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change_5_day / average_volume_10_day
+    volume_trend_score = np.where(volume_change_rate > 1, 1.5, -1.2)
+    
+    # Intermediate Composite Factor
+    intermediate_composite_factor = (combined_components + volume_weighted_intraday_return) * volume_trend_score + price_trend
+    
+    # Opening Impact Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    intermediate_alpha_factor = intermediate_composite_factor - open_to_close_return
+    
+    # Crossover Signals
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    crossover_signal = (short_term_ma > long_term_ma).astype(int)
+    
+    # Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Volume Return
+    average_volume_20_day = df['volume'].rolling(window=20).mean()
+    volume_return = df['volume'] / average_volume_20_day
+    
+    # Open-Close Reversal
+    open_close_reversal = (df['open'].shift(-1) - df['close']) / df['close']
+    
+    # Close-to-Open Gap
+    close_to_open_gap = (df['close'] - df['open'].shift(-1)) / df['open'].shift(-1)
+    
+    # Average True Range (ATR)
+    true_range = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    atr = true_range.rolling(window=14).mean()
+    
+    # Trend Strength
+    trend_strength = (df['close'] - df['close'].shift(20)) / 20
+    
+    # Final Alpha Factor
+    smoothed_composite_factor = intermediate_alpha_factor.rolling(window=5).mean()
+    final_alpha_factor = smoothed_composite_factor + crossover_signal * daily_return + volume_return + open_close_reversal + close_to_open_gap + atr + trend_strength
+    
+    return final_alpha_factor
+```

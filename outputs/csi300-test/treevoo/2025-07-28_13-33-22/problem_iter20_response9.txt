@@ -1,0 +1,81 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, m=5):
+    # Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['atr'] = df['intraday_volatility'].rolling(window=n).mean()
+    
+    # Overnight Return
+    df['overnight_return'] = df['open'] - df['close'].shift(1)
+    
+    # Daily Momentum
+    df['daily_momentum'] = df['close'] - df['close'].shift(n)
+    
+    # Volume-Adjusted Transaction Intensity
+    df['volume_adjusted_intensity'] = (df['amount'] / df['volume']).rolling(window=n).sum()
+    
+    # Price Trend Reversal
+    avg_volume_adjusted_intensity = df['volume_adjusted_intensity'].rolling(window=n).mean()
+    df['price_trend_reversal'] = (df['close'] - df['close'].shift(1)) * (df['volume_adjusted_intensity'] / avg_volume_adjusted_intensity)
+    
+    # Intraday Momentum
+    df['intraday_momentum'] = df['high'] - df['low']
+    
+    # Adjust by Volume and Price Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['price_spike'] = (abs(df['close'] - df['close'].shift(1)) > 2 * df['close'].rolling(window=n).std()).astype(int)
+    df['combined_spikes'] = df['volume_spike'] + df['price_spike']
+    df['capped_spikes'] = df['combined_spikes'].clip(upper=2)
+    
+    # Volatility Adjustment
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    df['std_log_returns'] = df['log_returns'].rolling(window=n).std()
+    df['adjusted_intraday_momentum'] = df['intraday_momentum'] / (df['std_log_returns'] + 1e-8)  # Avoid division by zero
+    
+    # Scale Intraday Momentum
+    df['scaled_intraday_momentum'] = df['adjusted_intraday_momentum'] * (1 / df['capped_spikes'])
+    
+    # Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['combined_intraday_features'] = df['open'] - (df['intraday_midpoint'] - df['opening_gap'])
+    
+    # Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Combined Alpha Factor
+    df['combined_alpha_factor'] = (
+        (df['intraday_volatility'] * df['overnight_return']) +
+        df['daily_momentum'] +
+        df['price_trend_reversal'] +
+        (df['std_log_returns'] * df['close_to_open_return']) +
+        (df['intraday_range'] * (df['close_to_open_return'] + df['price_change']))
+    )
+    
+    # Enhance with Recent Volatility
+    df['absolute_price_change'] = df['price_change'].abs()
+    df['avg_absolute_price_change'] = df['absolute_price_change'].rolling(window=m).mean()
+    df['enhanced_combined_alpha_factor'] = df['combined_alpha_factor'] * df['avg_absolute_price_change']
+    
+    # Adjust Combined Factor by Volume Spike
+    df['adjusted_factor_by_volume_spike'] = df['enhanced_combined_alpha_factor'] / (df['volume_spike'] + 1e-8)  # Avoid division by zero
+    df['capped_factor'] = df['adjusted_factor_by_volume_spike'].clip(lower=-2, upper=2)
+    
+    # Weight by Relative Volume
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['relative_volume'] = df['volume'] / (df['average_volume'] + 1e-8)  # Avoid division by zero
+    df['weighted_factor'] = df['capped_factor'] * df['relative_volume']
+    
+    # Apply Moving Average to Smooth the Final Factor
+    df['final_factor'] = df['weighted_factor

@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Momentum for Close Prices
+    n = 20
+    df['close_momentum'] = df['close'].pct_change(periods=n)
+    
+    # Adjust Momentum by Average Volume
+    avg_volume = df['volume'].rolling(window=n).mean()
+    df['vol_adj_close_momentum'] = df['close_momentum'] * (df['volume'] / avg_volume)
+    
+    # Calculate High-to-Low Range and Return
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_return'] = df['high_low_range'] / df['close'].shift(1)
+    
+    # Combine Close Price Momentum and High-to-Low Return
+    df['combined_momentum'] = df['vol_adj_close_momentum'] + df['high_low_return']
+    
+    # Open-High-Low Volatility with Volume Adjustment
+    df['open_high_diff'] = df['high'] - df['open']
+    df['open_low_diff'] = df['open'] - df['low']
+    df['vol_weighted_volatility'] = (df['open_high_diff'] + df['open_low_diff']) * (df['volume'] / avg_volume)
+    
+    # Adjust Volatility by Volume Trend
+    df['volume_pct_change'] = df['volume'].pct_change()
+    df['adjusted_volatility'] = df['vol_weighted_volatility'] * (1 + df['volume_pct_change'])
+    
+    # Combined Price Momentum
+    df['momentum_21'] = df['close'] - df['close'].shift(21)
+    df['momentum_63'] = df['close'] - df['close'].shift(63)
+    df['combined_price_momentum'] = 0.5 * df['momentum_21'] + 0.5 * df['momentum_63']
+    
+    # Volume Reversal Indicator
+    df['avg_volume_21'] = df['volume'].rolling(window=21).mean()
+    df['avg_volume_63'] = df['volume'].rolling(window=63).mean()
+    df['volume_reversal'] = (df['avg_volume_21'] - df['avg_volume_63']) / df['avg_volume_63']
+    
+    # Price-Amount Interaction Effect
+    n_amount = 20
+    df['amount_per_close'] = df['amount'].rolling(window=n_amount).sum() / df['close']
+    df['prev_amount_per_close'] = df['amount_per_close'].shift(n_amount)
+    df['interaction_effect'] = df['amount_per_close'] - df['prev_amount_per_close']
+    
+    # Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Smoothed Momentum
+    df['smoothed_momentum'] = df['daily_return'].rolling(window=20).sum() / avg_volume
+    
+    # Enhanced Price Reversion
+    df['10_day_high'] = df['high'].rolling(window=10).max()
+    df['10_day_low'] = df['low'].rolling(window=10).min()
+    df['proximity_to_high'] = (df['close'] - df['10_day_high']) / df['10_day_high']
+    df['proximity_to_low'] = (df['close'] - df['10_day_low']) / df['10_day_low']
+    df['min_proximity'] = df[['proximity_to_high', 'proximity_to_low']].min(axis=1)
+    df['inverted_proximity'] = 1 / (1 - df['min_proximity'])
+    df['20_day_std'] = df['daily_return'].rolling(window=20).std()
+    df['enhanced_price_reversion'] = df['inverted_proximity'] / df['20_day_std']
+    
+    # Weighted Final Alpha Factor
+    df['final_alpha'] = (
+        df['combined_momentum'] + 
+        df['adjusted_volatility'] + 
+        df['combined_price_momentum'] + 
+        df['volume_reversal'] + 
+        df['interaction_effect']
+    ) * df['smoothed_momentum'] * df['enhanced_price_reversion']
+    
+    return df['final_alpha']
+```

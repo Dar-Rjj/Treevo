@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Integrated Momentum Indicators
+    df['IntradayMomentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    df['HistoricalMomentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['CombinedMomentum'] = df['IntradayMomentum'] + df['HistoricalMomentum']
+    
+    # Smoothed Momentum
+    df['SmoothedMomentum'] = df['CombinedMomentum'].rolling(window=5).mean()
+    
+    # Volatility-Adjusted Momentum
+    df['DailyHighLowRange'] = (df['high'] - df['low']) / df['close']
+    df['AverageDailyRange'] = df['DailyHighLowRange'].rolling(window=10).mean()
+    df['AdjustedSmoothedMomentum'] = df['SmoothedMomentum'] / (df['AverageDailyRange'] + 1)
+    
+    # Volume-Price Indicator
+    df['VolumeChange'] = 0.5 * (df['volume'] - df['volume'].shift(1))
+    df['AvgHighLowRange_5days'] = (df['high'] - df['low']).rolling(window=5).sum() / (5 * df['close'])
+    df['VolumePriceFactor'] = df['VolumeChange'] + 0.3 * df['AvgHighLowRange_5days'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Return-Based Strength
+    df['ShortTermReturn'] = (df['close'] / df['close'].shift(5)) - 1
+    df['LongTermReturn'] = (df['close'] / df['close'].shift(20)) - 1
+    df['RelativeStrength'] = df['ShortTermReturn'] - df['LongTermReturn']
+    
+    # Identify Volume Spikes
+    df['VolatilityStdDev'] = df['volume'].rolling(window=10).std()
+    df['MeanVolume'] = df['volume'].rolling(window=10).mean()
+    df['VolumeSpike'] = df['volume'] > (df['MeanVolume'] + 2 * df['VolatilityStdDev'])
+    
+    # Adjusted Integrated Factor
+    df['SumFactors'] = df['AdjustedSmoothedMomentum'] + df['VolumePriceFactor'] + df['RelativeStrength']
+    df['VolumeAverage'] = df['volume'].rolling(window=5).mean()
+    df['Volatility'] = (df['close'] - df['open']) / df['open']
+    df['Volatility'] = df['Volatility'].rolling(window=20).std()
+    df['AdjustedIntegratedFactor'] = df['SumFactors'] * (df['VolumeAverage'] * df['Volatility'])
+    
+    # Incorporate Advanced Volatility Adjustment
+    df['EMAHighLowRange'] = df['DailyHighLowRange'].ewm(span=10, adjust=False).mean()
+    df['VolatilityMultiplier'] = 1 / (df['EMAHighLowRange'] + 1)
+    df['AdjustedCombinedMomentum'] = df['CombinedMomentum'] * df['VolatilityMultiplier']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = df['AdjustedIntegratedFactor'] + df['AdjustedCombinedMomentum']
+    df['10DayMA_FinalFactor'] = df['FinalAlphaFactor'].rolling(window=10).mean()
+    df['10DayMA_Increasing'] = df['10DayMA_FinalFactor'] > df['10DayMA_FinalFactor'].shift(1)
+    
+    df['FinalAlphaFactor'] = df.apply(lambda row: row['FinalAlphaFactor'] * 1.1 if row['10DayMA_Increasing'] else row['FinalAlphaFactor'] * 0.9, axis=1)
+    
+    return df['FinalAlphaFactor']
+```

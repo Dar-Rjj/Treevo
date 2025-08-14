@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Trend
+    df['daily_trend'] = (df['close'] - df['open'])
+    df['ema_daily_trend'] = df['daily_trend'].ewm(span=10).mean()
+    df['adjusted_daily_trend'] = df['daily_trend'] / df['ema_daily_trend']
+    
+    # Incorporate Volatility
+    df['volatility'] = df['high'] - df['low']
+    df['trend_volatility_adjusted'] = df['adjusted_daily_trend'] / df['volatility']
+    
+    # Integrate Volume-Adjusted Momentum over 5 days
+    df['volume_trend'] = df['volume'] * df['trend_volatility_adjusted']
+    df['volume_momentum_5d'] = df['volume_trend'].rolling(window=5).sum()
+    
+    # Long-Term Trend Adjustment
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['long_term_trend'] = df['sma_20'] - df['sma_50']
+    df['long_term_adjusted'] = df['volume_momentum_5d'] * df['long_term_trend']
+    
+    # Conditional Trend Sensitivity
+    df['conditional_trend'] = df.apply(lambda x: x['long_term_adjusted'] * 1.2 if x['sma_20'] > x['sma_50'] else x['long_term_adjusted'] * 0.8, axis=1)
+    
+    # Volume Classification
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['volume_classification'] = df.apply(lambda x: 2 if x['volume_ratio'] > 1.5 else (1 if 0.8 <= x['volume_ratio'] <= 1.5 else (0 if 0.3 <= x['volume_ratio'] < 0.8 else -2)), axis=1)
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['conditional_trend'] * df['volume_classification']
+    
+    return df['final_factor']
+```

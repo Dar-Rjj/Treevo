@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-day, 5-day, and 20-day price returns
+    df['price_return_1d'] = df['close'].pct_change()
+    df['price_return_5d'] = df['close'].pct_change(5)
+    df['price_return_20d'] = df['close'].pct_change(20)
+
+    # Weighted average of momentum
+    df['weighted_momentum'] = (0.5 * df['price_return_1d'] + 
+                               0.3 * df['price_return_5d'] + 
+                               0.2 * df['price_return_20d'])
+
+    # Filter by relative volume
+    avg_volume = df['volume'].rolling(window=20).mean()
+    df['filtered_days'] = (df['volume'] >= 1.5 * avg_volume).astype(int)
+
+    # Adjust for volume and amount
+    df['volume_pct_change'] = df['volume'].pct_change()
+    df['adjusted_momentum'] = df['weighted_momentum'] * df['volume_pct_change']
+
+    df['amount_pct_change'] = df['amount'].pct_change()
+    df['adjusted_momentum'] = df['adjusted_momentum'] * df['amount_pct_change']
+
+    # Incorporate high-low differential and volume volatility
+    df['rolling_high'] = df['high'].rolling(window=20).max()
+    df['rolling_low'] = df['low'].rolling(window=20).min()
+    df['high_low_diff'] = df['rolling_high'] - df['rolling_low']
+
+    df['volume_volatility'] = df['volume'].rolling(window=10).std()
+    df['volatility_adjusted_high_low'] = df['high_low_diff'] * df['volume_volatility']
+
+    # Calculate adjusted high-low cumulative return and weighted price gaps
+    df['daily_price_range'] = df['high'] - df['low']
+    df['sum_filtered_price_ranges'] = (df['filtered_days'] * df['daily_price_range']).rolling(window=20).sum()
+
+    df['weighted_price_gaps'] = (df['daily_price_range'] * df['volume_pct_change']).rolling(window=20).sum()
+
+    # Combine momentum and volatility components
+    df['aggregated_signal'] = (df['adjusted_momentum'] + 
+                              df['volatility_adjusted_high_low'])
+
+    # Generate alpha factor
+    df['final_factor'] = (df['aggregated_signal'] + 
+                          df['sum_filtered_price_ranges'] + 
+                          df['weighted_price_gaps']) * df['amount_pct_change']
+
+    # Return the final alpha factor
+    return df['final_factor']
+```

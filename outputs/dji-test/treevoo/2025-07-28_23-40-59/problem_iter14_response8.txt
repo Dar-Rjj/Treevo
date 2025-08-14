@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=7, M=10, K=10, LMA_period=200, SMA_period=50, EMA_smooth_period=10):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Averaged Daily Return
+    df['volume_weighted_return'] = (df['price_change'] * df['volume']).rolling(N).sum() / df['volume'].rolling(N).sum()
+    
+    # Calculate Raw Momentum
+    df['raw_momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Adjust for Volatility and Volume
+    df['short_term_volatility'] = df['close'].rolling(7).std()
+    df['volume_factor'] = df['volume'] / df['volume'].rolling(7).mean()
+    df['weighted_raw_momentum'] = df['raw_momentum'] / (df['short_term_volatility'] * df['volume_factor'])
+    
+    # Combine Factors
+    df['combined_factor'] = df['volume_weighted_return'] * df['weighted_raw_momentum']
+    
+    # Calculate M-Day Exponential Moving Average (EMA) Volume
+    df['ema_volume'] = df['volume'].ewm(span=M, adjust=False).mean()
+    df['volume_score'] = (df['volume'] > df['ema_volume']).astype(int) * 2 - 1
+    
+    # Calculate K-Day Exponential Moving Average (EMA) Amount
+    df['ema_amount'] = df['amount'].ewm(span=K, adjust=False).mean()
+    df['amount_score'] = (df['amount'] > df['ema_amount']).astype(int) * 2 - 1
+    
+    # Calculate LMA and SMA
+    df['LMA'] = df['close'].rolling(window=LMA_period).mean()
+    df['SMA'] = df['close'].rolling(window=SMA_period).mean()
+    
+    # Compute LMA-SMA Difference
+    df['LMA_SMA_diff'] = df['LMA'] - df['SMA']
+    
+    # Apply EMA Smoothing
+    df['smoothed_LMA_SMA_diff'] = df['LMA_SMA_diff'].ewm(span=EMA_smooth_period, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factor'] * df['volume_score'] * df['amount_score'] * df['smoothed_LMA_SMA_diff']
+    
+    return df['alpha_factor']
+```

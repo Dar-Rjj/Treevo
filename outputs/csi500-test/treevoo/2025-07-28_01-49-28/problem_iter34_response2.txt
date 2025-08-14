@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = (df['close'] - df['open']).abs()
+    volume_adjusted_breakout_strength = (daily_range + open_to_close_movement) * df['volume']
+
+    # High-Low Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    moving_sum_high_low_20 = high_low_spread.rolling(window=20).sum()
+    prev_moving_sum_high_low_20 = moving_sum_high_low_20.shift(1)
+    high_low_spread_momentum = moving_sum_high_low_20 - prev_moving_sum_high_low_20
+
+    # Enhance with 10-Day High and Low Prices
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_ten_day_high = df['close'] - ten_day_high
+    proximity_to_ten_day_low = df['close'] - ten_day_low
+    min_proximity = proximity_to_ten_day_high.abs().where(proximity_to_ten_day_high > 0, proximity_to_ten_day_low.abs())
+    inverted_min_proximity = 1 / (1 + min_proximity)
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    enhanced_proximity = inverted_min_proximity / twenty_day_volatility
+
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_by_volume = (open_high_diff + open_low_diff) * df['volume']
+
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    amount_per_unit_close = df['amount'] / df['close']
+    sum_amounts_10 = amount_per_unit_close.rolling(window=10).sum()
+    sum_amounts_20 = amount_per_unit_close.rolling(window=20).sum()
+    rate_of_change = (sum_amounts_10 - sum_amounts_20) / sum_amounts_20
+
+    # Final Alpha Factor
+    combined_indicator = (volume_adjusted_breakout_strength + high_low_spread_momentum + enhanced_proximity + weighted_avg_by_volume) / 4
+    strong_move_indicator = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    final_alpha_factor = combined_indicator * strong_move_indicator * rate_of_change
+
+    return final_alpha_factor
+```

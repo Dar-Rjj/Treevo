@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change and High-to-Low Range
+    df['price_change'] = df['close'].diff()
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Separate Positive and Negative Gains
+    positive_gains = df['price_change'].apply(lambda x: x if x > 0 else 0)
+    negative_gains = df['price_change'].apply(lambda x: abs(x) if x < 0 else 0)
+    
+    # Sum of Positive and Negative Gains Over a Period (e.g., 14 days)
+    period = 14
+    df['positive_sum'] = positive_gains.rolling(window=period).sum()
+    df['negative_sum'] = negative_gains.rolling(window=period).sum()
+    
+    # Adjust for Volume and Amount
+    df['volume_weighted_positive_sum'] = (positive_gains * df['volume']).rolling(window=period).sum()
+    df['volume_weighted_negative_sum'] = (negative_gains * df['volume']).rolling(window=period).sum()
+    
+    # Calculate RSI
+    df['rs'] = df['volume_weighted_positive_sum'] / df['volume_weighted_negative_sum']
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Calculate Volume-Weighted Price (VWP)
+    df['vwp'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+    df['vwp_rolling'] = df['vwp'].rolling(window=period).sum()
+    
+    # Compute Weighted Momentum
+    df['weighted_momentum'] = df['price_change'] / df['vwp_rolling']
+    
+    # Adjust for Volatility
+    df['adjusted_volatility_momentum'] = df['weighted_momentum'] / df['high_low_range']
+    
+    # Determine Trend Direction
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    df['trend_direction'] = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+    
+    # Confirm with Volume
+    df['volume_change'] = df['volume'].diff()
+    
+    # Final Factor
+    df['final_factor'] = df['adjusted_volatility_momentum'] * df['volume_change'] * df['trend_direction']
+    
+    return df['final_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=True, index_col='date')
+# factor = heuristics_v2(df)
+# print(factor)
+```

@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price by Open Price
+    adj_close = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    enhanced_intraday_momentum = (high_indicator + low_indicator) / 2
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    volume_ma = df['volume'].rolling(window=20).mean()
+    normalized_volume = df['volume'] / volume_ma
+    volume_impacted_intraday_momentum = enhanced_intraday_momentum * normalized_volume
+    
+    # Incorporate Longer-Term Momentum Adjusted for Volume
+    n = 20
+    long_term_momentum = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    volume_ratio = df['volume'] / df['volume'].shift(n)
+    volume_adjusted_long_term_momentum = long_term_momentum * volume_ratio**0.5 + long_term_momentum
+    
+    # Consolidate All Factors
+    total_factor = (adj_close + volume_impacted_intraday_momentum + volume_adjusted_long_term_momentum) / df['open']
+    
+    # Calculate Daily Price Return
+    daily_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01
+    significant_increase = (daily_return > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    median_volume = df['volume'].rolling(window=7).median()
+    volume_spike = (df['volume'] > median_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_price_momentum = (daily_return * significant_increase).cumsum()
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = weighted_price_momentum * volume_spike
+    
+    # Final Alpha Factor Synthesis
+    alpha_factor = (total_factor + filtered_momentum) * volume_spike
+    
+    return alpha_factor
+```

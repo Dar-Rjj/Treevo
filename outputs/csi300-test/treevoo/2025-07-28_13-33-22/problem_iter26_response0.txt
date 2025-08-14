@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=10, k=10, p=10, q=10, r=10):
+    # Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open'].shift(1)
+    
+    # Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    df['combined_intraday_features'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Enhanced Intraday Factor
+    avg_intraday_range = df['intraday_range'].rolling(window=n).mean()
+    enhanced_intraday_factor = (avg_intraday_range * (df['close_to_open_return'] + df['price_change'])) + df['combined_intraday_features']
+    
+    # Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=m).mean()
+    enhanced_intraday_factor *= avg_abs_price_change
+    
+    # Volume Adjusted Factor
+    avg_volume = df['volume'].rolling(window=k).mean()
+    volume_adjusted_factor = df['volume'] / avg_volume
+    volume_adjusted_factor = volume_adjusted_factor.apply(lambda x: 1 if x > 1 else 0.5)
+    enhanced_intraday_factor *= volume_adjusted_factor
+    
+    # Adjust for Combined Volume and Price Spikes
+    volume_spike = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    price_spike = (df['price_change'] - df['price_change'].shift(1)) / df['price_change'].shift(1)
+    combined_spike = volume_spike + price_spike
+    enhanced_intraday_factor /= combined_spike
+    
+    # Introduce Volatility Adjustment
+    log_returns = (df['close'] / df['close'].shift(1)).apply(np.log)
+    std_log_returns = log_returns.rolling(window=10).std()
+    enhanced_intraday_factor /= std_log_returns
+    
+    # New Momentum Component
+    momentum = df['close'] - df['close'].shift(n)
+    enhanced_intraday_factor += momentum
+    
+    # High-Low Volatility
+    high_low_volatility = df['high'] - df['low']
+    avg_high_low_volatility = high_low_volatility.rolling(window=p).mean()
+    
+    # Volume Weighted High-Low Volatility
+    volume_weighted_high_low_volatility = high_low_volatility * df['volume']
+    avg_volume_weighted_high_low_volatility = volume_weighted_high_low_volatility.rolling(window=q).mean()
+    
+    # Add Recent Amount Trend
+    avg_amount = df['amount'].rolling(window=r).mean()
+    enhanced_intraday_factor *= avg_amount
+    
+    # Final Alpha Factor
+    final_alpha_factor = enhanced_intraday_factor + momentum + avg_volume_weighted_high_low_volatility * avg_amount
+    
+    return final_alpha_factor
+```

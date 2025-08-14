@@ -1,0 +1,56 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['Gain'] = 0.0
+    df['Loss'] = 0.0
+    for i in range(1, len(df)):
+        if df.loc[df.index[i], 'close'] > df.loc[df.index[i-1], 'close']:
+            df.loc[df.index[i], 'Gain'] = df.loc[df.index[i], 'close'] - df.loc[df.index[i-1], 'close']
+        else:
+            df.loc[df.index[i], 'Loss'] = df.loc[df.index[i-1], 'close'] - df.loc[df.index[i], 'close']
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    df['Sum_Gain_14'] = df['Gain'].rolling(window=14).sum()
+    df['Sum_Loss_14'] = df['Loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    df['RS'] = df['Sum_Gain_14'] / df['Sum_Loss_14'].replace(0, 1)  # Avoid division by zero
+    
+    # Convert to ARSI
+    df['ARSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Adjust for Advanced Features
+    df['Volume_Avg_14'] = df['volume'].rolling(window=14).mean()
+    df['ARSI_Adjusted'] = df['ARSI'] * df['Volume_Avg_14'] * df['High_Low_Spread']
+    df['Price_Momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['ARSI_Momentum_Spread'] = df['ARSI_Adjusted'] * df['Price_Momentum']
+    
+    # Calculate Volume and Amount Adjust Factor
+    df['Volume_Amount_Adjust_Factor'] = df['ARSI_Momentum_Spread'] / (df['volume'] * df['amount'])
+    
+    # Calculate Short-Term Return
+    df['Short_Term_Return'] = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate Long-Term Return
+    df['Long_Term_Return'] = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Volume-Weighted Short-Term Return
+    df['Volume_Weighted_Short_Term_Return'] = df['volume'] * df['Short_Term_Return']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    df['Volume_Weighted_Long_Term_Return'] = df['volume'] * df['Long_Term_Return']
+    
+    # Calculate Short-Term Volatility (Average True Range over 5 days)
+    df['True_Range'] = df[['high'-'low', (df['high']-df['close'].shift(1)).abs(), (df['low']-df['close'].shift(1)).abs()]].max(axis=1)
+    df['Short_Term_Volatility'] = df['True_Range'].rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    df['Volatility_Adjusted_Short_Term_Return'] = df['Volume_Weighted_Short_Term_Return'] / df['Short_Term_Volatility']
+    df['Alpha_Factor'] = df['Volatility_Adjusted_Short_Term_Return'] - df['Volume_Weighted_Long_Term_Return']
+    
+    return df['Alpha_Factor']

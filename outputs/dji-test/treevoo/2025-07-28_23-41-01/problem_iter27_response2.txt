@@ -1,0 +1,86 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    close_position_in_range = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Daily Return
+    daily_return = (df['close'].pct_change()).fillna(0)
+    
+    # Weighted by Volume
+    weighted_daily_return = daily_return * df['volume']
+    
+    # Combine Initial Factors
+    initial_factors = close_position_in_range + weighted_daily_return
+    
+    # Calculate Breakout Strength
+    breakout_strength = (df['high'] - df['low']) / (df['high'] - df['low']).rolling(window=21).sum()
+    
+    # Calculate Volume Weighted Momentum
+    volume_weighted_momentum = (df['close'].diff() * df['volume']).fillna(0)
+    
+    # Combine Breakout and Intraday Factors
+    combined_breakout_intraday = initial_factors + breakout_strength + volume_weighted_momentum
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = (df['close'].pct_change(periods=7).fillna(0) + 
+                           df['close'].pct_change(periods=14).fillna(0))
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = (df['close'].pct_change(periods=21).fillna(0) + 
+                          df['close'].pct_change(periods=63).fillna(0))
+    
+    # Calculate Price Momentum
+    price_momentum = (df['close'].pct_change(periods=7).fillna(0) + 
+                      df['close'].pct_change(periods=21).fillna(0))
+    
+    # Calculate Volume Activity
+    volume_7d_avg = df['volume'].rolling(window=7).mean()
+    volume_21d_avg = df['volume'].rolling(window=21).mean()
+    volume_ratio = volume_7d_avg / volume_21d_avg
+    
+    # Determine Volume Impact
+    adjusted_factor = combined_breakout_intraday * volume_ratio
+    
+    # Incorporate Momentum
+    momentum_adjusted_factor = adjusted_factor + short_term_momentum + long_term_momentum
+    
+    # Adjust for Trend
+    trend_adjustment = df['close'] - df['close'].rolling(window=21).mean()
+    
+    # Adjusted Momentum Indicators
+    sma_21 = df['close'].rolling(window=21).mean() * df['volume']
+    ema_21 = df['close'].ewm(span=21, adjust=False).mean() * df['volume']
+    roc = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    
+    # Trend Indicator: Average Directional Index (ADX)
+    adx = (abs(df['high'] - df['low']) / (df['high'].rolling(window=14).max() - df['low'].rolling(window=14).min())).rolling(window=14).mean()
+    
+    # Market Sentiment Factor
+    market_sentiment_5d = (df['open'] - df['close']).rolling(window=5).mean()
+    market_sentiment_20d = (df['open'] - df['close']).rolling(window=20).mean()
+    
+    # Volatility Adjustment
+    volatility_21d = df['close'].pct_change().rolling(window=21).std()
+    volatility_63d = df['close'].pct_change().rolling(window=63).std()
+    
+    # New Factor: Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Final Alpha Factor
+    final_alpha_factor = (momentum_adjusted_factor + trend_adjustment + sma_21 + ema_21 + roc +
+                          adx + market_sentiment_5d + market_sentiment_20d + 
+                          volatility_21d + volatility_63d + rsi)
+    
+    return final_alpha_factor
+```

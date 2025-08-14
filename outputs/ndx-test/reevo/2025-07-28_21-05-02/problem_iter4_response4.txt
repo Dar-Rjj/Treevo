@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 50-day and 100-day exponential moving average of the closing price
+    df['close_50_ema'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['close_100_ema'] = df['close'].ewm(span=100, adjust=False).mean()
+    
+    # Calculate the 20-day standard deviation of the closing price for volatility
+    df['close_20_std'] = df['close'].rolling(window=20).std()
+    
+    # Calculate the 50-day standard deviation of the volume
+    df['volume_50_std'] = df['volume'].rolling(window=50).std()
+    
+    # Factor 1: Difference between the closing price and the 50-day EMA, divided by the 20-day standard deviation (volatility-adjusted)
+    factor_1 = (df['close'] - df['close_50_ema']) / df['close_20_std']
+    
+    # Factor 2: Difference between the 50-day EMA and the 100-day EMA, divided by the 20-day standard deviation (trend-following)
+    factor_2 = (df['close_50_ema'] - df['close_100_ema']) / df['close_20_std']
+    
+    # Factor 3: Volume divided by its 50-day standard deviation (volume activity)
+    factor_3 = df['volume'] / df['volume_50_std']
+    
+    # Factor 4: Non-linear transformation of the ratio of the highest high to the lowest low over 20 days (relative strength)
+    df['high_low_ratio'] = df['high'].rolling(window=20).max() / df['low'].rolling(window=20).min()
+    factor_4 = np.log(df['high_low_ratio'])
+    
+    # Factor 5: Calculate the 20-day weighted moving average (WMA) with a weight decay
+    weights = np.arange(1, 21)
+    df['close_20_wma'] = df['close'].rolling(window=20).apply(lambda prices: np.dot(prices, weights)/weights.sum(), raw=True)
+    factor_5 = (df['close'] - df['close_20_wma']) / df['close_20_std']
+    
+    # Combine the factors into a single factor value with optimal weights
+    factor_values = 0.3 * factor_1 + 0.3 * factor_2 + 0.2 * factor_3 + 0.1 * factor_4 + 0.1 * factor_5
+    
+    return factor_values
+```

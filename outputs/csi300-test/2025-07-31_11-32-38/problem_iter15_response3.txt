@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Compute 20-Day Moving Average of Daily Price Changes
+    df['20_Day_MA_Price_Change'] = df['Daily_Price_Change'].rolling(window=20).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Close-to-Open Returns
+    df['Combined_Return'] = (df['Intraday_Return'].abs() * df['Intraday_Return'] + 
+                             df['Close_to_Open_Return'].abs() * df['Close_to_Open_Return'])
+    
+    # Integrate Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    df['Preliminary_Factor'] = df['Combined_Return'] * df['Daily_Volume_Change']
+    
+    # Calculate True Range (TR)
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = (df['close'].shift(1) - df['high']).abs()
+    df['TR3'] = (df['close'].shift(1) - df['low']).abs()
+    df['True_Range'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    
+    # Calculate Average True Range (ATR)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Positive Directional Movement (+DM)
+    df['+DM'] = (df['high'] - df['high'].shift(1)).apply(lambda x: max(x, 0)) * (
+        (df['high'] - df['high'].shift(1)) > (df['low'].shift(1) - df['low']))
+    
+    # Calculate Negative Directional Movement (-DM)
+    df['-DM'] = (df['low'].shift(1) - df['low']).apply(lambda x: max(x, 0)) * (
+        (df['low'].shift(1) - df['low']) > (df['high'] - df['high'].shift(1)))
+    
+    # Calculate +DM Smoothed Over 14 Periods
+    df['+DM_Smoothed'] = df['+DM'].rolling(window=14).sum() / 14
+    
+    # Calculate -DM Smoothed Over 14 Periods
+    df['-DM_Smoothed'] = df['-DM'].rolling(window=14).sum() / 14
+    
+    # Calculate +DI
+    df['+DI'] = df['+DM_Smoothed'] / df['ATR']
+    
+    # Calculate -DI
+    df['-DI'] = df['-DM_Smoothed'] / df['ATR']
+    
+    # Calculate ADMI
+    df['ADMI'] = (df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
+    
+    # Synthesize Final Alpha Factor
+    df['Difference'] = df['20_Day_MA_Price_Change'] - df['Preliminary_Factor']
+    df['Alpha_Factor'] = df['Difference'].rolling(window=5).mean() * df['ADMI']
+    
+    return df['Alpha_Factor']
+```

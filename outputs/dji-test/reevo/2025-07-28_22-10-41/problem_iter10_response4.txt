@@ -1,0 +1,50 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the log return of close prices to capture momentum
+    df['log_return'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # Calculate the 50-day and 200-day exponential moving averages (EMA) of the close price to capture longer-term trends
+    df['ema_close_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['ema_close_200'] = df['close'].ewm(span=200, adjust=False).mean()
+    
+    # Calculate the 14-day relative strength index (RSI) to incorporate mean reversion
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Calculate the 10-day average true range (ATR) to incorporate volatility
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['tr'].rolling(window=10).mean()
+    
+    # Calculate the 30-day rolling standard deviation of log returns to capture volatility
+    df['volatility'] = df['log_return'].rolling(window=30).std()
+    
+    # Calculate the volume-weighted average price (VWAP) to incorporate volume
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Integrate adaptive, dynamic weights for each feature based on market regime changes
+    df['market_regime'] = (df['close'] - df['ema_close_200']) / df['close']
+    df['macro_indicator'] = df['close'].pct_change(90)  # Example macro indicator: 90-day percentage change
+    
+    log_return_weight = 0.5 + 0.1 * df['market_regime']
+    ema_50_weight = 0.3 - 0.05 * df['market_regime']
+    ema_200_weight = 0.2 + 0.05 * df['market_regime']
+    rsi_weight = 0.4 - 0.05 * df['macro_indicator']
+    atr_weight = 0.3 + 0.05 * df['macro_indicator']
+    volatility_weight = 0.5 - 0.1 * df['market_regime']
+    vwap_weight = 0.4 + 0.05 * df['macro_indicator']
+    
+    # Combine the features into a single alpha factor with dynamic weights
+    factor = (
+        (df['log_return'] * log_return_weight) +
+        ((df['close'] - df['ema_close_50']) * ema_50_weight) +
+        ((df['close'] - df['ema_close_200']) * ema_200_weight) +
+        ((50 - df['rsi']) * rsi_weight) +
+        ((df['atr'] / df['close']) * atr_weight) +
+        (df['volatility'] * volatility_weight) +
+        ((df['close'] - df['vwap']) * vwap_weight)
+    )
+    return factor
+```

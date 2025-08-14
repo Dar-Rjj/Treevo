@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Close_Open_Diff'] = df['close'] - df['open']
+    df['Intraday_Price_Movement'] = df['High_Low_Range'] + df['Close_Open_Diff']
+    
+    # Incorporate Volume Influence
+    df['Volume_Adjusted_Momentum'] = df['volume'] * df['Intraday_Price_Movement']
+    df['Smoothed_Volume_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Market Volatility
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Abs_Return_Diff'] = df['Daily_Return'].abs()
+    df['Volatility'] = df['Daily_Return'].rolling(window=30).std()
+    df['Adjusted_Momentum'] = df['Smoothed_Volume_Adjusted_Momentum'] - df['Volatility']
+    
+    # Enhance Trend Reversal Signal
+    df['Short_Term_Momentum'] = df['close'] - df['close'].ewm(span=5, adjust=False).mean()
+    df['Long_Term_Momentum'] = df['close'] - df['close'].ewm(span=20, adjust=False).mean()
+    df['Momentum_Reversal'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    df['Reversal_Signal'] = np.where(df['Momentum_Reversal'] > 0, 1, -1)
+    df['Interim_Alpha_Factor'] = df['Adjusted_Momentum'] + df['Reversal_Signal']
+    
+    # Incorporate Relative Strength
+    df['10_day_Avg_Close'] = df['close'].rolling(window=10).mean()
+    df['10_day_Avg_Volume'] = df['volume'].rolling(window=10).mean()
+    df['Relative_Strength'] = df['10_day_Avg_Close'] / df['10_day_Avg_Volume']
+    
+    # Integrate Liquidity Signal
+    df['10_day_Avg_Amount'] = df['amount'].rolling(window=10).mean()
+    df['Liquidity_Signal'] = df['10_day_Avg_Amount'] / df['10_day_Avg_Volume']
+    
+    # Refine Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Interim_Alpha_Factor'] + df['Relative_Strength'] + df['Liquidity_Signal']
+    df['Smoothed_Final_Alpha_Factor'] = df['Final_Alpha_Factor'].ewm(span=5, adjust=False).mean()
+    
+    return df['Smoothed_Final_Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(your_dataframe)
+```

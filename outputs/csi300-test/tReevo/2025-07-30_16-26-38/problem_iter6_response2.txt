@@ -1,0 +1,31 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Dynamic Volatility Calculation using High, Low, and Close prices
+    df['HL_C_diff'] = (df['high'] - df['low']) / df['close']
+    rolling_volatility = df['HL_C_diff'].rolling(window=30).std()
+    
+    # Adaptive Window Sizing based on Volatility
+    df['Rolling_Volatility'] = rolling_volatility
+    df['Adaptive_Window'] = df['Rolling_Volatility'].apply(lambda x: 5 if x > rolling_volatility.mean() else 30)
+    
+    # Rolling Statistics with Adaptive Window
+    df['Rolling_Mean'] = df.groupby('Adaptive_Window')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).mean())
+    df['Rolling_Std'] = df.groupby('Adaptive_Window')['Volume_Weighted_Return'].transform(lambda x: x.rolling(window=x.name).std())
+    
+    # Factor is the ratio of rolling mean to rolling standard deviation
+    df['Factor'] = df['Rolling_Mean'] / (df['Rolling_Std'] + 1e-6)
+    
+    return df['Factor']
+
+# Example usage:
+# df = pd.DataFrame(...)  # Your DataFrame with columns: date, open, high, low, close, amount, volume
+# factor_series = heuristics_v2(df)
+```

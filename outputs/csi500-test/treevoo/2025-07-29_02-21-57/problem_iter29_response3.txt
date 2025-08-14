@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['TR1'] = df['high'] - df['low']
+    df['TR2'] = abs(df['high'] - df['close'].shift(1))
+    df['TR3'] = abs(df['low'] - df['close'].shift(1))
+    df['TrueRange'] = df[['TR1', 'TR2', 'TR3']].max(axis=1)
+    
+    # Daily Range
+    df['DailyRange'] = df['high'] - df['low']
+    
+    # Volume Weighted Moving Averages
+    df['VWAP_short'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    df['VWAP_long'] = (df['close'] * df['volume']).rolling(window=30).sum() / df['volume'].rolling(window=30).sum()
+    
+    # Average True Range
+    df['ATR'] = df['TrueRange'].rolling(window=14).mean()
+    
+    # 10-Day Moving Average of Daily Range
+    df['MA_DailyRange_10'] = df['DailyRange'].rolling(window=10).mean()
+    
+    # 5-Day Volume Adjusted Momentum
+    df['5DayCloseReturn'] = df['close'] / df['close'].shift(5) - 1
+    df['5DayVolumeRatio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5).mean()
+    df['Momentum_5Day_Volume_Adjusted'] = df['5DayCloseReturn'] * df['5DayVolumeRatio']
+    
+    # 10-Day Price Range
+    df['10DayHigh'] = df['high'].rolling(window=10).max()
+    df['10DayLow'] = df['low'].rolling(window=10).min()
+    
+    # 10-Day Intraday Volatility
+    df['IntradayVolatility'] = (df['high'] - df['low']) / df['open']
+    df['10DayMA_IntradayVolatility'] = df['IntradayVolatility'].rolling(window=10).mean()
+    
+    # Breakouts and Breakout Strength
+    df['UpwardBreakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['DownwardBreakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+    df['20DayAvgDailyRange'] = df['DailyRange'].rolling(window=20).mean()
+    df['BreakoutStrength'] = np.where(df['UpwardBreakout'] == 1, (df['close'] - df['high'].shift(1)) / df['20DayAvgDailyRange'],
+                                       np.where(df['DownwardBreakout'] == 1, (df['low'].shift(1) - df['close']) / df['20DayAvgDailyRange'], 0))
+    df['CumulatedBreakoutStrength'] = df['BreakoutStrength'].rolling(window=10).apply(lambda x: sum(x[x > 0]) - sum(x[x < 0]))
+    
+    # Adjust Momentum by ATR
+    df['WeightedMomentum_ATR'] = ((df['close'] - df['close'].shift(14)) * df['volume']) / df['ATR']
+    
+    # Combine Indicators
+    df['CombinedAlphaFactor'] = df['CumulatedBreakoutStrength'] + df['Momentum_5Day_Volume_Adjusted'] + df['10DayMA_IntradayVolatility'] + df['WeightedMomentum_ATR']
+    
+    # VWMA Comparison
+    df['VWMA_Signal'] = np.where(df['VWAP_short'] > df['VWAP_long'], 1, -1)
+    
+    # 10-Day Price Range Evaluation
+    df['10DayPriceRange_Signal'] = np.where((df['close'] >= 0.8 * df['10DayHigh']), -1,
+                                            np.where((df['close'] <= 1.2 * df['10DayLow']), 1, 0))
+    
+    # Volume Trend
+    df['10DayMA_Volume'] = df['volume'].rolling(window=10).mean()
+    df['VolumeSurge'] = (df['volume'] > df['10DayMA_Volume']).astype(int)
+    df['AdjustedAlphaFactor'] = np.where(df['VolumeSurge'] == 1, df['CombinedAlphaFactor'] * 1.5,
+                                        

@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-to-Low Momentum
+    intraday_momentum = df['high'] - df['low']
+    
+    # Apply Moving Averages to Intraday Momentum
+    fast_ema = intraday_momentum.ewm(span=5, adjust=False).mean()
+    slow_ema = intraday_momentum.ewm(span=10, adjust=False).mean()
+    
+    # Calculate 20-day Moving Average of Daily Log Returns
+    log_returns = np.log(df['close']).diff().rolling(window=20).mean()
+    
+    # Calculate 20-day Exponential Moving Average of Volume
+    ema_volume = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Adjust Intraday Momentum by Volume and Long-Term Price Trend
+    adjusted_momentum = (fast_ema * log_returns) / ema_volume - slow_ema
+    
+    # Smooth the Adjusted Intraday Momentum
+    smoothed_momentum = adjusted_momentum.rolling(window=5).mean()
+    
+    # Calculate Volume Confirmation
+    avg_volume = df['volume'].rolling(window=20).mean()
+    volume_ratio = df['volume'] / avg_volume
+    volume_confirmation = np.where(volume_ratio > 1, 1, np.where(volume_ratio < 1, -1, 0))
+    
+    # Incorporate Price Oscillation
+    max_high = df['high'].rolling(window=20).max()
+    min_low = df['low'].rolling(window=20).min()
+    max_range = max_high - min_low
+    actual_range = df['high'] - df['low'].shift(19)
+    oscillation_score = np.where(actual_range > 0.5 * max_range, 1, 
+                                 np.where(actual_range < 0.2 * max_range, -1, 0))
+    
+    # Final Alpha Factor
+    final_factor = smoothed_momentum * volume_confirmation + oscillation_score
+    
+    return final_factor
+```

@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Close Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Apply Exponential Moving Average (EMA) to Returns
+    df['ema_returns'] = df['daily_return'].ewm(span=20, adjust=False).mean()
+
+    # Compute EMA of Squared Returns for Volatility
+    df['squared_returns'] = df['daily_return'] ** 2
+    df['ema_volatility'] = df['squared_returns'].ewm(span=20, adjust=False).mean()
+
+    # Calculate Divergence between EMA of Returns and Volatility
+    df['divergence'] = np.abs(df['ema_returns'] - df['ema_volatility'])
+
+    # Weight Divergence by Volume and High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_divergence'] = (df['divergence'] * df['volume']) / df['high_low_range']
+
+    # Calculate Intraday Volatility
+    df['range'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['range'].rolling(window=10).mean()
+
+    # Calculate Intraday Momentum
+    df['intraday_return'] = (df['high'] - df['low']) / (df['close'] - df['open'])
+    
+    # Calculate Volume Weighted Price
+    df['vwp_close'] = df['close'] * df['volume']
+    df['vwp_open'] = df['open'] * df['volume']
+    df['vwp'] = (df['vwp_close'] + df['vwp_open']) / (2 * df['volume'])
+    
+    # Calculate Volume Weighted Price Change
+    df['vwp_change'] = df['vwp'] - df['vwp'].shift(1)
+    
+    # Compute Combined Intraday and Daily Momentum
+    df['combined_momentum'] = df['intraday_return'] + df['vwp_change']
+    
+    # Integrate Momentum and Reversal
+    df['integrated_momentum'] = df['combined_momentum'] - df['combined_momentum'].ewm(span=30, adjust=False).mean()
+    
+    # Combine Initial Factors
+    df['raw_combined_factor'] = df['intraday_volatility'] * df['integrated_momentum']
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['combined_factor'] = df['raw_combined_factor'] / df['avg_volume']
+    
+    # Calculate Volume Thrust
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['intraday_range'] = (df['high'] - df['low']) / df['close']
+    df['volume_thrust'] = df['volume_ratio'] / df['intraday_range']
+    
+    # Introduce Trend Filter
+    df['50_sma'] = df['close'].rolling(window=50).mean()
+    df['trend'] = np.where(df['close'] > df['50_sma'], 1.2, 0.8)
+    
+    # Final Combination and Smoothing
+    df['final_factor'] = (df['combined_factor'] * df['weighted_divergence'] * df['volume_thrust']) * df['trend']
+    df['smoothed_factor'] = df['final_factor'].rolling(window=5).mean()
+
+    return df['smoothed_factor']
+```

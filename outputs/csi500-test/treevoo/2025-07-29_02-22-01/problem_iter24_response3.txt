@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted High-Low Spread
+    high_low_spread = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    moving_sum_high_low_spread = high_low_spread.rolling(window=10).sum()
+    
+    # Calculate Short-Term and Long-Term EMAs
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Cumulative Daily Price Change
+    cumulative_daily_price_change = daily_price_change.rolling(window=14).sum()
+    
+    # Average Volume
+    average_volume = df['volume'].rolling(window=14).mean()
+    
+    # Weighted Cumulative Daily Price Change
+    weighted_cumulative_momentum = cumulative_daily_price_change * average_volume
+    
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    combined_factor = moving_sum_high_low_spread + cumulative_daily_price_change
+    
+    # Volume-Weighted Adjusted Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_weighted_adjusted_return = df['volume'] * intraday_return
+    
+    # Volume Reversal Indicator
+    volume_rate_of_change = df['volume'].pct_change()
+    smoothed_volume_rate_of_change = volume_rate_of_change.rolling(window=5).mean()
+    volume_reversal_indicator = cumulative_daily_price_change / (smoothed_volume_rate_of_change + 1e-6)
+    
+    # Volume Confirmation
+    daily_volume_change = df['volume'].diff()
+    positive_volume_changes = daily_volume_change.where(daily_volume_change > 0, 0)
+    volume_confirmation = (positive_volume_changes.rolling(window=10).sum() / 
+                           (daily_volume_change > 0).rolling(window=10).sum()).fillna(0)
+    
+    # Final Alpha Factor
+    final_alpha_factor = (combined_factor + cumulative_daily_price_change + 
+                          weighted_cumulative_momentum + volume_weighted_adjusted_return + 
+                          volume_reversal_indicator + intraday_return + 
+                          (cumulative_daily_price_change * volume_confirmation))
+    
+    return final_alpha_factor
+```

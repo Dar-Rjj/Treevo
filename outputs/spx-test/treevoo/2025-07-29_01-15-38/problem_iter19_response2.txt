@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Trend Analysis
+    # Simple Moving Average (SMA)
+    df['SMA_short'] = df['close'].rolling(window=5).mean()
+    df['SMA_long'] = df['close'].rolling(window=20).mean()
+    
+    # Exponential Moving Average (EMA)
+    df['EMA_short'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_long'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Momentum Indicators
+    # Price Rate of Change (ROC)
+    df['ROC'] = df['close'].pct_change(periods=12) * 100
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Volume Analysis
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # Volume Trend
+    df['Volume_Trend'] = df['volume'].diff()
+    
+    # Volatility Analysis
+    # True Range
+    df['True_Range'] = df[['high', 'low']].diff(axis=1).max(axis=1).abs().combine_first((df['high'] - df['close'].shift()).abs()).combine_first((df['low'] - df['close'].shift()).abs())
+    
+    # Average True Range (ATR)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Price Pattern Analysis
+    # Inside Bar
+    df['Inside_Bar'] = (df['high'] < df['high'].shift()) & (df['low'] > df['low'].shift())
+    
+    # Outside Bar
+    df['Outside_Bar'] = (df['high'] > df['high'].shift()) & (df['low'] < df['low'].shift())
+    
+    # Order Flow Analysis
+    # Accumulation/Distribution Line (A/D)
+    df['A/D'] = (2 * df['close'] - df['high'] - df['low']) / (df['high'] - df['low']) * df['volume']
+    df['A/D'] = df['A/D'].cumsum()
+    
+    # Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(), 0)
+    positive_money_flow_14 = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_14 = negative_money_flow.rolling(window=14).sum()
+    money_ratio = positive_money_flow_14 / negative_money_flow_14
+    df['MFI'] = 100 - (100 / (1 + money_ratio))
+    
+    # Market Strength Analysis
+    # Stochastic Oscillator
+    lowest_low = df['low'].rolling(window=14).min()
+    highest_high = df['high'].rolling(window=14).max()
+    df['%K'] = (df['close'] - lowest_low) / (highest_high - lowest_low) * 100
+    df['%D'] = df['%K'].rolling(window=3).mean()
+    
+    # Williams %R
+    df['Williams_%R'] = (highest_high - df['close']) / (highest_high - lowest_low) * -100
+    
+    # Composite Factor
+    df['Composite_Factor'] = (df['SMA_short'] - df['SMA_long']) + (df['RSI'] - 50) + df['OBV'].diff()
+    
+    return df['Composite_Factor']
+```

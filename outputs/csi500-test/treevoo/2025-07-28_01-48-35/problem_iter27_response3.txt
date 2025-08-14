@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = (df['high'] - df['low']) / df['low'] * df['volume']
+    
+    # Short-Term Price Change
+    short_term_price_change = df['close'].diff(5)
+    
+    # High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Momentum Indicators
+    short_term_momentum = (df['close'] - df['close'].shift(7)) / df['close'].shift(7)
+    medium_term_momentum = (df['close'] - df['close'].shift(21)) / df['close'].shift(21)
+    long_term_momentum = (df['close'] - df['close'].shift(63)) / df['close'].shift(63)
+    
+    # True Range
+    true_range = pd.concat(
+        [df['high'] - df['low'], 
+         abs(df['high'] - df['close'].shift(1)), 
+         abs(df['low'] - df['close'].shift(1))],
+        axis=1).max(axis=1)
+    
+    # Relative Strength
+    relative_strength = df['close'] / df['close'].shift(21)
+    
+    # Money Flow
+    money_flow_multiplier = (df['close'] - (df['high'] + df['low']) / 2) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    money_flow_index = money_flow_volume.rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    
+    # Trend Direction
+    positive_dm = (df['high'] - df['high'].shift(1)).where(lambda x: x > 0, 0) - (df['low'].shift(1) - df['low']).where(lambda x: x < 0, 0)
+    negative_dm = (df['low'].shift(1) - df['low']).where(lambda x: x > 0, 0) - (df['high'] - df['high'].shift(1)).where(lambda x: x < 0, 0)
+    di_positive = positive_dm.rolling(window=14).mean() / true_range.rolling(window=14).mean()
+    di_negative = negative_dm.rolling(window=14).mean() / true_range.rolling(window=14).mean()
+    
+    # Volume Ratio
+    volume_ratio = df['volume'] / df['volume'].rolling(window=21).mean()
+    
+    # Weighted Average of Momentum Indicators
+    weighted_momentum = 0.3 * short_term_momentum + 0.5 * medium_term_momentum + 0.2 * long_term_momentum
+    
+    # Price-Volatility Ratio
+    price_volatility_ratio = (df['close'] - df['close'].shift(21)) / true_range.rolling(window=21).mean()
+    
+    # Modified Volume-Weighted Intraday Return
+    modified_volume_weighted_intraday_return = (df['high'] - df['low']) / df['open'] * df['volume']
+    
+    # Cumulative Money Flow
+    cumulative_money_flow = money_flow_volume.rolling(window=14).sum()
+    
+    # Relative High-Low
+    relative_high_low = (df['high'] - df['low']) / df['close']
+    
+    # Final Alpha Factor
+    final_alpha_factor = (
+        short_term_price_change + 
+        high_low_spread + 
+        daily_return + 
+        weighted_momentum + 
+        relative_strength + 
+        money_flow_index + 
+        di_positive - di_negative + 
+        price_volatility_ratio + 
+        modified_volume_weighted_intraday_return + 
+        cumulative_money_flow + 
+        relative_high_low
+    ) / 11 * volume_ratio
+    
+    return final_alpha_factor
+```

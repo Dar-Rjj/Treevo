@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_change'] = df['close'] - df['open']
+
+    # Aggregate Price Movements over a Period (e.g., 10 days)
+    period = 10
+    df['sum_high_low_range'] = df['high_low_range'].rolling(window=period).sum()
+    df['sum_close_open_change'] = df['close_open_change'].rolling(window=period).sum()
+
+    # Smooth High-Low Range (e.g., 20-day EMA)
+    smoothing_period = 20
+    df['smoothed_high_low_range'] = df['high_low_range'].ewm(span=smoothing_period, adjust=False).mean()
+
+    # Calculate Long-Term High-Low Range (e.g., 50-day)
+    long_term_period = 50
+    df['long_term_high'] = df['high'].rolling(window=long_term_period).max()
+    df['long_term_low'] = df['low'].rolling(window=long_term_period).min()
+    df['long_term_high_low_range'] = df['long_term_high'] - df['long_term_low']
+
+    # Compute Momentum of High-Low Ranges
+    df['high_low_range_momentum'] = df['long_term_high_low_range'] - df['smoothed_high_low_range']
+
+    # Calculate True Range
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x[0] - x[1], abs(x[0] - df['close'].shift(1)), abs(x[1] - df['close'].shift(1))), axis=1)
+
+    # Calculate Rolling Average True Range (ATR) (e.g., 14 days)
+    atr_period = 14
+    df['atr'] = df['true_range'].rolling(window=atr_period).sum()
+
+    # Adjust Price Momentum by ATR
+    df['adjusted_momentum'] = (df['sum_high_low_range'] + df['sum_close_open_change']) / df['atr']
+
+    # Evaluate Volume Activity
+    volume_averaging_period = 20
+    df['average_volume'] = df['volume'].rolling(window=volume_averaging_period).mean()
+    df['high_volume_indicator'] = df['volume'] > df['average_volume']
+
+    # Detect Volume Spike (e.g., 5-day average)
+    spike_period = 5
+    df['volume_5_day_avg'] = df['volume'].rolling(window=spike_period).mean()
+    df['volume_spike'] = df['volume'] > 2 * df['volume_5_day_avg']
+
+    # Adjust Momentum Based on Volume
+    df['adjusted_momentum'] = df['adjusted_momentum'].where(~df['volume_spike'], df['adjusted_momentum'] * 0.8)
+
+    # Integrate Combined Factors
+    df['interim_alpha_factor'] = df['adjusted_momentum'] * df['high_volume_indicator']
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['interim_alpha_factor'] + df['high_low_range_momentum']
+
+    return df['final_alpha_factor']
+```

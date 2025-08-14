@@ -1,0 +1,52 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_ma_10 = df['volume'].rolling(window=10).mean()
+    volume_trend = df['volume'] - volume_ma_10
+    
+    # Determine if volume trend is positive or negative
+    volume_trend_positive = (volume_trend > 0).astype(int)
+    volume_trend_negative = (volume_trend < 0).astype(int)
+    
+    # Calculate Price Trend
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    price_trend = df['close'] - ema_10
+    
+    # Determine if price trend is positive or negative
+    price_trend_positive = (price_trend > 0).astype(int)
+    price_trend_negative = (price_trend < 0).astype(int)
+    
+    # Calculate Volatility
+    volatility = df['close'].rolling(window=10).std()
+    
+    # Determine if volatility is high or low
+    volatility_high = (volatility > volatility.mean()).astype(int)
+    volatility_low = (volatility < volatility.mean()).astype(int)
+    
+    # Calculate Average True Range (ATR) over 10 days
+    tr1 = df['high'] - df['low']
+    tr2 = np.abs(df['high'] - df['close'].shift(1))
+    tr3 = np.abs(df['low'] - df['close'].shift(1))
+    true_range = np.maximum.reduce([tr1, tr2, tr3])
+    atr_10 = true_range.rolling(window=10).mean()
+    
+    # Compare ATR to 10-day moving average of ATR
+    atr_ma_10 = atr_10.rolling(window=10).mean()
+    atr_above_average = (atr_10 > atr_ma_10).astype(int)
+    atr_below_average = (atr_10 < atr_ma_10).astype(int)
+    
+    # Combine Spread, Volume, Price Trends, and Volatility
+    adjusted_spread = high_low_spread * volume_trend
+    adjusted_spread = adjusted_spread * (1.5 * volume_trend_positive + 0.5 * volume_trend_negative)
+    adjusted_spread = adjusted_spread * (1.2 * price_trend_positive + 0.8 * price_trend_negative)
+    adjusted_spread = adjusted_spread * (1.3 * volatility_high + 0.7 * volatility_low)
+    adjusted_spread = adjusted_spread * (1.4 * atr_above_average + 0.6 * atr_below_average)
+    
+    return adjusted_spread

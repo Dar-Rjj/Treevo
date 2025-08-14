@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    sma_close = data['close'].rolling(window=20).mean()
+    
+    # Calculate Exponential Moving Average (EMA) of Close Prices
+    ema_close = data['close'].ewm(span=20, adjust=False).mean()
+    
+    # Detect Bearish and Bullish Candles
+    bearish_candle = (data['open'] > data['close'])
+    bullish_candle = (data['open'] < data['close'])
+    
+    # Identify Engulfing Patterns
+    engulfing_bullish = ((data['close'] > data['close'].shift(1)) & (data['open'] < data['open'].shift(1)))
+    engulfing_bearish = ((data['close'] < data['close'].shift(1)) & (data['open'] > data['open'].shift(1)))
+    
+    # Sum of Volumes over a Period
+    volume_sum = data['volume'].rolling(window=20).sum()
+    
+    # Volume Difference Between Up and Down Days
+    up_volume = data['volume'].where(data['close'] > data['close'].shift(1), 0).rolling(window=20).sum()
+    down_volume = data['volume'].where(data['close'] < data['close'].shift(1), 0).rolling(window=20).sum()
+    volume_diff = up_volume - down_volume
+    
+    # SMA of Close Prices Adjusted by Volume
+    sma_close_volume = (sma_close * volume_sum)
+    
+    # EMA of Close Prices Adjusted by Volume
+    ema_close_volume = (ema_close * volume_sum)
+    
+    # Price Change Momentum
+    price_momentum = data['close'] / data['close'].shift(20) - 1
+    
+    # Volume Change Momentum
+    volume_momentum = data['volume'] / data['volume'].shift(20) - 1
+    
+    # Analyze Daily Open-Close Spread
+    open_close_spread = data['close'] - data['open']
+    positive_spread = open_close_spread.where(open_close_spread > 0, 0)
+    negative_spread = open_close_spread.where(open_close_spread < 0, 0)
+    
+    # Analyze Candlestick Body Size
+    body_size = abs(data['close'] - data['open'])
+    large_body_up = (body_size > body_size.shift(1)) & (data['close'] > data['open'])
+    large_body_down = (body_size > body_size.shift(1)) & (data['close'] < data['open'])
+    
+    # Combine multiple factors into a single alpha factor
+    alpha_factor = (
+        sma_close_volume +
+        ema_close_volume +
+        price_momentum +
+        volume_momentum +
+        positive_spread -
+        negative_spread +
+        large_body_up.astype(int) -
+        large_body_down.astype(int)
+    )
+    
+    return alpha_factor
+```

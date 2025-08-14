@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = (df['close'] - df['close'].shift(1)).clip(lower=0)
+    df['loss'] = (df['close'].shift(1) - df['close']).clip(lower=0)
+    
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    df['gain_14'] = df['gain'].rolling(window=14).sum()
+    df['loss_14'] = df['loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    df['rs'] = df['gain_14'] / df['loss_14']
+    
+    # Convert to ARSI
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    df['volume_avg_14'] = df['volume'].rolling(window=14).mean()
+    df['arsi'] = df['rsi'] * df['volume_avg_14']
+    
+    # Add Momentum
+    df['close_to_open_return'] = (df['close'] / df['open']) - 1
+    df['arsi_momentum'] = df['arsi'] * df['close_to_open_return']
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'].shift(1) / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'].shift(1) / df['close'].shift(20)) - 1
+    
+    # Calculate Volume-Weighted Short-Term Return
+    df['volume_weighted_short_term_return'] = df['volume'] * df['short_term_return']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    df['volume_weighted_long_term_return'] = df['volume'] * df['long_term_return']
+    
+    # Calculate Short-Term Volatility (Average True Range over 5 days)
+    df['true_range'] = df[['high', 'close']].max(axis=1) - df[['low', 'close']].min(axis=1)
+    df['atr_5'] = df['true_range'].rolling(window=5).mean()
+    
+    # Synthesize ARSI with Volume-Weighted Returns and Volatility
+    df['combined_arsi'] = df['arsi_momentum'] * df['volume_weighted_short_term_return']
+    df['volatility_adjusted_arsi'] = df['combined_arsi'] / df['atr_5']
+    df['adjusted_arsi'] = df['volatility_adjusted_arsi'] - df['volume_weighted_long_term_return']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    df['close_to_close_return'] = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    df['volatility_return_combination'] = df['intraday_volatility'] * df['close_to_close_return']
+    
+    # Final Adjustment
+    df['final_factor'] = df['adjusted_arsi'] + df['volatility_return_combination']
+    
+    # Introduce new factors: Volume-Weighted Intraday Volatility and Volume-Weighted Momentum
+    df['volume_weighted_intraday_volatility'] = df['volume'] * df['intraday_volatility']
+    df['volume_weighted_momentum'] = df['volume'] * df['close_to_open_return']
+    
+    # Add the new factors to the final factor
+    df['final_factor'] += df['volume_weighted_intraday_volatility'] + df['volume_weighted_momentum']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

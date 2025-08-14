@@ -1,0 +1,87 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Intraday Range Weighted Average Price (IRWAP)
+    irwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    
+    # Evaluate IRWAP Difference
+    irwap_diff = df['close'] - irwap
+    
+    # Calculate Adjusted Volume
+    adjusted_volume = df['volume'] / high_low_spread
+    
+    # Integrate Volume-Adjusted Log Return
+    log_return = np.log(df['close'] / df['close'].shift(1))
+    vol_adjusted_log_return = adjusted_volume * log_return
+    
+    # Calculate Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Compute Volume Change
+    volume_change = df['volume'].pct_change()
+    
+    # Weighted Moving Average of Log Returns
+    wma_log_returns = daily_log_return.ewm(span=10).mean()
+    
+    # Volume Change Momentum
+    volume_change_momentum = volume_change.ewm(span=10).mean()
+    
+    # Calculate Short-Term Momentum
+    short_term_momentum = daily_log_return.rolling(window=7).sum()
+    
+    # Calculate Long-Term Momentum
+    long_term_momentum = daily_log_return.rolling(window=25).sum()
+    
+    # Combine Short and Long-Term Momentum
+    combined_momentum = short_term_momentum - long_term_momentum
+    
+    # Filter by Volume
+    avg_volume_20_days = df['volume'].rolling(window=20).mean()
+    volume_filter = df['volume'] > 1.5 * avg_volume_20_days
+    
+    # Introduce Price Volatility Component
+    price_volatility = (df['high'] - df['low']).rolling(window=10).std()
+    adjusted_combined_momentum = combined_momentum / price_volatility
+    
+    # Calculate N-Day Price Change
+    n_day_price_change = df['close'].diff(periods=5)
+    
+    # Compute M-Day Exponential Moving Average (EMA) Volume
+    ema_volume = df['volume'].ewm(span=20).mean()
+    
+    # Compare Latest Volume to EMA Volume
+    volume_score = np.where(df['volume'] > ema_volume, 1, -1)
+    
+    # Calculate K-Day Exponential Moving Average (EMA) Amount
+    ema_amount = df['amount'].ewm(span=20).mean()
+    
+    # Compare Latest Amount to EMA Amount
+    amount_score = np.where(df['amount'] > ema_amount, 1, -1)
+    
+    # Calculate LMA-SMA Difference
+    lma = df['close'].rolling(window=200).mean()
+    sma = df['close'].rolling(window=50).mean()
+    lma_sma_diff = lma - sma
+    
+    # Apply EMA Smoothing
+    smoothed_lma_sma_diff = lma_sma_diff.ewm(span=10).mean()
+    
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Weighted Moving Average of Daily Ranges
+    wma_daily_ranges = daily_range.ewm(span=10).mean()
+    
+    # Combine Factors
+    final_factor = (wma_log_returns * volume_change_momentum * wma_daily_ranges * adjusted_combined_momentum)
+    
+    # Apply volume and amount scores
+    final_factor *= volume_score * amount_score
+    
+    return final_factor
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Close-Open Change
+    df['Close_Open_Change'] = df['close'] - df['open']
+    
+    # Sum of High-Low Ranges over a Period (e.g., 20 days)
+    df['Sum_High_Low_Range'] = df['High_Low_Range'].rolling(window=20).sum()
+    
+    # Sum of Close-Open Changes over a Period (e.g., 20 days)
+    df['Sum_Close_Open_Change'] = df['Close_Open_Change'].rolling(window=20).sum()
+    
+    # Smooth High-Low Range with Exponential Moving Average (e.g., 20-day)
+    df['Smooth_High_Low_Range'] = df['High_Low_Range'].ewm(span=20, adjust=False).mean()
+    
+    # Compute Momentum of High-Low Ranges (e.g., 5-day vs 20-day)
+    df['Momentum_High_Low_Range'] = df['Smooth_High_Low_Range'].ewm(span=5, adjust=False).mean() - df['Smooth_High_Low_Range']
+    
+    # Calculate True Range
+    df['True_Range'] = df[['high', 'low', 'close']].shift(1).apply(lambda x: max(x[0] - x[1], x[0] - x[2], x[2] - x[1]), axis=1)
+    
+    # Calculate Rolling Average True Range (e.g., 14-day)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Standard Deviation of Close Prices (e.g., 20-day)
+    df['Close_Std'] = df['close'].rolling(window=20).std()
+    
+    # Integrated Momentum Score
+    df['Integrated_Momentum_Score'] = (df['Sum_High_Low_Range'] + df['Sum_Close_Open_Change']) * df['Close_Std'] / df['volume']
+    
+    # Adjust for Volume Impact on Price
+    df['Volume_Adjusted_High_Low'] = df['High_Low_Range'] * df['volume']
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['Combined_Price_Movement'] = (df['Volume_Adjusted_High_Low'] * 0.6 + df['Close_Open_Change'] * 0.4) / df['volume']
+    
+    # Dynamic Momentum Indicator
+    df['Dynamic_Momentum_Indicator'] = df['Combined_Price_Movement'].shift(1) + df['Combined_Price_Movement'] * df['Close_Std']
+    
+    # Evaluate Volume Activity
+    df['Average_Volume'] = df['volume'].rolling(window=20).mean()
+    df['High_Volume_Day'] = df['volume'] > df['Average_Volume']
+    
+    # Integrate Combined Factors
+    df['Volume_Ratio'] = df['volume'] / df['Average_Volume']
+    df['Final_Alpha_Factor'] = df['Integrated_Momentum_Score'] * df['Volume_Ratio'] + df['Dynamic_Momentum_Indicator']
+    
+    return df['Final_Alpha_Factor']
+```

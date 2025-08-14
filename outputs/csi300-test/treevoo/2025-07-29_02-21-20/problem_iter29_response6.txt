@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['intraday_price_movement'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    weighted_high_low = (0.6 * high_price_indicator + 0.4 * low_price_indicator)
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    ema_volume_10 = df['volume'].ewm(span=10, adjust=False).mean()
+    volume_impact = df['volume'] / ema_volume_10
+    intraday_momentum_vol_adj = weighted_high_low * volume_impact
+    
+    # Weighted Intraday Momentum
+    ema_intraday_vol_12 = (df['intraday_price_movement'] * df['volume']).ewm(span=12, adjust=False).mean()
+    recent_volume_7 = df['volume'].rolling(window=7).mean()
+    weighted_intraday_momentum = ema_intraday_vol_12 * recent_volume_7
+    
+    # Adjusted High-Low Breakout Potential
+    high_low_range = df['high'] - df['low']
+    ema_high_low_vol_25 = (high_low_range * df['volume']).ewm(span=25, adjust=False).mean()
+    recent_volume_15 = df['volume'].rolling(window=15).mean()
+    adjusted_high_low_breakout = ema_high_low_vol_25 * recent_volume_15
+    
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    volume_ratio = df['volume'] / df['volume'].shift(20)
+    final_long_term_factor = long_term_momentum * (volume_ratio ** (1/3))
+    
+    # Daily Price Return
+    daily_price_return = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    significant_price_increase = (daily_price_return > 0).astype(int)
+    
+    # Volume Spike Indicator
+    avg_weekly_volume = df['volume'].rolling(window=7).mean().shift(1)
+    volume_spike_indicator = (df['volume'] > avg_weekly_volume).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_price_momentum = daily_price_return * significant_price_increase
+    weighted_price_momentum = weighted_price_momentum.cumsum() * volume_spike_indicator
+    
+    # Consolidate All Factors
+    total_factor = (intraday_momentum_vol_adj + 
+                    weighted_intraday_momentum + 
+                    final_long_term_factor + 
+                    weighted_price_momentum)
+    
+    # Adjust for Open Price
+    total_factor_adjusted = total_factor / df['open']
+    
+    return total_factor_adjusted
+```

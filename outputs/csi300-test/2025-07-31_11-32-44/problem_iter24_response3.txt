@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Moving Averages
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+
+    # SMA differences
+    df['SMA_diff_5_10'] = df['SMA_5'] - df['SMA_10']
+    df['SMA_diff_10_20'] = df['SMA_10'] - df['SMA_20']
+    df['SMA_diff_20_50'] = df['SMA_20'] - df['SMA_50']
+
+    # Exponential Moving Averages
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+
+    # EMA differences
+    df['EMA_diff_5_10'] = df['EMA_5'] - df['EMA_10']
+    df['EMA_diff_10_20'] = df['EMA_10'] - df['EMA_20']
+    df['EMA_diff_20_50'] = df['EMA_20'] - df['EMA_50']
+
+    # Rate of Change (ROC)
+    df['ROC_12'] = (df['close'] / df['close'].shift(12) - 1) * 100
+    df['ROC_26'] = (df['close'] / df['close'].shift(26) - 1) * 100
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    gain = (delta.where(delta > 0, 0)).rolling(window=28).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=28).mean()
+    rs = gain / loss
+    df['RSI_28'] = 100 - (100 / (1 + rs))
+
+    # Average True Range (ATR)
+    true_range = df[['high', 'low']].apply(lambda x: x.diff().abs().max(axis=1), axis=1)
+    df['ATR_14'] = true_range.rolling(window=14).mean()
+    df['ATR_28'] = true_range.rolling(window=28).mean()
+
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+
+    # Chaikin Money Flow (CMF)
+    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mf_volume = mf_multiplier * df['volume']
+    df['CMF_20'] = mf_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Combined Factors
+    df['SMA_CMF_diff'] = df['SMA_50'] - df['CMF_20']
+    df['ROC_ATR_ratio'] = df['ROC_12'] / df['ATR_14']
+    df['RSI_OBV_diff'] = df['RSI_14'] - df['OBV']
+
+    # Custom Composite Factors
+    df['Composite_Alpha_1'] = (df['SMA_5'] - df['SMA_10']) / df['ATR_14']
+    df['Composite_Alpha_2'] = df['ROC_12'] * df['OBV'] / df['EMA_20']
+
+    # Trend Reversal Signals
+    df['Bearish

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Volume Spikes
+    df['volume_spike'] = (df['volume'] / df['volume'].shift(1)) - 1
+    
+    # Identify Price Spikes
+    df['price_spike'] = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Introduce Dynamic Volatility Adjustment
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['log_returns'].rolling(window=30).std()
+    
+    # Scale Intraday Momentum
+    combined_spikes = np.sqrt(df['volume_spike']**2 + df['price_spike']**2)
+    df['scaled_intraday_momentum'] = df['intraday_range'] / (combined_spikes + 1e-6)  # Avoid division by zero
+    df['scaled_intraday_momentum'] = df['scaled_intraday_momentum'].clip(lower=-3, upper=3)  # Apply dynamic threshold
+    
+    # Calculate Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    df['intraday_feature'] = (df['open'] - df['intraday_midpoint']) - df['opening_gap']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = np.abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=5).mean()
+    
+    # Adjust for Dynamic Volume Spikes
+    volume_spike_factor = (df['volume'] / df['volume'].shift(1)).clip(lower=0.5, upper=2.0)
+    df['adjusted_intraday_feature'] = df['intraday_feature'] * volume_spike_factor
+    
+    # Weight by Volume
+    df['weighted_feature'] = df['adjusted_intraday_feature'] * df['volume']
+    
+    # Incorporate Accumulated Volume
+    df['accumulated_volume'] = df['volume'].rolling(window=20).sum()
+    df['normalized_feature'] = df['weighted_feature'] / df['accumulated_volume']
+    
+    # Integrate Long-Term Momentum
+    df['long_term_momentum'] = df['close'].rolling(window=200).mean()
+    df['final_intraday_feature'] = df['normalized_feature'] + (df['close'] - df['long_term_momentum'])
+    
+    # Calculate Price Change Ratio
+    df['price_change_ratio'] = df['high'] / df['low']
+    
+    # Integrate Price Change Ratio into Intraday Features
+    df['integrated_feature'] = df['intraday_midpoint'] * df['price_change_ratio'] - df['opening_gap']
+    
+    # Apply Adaptive Moving Average Smoothing
+    df['smoothed_feature'] = df['final_intraday_feature'].rolling(window=10).mean()
+    
+    return df['smoothed_feature']
+```

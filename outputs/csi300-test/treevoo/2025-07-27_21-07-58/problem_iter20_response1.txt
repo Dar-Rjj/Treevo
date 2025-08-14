@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Momentum
+    df['Price_Momentum_1D'] = df['close'].pct_change()
+
+    # Compute Daily Price Change Percentage
+    df['Daily_Price_Change_Pct'] = df['close'].pct_change() * 100
+
+    # Compute Average Price Momentum over 5 Days
+    df['Avg_Price_Momentum_5D'] = df['Daily_Price_Change_Pct'].rolling(window=5).mean()
+
+    # Calculate Daily Volume Change
+    df['Daily_Volume_Change'] = df['volume'].diff()
+
+    # Compute Average Volume Change over 10 Days
+    df['Avg_Volume_Change_10D'] = df['Daily_Volume_Change'].rolling(window=10).mean()
+
+    # Combine Price Momentum and Volume Surge
+    df['Price_Momentum_Vol_Surge'] = df['Avg_Price_Momentum_5D'] * df['Avg_Volume_Change_10D']
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'].diff()
+
+    # Combine High-Low Range and Volume
+    df['High_Low_Range_Vol_Adjusted'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+
+    # Adjust by Average Volume
+    n = 20  # Number of periods for average volume
+    df['Avg_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Avg_Volume']
+
+    # Adjust by Average Amount
+    m = 20  # Number of periods for average amount
+    df['Avg_Amount'] = df['amount'].rolling(window=m).mean()
+    df['Amount_Ratio'] = df['amount'] / df['Avg_Amount']
+
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['Combined_Adjusted_Mom_Vol_Amt'] = (
+        df['Price_Momentum_1D'] * df['Volume_Ratio'] * df['Amount_Ratio'] + 
+        df['Price_Momentum_Vol_Surge']
+    )
+
+    # Incorporate High-Low Range Dynamics
+    df['Avg_High_Low_Range_5D'] = df['High_Low_Range'].rolling(window=5).mean()
+    df['Avg_Change_High_Low_Range_5D'] = df['Change_High_Low_Range'].rolling(window=5).mean()
+    df['Combined_High_Low_Range_Dynamics'] = (
+        df['Avg_High_Low_Range_5D'] * df['Avg_Change_High_Low_Range_5D']
+    )
+
+    # Final Combined Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Combined_Adjusted_Mom_Vol_Amt'] + 
+        df['Combined_High_Low_Range_Dynamics']
+    )
+
+    return df['Alpha_Factor'].dropna()
+```

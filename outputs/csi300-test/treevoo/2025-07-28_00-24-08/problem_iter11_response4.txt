@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open'] - 1
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = df['open'].shift(-1) / df['close'] - 1
+    
+    # Aggregate Returns
+    aggregate_returns = intraday_return + overnight_return
+    
+    # Intraday Trend Strength
+    daily_range = df['high'] - df['low']
+    intraday_pct_change = df['close'] / df['open'] - 1
+    
+    # Volume Adjusted Reversal Signal
+    pct_change_volume = df['volume'] / df['volume'].shift(1) - 1
+    close_to_next_open_return = (df['close'].shift(-1) / df['open']) - 1
+    inverse_close_to_next_open = 0 - close_to_next_open_return
+    
+    # Smoothed Moving Average of Composite Factor
+    composite_factor = aggregate_returns + intraday_pct_change + inverse_close_to_next_open
+    sma_composite = composite_factor.rolling(window=5).mean()
+    exp_smoothed_composite = sma_composite.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Intraday Return Factors
+    intraday_high_low_ratio = df['high'] / df['low']
+    open_to_close_direction = (df['close'] > df['open']).astype(int)
+    
+    # Volume Weighted Smoothed Returns
+    sma_volume = df['volume'].rolling(window=5).mean()
+    volume_weighted_returns = (df['close'] - df['close'].shift(1)) * (df['volume'] / sma_volume)
+    
+    # Summarize Momentum-Reversal Indicator
+    momentum_reversal_indicator = intraday_high_low_ratio + open_to_close_direction + volume_weighted_returns
+    final_factor_sign = np.sign(momentum_reversal_indicator)
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Average Volume Over a Period
+    avg_volume = df['volume'].rolling(window=5).mean()
+    
+    # Weight High-Low Range by Volume
+    weighted_high_low_range = high_low_range * (df['volume'] / avg_volume)
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] / df['open'].shift(5) - 1
+    
+    # Adjust for Combined Volatility
+    adjusted_returns = aggregate_returns * weighted_high_low_range
+    
+    # Smoothed Moving Average
+    sma_adjusted_returns = adjusted_returns.rolling(window=5).mean()
+    exp_smoothed_adjusted_returns = sma_adjusted_returns.ewm(span=5, adjust=False).mean()
+    
+    # Final Alpha Factor
+    alpha_factor = exp_smoothed_adjusted_returns * final_factor_sign
+    
+    return alpha_factor
+```

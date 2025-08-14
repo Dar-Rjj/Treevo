@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Momentum
+    df['high_low_momentum'] = df['high_low_range'].diff()
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+    
+    # Adjust by Volume and Amount
+    n = 5  # Example: Sum over past 5 days
+    m = 5  # Example: Sum over past 5 days
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['avg_amount'] = df['amount'].rolling(window=m).mean()
+    df['combined_vol_amt'] = df['avg_volume'] + df['avg_amount']
+    
+    # Combine High-Low Range Momentum and Adjusted Volume-Amount
+    df['high_low_momentum_adj'] = df['high_low_momentum'] / df['combined_vol_amt']
+    
+    # Calculate Daily Price Return
+    df['daily_price_return'] = df['close'].pct_change()
+    
+    # Calculate 20-Day Weighted Moving Average of Returns
+    df['wma_returns'] = (df['daily_price_return'] * df['volume']).rolling(window=22).sum() / df['volume'].rolling(window=22).sum()
+    
+    # Adjust for Price Volatility
+    df['daily_price_range'] = df['high'] - df['low']
+    df['avg_daily_price_range'] = df['daily_price_range'].rolling(window=20).mean()
+    df['final_factor_value'] = df['wma_returns'] - df['avg_daily_price_range']
+    
+    # Compute Average True Range (ATR)
+    df['true_range'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1).fillna(0)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Multiply ATR by Reversal Signal
+    df['atr_reversal'] = df['atr'] * df['reversal_signal']
+    
+    # Exponential Moving Average (EMA) of ATR * Reversal
+    df['ema_atr_reversal'] = df['atr_reversal'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Simple Moving Averages
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_100'] = df['close'].rolling(window=100).mean()
+    df['sma_200'] = df['close'].rolling(window=200).mean()
+    
+    # Subtract Longer SMA from Shorter SMA
+    df['sma_diff_100_200'] = df['sma_100'] - df['sma_200']
+    df['sma_diff_50_100'] = df['sma_50'] - df['sma_100']
+    
+    # Calculate Intraday Return Ratio
+    df['intraday_return_ratio'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Weighted Open-to-Close Return
+    df['weighted_open_close_return'] = (df['close'] - df['open']) * df['volume']
+    
+    # Combine Momentum and Volume Indicators
+    df['combined_alpha'] = (df['wma_returns'] * 0.3 +
+                            df['intraday_return_ratio'] * 0.2 +
+                            df['weighted_open_close_return'] * 0.1 +
+                            df['sma_diff_100_200'] * 0.2 +
+                            df['sma_diff_50_100'] * 0.2 +
+                            df['ema_atr_reversal'] +
+                            df['final_factor_value'])
+    
+    return df['combined_alpha']
+```

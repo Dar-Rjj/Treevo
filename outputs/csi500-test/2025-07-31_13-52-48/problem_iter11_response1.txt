@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Calculate 20-Day Rolling Sum of Daily Price Changes
+    df['20_day_rolling_sum'] = df['daily_price_change'].rolling(window=20).sum()
+    
+    # Calculate 60-Day Moving Average of Daily Price Changes
+    df['60_day_moving_avg'] = df['daily_price_change'].rolling(window=60).mean()
+    
+    # Compute Momentum Difference
+    df['momentum_diff'] = df['20_day_rolling_sum'] - df['60_day_moving_avg']
+    
+    # Apply Volume Shock Filter
+    df['volume_change'] = df['volume'].diff().abs()
+    volume_threshold = df['volume_change'].quantile(0.75)
+    df['filtered_volume_shock'] = (df['volume_change'] < volume_threshold) * 1
+    
+    # Calculate Intraday Price Movement
+    df['intraday_high_low'] = (df['high'] - df['low']) / df['open']
+    df['intraday_close_open'] = (df['close'] - df['open']) / df['open']
+    df['avg_intraday_movement'] = (df['intraday_high_low'] + df['intraday_close_open']) / 2
+    df['smoothed_intraday'] = df['avg_intraday_movement'].rolling(window=3).mean()
+    
+    # Confirm with Volume
+    df['volume_change_percentage'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Calculate Close to High Ratio
+    df['close_to_high_ratio'] = df['close'] / df['high']
+    
+    # Calculate Close to Low Ratio
+    df['close_to_low_ratio'] = df['close'] / df['low']
+    
+    # Combine Ratios
+    df['combined_ratios'] = 0.5 * df['close_to_high_ratio'] + 0.5 * df['close_to_low_ratio']
+    
+    # Calculate Volume-Adjusted Momentum
+    df['volume_adjusted_momentum'] = (df['close'] - df['close'].shift(1)) * df['volume']
+    
+    # Calculate Price Volatility
+    df['price_volatility'] = df[['open', 'high', 'low', 'close']].std(axis=1)
+    
+    # Weighted Final Alpha Factor
+    df['alpha_factor'] = (
+        df['smoothed_intraday'] * df['volume_change_percentage'] +
+        df['combined_ratios'] +
+        df['volume_adjusted_momentum'] +
+        df['price_volatility']
+    )
+    
+    # Return the alpha factor
+    return df['alpha_factor']
+```

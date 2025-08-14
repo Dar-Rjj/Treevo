@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate intraday range (High - Low)
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Measure the intraday price movement (Close - Open)
+    df['intraday_movement'] = df['close'] - df['open']
+    
+    # Determine the intraday midpoint ((High + Low) / 2)
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Compute the intraday midpoint to open ratio (Intraday Midpoint / Open)
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+    
+    # Adjust close-to-open return by intraday range
+    df['close_to_open_return'] = df['close'] - df['open']
+    df['adjusted_close_to_open_return'] = df['close_to_open_return'] / df['intraday_range']
+    
+    # Compute the volume-weighted average price (VWAP)
+    df['vwap'] = (df['amount'] / df['volume']).cumsum() / (df['volume'].cumsum())
+    
+    # Calculate the volume-weighted volatility (Intraday Range / Sum of Volume)
+    df['vol_weighted_volatility'] = df['intraday_range'] / df['volume'].sum()
+    
+    # Introduce intraday range to volume ratio (Intraday Range / Volume)
+    df['range_to_volume_ratio'] = df['intraday_range'] / df['volume']
+    
+    # Calculate the rate of change over a defined period (Momentum)
+    df['momentum'] = df['close'].pct_change(periods=5)
+    
+    # Determine the moving average convergence divergence (MACD) using close prices
+    df['ema12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema12'] - df['ema26']
+    
+    # Develop intraday momentum indicator
+    df['prev_intraday_midpoint'] = df['intraday_midpoint'].shift(1)
+    df['intraday_momentum'] = df['intraday_midpoint'] - df['prev_intraday_midpoint']
+    
+    # Measure the standard deviation of price changes (ATR)
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
+    
+    # Calculate the weighted sum of Momentum, ATR, and Volume-Range Ratio
+    df['composite_factor'] = 0.3 * df['momentum'] + 0.3 * df['atr'] + 0.4 * df['range_to_volume_ratio']
+    
+    # Calculate close-to-next day open return
+    df['next_day_open'] = df['open'].shift(-1)
+    df['close_to_next_open_return'] = (df['next_day_open'] - df['vwap']) / df['next_day_open']
+    
+    # Calculate close-to-open envelope
+    df['max_close'] = df['close'].rolling(window=5).max()
+    df['min_open'] = df['open'].rolling(window=5).min()
+    df['close_envelope'] = (df['max_close'] - df['close']) / df['max_close']
+    df['open_envelope'] = (df['open'] - df['min_open']) / df['min_open']
+    
+    # Combine intraday midpoint to open ratio and close-to-next day open return
+    df['final_factor'] = (df['midpoint_to_open_ratio'] + df['close_to_next_open_return'] + 
+                          df['close_envelope'] + df['open_envelope'] + df['composite_factor'])
+    
+    return df['final_factor']
+```

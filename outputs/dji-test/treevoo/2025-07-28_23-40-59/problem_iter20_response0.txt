@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Volume-Weighted Daily Return
+    N = 20
+    df['volume_weighted_return'] = (df['price_change'] * df['volume']).rolling(window=N).sum() / df['volume'].rolling(window=N).sum()
+    
+    # Enhanced Price Directional Component
+    df['close_open_diff'] = df['close'] - df['open']
+    df['price_direction'] = df['close_open_diff'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Dynamic Volume Spike Indicator
+    rolling_vol_mean = df['volume'].rolling(window=20).mean()
+    rolling_vol_std = df['volume'].rolling(window=20).std()
+    df['vol_spike_threshold'] = rolling_vol_mean + 2 * rolling_vol_std
+    df['is_vol_spike'] = df['volume'] > df['vol_spike_threshold']
+    df['dynamic_factor'] = 1 + (df['volume'] - rolling_vol_mean) / rolling_vol_std
+    df.loc[~df['is_vol_spike'], 'dynamic_factor'] = 1
+    df['volume_weighted_return_adjusted'] = df['volume_weighted_return'] * df['dynamic_factor']
+    
+    # High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Adjusted Volume
+    df['adjusted_volume'] = df['volume'] / df['high_low_spread']
+    
+    # Log Return
+    df['log_return'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    
+    # Combine Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['combined'] = df['log_return'] * df['adjusted_volume'] * df['price_direction']
+    
+    # Smooth the Combined Adjusted Volume, Log Return, and Enhanced Price Direction
+    df['smoothed_combined'] = df['combined'].rolling(window=5).apply(lambda x: x.ewm(span=5).mean().iloc[-1])
+    
+    # Raw Momentum
+    df['raw_momentum'] = df['close'] - df['close'].shift(7)
+    
+    # Adjust for Volatility and Volume
+    df['short_term_volatility'] = df['close'].rolling(window=7).std()
+    df['volume_factor'] = df['volume'] / df['volume'].rolling(window=7).mean()
+    df['weighted_raw_momentum'] = df['raw_momentum'] / (df['short_term_volatility'] * df['volume_factor'])
+    
+    # Combine Factors
+    df['combined_factors'] = df['weighted_raw_momentum'] * df['volume_weighted_return_adjusted']
+    
+    # M-Day Exponential Moving Average (EMA) Volume
+    M = 20
+    df['ema_volume'] = df['volume'].ewm(span=M, adjust=False).mean()
+    
+    # Compare Latest Volume to EMA Volume
+    df['volume_ema_score'] = df.apply(lambda row: 1 if row['volume'] > row['ema_volume'] else -1, axis=1)
+    
+    # K-Day Exponential Moving Average (EMA) Amount
+    K = 20
+    df['ema_amount'] = df['amount'].ewm(span=K, adjust=False).mean()
+    
+    # Compare Latest Amount to EMA Amount
+    df['amount_ema_score'] = df.apply(lambda row: 1 if row['amount'] > row['ema_amount'] else -1, axis=1)
+    
+    # Compute LMA-SMA Difference
+    LMA_period = 200
+    SMA_period = 50
+    df['LMA'] = df['close'].rolling(window=LMA_period).mean()
+    df['SMA'] = df['close'].rolling(window=SMA_period).mean()
+    df['lma_sma_diff'] = df['LMA'] - df['SMA']
+    
+    # Apply EMA Smoothing on LMA-SMA Difference
+    ema_smoothing_period = 10
+    df['smoothed_lma_sma_diff'] = df['lma_sma_diff'].ewm(span=ema_smoothing_period, adjust=False).mean()
+    
+    # Combine Components into Final Alpha Factor
+    df['alpha_factor'] = df['volume_weighted_return_adjusted'] + df['smoothed_combined'] + df['weighted_raw_momentum'] + df['volume_ema_score'] + df['amount_ema_score'] + df['smoothed_lma_sma_diff']
+    
+    return df['

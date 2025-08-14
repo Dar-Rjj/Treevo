@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) - df['open']
+    
+    # Smooth with EMA (10 days)
+    ema_window = 10
+    df['ema_smoothed_return'] = df['close_to_open_return'].ewm(span=ema_window, min_periods=ema_window).mean()
+    
+    # Adjust for Volume and Amount
+    df['total_volume'] = df['volume'].rolling(window=ema_window).sum()
+    df['total_amount'] = df['amount'].rolling(window=ema_window).sum()
+    df['adjusted_ema_return'] = df['ema_smoothed_return'] / (df['total_volume'] + df['total_amount'])
+    
+    # Combine Long-Term and Short-Term Momentum
+    long_term_momentum = (df['close'] / df['close'].shift(28)) - 1
+    short_term_momentum = (df['close'] / df['close'].shift(10)) - 1
+    df['combined_momentum'] = long_term_momentum + short_term_momentum
+    
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Compute RTSI
+    df['gain'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['loss'] = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    gain_ema = df['gain'].ewm(span=14, min_periods=14).mean()
+    loss_ema = df['loss'].ewm(span=14, min_periods=14).mean()
+    df['rtsi'] = (gain_ema / (gain_ema + loss_ema)) * 100
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].pct_change().rolling(window=20).std() * np.sqrt(252)
+    df['realized_volatility'] = realized_volatility
+    
+    # Weighted Average of Combined Components
+    weights = {
+        'combined_momentum': 0.3,
+        'price_range_ratio': 0.2,
+        'rtsi': 0.1,
+        'realized_volatility': 0.1
+    }
+    df['weighted_average'] = (df['combined_momentum'] * weights['combined_momentum'] +
+                              df['price_range_ratio'] * weights['price_range_ratio'] +
+                              df['rtsi'] * weights['rtsi'] +
+                              df['realized_volatility'] * weights['realized_volatility'])
+    
+    # Final Factor
+    df['alpha_factor'] = df['weighted_average'] * df['adjusted_ema_return']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute True Range
+    df['True_Range'] = df[['High', 'Low']].sub(df['Close'].shift(), axis=0).abs().max(axis=1)
+    
+    # Compute Intraday Price Movement
+    df['Intraday_Price_Movement'] = df['Close'] - df['Open']
+    
+    # Adjust for Volume Impact on Price
+    df['Volume_Adjusted_True_Range'] = df['True_Range'] * df['Volume']
+    df['Volume_Adjusted_Price_Movement'] = df['Intraday_Price_Movement'] * df['Volume']
+    
+    # Smooth High-Low Ranges and Price Movements
+    df['Smoothed_High_Low_Range'] = df['High'] - df['Low']
+    df['Smoothed_High_Low_Range'] = df['Smoothed_High_Low_Range'].ewm(span=20).mean()
+    
+    df['Smoothed_Close_Open_Diff'] = df['Close'] - df['Open']
+    df['Smoothed_Close_Open_Diff'] = df['Smoothed_Close_Open_Diff'].ewm(span=10).mean()
+    
+    # Calculate Combined Price and High-Low Range Momentum
+    df['Combined_Momentum'] = df['Smoothed_High_Low_Range'] - df['Smoothed_Close_Open_Diff']
+    
+    # Evaluate Volume Activity
+    df['EMA_Volume_20'] = df['Volume'].ewm(span=20).mean()
+    df['High_Volume_Indicator'] = (df['Volume'] > df['EMA_Volume_20']).astype(int)
+    
+    # Integrate Price, High-Low Range, and Volume Activity
+    df['Integrated_Measure'] = (df['Volume_Adjusted_True_Range'] + df['Volume_Adjusted_Price_Movement']) * df['High_Volume_Indicator']
+    
+    # Interaction Term
+    df['Interaction_Term'] = df['Combined_Momentum'] * df['Smoothed_Close_Open_Diff'] * df['Volume']
+    
+    # Generate Final Alpha Factor
+    df['Alpha_Factor'] = df['Integrated_Measure'] + df['Interaction_Term']
+    
+    return df['Alpha_Factor']
+```

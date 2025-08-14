@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_price_range / df['volume']
+    
+    # Calculate N-day Exponential Moving Average of Close Price
+    n_day_ema_close = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Adjust Momentum by Intraday Volatility
+    adjusted_momentum = n_day_ema_close * intraday_volatility
+    
+    # Calculate Dynamic Adjustment Factor
+    dynamic_adjustment_factor = df['volume'].ewm(span=5, adjust=False).mean()
+    
+    # Apply Dynamic Adjustment
+    dynamically_adjusted_momentum = adjusted_momentum * (df['volume'] / dynamic_adjustment_factor)
+    
+    # Calculate Volume Change
+    prev_volume = df['volume'].shift(1)
+    current_volume = df['volume']
+    volume_change = current_volume - prev_volume
+    
+    # Integrate Intraday Price Movement and Volume
+    intraday_momentum_score = intraday_price_range * volume_change
+    intraday_momentum_score = np.maximum(intraday_momentum_score, 0)  # Ensure non-negative
+    
+    # Combine Dynamically Adjusted Momentum and IntradayMomentumScore
+    combined_momentum = dynamically_adjusted_momentum + intraday_momentum_score
+    
+    # Calculate 5-Day Average High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    avg_high_low_spread = high_low_spread.rolling(window=5).mean()
+    
+    # Finalize 5-Day Momentum
+    five_day_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    high_low_spread_momentum = avg_high_low_spread * five_day_momentum
+    
+    # Calculate Volume Weighted Average Price
+    vwap = ((df['open'] + df['high'] + df['low'] + df['close']) / 4) * df['volume']
+    vwap = vwap.rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    combined_factor = combined_momentum * intraday_price_range / vwap
+    
+    # Filter for Recent Price Trend
+    recent_price_trend = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Introduce Volume Trend
+    five_day_sum_volume = df['volume'].rolling(window=5).sum()
+    volume_ratio = current_volume / five_day_sum_volume
+    volume_trend_adjusted_factor = combined_factor * volume_ratio
+    
+    return volume_trend_adjusted_factor
+```

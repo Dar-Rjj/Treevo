@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Compute Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Determine Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['close']
+    
+    # Adjust Volatility by Volume
+    df['adjusted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Short-Term Momentum
+    df['short_term_momentum'] = df['close'].diff(1).shift(-1)
+    
+    # Calculate Medium-Term Momentum
+    df['medium_term_momentum'] = df['close'].diff(3).shift(-3)
+    
+    # Calculate Long-Term Momentum
+    df['long_term_momentum'] = df['close'].diff(5).shift(-5)
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap_numerator = (df['open'] + df['high'] + df['low'] + df['close']) * df['volume']
+    df['vwap'] = vwap_numerator.rolling(window=1, min_periods=1).sum() / df['volume']
+    
+    # Adjust VWAP for Intraday Dynamics
+    df['vwap_adjustment'] = df['vwap'].diff(1).shift(-1)
+    
+    # Integrate Relative Volume
+    df['average_volume_5d'] = df['volume'].rolling(window=5, min_periods=1).mean()
+    df['relative_volume'] = df['volume'] / df['average_volume_5d']
+    
+    # Additional Volatility Adjustment
+    df['additional_volatility'] = df['adjusted_volatility'] * df['relative_volume']
+    
+    # Combine Intraday Return, Adjusted Volatility, Momentum, and VWAP Adjustment
+    df['combined_value'] = (
+        df['intraday_return'] - 
+        df['additional_volatility'] + 
+        df['short_term_momentum'] + 
+        df['medium_term_momentum'] + 
+        df['long_term_momentum'] + 
+        df['vwap_adjustment']
+    )
+    
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = (df['combined_value'] > 0).astype(int)
+    
+    # Incorporate Extreme Momentum
+    df['ultra_short_term_momentum'] = df['close'].diff(1).shift(-1)
+    df['ultra_long_term_momentum'] = df['close'].diff(20).shift(-20)
+    
+    # Update Combined Value
+    df['combined_value'] = (
+        df['intraday_return'] - 
+        df['additional_volatility'] + 
+        df['short_term_momentum'] + 
+        df['medium_term_momentum'] + 
+        df['long_term_momentum'] + 
+        df['vwap_adjustment'] + 
+        df['ultra_short_term_momentum'] + 
+        df['ultra_long_term_momentum']
+    )
+    
+    # Regenerate Final Alpha Factor
+    df['alpha_factor'] = (df['combined_value'] > 0).astype(int)
+    
+    return df['alpha_factor']
+```

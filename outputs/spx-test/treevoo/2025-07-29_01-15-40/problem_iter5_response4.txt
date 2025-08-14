@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Cumulative Directional Movement
+    df['Upward'] = df['high'] - df['high'].shift(1)
+    df['Downward'] = df['low'] - df['low'].shift(1)
+    df['Net_Movement'] = df.apply(lambda row: row['Upward'] if row['Upward'] > row['Downward'] else row['Downward'], axis=1)
+    df['Cumulative_Directional_Movement'] = df['Net_Movement'].rolling(window=5).sum()
+
+    # Calculate Intraday High-Low Spread and Average Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Average_Intraday_High_Low_Spread'] = df['Intraday_High_Low_Spread'].rolling(window=5).mean()
+
+    # Compute High-Low Momentum Score
+    df['High_Low_Momentum_Score'] = df.apply(lambda row: 1 if row['Intraday_High_Low_Spread'] > row['Average_Intraday_High_Low_Spread'] else -1, axis=1)
+
+    # Adjust by Volume
+    df['Adjusted_High_Low_Momentum'] = df['High_Low_Momentum_Score'] * df['volume']
+
+    # Combine Directional Movement and High-Low Momentum
+    df['Combined_Directional_and_High_Low'] = df['Cumulative_Directional_Movement'] + df['Adjusted_High_Low_Momentum']
+
+    # Calculate Price Momentum
+    df['Price_Change'] = df['close'] - df['close'].shift(5)
+    df['Price_Momentum'] = df['Price_Change'].rolling(window=5).sum()
+
+    # Calculate Volume Trend
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(5)
+    df['Volume_Trend'] = df['Volume_Change'].rolling(window=5).sum()
+
+    # Combine Price Momentum and Volume Trend
+    price_coefficient = 0.7
+    volume_coefficient = 0.3
+    df['Combined_Price_Volume'] = (df['Price_Momentum'] * price_coefficient) + (df['Volume_Trend'] * volume_coefficient)
+
+    # Calculate Final Factor
+    df['Final_Factor'] = df['Combined_Directional_and_High_Low'] + df['Combined_Price_Volume'] + (df['high'] - df['low'])
+
+    return df['Final_Factor']
+```

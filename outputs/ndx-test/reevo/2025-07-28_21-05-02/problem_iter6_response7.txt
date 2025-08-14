@@ -1,0 +1,43 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 3-day momentum (current close - close 3 days ago)
+    df['momentum_3d'] = df['close'].diff(3)
+    
+    # Calculate the 5-day exponential moving average (EMA) of the closing price
+    df['ema_5d'] = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the volatility (standard deviation of the last 5 days' returns)
+    df['volatility_5d'] = df['close'].pct_change().rolling(window=5).std()
+    
+    # Calculate the volume shock (current volume / average volume over the last 5 days)
+    df['volume_shock'] = df['volume'] / df['volume'].rolling(window=5).mean()
+    
+    # Calculate the 3-day weighted moving average with recent days having more weight
+    df['wma_3d'] = df['close'].rolling(window=3).apply(lambda x: ((np.arange(1,4)*x).sum()/6), raw=True)
+    
+    # Calculate the positive difference between the current close price and 3-day WMA
+    df['diff_pos_wma'] = df[['close', 'wma_3d']].apply(lambda x: max(x['close'] - x['wma_3d'], 0), axis=1)
+    
+    # Non-linear transformation: square root of the positive difference
+    df['nonlinear_diff'] = np.sqrt(df['diff_pos_wma'])
+    
+    # Calculate the 5-day cumulative return (cumulative return over the past 5 days)
+    df['cumulative_return_5d'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate the price range (high - low) over the last 7 days
+    df['price_range_7d'] = (df['high'] - df['low']).rolling(window=7).mean()
+    
+    # Relative 5-day EMA to 10-day EMA
+    df['relative_ema'] = df['ema_5d'] / df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Factor is the product of the 3-day momentum, relative 5-day EMA, 5-day volatility, volume shock, non-linear difference, 5-day cumulative return, and 7-day price range
+    factor_value = (df['momentum_3d'] * 
+                    (df['relative_ema'] - 1) * 
+                    df['volatility_5d'] * 
+                    df['volume_shock'] * 
+                    df['nonlinear_diff'] * 
+                    df['cumulative_return_5d'] * 
+                    df['price_range_7d'])
+    
+    return factor_value
+```

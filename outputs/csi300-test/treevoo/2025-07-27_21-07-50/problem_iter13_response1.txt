@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-Based Factor
+    df['momentum_10day'] = df['close'] - df['close'].rolling(window=10).mean()
+    df['roc_5day'] = (df['close'] / df['close'].shift(5) - 1) * 100
+    
+    # Volume Anomaly Detection
+    df['volume_change'] = (df['volume'] - df['volume'].rolling(window=20).mean()) / df['volume'].rolling(window=20).std()
+    df['volume_max_ratio'] = df['volume'] / df['volume'].rolling(window=30).max()
+    
+    # Price Volatility Analysis
+    df['volatility_20day'] = df['close'].rolling(window=20).std()
+    tr = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14day'] = tr.rolling(window=14).mean()
+    
+    # Reversal Signals from Price Patterns
+    df['bearish_engulfing'] = (df['open'] > df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'])
+    df['bullish_engulfing'] = (df['open'] < df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'])
+    df['hammer_hanging_man'] = (df['close'] - df['low']) / (df['high'] - df['low']) > 0.67 & (df['close'] - df['open']) / (df['high'] - df['low']).abs() < 0.33
+    
+    # Liquidity and Transaction Activity
+    df['liquidity_level'] = df['volume'] / df['amount']
+    df['distribution_signal'] = ((df['volume'] > df['volume'].shift(1)) & (df['close'] < df['close'].shift(1))).astype(int)
+    df['distribution_days'] = df['distribution_signal'].rolling(window=10, min_periods=1).sum()
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (df['momentum_10day'] + 
+                    df['roc_5day'] + 
+                    df['volume_change'] + 
+                    df['volume_max_ratio'] + 
+                    -df['volatility_20day'] + 
+                    df['atr_14day'] + 
+                    df['bullish_engulfing'] * 5 - 
+                    df['bearish_engulfing'] * 5 - 
+                    df['hammer_hanging_man'] * 3 + 
+                    df['liquidity_level'] - 
+                    df['distribution_days'])
+    
+    return alpha_factor
+```

@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['prev_close']).abs()
+    df['tr3'] = (df['prev_close'] - df['low']).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Calculate Intraday Price Movement
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_diff'] = df['close'] - df['open']
+    df['high_low_sign'] = (df['high'] - df['low']).apply(lambda x: 1 if x > 0 else -1)
+    df['intraday_price_move'] = df['close_open_diff'] * df['high_low_sign']
+
+    # Aggregate Price Movements and Accumulated Buy-Sell Imbalance
+    period = 10
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=period).sum()
+    df['sum_close_open_diff'] = df['close_open_diff'].rolling(window=period).sum()
+    df['signed_volume'] = df['volume'] * df['close_open_diff'].apply(lambda x: 1 if x > 0 else -1)
+    df['pos_vol'] = df['signed_volume'].where(df['signed_volume'] > 0, 0)
+    df['neg_vol'] = df['signed_volume'].where(df['signed_volume'] < 0, 0)
+    df['sum_pos_vol'] = df['pos_vol'].rolling(window=period).sum()
+    df['sum_neg_vol'] = df['neg_vol'].rolling(window=period).sum()
+
+    # Calculate Integrated Momentum Score
+    df['price_volatility'] = df['close'].rolling(window=period).std()
+    df['vol_weighted_mom'] = df['intraday_price_move'] * (df['price_volatility'] / df['price_volatility'].mean())
+    df['total_abs_vol'] = (df['sum_pos_vol'] + df['sum_neg_vol']).abs()
+    df['pos_vol_ratio'] = df['sum_pos_vol'] / df['total_abs_vol']
+    df['neg_vol_ratio'] = df['sum_neg_vol'] / df['total_abs_vol']
+    df['integrated_momentum_score'] = df['vol_weighted_mom'] * (df['pos_vol_ratio'] - df['neg_vol_ratio'])
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_hl'] = df['high_low_diff'] * df['volume']
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['weighted_avg'] = (df['volume_adjusted_hl'] + df['close_open_diff']) / 2
+
+    # Introduce Volume Trend Analysis
+    df['volume_trend'] = df['volume'].pct_change(periods=period)
+    df['combined_measure'] = df['weighted_avg'] * (1 + df['volume_trend'])
+
+    # Dynamic Momentum Indicator
+    df['yesterday_indicator'] = df['integrated_momentum_score'].shift(1)
+    df['today_indicator'] = df['integrated_momentum_score']
+    df['momentum_change'] = df['today_indicator'] - df['yesterday_indicator']
+    df['smoothed_momentum'] = df['integrated_momentum_score'].ewm(span=period, adjust=False).mean()
+
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = (df['true_range'] + df['combined_measure'] + df['smoothed_momentum'])
+    
+    return df['final_alpha_factor']
+```

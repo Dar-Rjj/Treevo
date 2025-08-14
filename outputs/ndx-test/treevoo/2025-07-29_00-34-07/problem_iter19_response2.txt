@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Averaged Momentum
+    df['1_day_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['averaged_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['20_day_return']) / 3
+
+    # Weighted Average of Price Gaps
+    df['price_gap'] = abs(df['open'] - df['close'])
+    df['5_day_volume_ma'] = df['volume'].rolling(window=5).mean()
+    df['volume_growth'] = df['volume'] / df['volume'].shift(1)
+    df['volume_trend'] = df['5_day_volume_ma'] * df['volume_growth']
+    df['weighted_price_gaps'] = df['price_gap'] * df['volume_trend']
+
+    # Adjust for Volume
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['adjusted_weighted_price_gaps'] = df['weighted_price_gaps'] * df['volume_change']
+
+    # High-to-Low Range and Momentum
+    df['high_low_range'] = df['high'] - df['low']
+    df['combined_value'] = df['high_low_range'] * 100 + df['weighted_price_gaps']
+    df['smoothed_combined_value'] = df['combined_value'].rolling(window=5).mean()
+    df['momentum_smoothed_combined_value'] = df['smoothed_combined_value'] - df['smoothed_combined_value'].shift(5)
+
+    # Calculate Rolling High-Low Differential
+    df['20_day_high'] = df['high'].rolling(window=20).max()
+    df['20_day_low'] = df['low'].rolling(window=20).min()
+    df['high_low_differential'] = df['20_day_high'] - df['20_day_low']
+
+    # Weight by Volume Volatility
+    df['volume_volatility'] = df['volume'].rolling(window=10).std()
+    df['weighted_high_low_differential'] = df['high_low_differential'] * df['volume_volatility']
+
+    # Aggregate the Signals
+    alpha_factor = (
+        df['adjusted_weighted_price_gaps'] +
+        df['momentum_smoothed_combined_value'] +
+        df['weighted_high_low_differential'] -
+        df['averaged_momentum']
+    )
+
+    return alpha_factor
+```

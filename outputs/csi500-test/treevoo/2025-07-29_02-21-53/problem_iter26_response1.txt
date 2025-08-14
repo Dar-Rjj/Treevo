@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Price Movement
+    high_low_diff = df['high'] - df['low']
+    close_open_change = df['close'] - df['open']
+    
+    # Aggregate and Smooth Price Movements
+    sum_high_low_range = high_low_diff.rolling(window=20).sum()
+    sum_close_open_change = close_open_change.rolling(window=20).sum()
+    smoothed_high_low_range = high_low_diff.ewm(span=20, adjust=False).mean()
+    long_term_high_low_range = (df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min())
+    
+    # Compute Momentum of High-Low Ranges
+    momentum_high_low = long_term_high_low_range - smoothed_high_low_range
+    
+    # Calculate True Range
+    tr1 = df['high'] - df['low']
+    tr2 = (df['high'] - df['close'].shift(1)).abs()
+    tr3 = (df['low'] - df['close'].shift(1)).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    atr = true_range.rolling(window=20).mean()
+    
+    # Adjust Price Momentum by ATR
+    weighted_high_low = sum_high_low_range / atr
+    weighted_close_open = sum_close_open_change / atr
+    adjusted_momentum_score = (weighted_high_low + weighted_close_open) / 2
+    
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_days = df['volume'] > avg_volume * 1.5
+    volume_5_day_avg = df['volume'].rolling(window=5).mean()
+    volume_spike = df['volume'] > 2 * volume_5_day_avg
+    
+    # Adjust Momentum Based on Volume
+    adjusted_momentum_score[volume_spike] *= 0.7
+    
+    # Integrate Combined Factors
+    interim_alpha_factor = adjusted_momentum_score * high_volume_days
+    
+    # Combine ATR and Price Momentum
+    final_alpha_factor = interim_alpha_factor + momentum_high_low
+    
+    # Incorporate Recent Price Trend
+    recent_price_trend = df['close'].rolling(window=20).mean()
+    trend_multiplier = (recent_price_trend > df['close'].shift(1)).astype(int) * 1.1 - 0.9
+    final_alpha_factor *= trend_multiplier
+    
+    return final_alpha_factor
+```

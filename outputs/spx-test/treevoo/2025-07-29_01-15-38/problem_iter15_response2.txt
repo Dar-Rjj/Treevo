@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Short-Term and Long-Term High-Low Range Momentum
+    df['short_term_momentum'] = (df['high_low_range'] - df['high_low_range'].shift(1)).rolling(window=5).sum()
+    df['long_term_momentum'] = (df['high_low_range'] - df['high_low_range'].shift(1)).rolling(window=20).sum()
+    
+    # Calculate High-Low Range Momentum Oscillator
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Weight by Volume Surge
+    avg_vol_10d = df['volume'].rolling(window=10).mean()
+    volume_weight = 1.7 * (df['volume'] > 1.5 * avg_vol_10d) + 1.3 * ((df['volume'] > avg_vol_10d) & (df['volume'] <= 1.5 * avg_vol_10d)) + 1 * (df['volume'] <= avg_vol_10d)
+    
+    # Integrate Close Price Velocity
+    close_price_change = df['close'] - df['close'].shift(1)
+    velocity_factor = 1.3 * (close_price_change > 0) + 0.7 * (close_price_change <= 0)
+    
+    # Incorporate Open-Price Momentum
+    open_price_diff = df['open'] - df['open'].shift(1)
+    open_momentum_adjuster = 0.6 * (open_price_diff > 0) - 0.6 * (open_price_diff < 0)
+    
+    # Integrate High-Price Momentum
+    high_price_diff = df['high'] - df['high'].shift(1)
+    high_momentum_adjuster = 0.4 * (high_price_diff > 0) - 0.4 * (high_price_diff < 0)
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['momentum_oscillator'] * volume_weight * velocity_factor 
+                          + open_momentum_adjuster + high_momentum_adjuster)
+    
+    return df['alpha_factor']
+```

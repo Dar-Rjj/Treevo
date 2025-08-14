@@ -1,0 +1,45 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the exponential moving average of close prices for a 5-day window
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Adjusted momentum: difference between today's close and the 5-day EMA, normalized by today's volume
+    momentum_adjusted = (df['close'] - ema_5) / df['volume']
+    
+    # Money flow: weighted price using amount and volume over a 3-day window
+    money_flow = (df['amount'] / df['volume']).rolling(window=3).mean()
+    
+    # Daily range ratio: current day's range to the 5-day average range
+    daily_range = df['high'] - df['low']
+    avg_daily_range = daily_range.rolling(window=5).mean()
+    range_ratio = daily_range / avg_daily_range
+    
+    # Adaptive volatility: standard deviation of the last 10 days
+    volatility = df['close'].rolling(window=10).std()
+    
+    # Long-term momentum: difference between today's close and the 20-day EMA, normalized by today's volume
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    long_momentum = (df['close'] - ema_20) / df['volume']
+    
+    # Market sentiment: percentage change in volume
+    volume_change = df['volume'].pct_change().fillna(0)
+    
+    # Dynamic weights based on adaptive volatility
+    weight_momentum = 1 / (1 + volatility)
+    weight_money_flow = 0.5 / (1 + volatility)
+    weight_range_ratio = 0.3 / (1 + volatility)
+    weight_long_momentum = 0.2 / (1 + volatility)
+    weight_volume_change = 0.1 / (1 + volatility)
+    
+    # Combine all factors with a weighted sum, where the weights are dynamically adjusted based on the adaptive volatility
+    alpha_factor = (momentum_adjusted * weight_momentum +
+                    money_flow * weight_money_flow +
+                    range_ratio * weight_range_ratio +
+                    long_momentum * weight_long_momentum +
+                    volume_change * weight_volume_change)
+    
+    # Smooth the alpha factor using an exponential moving average with a span of 5
+    alpha_factor_smoothed = alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return alpha_factor_smoothed
+```

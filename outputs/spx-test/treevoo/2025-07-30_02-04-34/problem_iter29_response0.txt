@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Spread
+    df['close_open_spread'] = df['close'] - df['open']
+    
+    # Calculate Smoothed Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['close']
+    df['smoothed_intraday_return'] = df['intraday_return'].ewm(span=5, min_periods=5).mean().shift(1)
+    
+    # Incorporate Volume Intensity
+    df['avg_volume_10'] = df['volume'].rolling(window=10, min_periods=1).mean()
+    df['volume_intensity'] = 1 / df['avg_volume_10']
+    df['intraday_momentum_diff'] = df['intraday_high_low_spread'] * df['volume_intensity']
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['avg_volume_change_20'] = df['volume_change'].rolling(window=20, min_periods=1).mean()
+    df['std_volume_change_20'] = df['volume_change'].rolling(window=20, min_periods=1).std()
+    df['volume_spike'] = (df['volume_change'] > 3 * df['std_volume_change_20']).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    df['intraday_vol_impact'] = df['intraday_momentum_diff'] * df['volume_spike']
+    df['smoothed_intraday_vol_impact'] = df['intraday_vol_impact'].rolling(window=4, min_periods=1).mean().shift(1)
+    
+    # Analyze Price and Volume Relationship
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    df['divergence'] = ((df['price_change'] > 0) & (df['volume_change'] < 0)) | ((df['price_change'] < 0) & (df['volume_change'] > 0))
+    df['rolling_divergence'] = df['divergence'].rolling(window=10, min_periods=1).sum()
+    
+    # Compute Price-Velocity Factor
+    df['price_velocity'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['smoothed_price_velocity'] = df['price_velocity'].ewm(span=5, min_periods=5).mean()
+    
+    # Evaluate Combined Momentum and Price-Velocity
+    df['combined_momentum'] = df['smoothed_intraday_return'] * df['smoothed_price_velocity']
+    df['final_combined_momentum'] = df['combined_momentum'].ewm(span=5, min_periods=5).mean()
+    
+    # Final Alpha Signal
+    df['final_signal'] = df['final_combined_momentum'] + df['smoothed_intraday_vol_impact']
+    df['thresholded_signal'] = df['final_signal'].where(np.abs(df['final_signal']) > 0.05, 0)
+    df['adjusted_signal'] = df['thresholded_signal'] * (1 - df['rolling_divergence'] / 10)
+    
+    # Final Signal Smoothing
+    df['final_alpha_signal'] = df['adjusted_signal'].rolling(window=3, min_periods=1).mean().shift(1)
+    
+    return df['final_alpha_signal']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', index_col='date')
+# alpha_signal = heuristics_v2(df)
+# print(alpha_signal)
+```

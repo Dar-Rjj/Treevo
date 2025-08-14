@@ -1,0 +1,44 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the daily return as (Close - Open) / Open for each day
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Sum the daily returns over a 5-day window to capture short-term momentum
+    df['momentum_5d'] = df['daily_return'].rolling(window=5).sum()
+    
+    # Determine the True Range as max(High - Low, abs(High - Previous Close), abs(Low - Previous Close))
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], 
+                                                                        abs(x['high'] - df['close'].shift(1)), 
+                                                                        abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Calculate an Average True Range over a 14-day period to assess long-term volatility
+    df['avg_true_range_14d'] = df['true_range'].rolling(window=14).mean()
+    
+    # Identify days with unusually high volume compared to a 20-day average
+    df['volume_20d_avg'] = df['volume'].rolling(window=20).mean()
+    df['unusually_high_volume'] = df['volume'] > 1.5 * df['volume_20d_avg']
+    
+    # Examine if high volume days coincide with positive or negative price changes
+    df['price_change'] = df['close'] - df['open']
+    df['high_vol_positive_change'] = (df['unusually_high_volume'] & (df['price_change'] > 0)).astype(int)
+    df['high_vol_negative_change'] = (df['unusually_high_volume'] & (df['price_change'] < 0)).astype(int)
+    
+    # Detect upward gaps where Today's Open is significantly higher than Yesterday's Close
+    df['upward_gap'] = (df['open'] - df['close'].shift(1)) > 0.02 * df['close'].shift(1)
+    
+    # Detect downward gaps where Today's Open is significantly lower than Yesterday's Close
+    df['downward_gap'] = (df['open'] - df['close'].shift(1)) < -0.02 * df['close'].shift(1)
+    
+    # Measure the correlation coefficient between daily volume and close prices over a 30-day window
+    df['volume_close_corr_30d'] = df['volume'].rolling(window=30).corr(df['close'])
+    
+    # Combine all the factors into a single alpha factor
+    df['alpha_factor'] = (df['momentum_5d'] +
+                          df['avg_true_range_14d'] +
+                          df['high_vol_positive_change'] * 1.5 - df['high_vol_negative_change'] * 1.5 +
+                          df['upward_gap'] * 1.5 - df['downward_gap'] * 1.5 +
+                          df['volume_close_corr_30d'])
+    
+    return df['alpha_factor']

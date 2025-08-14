@@ -1,0 +1,38 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Divide by Previous Close
+    prev_close = df['close'].shift(1)
+    momentum = high_low_spread / prev_close
+    
+    # Calculate Price and Intraday Momentum
+    recent_close = df['close']
+    close_10_days_ago = df['close'].shift(10)
+    price_momentum = recent_close - close_10_days_ago
+    
+    intraday_returns = (df['high'] - df['low']) / df['low']
+    
+    # Adjust by Volume
+    sum_volume_n_days = df['volume'].rolling(window=10).sum()
+    adjusted_momentum = momentum / sum_volume_n_days
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    volume_weighted_momentum = adjusted_momentum * df['volume']
+    cumulative_volume_weighted_momentum = volume_weighted_momentum.rolling(window=10).sum()
+    
+    # Confirm with Volume Trend
+    avg_volume_past_10_days = df['volume'].rolling(window=10).mean()
+    current_day_volume = df['volume']
+    volume_ratio = current_day_volume / avg_volume_past_10_days
+    
+    # Combine Momentum
+    if volume_ratio > 1.2:
+        combined_momentum = (price_momentum * intraday_returns) + cumulative_volume_weighted_momentum
+    else:
+        combined_momentum = 0.5 * (price_momentum + intraday_returns)
+    
+    return combined_momentum

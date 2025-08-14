@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between today's close and the previous day's close
+    df['daily_return'] = df['close'].diff()
+    
+    # Sum up positive and negative daily price changes separately over a 5-day window
+    df['positive_momentum'] = df['daily_return'].rolling(window=5).apply(lambda x: x[x > 0].sum(), raw=True)
+    df['negative_momentum'] = df['daily_return'].rolling(window=5).apply(lambda x: x[x < 0].sum(), raw=True)
+    
+    # Compare the current day's volume with the average volume over a 10-day lookback period
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    
+    # Calculate the correlation between daily return and its volume
+    df['return_volume_corr'] = df['daily_return'].rolling(window=10).corr(df['volume'])
+    
+    # Use the standard deviation of daily log-returns over a 20-day window as an indicator of recent market stability
+    df['log_returns'] = (df['close'] / df['close'].shift(1)).apply(np.log)
+    df['volatility'] = df['log_returns'].rolling(window=20).std()
+    
+    # Examine the relationship between high/low range and closing price
+    df['intraday_intensity'] = (df['high'] - df['low']) / df['close']
+    
+    # Combine all the sub-thoughts into a single alpha factor
+    df['alpha_factor'] = (df['positive_momentum'] - df['negative_momentum']) * df['volume_ratio'] \
+                         + df['return_volume_corr'] * df['volatility'] * df['intraday_intensity']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('market_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Weighted Simple Moving Average (SMA) over 10 periods
+    df['Weighted_SMA_10'] = 0.0
+    for i in range(10):
+        df['Weighted_SMA_10'] += df['close'].shift(i) * (i + 1)
+    df['Weighted_SMA_10'] /= 55
+    
+    # Exponential Moving Average (EMA) over 20 periods
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # True Range
+    df['True_Range'] = df[['high', 'close']].rolling(window=2).max() - df[['low', 'close']].rolling(window=2).min()
+    
+    # Average True Range (ATR) over 28 periods
+    df['ATR_28'] = df['True_Range'].rolling(window=28).mean()
+    
+    # New High and New Low with volume filter
+    df['New_High'] = (df['high'] > df['high'].rolling(window=10).max()) & (df['volume'] > df['volume'].shift(1))
+    df['New_Low'] = (df['low'] < df['low'].rolling(window=10).min()) & (df['volume'] > df['volume'].shift(1))
+    
+    # Rate of Change (ROC) over 24 periods
+    df['ROC_24'] = (df['close'] - df['close'].shift(24)) / df['close'].shift(24)
+    
+    # Relative Strength Index (RSI) over 28 periods
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=28).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=28).mean()
+    rs = gain / loss
+    df['RSI_28'] = 100 - (100 / (1 + rs))
+    
+    # On-Balance Volume (OBV) and its smoothed version (SMA over 10 periods)
+    df['OBV'] = 0
+    obv_signal = (df['close'] > df['close'].shift(1)).astype(int) - (df['close'] < df['close'].shift(1)).astype(int)
+    df['OBV'] = (obv_signal * df['volume']).cumsum()
+    df['Smoothed_OBV'] = df['OBV'].rolling(window=10).mean()
+    
+    # Money Flow Index (MFI) over 28 periods
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0).rolling(window=28).sum()
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0).abs().rolling(window=28).sum()
+    money_ratio = positive_money_flow / negative_money_flow
+    df['MFI_28'] = 100 - (100 / (1 + money_ratio))
+    
+    # Accumulation/Distribution Line (ADL) and its smoothed version (EMA over 10 periods)
+    adl = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low']) * df['volume']
+    df['ADL'] = adl.cumsum()
+    df['Smoothed_ADL'] = df['ADL'].ewm(span=10, adjust=False).mean()
+    
+    # Volume Price Trend (VPT) and Cumulative VPT
+    vpt = (df['volume'] * (df['close'] - df['close'].shift(1))) / df['close'].shift(1)
+    df['Cumulative_VPT'] = vpt.cumsum()
+    
+    # Price Volume Trend (PVT) and Cumulative PVT
+    pvt = (df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']
+    df['Cumulative_PVT'] = pvt.cumsum()
+    
+    # Combine all factors to form the final alpha factor
+    df['Alpha_Factor'] = (
+        df['Weighted_SMA_10'] +
+        df['EMA_20'] +
+        df['ATR_28'] +
+        df['New_High'].astype(int

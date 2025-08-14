@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n_days=5, price_momentum_coeff=1, volume_trend_coeff=0.5):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread over past N days
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=n_days).mean()
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = (df['intraday_high_low_spread'] > df['avg_intraday_high_low_spread']).astype(int) * 2 - 1
+    
+    # Adjust by Volume
+    df['high_low_volume_adjusted_score'] = df['high_low_momentum_score'] * df['volume']
+    
+    # Calculate Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(n_days)
+    df['price_momentum'] = df['price_change'].rolling(window=n_days).sum()
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(n_days)
+    df['volume_trend'] = df['volume_change'].rolling(window=n_days).sum()
+    
+    # Combine Price Momentum and Volume Trend
+    df['weighted_price_momentum'] = df['price_momentum'] * price_momentum_coeff
+    df['weighted_volume_trend'] = df['volume_trend'] * volume_trend_coeff
+    
+    # Calculate Final Factor
+    df['final_factor'] = df['weighted_price_momentum'] + df['weighted_volume_trend']
+    df['high_low_range'] = df['high'].rolling(window=n_days).max() - df['low'].rolling(window=n_days).min()
+    df['final_factor'] += df['high_low_volume_adjusted_score'] / df['high_low_range']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate simple moving averages for 5 and 20 days
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+
+    # Calculate the Relative Strength (RS) as the ratio of the current close to the 20-day SMA
+    df['RS'] = df['close'] / df['SMA_20']
+
+    # Calculate the price change and volume change
+    df['price_change'] = df['close'].pct_change()
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Calculate the volatility as the standard deviation of the last 5 days' closing prices
+    df['volatility'] = df['close'].rolling(window=5).std()
+
+    # Normalize the RS by the volatility
+    df['normalized_RS'] = df['RS'] / (df['volatility'] + 1e-7)
+
+    # Calculate momentum as the difference between the 5-day and 20-day SMA
+    df['momentum'] = df['SMA_5'] - df['SMA_20']
+
+    # Adaptive weights based on market conditions
+    df['weight_momentum'] = (df['momentum'] + df['momentum'].abs().max()) / (2 * df['momentum'].abs().max())
+    df['weight_price_change'] = (df['price_change'] + 1) / (df['price_change'].rolling(window=20).mean() + 1e-7)
+    df['weight_volume_change'] = (df['volume_change'] + 1) / (df['volume_change'].rolling(window=20).mean() + 1e-7)
+
+    # Combine the normalized RS, momentum, price change, and volume change with adaptive weights to form the alpha factor
+    df['alpha_factor'] = (df['weight_momentum'] * df['momentum'] +
+                          df['weight_price_change'] * df['price_change'] +
+                          2 * df['weight_volume_change'] * df['volume_change'] +
+                          df['normalized_RS']) / 4
+
+    return df['alpha_factor']
+```

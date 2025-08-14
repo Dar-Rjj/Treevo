@@ -1,0 +1,84 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Intraday Momentum Indicators
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    
+    # Volume Adjusted Factors
+    volume_adjusted_intraday_return = intraday_return * df['volume']
+    volume_adjusted_high_low_range = high_low_range * df['volume']
+    
+    # Smoothed Intraday Momentum
+    smoothed_intraday_momentum = volume_adjusted_intraday_return.ewm(span=10).mean()
+    recent_volume_weight = df['volume'].rolling(window=5).mean()
+    smoothed_intraday_momentum_weighted = smoothed_intraday_momentum * recent_volume_weight
+    
+    # High-Low Breakout Potential
+    breakout_potential = volume_adjusted_high_low_range.ewm(span=20).mean()
+    recent_volume_weight_10 = df['volume'].rolling(window=10).mean()
+    breakout_potential_weighted = breakout_potential * recent_volume_weight_10
+    
+    # Momentum Reversal Indicator
+    momentum_reversal = (intraday_return - smoothed_intraday_momentum) / breakout_potential
+    
+    # Volume Impact Factor
+    vol_diff = df['volume'] - df['volume'].rolling(window=10).mean()
+    volume_impact = vol_diff * momentum_reversal
+    
+    # Trading Activity Intensity
+    trading_activity_intensity = df['volume'].rolling(window=5).mean() / df['volume']
+    
+    # Daily Price Changes
+    daily_close_change = df['close'].diff()
+    daily_high_change = df['high'].diff()
+    daily_low_change = df['low'].diff()
+    
+    # Multi-Day Price Trends
+    close_3d_avg = daily_close_change.rolling(window=3).mean()
+    close_7d_avg = daily_close_change.rolling(window=7).mean()
+    close_21d_avg = daily_close_change.rolling(window=21).mean()
+    
+    # Volatility Measure
+    volatility = daily_close_change.rolling(window=21).std()
+    
+    # Daily Volume Changes
+    daily_volume_change = df['volume'].diff()
+    
+    # Multi-Day Volume Trends
+    volume_3d_avg = daily_volume_change.rolling(window=3).mean()
+    volume_7d_avg = daily_volume_change.rolling(window=7).mean()
+    volume_21d_avg = daily_volume_change.rolling(window=21).mean()
+    
+    # Gaps and Breaks
+    up_gap = (df['open'] - df['close'].shift(1)) > 0
+    down_gap = (df['open'] - df['close'].shift(1)) < 0
+    up_gap_size = df['open'] - df['close'].shift(1)
+    down_gap_size = df['open'] - df['close'].shift(1)
+    upper_breakout = df['high'] > df['high'].rolling(window=21).max().shift(1)
+    lower_breakout = df['low'] < df['low'].rolling(window=21).min().shift(1)
+    upper_breakout_size = df['high'] - df['high'].rolling(window=21).max().shift(1)
+    lower_breakout_size = df['low'].rolling(window=21).min().shift(1) - df['low']
+    
+    # Intraday Patterns
+    intraday_range = high_low_range
+    intraday_momentum = df['close'] - df['open']
+    strength_relative_to_open = intraday_momentum / intraday_range
+    std_high_low = df[['high', 'low']].rolling(window=21).std().sum(axis=1)
+    
+    # Consolidate Factors
+    consolidated_factors = (smoothed_intraday_momentum_weighted + volume_impact + trading_activity_intensity) / df['open']
+    
+    # Final Alpha Factor Synthesis
+    final_alpha = consolidated_factors * (vol_diff > 0).astype(int)
+    
+    return final_alpha
+```

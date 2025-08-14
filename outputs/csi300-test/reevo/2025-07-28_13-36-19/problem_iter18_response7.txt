@@ -1,0 +1,66 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import numpy as np
+    import pandas as pd
+
+    # Calculate the price movement as a percentage change from open to close
+    price_movement = (df['close'] - df['open']) / df['open']
+
+    # Calculate the average of high and low prices
+    avg_price = (df['high'] + df['low']) / 2
+
+    # Adaptive RSI with multiple windows
+    def adaptive_rsi(prices, short_window=10, long_window=20):
+        delta = prices.diff()
+        gain_short = (delta.where(delta > 0, 0)).rolling(window=short_window).mean()
+        loss_short = (-delta.where(delta < 0, 0)).rolling(window=short_window).mean()
+        rs_short = gain_short / loss_short
+        rsi_short = 100 - (100 / (1 + rs_short))
+        
+        gain_long = (delta.where(delta > 0, 0)).rolling(window=long_window).mean()
+        loss_long = (-delta.where(delta < 0, 0)).rolling(window=long_window).mean()
+        rs_long = gain_long / loss_long
+        rsi_long = 100 - (100 / (1 + rs_long))
+        
+        if prices.std() > prices.mean():
+            return rsi_short
+        else:
+            return rsi_long
+    
+    rsi_adaptive = adaptive_rsi(df['close'])
+
+    # Calculate the volume trend
+    volume_trend = df['volume'].pct_change()
+
+    # Exponential Moving Average of the price movement
+    ema_price_movement = price_movement.ewm(span=14, adjust=False).mean()
+
+    # Seasonal adjusted price movement
+    seasonal_adj_price_movement = price_movement.rolling(window=5).mean() - price_movement.rolling(window=20).mean()
+
+    # Dynamic indicator using the difference between EMA and simple moving average
+    sma_price_movement = price_movement.rolling(window=14).mean()
+    dynamic_indicator = ema_price_movement - sma_price_movement
+
+    # Dynamic weighting based on volatility
+    volatility = df['close'].pct_change().rolling(window=14).std()
+    weight_volatility = 1 / (1 + np.exp(-volatility))
+    weight_stability = 1 - weight_volatility
+
+    # Additional adaptive indicators
+    macd = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+    signal = macd.ewm(span=9, adjust=False).mean()
+    macd_hist = macd - signal
+
+    # Multi-factor model
+    factor = (
+        (ema_price_movement * df['amount'] * weight_volatility) +
+        (rsi_adaptive * df['volume'] * weight_stability) +
+        (volume_trend * avg_price * weight_volatility) +
+        (dynamic_indicator * (df['amount'] + df['volume']) * weight_volatility) +
+        (seasonal_adj_price_movement * (df['amount'] + df['volume']) * weight_stability) +
+        (macd_hist * (df['amount'] + df['volume']) * weight_volatility)
+    ) / (3 * (df['amount'] + df['volume']))
+
+    return factor
+```

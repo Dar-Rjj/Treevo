@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, m=5):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=n).mean()
+    
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+    
+    # Calculate Cumulative Return
+    cumulative_return = daily_return.rolling(window=m).sum()
+    
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=m).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+    
+    # Adjust by Price Volatility
+    price_volatility = df['close'].rolling(window=m).std()
+    final_adjusted_cumulative_return = (adjusted_cumulative_return / price_volatility) + 1
+    
+    # Calculate Weighted Momentum
+    log_return = np.log(df['close']) - np.log(df['close'].shift(m))
+    weights = np.exp(np.linspace(0, -1, m))
+    weighted_log_returns = log_return.rolling(window=m).apply(lambda x: (x * weights).sum(), raw=True)
+    weighted_momentum = weighted_log_returns / intraday_volatility
+    
+    # Determine Trend Direction
+    short_term_ema = df['close'].ewm(span=7).mean()
+    long_term_ema = df['close'].ewm(span=20).mean()
+    trend_direction = np.where(short_term_ema > long_term_ema, 1, -1)
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    adjusted_momentum = trend_direction * volume_change
+    combined_factor = (weighted_momentum + adjusted_momentum) / 2
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    ema_difference = short_term_ema - long_term_ema
+    relative_strength = weighted_momentum - short_term_ema
+    volume_weighted_price_movement = (df['close'] * df['volume']).rolling(window=m).mean()
+    combined_factor = (relative_strength / volume_weighted_price_movement) + final_adjusted_cumulative_return
+    final_factor = combined_factor / ema_difference
+    
+    return final_factor
+```

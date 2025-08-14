@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Return
+    intraday_return = df['close'] / df['open'] - 1
+    
+    # Intraday Volatility
+    high_low_diff = df['high'] - df['low']
+    mean_high_low_diff = high_low_diff.rolling(window=20).mean()
+    std_high_low_diff = high_low_diff.rolling(window=20).std()
+    intraday_volatility = (high_low_diff - mean_high_low_diff) / std_high_low_diff
+    
+    # Adjust Intraday Return by Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Weighted by Volume
+    weighted_adjusted_return = adjusted_intraday_return * df['volume']
+    
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate N-Day Moving Average of Price Range
+    n_day_mavg_price_range = daily_price_range.rolling(window=20).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    price_change = df['close'].diff()
+    up_change = price_change.apply(lambda x: x if x > 0 else 0)
+    down_change = price_change.apply(lambda x: -x if x < 0 else 0)
+    avg_up = up_change.rolling(window=14).mean()
+    avg_down = down_change.rolling(window=14).mean()
+    rs = avg_up / avg_down
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Detect Volume and Amount Shock
+    volume_change = df['volume'].pct_change()
+    amount_change = df['amount'].pct_change()
+    volume_shock = (volume_change > 0.5) & (amount_change > 0.5)
+    
+    # Calculate N-Day Moving Average of Volume
+    n_day_mavg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Volume Trend
+    volume_trend = (df['volume'] > n_day_mavg_volume).astype(int) * 2 - 1
+    
+    # Determine Range-to-Range Ratio
+    prev_day_high_low_range = (df['high'].shift(1) - df['low'].shift(1)).fillna(daily_price_range)
+    range_to_range_ratio = daily_price_range / prev_day_high_low_range
+    
+    # Integrate Volume Sensitivity
+    volume_ratio = df['volume'] / df['volume'].shift(1).fillna(df['volume'])
+    adjusted_range_to_range_ratio = range_to_range_ratio * volume_ratio
+    
+    # Adjust Momentum Factors with Volume and Amount Shock
+    volume_shock_indicator = volume_shock.astype(int)
+    adjusted_n_day_mavg_price_range = n_day_mavg_price_range * volume_shock_indicator
+    adjusted_rsi = rsi * volume_shock_indicator
+    adjusted_intraday_return_with_volume_shock = weighted_adjusted_return * volume_shock_indicator
+    adjusted_intraday_return_with_amount_shock = weighted_adjusted_return * amount_change
+    
+    # Combine Adjusted Intraday Return, Adjusted Range-to-Range Ratio, and Volume-Adjusted Momentum
+    combined_momentum = adjusted_intraday_return_with_volume_shock * adjusted_range_to_range_ratio * adjusted_rsi * volume_trend
+    
+    # Final Factor Calculation
+    final_factor = combined_momentum * volume_shock_indicator
+    
+    return final_factor
+```

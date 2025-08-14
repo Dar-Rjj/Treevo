@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=10, short_term_days=7, long_term_days=90, weight_price=0.5, weight_short_term=0.3, weight_long_term=0.2, smooth_window=15):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = (df['high'] - df['low']).abs()
+    
+    # Determine Price Momentum
+    df['close_open_return'] = (df['close'] - df['open']) / df['open']
+    df['price_momentum'] = (df['close'].pct_change().rolling(window=lookback_period).sum() * df['close_open_return'])
+    
+    # Adjust for Historical Volatility
+    df['daily_return'] = df['close'].pct_change()
+    df['historical_volatility'] = df['daily_return'].rolling(window=lookback_period).std()
+    df['adjusted_price_momentum'] = df['price_momentum'] / df['historical_volatility']
+    
+    # Integrate Volume and Price Momentum
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_weighted_momentum'] = df['volume_change'] * df['price_momentum']
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] - df['close'].shift(short_term_days)) / df['close'].shift(short_term_days)
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] - df['close'].shift(long_term_days)) / df['close'].shift(long_term_days)
+    
+    # Volume-Weighted Short-Term Return
+    df['vol_weighted_short_term_return'] = df['short_term_return'] * df['volume'].shift(1)
+    
+    # Volume-Weighted Long-Term Return
+    df['vol_weighted_long_term_return'] = df['long_term_return'] * df['volume'].shift(1)
+    
+    # Adjust Momentum by Intraday Volatility
+    df['adjusted_vol_weighted_short_term_return'] = df['vol_weighted_short_term_return'] / df['intraday_volatility']
+    df['adjusted_vol_weighted_long_term_return'] = df['vol_weighted_long_term_return'] / df['intraday_volatility']
+    
+    # Combine Adjusted Momentum Factors
+    df['combined_adjusted_momentum'] = (
+        weight_price * df['adjusted_price_momentum'] +
+        weight_short_term * df['adjusted_vol_weighted_short_term_return'] +
+        weight_long_term * df['adjusted_vol_weighted_long_term_return']
+    )
+    
+    # Reversal Indicator
+    df['reversal_indicator'] = -df['combined_adjusted_momentum']
+    
+    # Calculate 10-Day Moving Average of Close Price
+    df['10_day_ma'] = df['close'].rolling(window=10).mean()
+    
+    # Calculate 20-Day Moving Average of Close Price
+    df['20_day_ma'] = df['close'].rolling(window=20).mean()
+    
+    # Trend Indicator
+    df['trend_indicator'] = df['10_day_ma'] - df['20_day_ma']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['reversal_indicator'] + df['trend_indicator']
+    
+    # Smoothed Momentum Calculation
+    df['smoothed_momentum'] = df['adjusted_price_momentum'].rolling(window=smooth_window).median()
+    df['first_difference'] = df['smoothed_momentum'] - df['smoothed_momentum'].shift(1)
+    
+    return df['final_alpha_factor']
+```

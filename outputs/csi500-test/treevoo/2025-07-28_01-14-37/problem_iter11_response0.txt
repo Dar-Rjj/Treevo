@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import skew, kurtosis
+
+def heuristics_v2(df, n=20, m=10):
+    # Compute Close Price Difference
+    close_diff = df['close'].diff(periods=n)
+    
+    # Smoothing the Momentum
+    momentum_smoothed = close_diff.rolling(window=m).mean()
+    
+    # Volume Weighing Process
+    mean_volume = df['volume'].rolling(window=n).mean()
+    daily_volume_ratio = df['volume'] / mean_volume
+    adjusted_momentum = momentum_smoothed * daily_volume_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Logarithmic Return
+    log_return = np.log(intraday_return + 1e-6)  # Small constant to avoid log(0)
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Combine Intraday Momentum and Volatility
+    weighted_intraday_return = intraday_return * df['volume']
+    weighted_intraday_range = intraday_range * df['volume']
+    combined_factor = (weighted_intraday_return + weighted_intraday_range) / df['volume']
+    
+    # Adjust for Skewness and Kurtosis
+    skewness = skew(combined_factor.dropna())
+    kurt = kurtosis(combined_factor.dropna())
+    combined_factor = (combined_factor - combined_factor.mean()) / combined_factor.std()
+    combined_factor = (combined_factor - skewness) / (kurt + 1)
+    
+    # Integrate Volume Adjusted Momentum
+    combined_factor += adjusted_momentum
+    
+    # Calculate Volume-Weighted Price Movement
+    weighted_price = (df['high'] + df['low'] + df['close']) * np.sqrt(df['volume'])
+    total_weighted_price = weighted_price.sum()
+    total_volume = df['volume'].sum()
+    volume_weighted_price_movement = total_weighted_price / total_volume
+    
+    # Calculate Short-Term and Long-Term Momentum
+    short_term_momentum = df['close'].rolling(window=5).mean()
+    long_term_momentum = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    trend_direction = np.where(short_term_momentum > long_term_momentum, 1, -1)
+    
+    # Confirm with Volume
+    volume_change = df['volume'].diff()
+    confirmed_momentum = trend_direction * volume_change
+    
+    # Calculate Relative Strength
+    relative_strength = (short_term_momentum - long_term_momentum) / volume_weighted_price_movement
+    
+    # Final Alpha Factor
+    alpha_factor = 0.5 * (adjusted_momentum + relative_strength)
+    
+    # Adjust for Skewness and Kurtosis
+    skewness = skew(alpha_factor.dropna())
+    kurt = kurtosis(alpha_factor.dropna())
+    alpha_factor = (alpha_factor - alpha_factor.mean()) / alpha_factor.std()
+    alpha_factor = (alpha_factor - skewness) / (kurt + 1)
+    
+    return alpha_factor
+```

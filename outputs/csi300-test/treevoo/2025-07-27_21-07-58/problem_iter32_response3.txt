@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 1-Period Price Momentum
+    df['Price_Momentum_1D'] = df['close'].pct_change()
+
+    # Compute 5-Day Moving Average of Price Momentum
+    df['Price_Momentum_5D_MA'] = df['Price_Momentum_1D'].rolling(window=5).mean()
+
+    # Compute 10-Day Moving Average Volume Change
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Volume_Change_10D_MA'] = df['Volume_Change'].rolling(window=10).mean()
+
+    # Combine Price Momentum and Volume Surge
+    df['Momentum_Volume_Surge'] = df['Price_Momentum_5D_MA'] * df['Volume_Change_10D_MA']
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Change in High-Low Range
+    df['Change_High_Low_Range'] = df['High_Low_Range'].diff()
+
+    # Combine High-Low Range and Volume
+    df['High_Low_Volume'] = (df['Change_High_Low_Range'] * df['volume']) / df['close']
+
+    # Combine Adjusted Momentum, Volume, and Amount
+    df['Volume_Ratio'] = df['volume'] / df['volume'].rolling(window=10).mean()
+    df['Adjusted_Momentum'] = df['Price_Momentum_1D'] * df['Volume_Ratio']
+    df['Combined_Factor'] = df['Momentum_Volume_Surge'] + df['High_Low_Volume'] + df['Adjusted_Momentum']
+
+    # Incorporate High-Low Range Dynamics
+    df['High_Low_Range_5D_MA'] = df['High_Low_Range'].rolling(window=5).mean()
+    df['Change_High_Low_Range_5D_MA'] = df['Change_High_Low_Range'].rolling(window=5).mean()
+    df['High_Low_Dynamics'] = df['High_Low_Range_5D_MA'] * df['Change_High_Low_Range_5D_MA']
+
+    # Explore Basic Price Patterns
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Daily_Return_Close_to_Close'] = df['close'].pct_change()
+    df['Daily_Return_Open_to_Close'] = (df['close'] - df['open']) / df['open']
+    df['Daily_Gap'] = df['open'] - df['close'].shift(1)
+
+    # Investigate Intraday Dynamics
+    df['Volume_to_Price_Ratio'] = df['volume'] / df['close']
+    df['Intraday_Momentum'] = df['close'] - df['open']
+    df['Avg_Intraday_Momentum_5D'] = df['Intraday_Momentum'].rolling(window=5).mean()
+    df['Avg_Volume_to_Price_Ratio_5D'] = df['Volume_to_Price_Ratio'].rolling(window=5).mean()
+
+    # Analyze Gaps
+    df['Avg_Gap_5D'] = df['Daily_Gap'].rolling(window=5).mean()
+
+    # Combine All Factors for a Comprehensive Alpha
+    combined_factor = (
+        0.3 * df['Combined_Factor'] +
+        0.2 * df['High_Low_Dynamics'] +
+        0.1 * df['Daily_Return_Close_to_Close'] +
+        0.1 * df['Daily_Return_Open_to_Close'] +
+        0.1 * df['Avg_Intraday_Momentum_5D'] +
+        0.1 * df['Avg_Volume_to_Price_Ratio_5D'] +
+        0.1 * df['Avg_Gap_5D']
+    )
+
+    return combined_factor.dropna()
+```

@@ -1,0 +1,25 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = (df['close'].shift(-1) - df['open']) / df['open']
+    
+    # Assign Dynamic Weights Based on Recent Data
+    weights = [0.7, 0.3] if df.index[-1] - df.index[0] <= pd.Timedelta('5 days') else [0.5, 0.5]
+    
+    # Combine Intraday Range and Close-to-Open Return
+    df['weighted_intraday_range'] = df['intraday_range'] * weights[0]
+    df['weighted_close_to_open_return'] = df['close_to_open_return'] * weights[1]
+    df['final_alpha_factor'] = df['weighted_intraday_range'] + df['weighted_close_to_open_return']
+    
+    # Consider Market Dynamics: Integrate Volume and Amount
+    df['liquidity_factor'] = df['volume'] / df['amount']
+    
+    # Adjust Final Alpha Factor
+    df['adjusted_final_alpha_factor'] = df['final_alpha_factor'] * df['liquidity_factor']
+    
+    return df['adjusted_final_alpha_factor'].dropna()

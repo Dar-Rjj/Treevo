@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, m=10, p=5):
+    # Calculate Daily Price Range
+    df['price_range'] = df['high'] - df['low']
+    
+    # Calculate N-Day Moving Average of Price Range
+    df['avg_price_range'] = df['price_range'].rolling(window=n).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    df['upward_change'] = (df['close'] - df['close'].shift(1)).apply(lambda x: max(x, 0))
+    df['downward_change'] = (df['close'].shift(1) - df['close']).apply(lambda x: max(x, 0))
+    
+    df['avg_up'] = df['upward_change'].rolling(window=n).mean()
+    df['avg_down'] = df['downward_change'].rolling(window=n).mean()
+    
+    df['rs'] = df['avg_up'] / df['avg_down'].replace(0, 1e-6)
+    df['rsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Calculate Volume Adjusted Momentum
+    df['volume_adj_avg_price_range'] = df['avg_price_range'] * df['volume']
+    df['volume_adj_rsi'] = df['rsi'] * df['volume']
+    df['volume_adjusted_momentum'] = df['volume_adj_avg_price_range'] + df['volume_adj_rsi']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Compute Average True Range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    df['avg_true_range'] = df['true_range'].rolling(window=n).mean()
+    
+    # Determine Volume Trend
+    df['volume_trend'] = (df['volume'].rolling(window=m).sum() > df['volume'].shift(m).rolling(window=m).sum()).astype(int) * 2 - 1
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].rolling(window=p).mean()
+    
+    # Combine Factors
+    df['alpha_factor'] = (df['high_low_range'] * df['avg_true_range'] * df['volume_trend'] 
+                          + df['volume_adjusted_momentum'] 
+                          + df['price_momentum'])
+    
+    return df['alpha_factor']
+```

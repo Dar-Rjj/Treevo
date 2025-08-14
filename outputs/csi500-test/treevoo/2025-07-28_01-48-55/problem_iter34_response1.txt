@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) over a 10-day window
+    df['EMA'] = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate High-Low Price Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Volume-Adjusted High-Low Range
+    df['Volume_Adjusted_HL_Range'] = df['High_Low_Range'] * np.log(df['volume'])
+    
+    # Calculate Price Momentum
+    df['Price_Momentum'] = df['close'] - df['EMA']
+    
+    # Calculate Volume-Adjusted Spread
+    average_volume_20_day = df['volume'].rolling(window=20).mean()
+    relative_volume = df['volume'] / average_volume_20_day
+    df['Spread'] = df['high'] - df['low']
+    df['Volume_Adjusted_Spread'] = df['Spread'] * relative_volume
+    
+    # Calculate Momentum Factor
+    df['Momentum_Factor'] = df['Volume_Adjusted_HL_Range'].rolling(window=5).sum()
+    
+    # Calculate Price-Volatility Interaction
+    df['Daily_Price_Change'] = df['close'].diff()
+    df['Daily_Volume_Change'] = df['volume'].diff()
+    df['Price_Volatility_Interaction'] = df['Daily_Price_Change'] * df['Daily_Volume_Change']
+    
+    # Calculate Price Trend Strength
+    df['True_Range'] = df[['high', 'low']].apply(lambda x: max(x['high'], x['low']), axis=1)
+    df['Up_Move'] = df['high'] - df['high'].shift(1)
+    df['Down_Move'] = df['low'].shift(1) - df['low']
+    df['Positive_DM'] = (df['Up_Move'] > df['Down_Move']) * df['Up_Move']
+    df['Negative_DM'] = (df['Down_Move'] > df['Up_Move']) * df['Down_Move']
+    df['Directional_Index'] = 100 * (abs(df['Positive_DM'] - df['Negative_DM']).rolling(window=14).sum() /
+                                     (df['Positive_DM'] + df['Negative_DM']).rolling(window=14).sum())
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Price_Momentum'] -
+        df['Volume_Adjusted_Spread'] +
+        df['Momentum_Factor'] +
+        df['Price_Volatility_Interaction'] +
+        df['Directional_Index']
+    )
+    
+    return df['Final_Alpha_Factor']
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Log Return
+    short_term_log_return = np.log(df['close'] / df['close'].shift(5))
+    
+    # Calculate Long-Term Log Return
+    long_term_log_return = np.log(df['close'] / df['close'].shift(20))
+    
+    # Calculate Relative Strength
+    relative_strength = short_term_log_return - long_term_log_return
+    
+    # Weight by Volume and Average True Range
+    volume_avg = df['volume'].rolling(window=5).mean()
+    true_range = df.apply(lambda row: max(row['high'] - row['low'], 
+                                          abs(row['high'] - row['close'].shift(1)), 
+                                          abs(row['low'] - row['close'].shift(1))), axis=1)
+    atr = true_range.rolling(window=20).mean()
+    weighted_relative_strength = relative_strength * (volume_avg * atr)
+    
+    # Adjust for Recent Volume Trend
+    volume_momentum = (df['volume'] / df['volume'].shift(20)) - 1
+    adjusted_weighted_relative_strength = weighted_relative_strength * volume_momentum
+    
+    # Calculate Volume Volatility
+    volume_pct_change = df['volume'].pct_change()
+    volume_volatility = volume_pct_change.rolling(window=20).std()
+    
+    # Adjust Momentum by Inverse Volume Volatility
+    twenty_day_log_return = np.log(df['close'] / df['close'].shift(20))
+    adjusted_momentum = twenty_day_log_return / volume_volatility
+    
+    # Calculate Intraday Range Volatility
+    intraday_range_volatility = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume Scaled Intraday Movement
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_scaled_intraday_movement = intraday_return * df['volume']
+    
+    # Calculate Weighted Moving Average of Intraday Returns
+    weighted_moving_average_intraday_returns = volume_scaled_intraday_movement.rolling(window=5).mean()
+    
+    # Combine Indicators
+    combined_indicator = (volume_scaled_intraday_movement - intraday_range_volatility) + weighted_moving_average_intraday_returns + adjusted_momentum
+    
+    return combined_indicator
+```

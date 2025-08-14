@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import skew, kurtosis
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] / df['open'] - 1
+    
+    # Calculate Logarithmic Return
+    log_return = np.log(intraday_return + 1e-8)  # Add small constant to avoid log(0)
+    log_return = np.clip(log_return, np.percentile(log_return, 5), np.percentile(log_return, 95))  # Winsorize
+    
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Exponential Smoothing for Volume Weights
+    volume_weights = df['volume'].ewm(alpha=0.1).mean()
+    normalized_volume_weights = volume_weights / volume_weights.sum()
+    
+    # Weighted Sum
+    weighted_intraday_return = log_return * normalized_volume_weights
+    weighted_intraday_range = intraday_range * normalized_volume_weights
+    
+    combined_factor = (weighted_intraday_return + weighted_intraday_range) / 2
+    
+    # Adjust for Skewness and Kurtosis
+    skewness = skew(combined_factor)
+    kurt = kurtosis(combined_factor)
+    
+    adjusted_factor = (combined_factor - combined_factor.mean()) / combined_factor.std()
+    adjusted_factor = adjusted_factor - skewness * (adjusted_factor - adjusted_factor.mean())
+    adjusted_factor = adjusted_factor / (1 + 3 * (kurt - 1))
+    
+    return pd.Series(adjusted_factor, index=df.index)
+
+# Example usage
+# df = pd.DataFrame({
+#     'open': [100, 101, 99, 102],
+#     'high': [102, 103, 100, 104],
+#     'low': [98, 99, 97, 100],
+#     'close': [101, 102, 100, 103],
+#     'amount': [1000, 1500, 1200, 1600],
+#     'volume': [100, 150, 120, 160]
+# })
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

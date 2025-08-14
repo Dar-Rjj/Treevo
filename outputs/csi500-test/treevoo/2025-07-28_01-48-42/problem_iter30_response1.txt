@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Calculate Intraday Return Volatility
+    intraday_high_returns = df['high'] - df['open']
+    intraday_low_returns = df['low'] - df['open']
+    intraday_returns = pd.concat([intraday_high_returns, intraday_low_returns], axis=1)
+    intraday_volatility = intraday_returns.std(axis=1).rolling(window=10).std()
+    
+    # Compute Price Change
+    price_change = df['close'].diff(1)
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Compute 5-Day Momentum
+    five_day_momentum = price_change.rolling(window=5).sum()
+    
+    # Adjust Momentum by Open-Close Spread
+    momentum_adjusted = five_day_momentum * np.abs(open_close_spread)
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    combined_signal = momentum_adjusted / adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    enhanced_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Weighted Price Change
+    weighted_price_change = price_change * df['volume'] * np.sqrt(df['amount'])
+    
+    # Combine Adjusted Range with Weighted Price Change
+    combined_factor = enhanced_signal + weighted_price_change
+    
+    # Compute Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['open']
+    intraday_reversal = -intraday_return
+    
+    # Consider Close-to-Open Price Change
+    close_to_open_diff = df['open'] - df['close'].shift(1)
+    volume_adjusted_reversal = intraday_reversal * df['volume']
+    integrated_factor = volume_adjusted_reversal * close_to_open_diff
+    
+    # Adjust Momentum by Open-Close Spread (Intraday Reversal)
+    weighted_momentum = five_day_momentum * np.abs(open_close_spread)
+    integrated_combined_factor = combined_factor + weighted_momentum + integrated_factor
+    
+    # Calculate Price Momentum
+    daily_close_price_return = df['close'].pct_change()
+    smoothed_momentum = daily_close_price_return.ewm(span=12, adjust=False).mean()
+    
+    # Calculate Volume Spike Factor
+    volume_change = df['volume'].diff(1)
+    volume_spike_indicator = (volume_change > 2 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Compute Trend Strength
+    long_term_momentum = df['close'].pct_change().ewm(span=20, adjust=False).mean()
+    
+    # Generate New Factor Value
+    new_factor_value = (five_day_momentum / df['close']) + integrated_factor
+    generated_factor = 0.4 * new_factor_value + 0.2 * enhanced_signal
+    price_volatility_ratio = price_change / intraday_volatility
+    final_factor = 0.3 * intraday_volatility + 0.4 * generated_factor + 0.1 * price_volatility_ratio
+    
+    # Final Alpha Factor
+    alpha_factor = final_factor * volume_spike_indicator * long_term_momentum
+    
+    return alpha_factor
+```

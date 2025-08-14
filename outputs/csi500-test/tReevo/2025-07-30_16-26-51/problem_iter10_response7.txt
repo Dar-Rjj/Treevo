@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) / df['close'] - 1
+    
+    # Weight by Volume
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Define lookback periods
+    short_term = 5
+    mid_term = 10
+    long_term = 20
+    extended_term = 30
+    market_volatility_regime = 60
+    
+    # Calculate Simple Moving Averages and Standard Deviations for each lookback period
+    df[f'{short_term}_day_sma'] = df['volume_weighted_return'].rolling(window=short_term).mean()
+    df[f'{short_term}_day_std'] = df['volume_weighted_return'].rolling(window=short_term).std()
+    df[f'{mid_term}_day_sma'] = df['volume_weighted_return'].rolling(window=mid_term).mean()
+    df[f'{mid_term}_day_std'] = df['volume_weighted_return'].rolling(window=mid_term).std()
+    df[f'{long_term}_day_sma'] = df['volume_weighted_return'].rolling(window=long_term).mean()
+    df[f'{long_term}_day_std'] = df['volume_weighted_return'].rolling(window=long_term).std()
+    df[f'{extended_term}_day_sma'] = df['volume_weighted_return'].rolling(window=extended_term).mean()
+    df[f'{extended_term}_day_std'] = df['volume_weighted_return'].rolling(window=extended_term).std()
+    
+    # Calculate 60-day Standard Deviation for Market Volatility Regime
+    df[f'{market_volatility_regime}_day_std'] = df['volume_weighted_return'].rolling(window=market_volatility_regime).std()
+    
+    # Categorize Market as High, Medium, or Low Volatility
+    conditions = [
+        (df[f'{market_volatility_regime}_day_std'] > df[f'{market_volatility_regime}_day_std'].quantile(0.75)),
+        (df[f'{market_volatility_regime}_day_std'] < df[f'{market_volatility_regime}_day_std'].quantile(0.25))
+    ]
+    choices = ['High', 'Low']
+    df['market_volatility'] = np.select(conditions, choices, default='Medium')
+    
+    # Assign Weights to Short-Term, Mid-Term, Long-Term, and Extended Volatilities based on Market Conditions
+    def assign_weights(volatility):
+        if volatility == 'High':
+            return [0.4, 0.3, 0.2, 0.1]
+        elif volatility == 'Medium':
+            return [0.3, 0.3, 0.2, 0.2]
+        else:
+            return [0.2, 0.2, 0.3, 0.3]
+    
+    df['volatility_weights'] = df['market_volatility'].apply(assign_weights)
+    df['combined_volatility'] = (df['volatility_weights'].apply(lambda x: x[0]) * df[f'{short_term}_day_std'] +
+                                 df['volatility_weights'].apply(lambda x: x[1]) * df[f'{mid_term}_day_std'] +
+                                 df['volatility_weights'].apply(lambda x: x[2]) * df[f'{long_term}_day_std'] +
+                                 df['volatility_weights'].apply(lambda x: x[3]) * df[f'{extended_term}_day_std'])
+    
+    # Final Factor
+    df['final_factor'] = df['volume_weighted_return'] / df['combined_volatility']
+    
+    return df['final_factor'].dropna()
+
+# Example usage
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(df)
+```

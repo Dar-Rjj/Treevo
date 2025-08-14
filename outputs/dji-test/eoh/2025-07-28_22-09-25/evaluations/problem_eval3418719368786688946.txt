@@ -1,0 +1,24 @@
+def heuristics_v2(df):
+    # Calculate the 14-period ADX for trend strength
+    tr = df['high'].combine(df['low'].shift(1), max) - df['low'].combine(df['high'].shift(1), min)
+    atr = tr.rolling(window=14).mean()
+    
+    up_move = df['high'] - df['high'].shift(1)
+    down_move = df['low'].shift(1) - df['low']
+    plus_dm = up_move.where(up_move > down_move, other=0).where(up_move > 0, other=0)
+    minus_dm = down_move.where(down_move > up_move, other=0).where(down_move > 0, other=0)
+    plus_di = 100 * (plus_dm / atr).rolling(window=14).mean()
+    minus_di = 100 * (minus_dm / atr).rolling(window=14).mean()
+    adx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).rolling(window=14).mean()
+
+    # Volatility-adjusted price change
+    close_sma_20 = df['close'].rolling(window=20).mean()
+    vol_adj_price_change = (df['close'] - close_sma_20) / df['close'].rolling(window=20).std()
+
+    # Volume-weighted 10-day standard deviation of daily returns
+    daily_returns = df['close'].pct_change()
+    std_dev_10 = daily_returns.rolling(window=10).std() * df['volume'].rolling(window=10).mean()
+
+    # Heuristic combination: Weighted sum of ADX, volatility-adjusted price change, and volume-weighted standard deviation
+    heuristics_matrix = 0.3 * adx + 0.4 * vol_adj_price_change + 0.3 * std_dev_10
+    return heuristics_matrix

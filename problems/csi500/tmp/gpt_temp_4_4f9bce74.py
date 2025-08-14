@@ -1,0 +1,78 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].ewm(span=10).mean()
+    
+    # Calculate Medium-Term Price Momentum
+    medium_term_momentum = df['close'] - df['close'].ewm(span=30).mean()
+    
+    # Calculate Long-Term Price Momentum
+    long_term_momentum = df['close'] - df['close'].ewm(span=50).mean()
+    
+    # Combine Multi-Period Momenta
+    combined_momentum = 0.4 * short_term_momentum + 0.3 * medium_term_momentum + 0.3 * long_term_momentum
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = (df['close'] / df['open']) - 1
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Combined Momentum by Volume-Weighted Average Return
+    adjusted_momentum = combined_momentum * volume_weighted_returns
+    
+    # Assess Trend Following Potential
+    trend_50_day_ema = df['close'].ewm(span=50).mean()
+    trend_weight = (trend_50_day_ema > df['close']).astype(float) * 0.5 + 0.5
+    trend_component = trend_weight * (df['close'] - trend_50_day_ema)
+    
+    # Determine Final Factor Value
+    final_factor = adjusted_momentum + trend_component
+    
+    # Additional Enhancements
+    # Calculate Dynamic Short-Term Volatility
+    short_term_volatility = (df['high'] - df['low']).ewm(span=10).mean()
+    
+    # Calculate Dynamic Medium-Term Volatility
+    medium_term_volatility = (df['high'] - df['low']).ewm(span=30).mean()
+    
+    # Calculate Dynamic Long-Term Volatility
+    long_term_volatility = (df['high'] - df['low']).ewm(span=50).mean()
+    
+    # Combine Multi-Period Volatilities
+    combined_volatility = short_term_volatility + medium_term_volatility + long_term_volatility
+    
+    # Adjust Combined Momentum by Combined Volatility
+    adjusted_momentum_by_volatility = adjusted_momentum / combined_volatility
+    
+    # Re-evaluate Final Factor Value
+    final_factor = adjusted_momentum_by_volatility + trend_component
+    
+    # Incorporate Market Data
+    # Calculate Market Sentiment
+    sentiment_scores = df['sentiment']  # Assuming 'sentiment' column is available
+    sentiment_ema = sentiment_scores.ewm(span=10).mean()
+    
+    # Adjust Final Factor Value by Market Sentiment
+    final_factor = final_factor * sentiment_ema
+    
+    # Advanced Statistical Methods
+    # Calculate Skewness of Daily Returns
+    skewness = daily_returns.rolling(window=30).apply(lambda x: pd.Series(x).skew(), raw=True)
+    
+    # Adjust Final Factor Value by Skewness
+    final_factor = final_factor - skewness
+    
+    # Consider Macroeconomic Indicators
+    # Collect Recent Inflation Rates
+    inflation_rate = df['inflation_rate']  # Assuming 'inflation_rate' column is available
+    
+    # Adjust Final Factor Value by Inflation
+    final_factor = final_factor - inflation_rate
+    
+    # Final Alpha Factor
+    final_alpha_factor = final_factor
+    
+    return final_alpha_factor

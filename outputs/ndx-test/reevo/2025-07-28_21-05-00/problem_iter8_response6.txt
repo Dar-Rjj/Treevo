@@ -1,0 +1,66 @@
+```python
+def heuristics_v2(df: pd.DataFrame, macro_data: pd.DataFrame) -> pd.Series:
+    # Calculate price change and volume change
+    price_change = df['close'] - df['open']
+    volume_change = df['volume'].pct_change()
+
+    # Calculate the average of high and low, then subtract the close price
+    avg_high_low = (df['high'] + df['low']) / 2
+    diff_close_avg = df['close'] - avg_high_low
+
+    # Calculate the momentum factor as the difference between the current close and the 5-day moving average of the close
+    momentum_5d = df['close'] - df['close'].rolling(window=5).mean()
+
+    # Calculate the relative strength index (RSI) for the last 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # Calculate the volatility as the standard deviation of the price change over the last 10 days
+    volatility = price_change.rolling(window=10).std()
+
+    # Calculate the money flow index (MFI) for the last 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(price_change > 0, 0)
+    negative_money_flow = raw_money_flow.where(price_change < 0, 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    mfi = 100 - (100 / (1 + money_ratio))
+
+    # Integrate macroeconomic data
+    macro_data_aligned = macro_data.reindex(df.index, method='ffill')
+    combined_features = pd.concat([price_change, volume_change, diff_close_avg, momentum_5d, rsi, volatility, mfi, macro_data_aligned], axis=1)
+
+    # Use machine learning for factor synthesis
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.metrics import mean_squared_error
+    from sklearn.preprocessing import StandardScaler
+
+    # Prepare training data
+    X = combined_features.dropna().values
+    y = df['close'][combined_features.dropna().index].shift(-1).dropna().values  # Predict next day's close price
+
+    # Normalize features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Train a Random Forest model
+    tscv = TimeSeriesSplit(n_splits=5)
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    for train_index, test_index in tscv.split(X_scaled):
+        X_train, X_test = X_scaled[train_index], X_scaled[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+        mse = mean_squared_error(y_test, predictions)
+        print(f"Mean Squared Error: {mse}")
+
+    # Generate factor values using the trained model
+    factor_values = model.predict(X_scaled)
+    factor_series = pd.Series(factor_values, index=combined_features.dropna().index)
+
+    return factor_series
+```

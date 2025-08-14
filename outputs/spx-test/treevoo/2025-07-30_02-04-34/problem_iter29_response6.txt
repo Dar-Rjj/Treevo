@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum-Based Factor
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    momentum_difference = short_term_momentum - long_term_momentum
+
+    # Volume and Price Change Analysis
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_volume_5_days = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    enhanced_volume_change = volume_change * volume_ratio
+    signed_power_sum = ((df['close'] - df['open']) ** 2).rolling(window=5).sum()
+
+    # Enhanced Price Action Factor
+    daily_range = df['high'] - df['low']
+    daily_spread = df['close'] - df['open']
+    high_close_spread = df['high'] - df['close']
+    price_action_factor = (daily_spread / daily_range) - high_close_spread
+    combined_market_action = daily_range + abs(daily_spread)
+
+    # Intraday Analysis
+    intraday_high_low_spread = df['high'] - df['low']
+    close_open_spread = df['close'] - df['open']
+    intraday_return = (intraday_high_low_spread / df['close']).ewm(span=5, adjust=False).mean().shift(1)
+    avg_volume_5_periods = df['volume'].rolling(window=5).mean()
+    intraday_momentum_difference = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    smoothed_intraday_return = intraday_return.ewm(span=5, adjust=False).mean().shift(1)
+    intraday_momentum_difference_adjusted = intraday_momentum_difference / avg_volume_5_periods
+    volume_change_comparison = df['volume'] - df['volume'].shift(1)
+    volume_change_rolling_avg = volume_change_comparison.rolling(window=25).mean()
+    volume_spike = (volume_change > 1.75 * volume_change_rolling_avg).astype(int)
+    intraday_momentum_difference_spike = intraday_momentum_difference * volume_spike
+    smoothed_intraday_momentum_difference = intraday_momentum_difference_spike.rolling(window=4).mean().shift(1)
+
+    # Composite Factor
+    composite_factor = 0.4 * momentum_difference + 0.3 * enhanced_volume_change + 0.3 * price_action_factor
+
+    # Final Alpha Signal
+    final_alpha_signal = (momentum_difference * smoothed_intraday_return) * (enhanced_volume_change * volume_spike) + smoothed_intraday_momentum_difference
+
+    return final_alpha_signal
+```

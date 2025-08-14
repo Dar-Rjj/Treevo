@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate short-term and long-term SMAs
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # SMA Crossover Signal
+    df['SMA_Crossover'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Calculate True Range
+    df['TR'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    
+    # Calculate Average True Range (ATR) over 14 days
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = np.where(df['close'] > df['close'].shift(1), df['volume'], 
+                         np.where(df['close'] < df['close'].shift(1), -df['volume'], 0)).cumsum()
+    
+    # Volume Spike (Volume significantly higher than a moving average)
+    df['Volume_Mean_10'] = df['volume'].rolling(window=10).mean()
+    df['Volume_Spike'] = (df['volume'] > 1.5 * df['Volume_Mean_10']).astype(int)
+    
+    # Inside Bar Pattern
+    df['Inside_Bar'] = ((df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))).astype(int)
+    
+    # Outside Bar Pattern
+    df['Outside_Bar'] = ((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))).astype(int)
+    
+    # Bullish Engulfing Pattern
+    df['Bullish_Engulfing'] = ((df['open'] > df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & 
+                               (df['open'] < df['close'])).astype(int)
+    
+    # Bearish Engulfing Pattern
+    df['Bearish_Engulfing'] = ((df['open'] < df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & 
+                               (df['open'] > df['close'])).astype(int)
+    
+    # Composite Factor
+    df['Momentum_Factor'] = df['SMA_Crossover']
+    df['Volume_Factor'] = df['OBV'] / df['volume'].rolling(window=20).mean()
+    df['Volatility_Factor'] = 1 / df['ATR_14']
+    df['Pattern_Factor'] = (df['Inside_Bar'] + df['Outside_Bar'] + df['Bullish_Engulfing'] - df['Bearish_Engulfing'])
+    
+    # Combine factors with weights
+    alpha_factor = (0.4 * df['Momentum_Factor'] + 
+                    0.3 * df['Volume_Factor'] + 
+                    0.2 * df['Volatility_Factor'] + 
+                    0.1 * df['Pattern_Factor'])
+    
+    return alpha_factor
+```

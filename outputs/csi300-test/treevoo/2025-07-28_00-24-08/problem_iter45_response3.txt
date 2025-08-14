@@ -1,0 +1,90 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Simple Daily Returns
+    df['simple_daily_return'] = df['close'].pct_change()
+    
+    # Open-Close Spread
+    df['open_close_spread'] = df['close'] - df['open']
+    
+    # Intraday Return (Enhanced)
+    df['intraday_return_enhanced'] = (df['close'] - df['open']) / df['open']
+    
+    # Previous Day's Close-to-Open Return
+    df['prev_close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Aggregate Returns
+    df['aggregate_returns'] = df['intraday_return_enhanced'] + df['prev_close_to_open_return']
+    
+    # Volume Confirmation
+    df['volume_confirmation'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Short-Term Price Momentum
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Long-Term Price Momentum
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Price Momentum Ratio
+    df['price_momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum']
+    
+    # Generate Final Momentum Factor
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['final_momentum_factor'] = df['log_returns'].rolling(window=20).sum() * df['volume_confirmation']
+    
+    # High-Low Volatility
+    df['high_low_volatility'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Amount to Volume Ratio
+    df['amount_to_volume_ratio'] = df['amount'] / df['volume']
+    
+    # Weighted Sum of Factors
+    weights = [0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.3]
+    df['weighted_sum_factors'] = (
+        weights[0] * df['simple_daily_return'] +
+        weights[1] * df['open_close_spread'] +
+        weights[2] * df['aggregate_returns'] +
+        weights[3] * df['volume_confirmation'] +
+        weights[4] * df['price_momentum_ratio'] +
+        weights[5] * df['high_low_volatility'] +
+        weights[6] * df['amount_to_volume_ratio']
+    )
+    
+    # Smoothed Moving Average of Volume-Adjusted Returns
+    df['volume_adjusted_returns'] = df['close'].pct_change() * df['volume']
+    df['sma_volume_adjusted_returns'] = df['volume_adjusted_returns'].rolling(window=5).mean()
+    df['ema_sma_volume_adjusted_returns'] = df['sma_volume_adjusted_returns'].ewm(span=5, adjust=False).mean()
+    
+    # Final Alpha Factor (unadjusted)
+    df['final_alpha_factor_unadjusted'] = (
+        df['weighted_sum_factors'] * 
+        df['ema_sma_volume_adjusted_returns'] * 
+        df['final_momentum_factor'] * 
+        df['high_low_volatility']
+    )
+    
+    # RSI
+    def rsi(values, period=14):
+        diff = values.diff(1)
+        gain = diff.where(diff > 0, 0)
+        loss = -diff.where(diff < 0, 0)
+        avg_gain = gain.rolling(period).mean()
+        avg_loss = loss.rolling(period).mean()
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    
+    df['rsi'] = rsi(df['close'])
+    
+    # Recent Price Slope
+    df['recent_price_slope'] = df['close'].rolling(window=10).apply(lambda x: np.polyfit(range(10), x, 1)[0], raw=True)
+    
+    # Momentum Adjustment
+    df['final_alpha_factor'] = df['final_alpha_factor_unadjusted'] * (1 + df['recent_price_slope'])
+    
+    # Moving Average Crossover
+    df['short_term_ma'] = df['close'].rolling(window=10).mean()
+    df['long_term_ma'] = df['close'].rolling(window=50).mean()
+    df['crossover_signal'] = (df['short_term_ma'] > df['long_term_ma']).astype(int)
+

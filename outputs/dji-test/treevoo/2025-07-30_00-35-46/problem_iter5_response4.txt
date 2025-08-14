@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Adjust for Volume
+    df['volume_adj'] = df['volume'] / (df['volume'].rolling(window=5).mean() + 1)
+    
+    # Combine Intraday Range and Volume Adjustment
+    df['combined_range_volume'] = df['intraday_range'] * df['volume_adj']
+    
+    # Smoothing
+    df['smoothed_range_volume'] = df['combined_range_volume'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate Exponential Moving Average (EMA) Cross Signal
+    df['ema_short'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['ema_long'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Determine Momentum
+    df['momentum'] = df.apply(lambda row: 'bullish' if row['ema_short'] > row['ema_long'] else 'bearish', axis=1)
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    
+    # Weight OBV by the Difference between Short and Long EMA
+    df['weight'] = abs(df['ema_short'] - df['ema_long'])
+    df['obv_weighted'] = df['obv'] * df['weight']
+    
+    # Multiply Smoothed Intraday Momentum by OBV Factor
+    df['smoothed_momentum_obv'] = df['smoothed_range_volume'] * df['obv_weighted']
+    
+    # Calculate Intraday Momentum
+    df['high_low_return'] = df['high'] - df['low']
+    df['open_close_return'] = df['close'] - df['open']
+    df['intraday_momentum'] = (df['high_low_return'] + df['open_close_return']) / 2
+    
+    # Apply Volume and Amount Shock Filter
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['amount_ratio'] = df['amount'] / df['amount'].shift(1)
+    
+    df['shock_filter'] = (df['volume_ratio'] > 1.5) & (df['amount_ratio'] > 1.5)
+    df['intraday_momentum_shocked'] = df['intraday_momentum'] * df['shock_filter']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['smoothed_momentum_obv'] * df['intraday_momentum_shocked']
+    
+    return df['alpha_factor']
+```

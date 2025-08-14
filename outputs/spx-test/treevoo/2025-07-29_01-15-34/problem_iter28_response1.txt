@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the Momentum Factor
+    df['10_day_MA'] = df['close'].rolling(window=10).mean()
+    df['50_day_MA'] = df['close'].rolling(window=50).mean()
+    df['Momentum_Factor'] = df['10_day_MA'] - df['50_day_MA']
+    
+    # Calculate the Money Flow Index (MFI)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Raw_Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Money_Flow_Ratio'] = df['Raw_Money_Flow'].rolling(window=14).sum() / df['Raw_Money_Flow'].rolling(window=14, center=False).apply(lambda x: x[x < 0].sum(), raw=False)
+    df['MFI'] = 100 - (100 / (1 + df['Money_Flow_Ratio']))
+    
+    # Calculate the Relative Strength Index (RSI)
+    df['Price_Change'] = df['close'].diff(1)
+    df['Gain'] = df['Price_Change'].apply(lambda x: max(x, 0))
+    df['Loss'] = abs(df['Price_Change'].apply(lambda x: min(x, 0)))
+    df['Average_Gain'] = df['Gain'].rolling(window=14).mean()
+    df['Average_Loss'] = df['Loss'].rolling(window=14).mean()
+    df['RS'] = df['Average_Gain'] / df['Average_Loss']
+    df['RSI'] = 100 - (100 / (1 + df['RS']))
+    
+    # Calculate the On-Balance Volume (OBV)
+    df['OBV'] = 0
+    obv = []
+    for i in range(len(df)):
+        if i == 0:
+            obv.append(df['volume'][i])
+        else:
+            if df['close'][i] > df['close'][i-1]:
+                obv.append(obv[-1] + df['volume'][i])
+            elif df['close'][i] < df['close'][i-1]:
+                obv.append(obv[-1] - df['volume'][i])
+            else:
+                obv.append(obv[-1])
+    df['OBV'] = obv
+    
+    # Combine all factors to a single alpha factor using a simple average
+    df['Alpha_Factor'] = (df['Momentum_Factor'] + df['MFI'] + df['RSI'] + df['OBV']) / 4
+    
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def heuristics_v2(df):
+    # Momentum factor
+    df['short_term_return'] = df['close'].pct_change(5)
+    df['medium_term_return'] = df['close'].pct_change(20)
+    df['momentum_factor'] = 0.7 * df['short_term_return'] + 0.3 * df['medium_term_return']
+    
+    # Volume-based alpha factor
+    df['avg_volume_20_days'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_20_days']
+    df['volume_change'] = df['volume'].pct_change(1)
+    
+    # Fit a linear regression to the volume data over the past 10 days
+    def fit_volume_slope(series):
+        if len(series) < 10:
+            return np.nan
+        X = np.arange(len(series)).reshape(-1, 1)
+        y = series.values
+        model = LinearRegression().fit(X, y)
+        return model.coef_[0]
+    
+    df['volume_slope'] = df['volume'].rolling(window=10).apply(fit_volume_slope, raw=False)
+    
+    # Volatility-based alpha factor
+    df['daily_price_range'] = df['high'] - df['low']
+    df['std_dev_close_20_days'] = df['close'].rolling(window=20).std()
+    df['composite_volatility'] = np.sqrt(df['daily_price_range'] * df['std_dev_close_20_days'])
+    
+    # Transaction amount (dollar volume) alpha factor
+    df['amount'] = df['close'] * df['volume']
+    df['avg_amount_20_days'] = df['amount'].rolling(window=20).mean()
+    df['amount_std_20_days'] = df['amount'].rolling(window=20).std()
+    df['amount_cv'] = df['amount_std_20_days'] / df['avg_amount_20_days']
+    
+    # Fit a linear regression to the transaction amounts over the last 10 days
+    def fit_amount_slope(series):
+        if len(series) < 10:
+            return np.nan
+        X = np.arange(len(series)).reshape(-1, 1)
+        y = series.values
+        model = LinearRegression().fit(X, y)
+        return model.coef_[0]
+    
+    df['amount_slope'] = df['amount'].rolling(window=10).apply(fit_amount_slope, raw=False)
+    
+    # Combine all factors into a single composite factor
+    df['alpha_factor'] = (
+        0.4 * df['momentum_factor'] + 
+        0.2 * df['volume_slope'] +
+        0.2 * (1 / df['composite_volatility']) +
+        0.2 * df['amount_slope']
+    )
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    df['adjusted_daily_return'] = df['daily_return']
+    df.loc[df['price_gap'] > 0, 'adjusted_daily_return'] -= df['price_gap']
+    df.loc[df['price_gap'] < 0, 'adjusted_daily_return'] += abs(df['price_gap'])
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'].ewm(span=5).mean().diff()
+    
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-to-Low Price Range Momentum
+    df['high_low_range_momentum'] = df['high_low_range'].diff()
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Calculate Amount Acceleration
+    df['amount_ema'] = df['amount'].ewm(span=5).mean()
+    df['amount_acceleration'] = df['amount_ema'].diff()
+    
+    # Confirm High-Low Spread with Volume and Adjusted by Amount Acceleration
+    df['combined_high_low_spread'] = df['high_low_range_momentum'] * df['volume_change']
+    df['combined_high_low_spread'] *= df['amount_acceleration']
+    
+    # Smoothing Filter
+    df['smoothed_combined_high_low_spread'] = df['combined_high_low_spread'].rolling(window=10).mean()
+    
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['integrated_momentum'] = (df['price_momentum'] + df['high_low_range_momentum']) * df['smoothed_combined_high_low_spread']
+    
+    # Adjust by Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine Adjusted Daily Return, Integrated Momentum, and Volume Change
+    df['final_factor'] = df['adjusted_daily_return'] * df['integrated_momentum'] * df['volume_ratio']
+    
+    # Ensure Positive Factor
+    df['final_factor'] = df['final_factor'].apply(lambda x: max(x, 0))
+    
+    return df['final_factor']
+```

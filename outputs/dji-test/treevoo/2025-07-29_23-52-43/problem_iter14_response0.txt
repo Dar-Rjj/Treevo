@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['PrevClose'] = df['close'].shift(1)
+    df['CloseToPrevCloseReturn'] = (df['close'] - df['PrevClose']) / df['PrevClose']
+    
+    # Calculate High-Low Breakout Intensity
+    df['BreakoutIntensity'] = (df['high'] - df['low']) / df['close']
+    df['BreakoutIntensity'] = df['BreakoutIntensity'].apply(lambda x: max(x, 0))
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Calculate Previous Day's High-Low Spread
+    df['PrevDayHighLowSpread'] = (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['DailyVWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['PrevDayVWAP'] = df['DailyVWAP'].shift(1)
+    
+    # Incorporate Open and Close Prices
+    df['IntradayOpenCloseSpread'] = df['open'] - df['close']
+    df['PrevDayOpenCloseSpread'] = (df['open'].shift(1) - df['close'].shift(1))
+    
+    # Weight by Volume
+    df['VolumeWeightedCombinedMetrics'] = df['volume'] * (df['IntradayReturn'] + df['CloseToPrevCloseReturn'] + df['BreakoutIntensity'])
+    
+    # Combine Intraday Momentum, VWAP, and Open-Close Spread
+    df['MomentumDifference'] = df['IntradayHighLowSpread'] - df['PrevDayHighLowSpread']
+    df['VWAPDifference'] = df['DailyVWAP'] - df['PrevDayVWAP']
+    df['OpenCloseSpreadDifference'] = df['IntradayOpenCloseSpread'] - df['PrevDayOpenCloseSpread']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (df['MomentumDifference'] * df['VWAPDifference']) + df['OpenCloseSpreadDifference'] + df['VolumeWeightedCombinedMetrics']
+    
+    # Adjust for Volatility
+    df['RollingVolatility'] = df['IntradayHighLowSpread'].rolling(window=20).std()
+    df['AdjustedFinalAlphaFactor'] = df['FinalAlphaFactor'] / df['RollingVolatility']
+    
+    # Calculate Daily High-Low Difference
+    df['DailyHighLowDiff'] = df['high'] - df['low']
+    
+    # Calculate Moving Average of High-Low Differences
+    df['MovingAvgHighLowDiff'] = df['DailyHighLowDiff'].rolling(window=10).mean()
+    
+    # Add Price Trend Confirmation
+    df['5DaySMA'] = df['close'].rolling(window=5).mean()
+    df['20DaySMA'] = df['close'].rolling(window=20).mean()
+    df['PriceTrend'] = (df['5DaySMA'] > df['20DaySMA']).astype(int) * 2 - 1
+    
+    # Synthesize Final Alpha Factor
+    df['FinalAlphaFactor'] = df['AdjustedFinalAlphaFactor'] + df['MovingAvgHighLowDiff']
+    df['FinalAlphaFactor'] = df['FinalAlphaFactor'] * df['PriceTrend']
+    
+    return df['FinalAlphaFactor']
+```

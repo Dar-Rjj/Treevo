@@ -1,0 +1,49 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the daily log return
+    df['daily_log_return'] = np.log(df['close']).diff()
+    
+    # Calculate the 5-day, 20-day, and 60-day rolling standard deviation of the log returns to use as a volatility measure
+    df['volatility_5'] = df['daily_log_return'].rolling(window=5).std()
+    df['volatility_20'] = df['daily_log_return'].rolling(window=20).std()
+    df['volatility_60'] = df['daily_log_return'].rolling(window=60).std()
+    
+    # Calculate the volume-weighted price change
+    df['volume_scaled_price_change'] = (df['close'] - df['open']) * df['volume']
+    
+    # Calculate the 5-day moving average of the volume-scaled price change
+    df['ma_volume_scaled_price_change_5'] = df['volume_scaled_price_change'].rolling(window=5).mean()
+    
+    # Calculate the 10-day, 30-day, and 90-day moving averages of the closing price
+    df['ma_close_10'] = df['close'].rolling(window=10).mean()
+    df['ma_close_30'] = df['close'].rolling(window=30).mean()
+    df['ma_close_90'] = df['close'].rolling(window=90).mean()
+    
+    # Calculate the ratio of the current day's close to the 10-day moving average of the closing price
+    df['close_ma_ratio_10'] = df['close'] / df['ma_close_10']
+    
+    # Integrate trend strength by calculating the difference between the 10-day and 90-day moving averages of the closing prices
+    df['trend_strength'] = df['ma_close_10'] - df['ma_close_90']
+    
+    # Calculate the 5-day and 20-day momentum
+    df['momentum_5'] = df['close'].pct_change(periods=5)
+    df['momentum_20'] = df['close'].pct_change(periods=20)
+    
+    # Adaptive window for volatility based on the 5-day and 20-day momentum
+    df['adaptive_volatility'] = (df['volatility_5'] * (1 + df['momentum_5'].abs()) + 
+                                df['volatility_20'] * (1 + df['momentum_20'].abs())) / 2
+    
+    # Dynamic weighting for the factors
+    weight_adaptive_volatility = 0.4
+    weight_volume_scaled_price_change = 0.3
+    weight_close_ma_ratio = 0.2
+    weight_trend_strength = 0.1
+    
+    # Combine the factors: adaptive volatility, volume-scaled price change, close-to-MA ratio, and trend strength
+    alpha_factor = (weight_adaptive_volatility * df['adaptive_volatility'] + 
+                    weight_volume_scaled_price_change * df['ma_volume_scaled_price_change_5'] * df['close_ma_ratio_10'] + 
+                    weight_close_ma_ratio * (df['close_ma_ratio_10'] - 1) + 
+                    weight_trend_strength * df['trend_strength'])
+    
+    return alpha_factor
+```

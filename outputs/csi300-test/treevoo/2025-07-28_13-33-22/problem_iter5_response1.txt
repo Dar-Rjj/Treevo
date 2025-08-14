@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=20, threshold=5):
+    # Calculate Daily Log Returns
+    df['log_return'] = df['close'].pct_change().apply(lambda x: np.log(1 + x))
+    
+    # Compute Weighted Average Log Return
+    df['weighted_log_return'] = (df['log_return'] * df['volume']).rolling(window=n).sum() / df['volume'].rolling(window=n).sum()
+    
+    # Incorporate Short-Term Price Reversal
+    df['high_low_range'] = df['high'] - df['low']
+    df['weighted_log_return_adjusted'] = df['weighted_log_return'] - df['high_low_range']
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = df['close'] - df['open']
+    
+    # Combine Momentum and Range
+    avg_intraday_range = df['intraday_range'].rolling(window=n).mean()
+    combined_factor = avg_intraday_range * (df['close_open_return'] + df['weighted_log_return'] - df['high_low_range'])
+    
+    # Adjust by Volume Spikes
+    df['volume_spike'] = df['volume'].diff()
+    df['scaled_combined_factor'] = combined_factor / df['volume_spike'].clip(lower=1)
+    df['capped_scaled_combined_factor'] = df['scaled_combined_factor'].clip(upper=threshold)
+    
+    # Weight by Relative Volume
+    average_volume = df['volume'].rolling(window=n).mean()
+    df['relative_volume'] = df['volume'] / average_volume
+    df['final_factor'] = df['capped_scaled_combined_factor'] * df['relative_volume']
+    
+    return df['final_factor']
+```

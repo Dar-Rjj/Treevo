@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume']
+    df['dollar_value'] = df['volume'] * df['close']
+    df['vwap'] = df.groupby(df.index.date)['dollar_value'].transform('sum') / df.groupby(df.index.date)['total_volume'].transform('sum')
+    
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+    
+    # Calculate Exponential Moving Average (EMA) of VWAP
+    df['vwap_ema'] = df['vwap'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate VWAP EMA Deviation
+    df['vwap_ema_deviation'] = df['vwap'] - df['vwap_ema']
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Multi-Period Momentum
+    df['multi_period_momentum'] = df['close'].pct_change().rolling(window=5).sum()
+    
+    # Calculate Price Volatility
+    df['true_range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['average_true_range'] = df['true_range'].rolling(window=5).mean()
+    
+    # Integrate Factors into Final Alpha Signal
+    weight_vwap_deviation = 0.3
+    weight_vwap_ema_deviation = 0.2
+    weight_volume_trend = 0.1
+    weight_multi_period_momentum = 0.2
+    weight_price_volatility = 0.2
+    
+    df['alpha_signal'] = (
+        weight_vwap_deviation * df['vwap_deviation'] +
+        weight_vwap_ema_deviation * df['vwap_ema_deviation'] +
+        weight_volume_trend * df['volume_change'] +
+        weight_multi_period_momentum * df['multi_period_momentum'] +
+        weight_price_volatility * df['average_true_range']
+    )
+    
+    return df['alpha_signal']

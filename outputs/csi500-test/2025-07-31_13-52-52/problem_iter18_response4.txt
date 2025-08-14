@@ -1,0 +1,74 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Adjust for Opening Gap
+    prev_close = df['close'].shift(1)
+    open_gap = (df['open'] - prev_close).abs()
+    
+    # Calculate Price Movement Ratio
+    price_movement_ratio = (df['close'] - df['open']) / df['open']
+    
+    # Incorporate Volume Momentum
+    volume_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_range = (high_low_range + open_gap) * volume_change
+    
+    # Apply Time Series Momentum
+    lookback_period = 10
+    moving_avg = adjusted_range.rolling(window=lookback_period).mean()
+    time_series_momentum = adjusted_range - moving_avg
+    
+    # Calculate 5-Day Rolling Momentum
+    rolling_price_movement = price_movement_ratio.rolling(window=5).sum()
+    rolling_high_low_range = high_low_range.rolling(window=5).sum()
+    rolling_momentum = rolling_price_movement / rolling_high_low_range
+    
+    # Adjust Momentum for Volume
+    volume_adjusted_momentum = rolling_momentum * df['volume']
+    
+    # Integrate Volume-Adjusted Momentum and Volatility into Final Factor
+    daily_volatility = (df['high'] - df['low']).abs()
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+    integrated_factor = (volume_adjusted_momentum * close_to_open_return) / daily_volatility
+    
+    # Combine Close-to-Open Return with Volume
+    combined_close_to_open_return = (close_to_open_return * df['volume']) / daily_volatility
+    
+    # Volume Adjusted Momentum
+    volume_adjusted_momentum_sum = (df['close'] - df['close'].shift(1)).rolling(window=5).sum() * df['volume'].rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    final_alpha_factor = (time_series_momentum + volume_adjusted_momentum_sum + combined_close_to_open_return)
+    
+    # Apply a 5-Day Average Volume Adjustment to the Final Alpha Factor
+    avg_5d_volume = df['volume'].rolling(window=5).mean()
+    final_alpha_factor = final_alpha_factor * avg_5d_volume
+    
+    # Incorporate Long-Term Volatility
+    long_term_volatility = df['close'].rolling(window=20).std()
+    final_alpha_factor = final_alpha_factor * (1 / long_term_volatility)
+    
+    # Integrate Recent Volume Trend
+    ema_5d_volume = df['volume'].ewm(span=5, adjust=False).mean()
+    final_alpha_factor = final_alpha_factor * ema_5d_volume
+    
+    # Incorporate Short-Term Price Trend
+    short_term_price_trend = df['close'] - df['close'].rolling(window=5).mean()
+    
+    # Adjust for Short-Term Price Trend
+    final_alpha_factor = final_alpha_factor * short_term_price_trend
+    
+    # Incorporate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    final_alpha_factor = final_alpha_factor * rsi
+    
+    return final_alpha_factor
+```

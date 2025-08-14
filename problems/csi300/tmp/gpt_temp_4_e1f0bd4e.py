@@ -1,0 +1,33 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['NextDayOpen'] = df['open'].shift(-1)
+    df['CloseToOpenReturn'] = df['NextDayOpen'] - df['close']
+    
+    # Volume Weighting
+    df['VolumeWeightedReturn'] = df['CloseToOpenReturn'] * df['volume']
+    
+    # Determine Volatility
+    df['HL3'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Volatility'] = df['HL3'].rolling(window=20).std()
+    
+    # Adaptive Window Calculation
+    volatility_threshold = df['Volatility'].mean()
+    df['AdaptiveWindow'] = np.where(df['Volatility'] > volatility_threshold, 5, 20)
+    
+    # Rolling Statistics with Adaptive Window
+    def rolling_func(x):
+        window = x['AdaptiveWindow'].iloc[-1]
+        return x['VolumeWeightedReturn'].rolling(window=window).agg(['mean', 'std'])
+    
+    result = df.groupby('date').apply(rolling_func).unstack()
+    result.columns = ['RollingMean', 'RollingStd']
+    
+    # Final Factor: Normalize the Mean by Standard Deviation
+    result['FactorValue'] = result['RollingMean'] / (result['RollingStd'] + 1e-6)  # Avoid division by zero
+    
+    return result['FactorValue']

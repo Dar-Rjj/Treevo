@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['SMA_Signal'] = (df['SMA_50'] > df['SMA_200']).astype(int) - (df['SMA_50'] < df['SMA_200']).astype(int)
+    
+    df['ROC_14'] = df['close'].pct_change(periods=14)
+    
+    # Volume-Based Indicators
+    df['OBV'] = ((df['close'] > df['close'].shift(1)) * df['volume'] - (df['close'] < df['close'].shift(1)) * df['volume']).cumsum()
+    
+    df['PVT'] = (df['close'].pct_change() * df['volume']).cumsum()
+    
+    # Volatility Indicators
+    df['TR'] = df[['high', 'low']].diff(axis=1).abs().max(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    df['Bollinger_Middle'] = df['close'].rolling(window=20).mean()
+    df['Bollinger_STD'] = df['close'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['Bollinger_Middle'] + 2 * df['Bollinger_STD']
+    df['Bollinger_Lower'] = df['Bollinger_Middle'] - 2 * df['Bollinger_STD']
+    
+    # Market Strength Indicators
+    money_flow = (df['close'] - df['low']) - (df['high'] - df['close']) * df['volume']
+    positive_money_flow = money_flow.where(money_flow > 0, 0)
+    negative_money_flow = -money_flow.where(money_flow < 0, 0)
+    mfr = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    df['MFI_14'] = 100 - 100 / (1 + mfr)
+    
+    cmf_numerator = (df['close'] - df['low']) - (df['high'] - df['close'])
+    cmf_denominator = df['high'] - df['low']
+    cmf_factor = cmf_numerator / cmf_denominator
+    df['CMF_20'] = (cmf_factor * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Statistical Indicators
+    df['Return'] = df['close'].pct_change()
+    df['Correlation'] = df['Return'].rolling(window=30).corr(df['volume'])
+    
+    from sklearn.linear_model import LinearRegression
+    X = range(30)
+    model = LinearRegression()
+    def calc_slope(x):
+        model.fit(X.reshape(-1, 1), x.values[-30:])
+        return model.coef_[0]
+    df['Slope_30'] = df['close'].rolling(window=30).apply(calc_slope, raw=False)
+    
+    # Pattern Recognition (Simplified for demonstration)
+    def double_top_bottom(x):
+        recent_highs = x[-60:].nlargest(2)
+        if len(recent_highs) == 2 and abs(recent_highs.iloc[0] - recent_highs.iloc[1]) < 0.05 * recent_highs.iloc[0]:
+            return 1 if recent_highs.iloc[0] > recent_highs.iloc[1] else -1
+        return 0
+    df['Double_Top_Bottom'] = df['close'].rolling(window=120).apply(double_top_bottom, raw=False)
+    
+    alpha_factor = (df['SMA_Signal'] + 
+                    df['ROC_14'] + 
+                    df['OBV'].pct_change() + 
+                    df['PVT'].pct_change() + 
+                    1 / df['ATR_14'] + 
+                    (df['close'] - df['Bollinger_Lower']) / (df['Bollinger_Upper'] - df['Bollinger_Lower']) + 
+                    (df['MFI_14'] - 50) / 50 + 
+                    df['CMF_20'] + 
+                    df['Correlation'] + 
+                    df['Slope_30'] + 
+                    df['Double

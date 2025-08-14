@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Return
+    df['DailyReturn'] = df['close'].pct_change()
+    df['PriceGap'] = df['open'] - df['close'].shift(1)
+    df['AdjustedDailyReturn'] = df['DailyReturn'] - df['PriceGap'].where(df['PriceGap'] > 0, -df['PriceGap'])
+
+    # Calculate Price and High-to-Low Range Momentum
+    df['CloseEMA5'] = df['close'].ewm(span=5).mean()
+    df['PriceMomentum'] = df['CloseEMA5'] - df['CloseEMA5'].shift(1)
+    
+    df['HighLowRange'] = df['high'] - df['low']
+    df['HighLowRangeMomentum'] = df['HighLowRange'] - df['HighLowRange'].shift(1)
+
+    # Adjust by Volume and Price Change
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+
+    # Combine Momentum, Volume, and Price Change
+    df['CombinedMomentum'] = (df['HighLowRangeMomentum'] * df['VolumeChange']) + df['PriceChange']
+
+    # Confirm High-Low Spread with Volume and Adjusted by Amount Acceleration
+    df['AmountEMA5'] = df['amount'].ewm(span=5).mean()
+    df['AmountAcceleration'] = df['AmountEMA5'] - df['AmountEMA5'].shift(1)
+    df['AdjustedHighLowSpread'] = df['HighLowRange'] * df['VolumeChange'].clip(lower=0) * df['AmountAcceleration']
+
+    # Smoothing Filter
+    df['SmoothedVolumeAdjustedHighLowSpread'] = df['AdjustedHighLowSpread'].rolling(window=10).mean()
+
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['IntegratedMomentum'] = df['PriceMomentum'] * df['SmoothedVolumeAdjustedHighLowSpread']
+
+    # Adjust by Volume Change
+    df['VolumeAdjustment'] = df['volume'] / df['volume'].shift(1)
+
+    # Combine Adjusted Daily Return, Integrated Momentum, and Volume Change
+    df['AlphaFactor'] = (df['AdjustedDailyReturn'] * df['IntegratedMomentum']) * df['VolumeAdjustment']
+
+    # Final Alpha Factor Integration
+    df['FinalAlphaFactor'] = df['AlphaFactor'].apply(lambda x: max(x, 0))
+
+    return df['FinalAlphaFactor']
+```

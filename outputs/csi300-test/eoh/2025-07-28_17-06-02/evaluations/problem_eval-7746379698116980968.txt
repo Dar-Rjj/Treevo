@@ -1,0 +1,26 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    ema_15 = df['close'].ewm(span=15, adjust=False).mean()
+    ema_30 = df['close'].ewm(span=30, adjust=False).mean()
+    ema_ratio = (ema_15 / ema_30) - 1
+    
+    low_21 = df['low'].rolling(window=21).min()
+    high_21 = df['high'].rolling(window=21).max()
+    k_percent = 100 * ((df['close'] - low_21) / (high_21 - low_21))
+    
+    tr = df['high'] - df['low']
+    up_move = df['high'] - df['close'].shift(1)
+    down_move = df['low'] - df['close'].shift(1)
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0)
+    tr_14 = tr.rolling(window=14).sum()
+    plus_di = 100 * (plus_dm.rolling(window=14).sum() / tr_14)
+    minus_di = 100 * (minus_dm.rolling(window=14).sum() / tr_14)
+    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di))
+    adx = dx.rolling(window=14).mean()
+    
+    volume_weighted = df['volume'] * df['close']
+    
+    heuristics_matrix = (ema_ratio + k_percent - adx + volume_weighted) / 4
+    return heuristics_matrix

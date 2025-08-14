@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, w1=0.7, w2=0.3):
+    # Calculate Simple Moving Averages (SMA)
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    # Subtract Longer SMA from Shorter SMA
+    sma_diff_100_200 = sma_100 - sma_200
+    sma_diff_50_100 = sma_50 - sma_100
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Reversal Signal
+    reversal_signal = intraday_return.apply(lambda x: -1 if x > 0 else 1)
+    
+    # Combine Momentum and Reversal Signals
+    combined_signal_100_200 = sma_diff_100_200 * reversal_signal
+    combined_signal_50_100 = sma_diff_50_100 * reversal_signal
+    
+    # Compute Average True Range (ATR)
+    high_low_close = pd.concat([df['high'], df['low'], df['close'].shift(1)], axis=1)
+    atr = high_low_close.max(axis=1) - high_low_close.min(axis=1)
+    
+    # Integrate ATR with Combined Signal
+    atr_combined_signal_100_200 = atr * combined_signal_100_200
+    atr_combined_signal_50_100 = atr * combined_signal_50_100
+    
+    # Smooth Result with Exponential Moving Average (EMA)
+    ema_atr_combined_signal_100_200 = atr_combined_signal_100_200.ewm(span=10, min_periods=10).mean()
+    ema_atr_combined_signal_50_100 = atr_combined_signal_50_100.ewm(span=10, min_periods=10).mean()
+    
+    # High-Low Range Momentum with Volume Adjustment
+    high_low_range = df['high'] - df['low']
+    high_low_range_momentum = high_low_range - high_low_range.shift(1)
+    avg_volume = df['volume'].rolling(window=50).mean()
+    high_low_range_adj = high_low_range_momentum / avg_volume
+    
+    # Final Alpha Factor Combination
+    combined_price_intraday_reversal = (sma_diff_50_100 + sma_diff_100_200) + ema_atr_combined_signal_50_100 + ema_atr_combined_signal_100_200
+    final_alpha_factor = (combined_price_intraday_reversal * w1) + (high_low_range_adj * w2)
+    
+    return final_alpha_factor
+```

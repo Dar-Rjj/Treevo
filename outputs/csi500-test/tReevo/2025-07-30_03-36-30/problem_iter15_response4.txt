@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-Day and 10-Day Rolling Returns
+    df['5D_Return'] = (df['close'].shift(-4) / df['close']) - 1
+    df['10D_Return'] = (df['close'].shift(-9) / df['close']) - 1
+    
+    # Combine 5-Day and 10-Day Returns
+    df['Combined_Return'] = 0.7 * df['5D_Return'] + 0.3 * df['10D_Return']
+    
+    # Multiply by Volume of day t
+    df['Volume_Adjusted_Return'] = df['Combined_Return'] * df['volume']
+
+    # Calculate Open-High-Low Volatility Index
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Open_Close_Spread'] = df['open'] - df['close']
+    df['Mean_Price'] = (df['open'] + df['close']) / 2
+    df['Volatility_Index'] = (df['High_Low_Spread'] + abs(df['Open_Close_Spread'])) / df['Mean_Price']
+    
+    # Smooth Volatility Index with Exponential Smoothing
+    df['Smoothed_Volatility_Index'] = df['Volatility_Index'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Integrate Market Sentiment
+    df['Daily_Change_in_Amount'] = df['amount'] - df['amount'].shift(1)
+    
+    # Smooth Daily Change in Amount with Exponential Smoothing
+    df['Smoothed_Daily_Change_in_Amount'] = df['Daily_Change_in_Amount'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Add to Volume-Weighted Multi-Day Price Momentum
+    df['Adjusted_Momentum'] = df['Volume_Adjusted_Return'] + df['Smoothed_Daily_Change_in_Amount']
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = df['Adjusted_Momentum'] - df['Smoothed_Volatility_Index']
+    
+    return df['Final_Factor']
+
+# Example usage:
+# data = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor_values = heuristics_v2(data)
+```

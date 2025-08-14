@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Base Intraday Momentum
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Open_Close_Return'] = (df['close'] / df['open']) - 1
+    df['Daily_Volatility'] = (df['high'] - df['low']) / df['close']
+    df['Intraday_Momentum'] = (df['High_Low_Diff'] + df['Open_Close_Return']) * df['Daily_Volatility']
+
+    # Apply Volume and Price Shock Filter
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(1)
+    df['Amount_Ratio'] = df['amount'] / df['amount'].shift(1)
+    df['Price_Change'] = abs(df['close'] - df['close'].shift(1))
+    df['Historical_Price_Range'] = df['close'].rolling(window=30).max() - df['close'].rolling(window=30).min()
+    df['Price_Shock_Ratio'] = df['Price_Change'] / df['Historical_Price_Range']
+    df['Filtered_Intraday_Momentum'] = df['Intraday_Momentum'] * ((df['Volume_Ratio'] > 1.5) & (df['Amount_Ratio'] > 1.5) & (df['Price_Shock_Ratio'] > 0.05))
+
+    # Adjust for Volume
+    df['Volume_Adjusted_Momentum'] = df['Filtered_Intraday_Momentum'] / df['volume']
+
+    # Measure Volume Synchronization
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Volume_Shock_Filter'] = df['Volume_Ratio'] > 1.5
+    df['Synchronization_Value'] = np.sign(df['Volume_Change'] * df['Price_Change']) * df['Volume_Shock_Filter']
+
+    # Calculate On-Balance Volume (OBV)
+    df['OBV'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'OBV'] = df['volume']
+    df.loc[df['close'] < df['close'].shift(1), 'OBV'] = -df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+
+    # Measure Close Position in Range
+    df['Close_Position_in_Range'] = (df['close'] - df['low']) / (df['high'] - df['low']).replace(0, 1e-6)
+
+    # Calculate EMAs and Determine Momentum
+    df['EMA_7'] = df['close'].ewm(span=7, adjust=False).mean()
+    df['EMA_30'] = df['close'].ewm(span=30, adjust=False).mean()
+    df['Bullish'] = (df['EMA_7'] > df['EMA_30']).astype(int)
+    df['Bearish'] = (df['EMA_7'] <= df['EMA_30']).astype(int)
+    df['Momentum'] = df['Bullish'] - df['Bearish']
+    df['Weight'] = abs(df['EMA_7'] - df['EMA_30'])
+    df['OBV_Momentum_Factor'] = df['OBV'] * df['Weight']
+
+    # Combine all factors
+    df['Final_Factor'] = (
+        df['Volume_Adjusted_Momentum'] +
+        df['Synchronization_Value'] +
+        df['OBV_Momentum_Factor'] +
+        df['Intraday_Range'] +
+        df['Close_Position_in_Range']
+    ) / 5
+
+    # Smoothing
+    df['Smoothed_Final_Factor'] = df['Final_Factor'].ewm(span=5, adjust=False).mean()
+
+    return df['Smoothed_Final_Factor']
+```

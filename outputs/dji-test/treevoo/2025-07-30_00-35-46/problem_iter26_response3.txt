@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Open-Close Return
+    open_close_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Low and Open-Close Returns with weights
+    weight_high_low = 0.5
+    weight_open_close = 0.5
+    combined_return = (weight_high_low * high_low_diff + 
+                       weight_open_close * open_close_return)
+    
+    # Introduce Non-Linear Transformation
+    transformed_return = combined_return ** 2
+    
+    # Apply Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    
+    volume_threshold = 1.5
+    amount_threshold = 1.5
+    shock_filter = (volume_ratio > volume_threshold) & (amount_ratio > amount_threshold)
+    
+    # Introduce Smoothing Factor with EMA
+    ema_alpha = 0.2
+    volume_ema = volume_ratio.ewm(alpha=ema_alpha, adjust=False).mean()
+    amount_ema = amount_ratio.ewm(alpha=ema_alpha, adjust=False).mean()
+    
+    # Measure Synchronized Volume and Price Changes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_changes = np.sign(volume_change * price_change)
+    
+    # Apply Volume Shock Filter to Synchronized Changes
+    synchronized_changes = synchronized_changes * (volume_ratio > volume_threshold)
+    
+    # Calculate Momentum and OBV Factor
+    price_momentum = df['close'].pct_change()
+    
+    # Compute On-Balance-Volume (OBV)
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    
+    # Combine Momentum and OBV
+    weight_momentum = 0.5
+    weight_obv = 0.5
+    momentum_obv_factor = (weight_momentum * price_momentum + 
+                           weight_obv * obv.diff() / df['volume'])
+    
+    # Final Alpha Factor
+    alpha_factor = (transformed_return * shock_filter + 
+                    synchronized_changes + 
+                    momentum_obv_factor)
+    
+    return alpha_factor
+```

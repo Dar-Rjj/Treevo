@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=10):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Spread
+    spread = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Spread
+    volume_adjusted_spread = spread * df['volume']
+    
+    # Calculate Momentum Component
+    momentum_component = df['close'].pct_change().rolling(window=N).sum()
+    momentum_component *= close_to_range_ratio
+    
+    # Adjust for Volume Activity
+    average_volume_20 = df['volume'].rolling(window=20).mean().shift(1)
+    short_term_volume_change = df['volume'] - df['volume'].shift(5)
+    volume_trend_indicator = (short_term_volume_change > 0).astype(int) * 2 - 1
+    
+    # Volume Trend Score
+    average_volume_last_10 = df['volume'].rolling(window=10).mean()
+    volume_change_rate = df['volume'] / average_volume_last_10
+    positive_weight = (volume_change_rate > 1).astype(int) * 1.5
+    negative_weight = (volume_change_rate < 1).astype(int) * -1.2
+    volume_trend_score = (positive_weight + negative_weight) * volume_trend_indicator
+    
+    # Calculate Average Intraday Return
+    average_intraday_return = intraday_return.rolling(window=N).mean()
+    
+    # Combine Initial Signals
+    initial_signals = average_intraday_return + volume_adjusted_spread
+    
+    # Calculate Price Momentum
+    high_low_spread = df['high'] - df['low']
+    average_high_low_spread_10 = high_low_spread.rolling(window=10).mean()
+    relative_high_low_spread = high_low_spread / high_low_spread.shift(1)
+    
+    # Final Combined Momentum, Volume, and Price Factor
+    combined_momentum = (momentum_component * volume_trend_score) / average_volume_20
+    combined_volume_price_momentum = combined_momentum * (volume_trend_score * relative_high_low_spread)
+    
+    # Opening Impact Adjustment
+    open_close_return = df['close'] - df['open']
+    final_alpha_factor = combined_volume_price_momentum - open_close_return
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    lookback_window = 20
+    df['SMA'] = df['close'].rolling(window=lookback_window).mean()
+    
+    # Calculate Exponential Moving Average (EMA) of Close Prices
+    df['EMA'] = df['close'].ewm(span=lookback_window, adjust=False).mean()
+    
+    # Compute the Difference between EMA and SMA
+    df['Momentum'] = df['EMA'] - df['SMA']
+    
+    # Volume Adjust the Momentum
+    df['Volume_Adjusted_Momentum'] = df['Momentum'] * df['volume']
+    df['Smoothed_VAM'] = df['Volume_Adjusted_Momentum'].rolling(window=5).mean()
+    
+    # Calculate Intraday High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Previous Day Close-to-Open Change
+    df['Close_to_Open_Change'] = df['open'].shift(-1) - df['close']
+    
+    # Compute Volume-Weighted Breakout Measure
+    df['Volume_Weighted_Breakout'] = (df['volume'] * df['High_Low_Spread']) / df['Close_to_Open_Change']
+    
+    # Smooth the Factor Over a Short Window
+    short_window = 5
+    df['Smoothed_VWB'] = df['Volume_Weighted_Breakout'].rolling(window=short_window).mean()
+    
+    # Combine Volume-Adjusted Momentum and Volume-Weighted Breakout
+    df['Combined_Factor'] = df['Smoothed_VAM'] + df['Smoothed_VWB']
+    
+    # Calculate Volume Acceleration
+    df['Volume_Acceleration'] = df['volume'] - df['volume'].shift(1)
+    df['Volume_Acceleration_Sign'] = df['Volume_Acceleration'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Identify Price Momentum
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    df['Price_Momentum_Sign'] = df['Price_Change'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # Combine Volume-Adjusted Momentum and Volume-Price Confirmation
+    df['Trend_Confirmation'] = 0
+    df.loc[(df['Smoothed_VAM'] > 0) & (df['Volume_Acceleration_Sign'] == 1) & (df['Price_Momentum_Sign'] == 1), 'Trend_Confirmation'] = 1
+    df.loc[(df['Smoothed_VAM'] < 0) & (df['Volume_Acceleration_Sign'] == -1) & (df['Price_Momentum_Sign'] == -1), 'Trend_Confirmation'] = -1
+    
+    # Return the final alpha factor
+    return df['Combined_Factor'] * df['Trend_Confirmation']
+```

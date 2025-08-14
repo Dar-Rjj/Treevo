@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate 5-Day Average High-Low Spread
+    avg_high_low_spread = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Calculate Daily Return
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = intraday_range / df['volume']
+    
+    # Calculate Momentum (N-day Exponential Moving Average of Close price)
+    momentum = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate 5-Day Momentum
+    five_day_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Adjust Momentum by Intraday Volatility
+    adjusted_momentum = momentum * intraday_volatility
+    
+    # Apply Dynamic Adjustment
+    dynamic_adjustment = df['volume'].ewm(span=5, adjust=False).mean()
+    adjusted_momentum *= dynamic_adjustment
+    
+    # Integrate Intraday Price Movement and Volume
+    intraday_momentum_score = intraday_range * (df['volume'] - df['volume'].shift(1))
+    
+    # Combine Adjusted Momentum, 5-Day Momentum, and 5-Day Average High-Low Spread
+    combined_momentum = adjusted_momentum * five_day_momentum * avg_high_low_spread
+    
+    # Calculate Reversal Signal
+    n_day_ema_daily_return = daily_return.ewm(span=5, adjust=False).mean()
+    reversal_signal = n_day_ema_daily_return - daily_return
+    
+    # Finalize Integrated Alpha Factor
+    integrated_alpha_factor = combined_momentum * reversal_signal + intraday_momentum_score
+    integrated_alpha_factor.name = 'IntegratedAlphaFactor'
+    
+    # Introduce Volume Trend
+    five_day_sum_volume = df['volume'].rolling(window=5).sum()
+    volume_ratio = df['volume'] / five_day_sum_volume
+    
+    # Final Factor Computation
+    volume_trend_adjusted_factor = integrated_alpha_factor * volume_ratio
+    volume_trend_adjusted_factor.name = 'VolumeTrendAdjustedFactor'
+    
+    # Final Alpha Factor
+    final_alpha_factor = volume_trend_adjusted_factor - volume_trend_adjusted_factor.ewm(span=5, adjust=False).mean()
+    final_alpha_factor.name = 'FinalAlphaFactor'
+    
+    return final_alpha_factor
+```

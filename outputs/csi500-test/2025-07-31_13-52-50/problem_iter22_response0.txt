@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Returns
+    df['Daily_Return'] = df['close'].pct_change()
+
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    n = 20
+    alpha = 0.1
+    df['EMA_Daily_Return'] = df['Daily_Return'].ewm(span=n, adjust=False).mean()
+
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'].diff()
+
+    # Compute Price Momentum Factor
+    m = 20
+    df['Price_Momentum'] = df['Daily_Return'].rolling(window=m).sum()
+
+    # Compute Volume Momentum Factor
+    df['Volume_Momentum'] = df['Volume_Change'].rolling(window=m).sum()
+
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Calculate Price Breakout Ratio
+    df['Price_Breakout_Ratio'] = (df['high'] - df['open']) / df['High_Low_Range']
+
+    # Calculate Volume-Weighted Breakout Indicator
+    df['VW_Breakout_Indicator'] = (df['close'] - df['open']) * df['volume'] * df['Price_Breakout_Ratio']
+
+    # Determine Daily Return Deviation from VWAP
+    df['VWAP'] = (df['amount'] / df['volume']).rolling(window=20).mean()
+    df['Return_Deviation_VWAP'] = df['close'] - df['VWAP']
+
+    # Identify Trend Reversal Potential
+    df['Trend_Reversal_Potential'] = (df['Return_Deviation_VWAP'] > df['Return_Deviation_VWAP'].shift(1)).astype(int) & (df['volume'] > df['volume'].rolling(window=14).mean())
+
+    # Combine Price and Volume Momentum
+    k1, k2 = 1.5, 1.0
+    df['Combined_Momentum'] = k1 * df['Price_Momentum'] + k2 * df['Volume_Momentum']
+
+    # Calculate Volume Weight
+    df['Avg_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Weight'] = df['volume'] / df['Avg_Volume']
+
+    # Adjust Exponentially Smoothed Moving Average with Volume Weight
+    df['Adjusted_EMA'] = df['EMA_Daily_Return'] * df['Volume_Weight'] + df['Combined_Momentum']
+
+    # Generate Alpha Factor
+    df['Alpha_Factor'] = df['Adjusted_EMA'] + df['VW_Breakout_Indicator'] + df['Return_Deviation_VWAP']
+    df['Alpha_Factor'] = df['Alpha_Factor'].rolling(window=20).mean()
+
+    # Final Composite Factor Calculation
+    df['Final_Composite_Factor'] = np.where(df['Trend_Reversal_Potential'], df['Alpha_Factor'] + df['Combined_Momentum'], df['Alpha_Factor'])
+    df['Final_Composite_Factor'] = df['Final_Composite_Factor'].ewm(alpha=alpha, adjust=False).mean()
+
+    return df['Final_Composite_Factor']
+```

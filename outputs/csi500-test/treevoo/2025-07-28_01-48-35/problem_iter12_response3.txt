@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = (df['close'] - df['low']) / intraday_range
+    
+    # Calculate Momentum Component
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    momentum_component = df['close'] - ema_10
+    
+    # Combine with Close-to-Range Ratio
+    combined_momentum = close_to_range_ratio * momentum_component
+    
+    # Adjust for Volume Activity
+    volume_sum_20 = df['volume'].rolling(window=20).sum()
+    volume_activity = df['volume'] / volume_sum_20
+    short_term_volume_change = df['volume'] - df['volume'].shift(5)
+    volume_trend_indicator = np.where(short_term_volume_change > 0, 1, -1)
+    avg_volume_10 = df['volume'].rolling(window=10).mean()
+    volume_change_rate = df['volume'] / avg_volume_10
+    volume_trend_score = np.where(volume_change_rate > 1, 1.5 * (volume_change_rate - 1), -1.2 * (volume_change_rate - 1))
+    
+    # Calculate Range Expansion
+    true_range = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift())), abs(df['low'] - df['close'].shift()))
+    atr_10 = true_range.rolling(window=10).mean()
+    range_expansion = true_range / atr_10
+    
+    # Calculate On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['obv'] = obv
+    
+    # Final Combined Factor
+    final_factor = combined_momentum * volume_trend_score / volume_sum_20
+    final_factor = final_factor * (1 + range_expansion) * (1 + df['obv'])
+    final_factor_smoothed = final_factor.rolling(window=5).mean()
+    
+    # Opening Impact Adjustment
+    open_close_return = (df['open'] - df['close']) / df['close']
+    adjusted_final_factor = final_factor_smoothed - open_close_return
+    
+    # Enhance with Accumulation/Distribution Line (ADL)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    adl = money_flow_volume.rolling(window=10).sum()
+    
+    # Incorporate ADL into Final Alpha Factor
+    final_alpha_factor = adjusted_final_factor + adl
+    
+    return final_alpha_factor
+```

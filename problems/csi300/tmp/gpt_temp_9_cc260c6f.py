@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['Close_to_Open_Return'] * df['volume']
+    
+    # Dynamic Volatility Calculation
+    short_term_vol = df[['high', 'low', 'close']].rolling(window=5).std().mean(axis=1)
+    medium_term_vol = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    long_term_vol = df[['high', 'low', 'close']].rolling(window=60).std().mean(axis=1)
+    
+    # Combined Volatility Measure (Simple Average for demonstration)
+    combined_volatility = (short_term_vol + medium_term_vol + long_term_vol) / 3
+    
+    # Adaptive Window Calculation
+    def determine_window_size(vol):
+        if vol > combined_volatility.mean():
+            return 5  # High volatility, smaller window
+        elif vol < combined_volatility.mean() - combined_volatility.std():
+            return 40  # Low volatility, larger window
+        else:
+            return 20  # Medium volatility, fixed window
+    
+    windows = [determine_window_size(vol) for vol in combined_volatility]
+    df['Adaptive_Window'] = windows
+    
+    # Rolling Statistics with Adaptive Window
+    rolling_mean = [df['Volume_Weighted_Return'].iloc[i-df['Adaptive_Window'][i]:i].mean() 
+                    if i >= df['Adaptive_Window'][i] else np.nan for i in range(len(df))]
+    rolling_std = [df['Volume_Weighted_Return'].iloc[i-df['Adaptive_Window'][i]:i].std() 
+                   if i >= df['Adaptive_Window'][i] else np.nan for i in range(len(df))]
+    
+    # Heuristic Factor: Standardized Volume-Weighted Return
+    df['Heuristic_Factor'] = (df['Volume_Weighted_Return'] - rolling_mean) / rolling_std
+    
+    return df['Heuristic_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# factor = heuristics_v2(df)

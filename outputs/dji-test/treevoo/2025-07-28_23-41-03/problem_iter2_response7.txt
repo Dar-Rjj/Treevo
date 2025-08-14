@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, ema_short_period=5):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate High-Low Range Momentum
+    df['range_momentum'] = df['high_low_range'].diff()
+    
+    # Adjust by Volume
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['range_momentum_vol_adj'] = df['range_momentum'] / df['average_volume']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+    
+    # Calculate Average True Range (ATR)
+    df['tr'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - df['close'].shift(1)), abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['atr'] = df['tr'].rolling(window=n).mean()
+    
+    # Multiply ATR by Reversal Signal
+    df['atr_reversal'] = df['atr'] * df['reversal_signal']
+    
+    # Smooth with Exponential Moving Average (EMA)
+    df['momentum_component'] = df['atr_reversal'].ewm(span=ema_short_period, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['range_momentum_vol_adj'] + df['momentum_component']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['high_low_diff'] = df['high'] - df['low']
+    df['high_prev_close_diff'] = np.abs(df['high'] - df['prev_close'])
+    df['prev_close_low_diff'] = np.abs(df['prev_close'] - df['low'])
+    df['true_range'] = df[['high_low_diff', 'high_prev_close_diff', 'prev_close_low_diff']].max(axis=1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    n = 14  # Number of days for rolling window
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low'] = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate Open-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+    
+    # Assign Weights Based on Historical Volatility
+    volatility = df['close'].pct_change().rolling(window=n).std()
+    weight_adj_hl = 1 / (1 + volatility)
+    weight_oc = 1 - weight_adj_hl
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['combined_measure'] = (weight_adj_hl * df['volume_adjusted_high_low'] +
+                              weight_oc * df['open_close_momentum'])
+    
+    # Introduce Volume Trend Analysis
+    df['volume_trend'] = df['volume'] - df['volume'].shift(n)
+    df['combined_measure'] = df['combined_measure'] * (1 + np.sign(df['volume_trend']))
+    
+    # Dynamic Momentum Indicator
+    df['yesterday_indicator'] = df['combined_measure'].shift(1)
+    df['today_indicator'] = df['combined_measure']
+    df['momentum_change'] = df['today_indicator'] - df['yesterday_indicator']
+    df['smoothed_momentum'] = df['momentum_change'] / df['close'].pct_change().rolling(window=n).std()
+    
+    # Aggregate and Smooth High-Low Ranges
+    df['high_low_sum'] = (df['high'] - df['low']).rolling(window=n).sum()
+    df['close_open_sum'] = (df['close'] - df['open']).rolling(window=n).sum()
+    df['smoothed_high_low'] = df['high_low_sum'].ewm(span=20).mean()
+    df['long_term_high_low'] = (df['high'] - df['low']).rolling(window=50).sum()
+    
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].ewm(span=n).mean()
+    df['high_volume_days'] = (df['volume'] > df['avg_volume']).astype(int)
+    
+    # Integrate Combined Factors
+    df['final_factor'] = (df['atr'] + 
+                          df['combined_measure'] + 
+                          df['smoothed_momentum'] + 
+                          df['smoothed_high_low'] + 
+                          df['long_term_high_low']) * df['high_volume_days']
+    
+    return df['final_factor']
+```

@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate 20-Day Volume-Weighted Average Return
+    df['weighted_return'] = df['daily_return'] * df['volume']
+    df['20_day_weighted_return_sum'] = df['weighted_return'].rolling(window=20).sum()
+    df['20_day_volume_sum'] = df['volume'].rolling(window=20).sum()
+    df['20_day_vol_weighted_return'] = df['20_day_weighted_return_sum'] / df['20_day_volume_sum']
+
+    # Adjust for Price Volatility
+    df['daily_price_range'] = df['high'] - df['low']
+    df['20_day_avg_price_range'] = df['daily_price_range'].rolling(window=20).mean()
+    df['adjusted_momentum'] = df['20_day_vol_weighted_return'] - df['20_day_avg_price_range']
+
+    # Calculate Intraday Return Ratio
+    df['intraday_return_ratio'] = df['high'] / df['low']
+
+    # Calculate Weighted Open-to-Close Return
+    df['open_to_close_return'] = (df['close'] - df['open']) / df['open']
+    df['weighted_open_to_close_return'] = df['open_to_close_return'] * df['volume']
+
+    # Combine Adjusted Momentum and Intraday Factors
+    df['combined_factor'] = df['adjusted_momentum'] + df['intraday_return_ratio'] + df['weighted_open_to_close_return']
+
+    # Price Momentum Component
+    df['50_day_sma'] = df['close'].rolling(window=50).mean()
+    df['100_day_sma'] = df['close'].rolling(window=100).mean()
+    df['200_day_sma'] = df['close'].rolling(window=200).mean()
+    df['sma_diff_100_200'] = df['100_day_sma'] - df['200_day_sma']
+    df['sma_diff_50_100'] = df['50_day_sma'] - df['100_day_sma']
+    df['sma_combined'] = df['sma_diff_50_100'] + df['sma_diff_100_200']
+
+    # Intraday Reversal Momentum Component
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    df['reversal_signal'] = np.where(df['intraday_return'] > 0, -1, 1)
+    
+    # Calculate ATR
+    df['true_range'] = df[['high', 'low']].sub(df['close'].shift(1), axis=0).abs().max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=20).mean()
+    df['atr_reversal'] = df['atr'] * df['reversal_signal']
+    
+    # Calculate Exponential Moving Average (EMA) of ATR * Reversal Signal
+    df['ema_atr_reversal'] = df['atr_reversal'].ewm(span=10, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factor'] + df['sma_combined'] + df['ema_atr_reversal']
+    
+    return df['alpha_factor']
+```

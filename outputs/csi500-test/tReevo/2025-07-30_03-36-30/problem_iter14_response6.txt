@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 3-Day and 5-Day Rolling Returns
+    df['3_day_return'] = (df['close'].shift(2) - df['close']) / df['close'].shift(2)
+    df['5_day_return'] = (df['close'].shift(4) - df['close']) / df['close'].shift(4)
+    
+    # Adaptive Weighting of 3-Day and 5-Day Returns
+    df['3_day_volume_sum'] = df['volume'].rolling(window=3).sum()
+    df['5_day_volume_sum'] = df['volume'].rolling(window=5).sum()
+    
+    df['total_3_day_volume'] = df['volume'].shift(1) + df['volume'].shift(2)
+    df['total_5_day_volume'] = df['volume'].shift(1) + df['volume'].shift(2) + df['volume'].shift(3) + df['volume'].shift(4)
+    
+    df['3_day_weight'] = df['3_day_volume_sum'] / df['total_3_day_volume']
+    df['5_day_weight'] = df['5_day_volume_sum'] / df['total_5_day_volume']
+    
+    df['weighted_return'] = (df['3_day_return'] * df['3_day_weight'] + 
+                             df['5_day_return'] * df['5_day_weight'])
+    
+    # Multiply by Volume of day t
+    df['volume_weighted_momentum'] = df['weighted_return'] * df['volume']
+    
+    # Calculate Intraday Volatility Index
+    df['high_low_spread'] = df['high'] - df['low']
+    df['open_close_spread'] = abs(df['open'] - df['close'])
+    df['mean_price'] = (df['open'] + df['close']) / 2
+    df['intraday_volatility'] = (df['high_low_spread'] + df['open_close_spread']) / df['mean_price']
+    
+    # Integrate Enhanced Market Sentiment
+    df['daily_change_amount'] = df['amount'] - df['amount'].shift(1)
+    df['normalized_daily_change_amount'] = df['daily_change_amount'] / df['amount']
+    
+    df['daily_change_volume'] = df['volume'] - df['volume'].shift(1)
+    df['normalized_daily_change_volume'] = df['daily_change_volume'] / df['volume']
+    
+    df['enhanced_market_sentiment'] = (df['normalized_daily_change_amount'] + df['normalized_daily_change_volume']) / 2
+    
+    # Adjust for Cumulative Market Impact
+    df['10_day_ma_volume'] = df['volume'].rolling(window=10).mean()
+    df['deviation_from_10_day_avg'] = (df['volume'] - df['10_day_ma_volume']) / df['10_day_ma_volume']
+    
+    df['adjusted_momentum'] = df['volume_weighted_momentum'] * df['deviation_from_10_day_avg']
+    
+    # Final Factor Calculation
+    df['final_factor'] = df['adjusted_momentum'] - df['intraday_volatility'] + df['enhanced_market_sentiment']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# factor_values = heuristics_v2(df)
+```

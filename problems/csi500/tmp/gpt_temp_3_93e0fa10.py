@@ -1,0 +1,68 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    n = 14  # Lookback period for calculations
+    short_window = 5
+    long_window = 20
+    
+    # Price Based Factors
+    df['SMA'] = (df['close'] + df['high'] + df['low']) / 3
+    df['ROC'] = (df['close'] / df['close'].shift(n)) - 1
+    
+    # Volatility Indicators
+    df['TR'] = df[['high' - 'low', 
+                   ('high' - df['close'].shift(1)).abs(), 
+                   ('low' - df['close'].shift(1)).abs()]].max(axis=1)
+    df['ATR'] = df['TR'].rolling(window=n).mean()
+    
+    # Volume Based Factors
+    df['OBV'] = 0.0
+    df['Volume_Oscillator'] = (df['volume'].rolling(window=short_window).mean() - 
+                               df['volume'].rolling(window=long_window).mean()) / df['volume'].rolling(window=long_window).mean()
+    
+    # Price-Volume Combined Factors
+    df['PVT'] = ((df['close'] - df['close'].shift(1)) / df['close'].shift(1) * df['volume']).cumsum()
+    df['CMF'] = (((2*df['close'] - df['high'] - df['low']) / (df['high'] - df['low']) * df['volume']).rolling(window=n).sum() / 
+                 df['volume'].rolling(window=n).sum())
+    
+    # Gap and Opening Factors
+    df['Open_Close_Ratio'] = df['open'] / df['close'].shift(1)
+    df['High_Low_Gap'] = df['high'] - df[['close', 'open']].max(axis=1)
+    df['Low_High_Reversal'] = df[['open', 'close']].min(axis=1) - df['low']
+    
+    # Market Sentiment Factors
+    df['Bearish_Bullish_Signal'] = (df['close'] < df['open']).astype(int)
+    df['Doji_Pattern'] = ((df['open'] - df['close']).abs() < 0.005 * (df['high'] - df['low'])).astype(int)
+    
+    # Transaction Value Considerations
+    df['Average_Value_Per_Transaction'] = (df['high'] + df['low']) / 2 * df['volume']
+    df['Value_Growth'] = (df['Average_Value_Per_Transaction'] / df['Average_Value_Per_Transaction'].shift(n)) - 1
+    
+    # Technical Pattern Recognition
+    # Note: Implementing complex patterns like Head and Shoulders, Double Top/Bottom is out of scope here.
+    
+    # Statistical Measures on Historical Data
+    df['Return'] = df['close'].pct_change()
+    df['Skewness'] = df['Return'].rolling(window=n).skew()
+    df['Kurtosis'] = df['Return'].rolling(window=n).kurt()
+    
+    # Order Imbalance Indicators
+    # Note: Buy/Sell Imbalance and Limit Order Book Slope are not directly calculable from the provided data.
+    
+    # Seasonal Factors
+    df['Month'] = df.index.month
+    df['DayOfWeek'] = df.index.dayofweek
+    month_effect = df.groupby('Month')['close'].pct_change().mean()
+    day_of_week_effect = df.groupby('DayOfWeek')['close'].pct_change().mean()
+    
+    # Inter-Market Factors
+    # Note: Correlation with Major Indices and Relative Strength require external data.
+    
+    # Final Alpha Factor
+    alpha_factor = (df['SMA'] + df['ROC'] + df['ATR'] + df['OBV'] + df['PVT'] + df['CMF'] + 
+                    df['Open_Close_Ratio'] + df['High_Low_Gap'] + df['Low_High_Reversal'] + 
+                    df['Bearish_Bullish_Signal'] + df['Doji_Pattern'] + df['Average_Value_Per_Transaction'] + 
+                    df['Value_Growth'] + df['Skewness'] + df['Kurtosis'])
+    
+    return alpha_factor

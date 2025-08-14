@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor to predict future stock returns.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with (date) as index and columns ['open', 'high', 'low', 'close', 'amount', 'volume'].
+    
+    Returns:
+    pd.Series: Factor values indexed by (date).
+    """
+    # Calculate the relative strength index (RSI) using the close price
+    def calculate_rsi(data, window=14):
+        delta = data.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    # Calculate the RSI for the close price
+    rsi_close = calculate_rsi(df['close'])
+    
+    # Calculate the average true range (ATR) over a rolling window
+    def calculate_atr(data, window=14):
+        tr = data[['high', 'low']].diff().abs().max(axis=1)
+        atr = tr.rolling(window=window).mean()
+        return atr
+    
+    # Calculate the ATR
+    atr = calculate_atr(df)
+    
+    # Calculate the money flow index (MFI) using high, low, close, and volume
+    def calculate_mfi(high, low, close, volume, window=14):
+        typical_price = (high + low + close) / 3
+        money_flow = typical_price * volume
+        positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0).rolling(window=window).sum()
+        negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0).rolling(window=window).sum()
+        mfi = 100 - (100 / (1 + (positive_money_flow / negative_money_flow)))
+        return mfi
+    
+    # Calculate the MFI
+    mfi = calculate_mfi(df['high'], df['low'], df['close'], df['volume'])
+    
+    # Combine the factors into a single alpha factor
+    alpha_factor = (rsi_close + atr + mfi) / 3
+    
+    return alpha_factor
+```

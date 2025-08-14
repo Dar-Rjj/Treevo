@@ -1,0 +1,83 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Compute Average Intraday High-Low Spread over past N days (N=5)
+    n = 5
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=n).mean()
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = df.apply(lambda row: 1 if row['intraday_high_low_spread'] > row['avg_intraday_high_low_spread'] else -1, axis=1)
+    df['high_low_momentum_score'] = df['high_low_momentum_score'] * df['volume']
+    
+    # Calculate Price Momentum over the last 5 days
+    df['price_change'] = df['close'].pct_change()
+    df['price_momentum'] = df['price_change'].rolling(window=n).sum()
+    
+    # Calculate Volume Trend over the last 5 days
+    df['volume_change'] = df['volume'].pct_change()
+    df['volume_trend'] = df['volume_change'].rolling(window=n).sum()
+    
+    # Calculate Daily Range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Compute Average Daily Range over past M days (M=10)
+    m = 10
+    df['avg_daily_range'] = df['daily_range'].rolling(window=m).mean()
+    
+    # Calculate Range Momentum
+    df['range_momentum'] = df.apply(lambda row: 1 if row['daily_range'] > row['avg_daily_range'] else -1, axis=1)
+    
+    # Integrate Open-Price and Close-Price Movement
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_close_movement'] = df['open_close_diff'].rolling(window=n).sum()
+    
+    # Calculate Open to Low Price Difference
+    df['open_low_diff'] = df['open'] - df['low']
+    df['open_low_movement'] = df['open_low_diff'].rolling(window=n).sum()
+    
+    # Calculate Intraday Price Volatility
+    p = 5
+    intraday_prices = df[['open', 'high', 'low', 'close']]
+    df['intraday_price_volatility'] = intraday_prices.rolling(window=p).std().mean(axis=1)
+    
+    # Compute Average Intraday Price Volatility over past P days
+    df['avg_intraday_price_volatility'] = df['intraday_price_volatility'].rolling(window=p).mean()
+    
+    # Compute Price Volatility Score
+    df['price_volatility_score'] = df.apply(lambda row: 1 if row['intraday_price_volatility'] > row['avg_intraday_price_volatility'] else -1, axis=1)
+    df['price_volatility_score'] = df['price_volatility_score'] * df['volume']
+    
+    # Incorporate Open Price Movement Factor
+    df['open_price_change'] = df['open'].pct_change()
+    df['open_price_momentum'] = df['open_price_change'].rolling(window=n).sum()
+    
+    # Calculate Intraday Mid-Price
+    df['mid_price'] = (df['high'] + df['low']) / 2
+    
+    # Compute Intraday Mid-Price Momentum
+    df['mid_price_change'] = df['mid_price'].pct_change()
+    df['mid_price_momentum'] = df['mid_price_change'].rolling(window=n).sum()
+    
+    # Combine Factors with coefficients
+    coefficients = {
+        'high_low_momentum_score': 0.2,
+        'price_momentum': 0.3,
+        'volume_trend': 0.1,
+        'range_momentum': 0.1,
+        'open_close_movement': 0.1,
+        'open_low_movement': 0.1,
+        'price_volatility_score': 0.1,
+        'open_price_momentum': 0.1,
+        'mid_price_momentum': 0.1
+    }
+    
+    df['alpha_factor'] = 0
+    for factor, coef in coefficients.items():
+        df['alpha_factor'] += df[factor] * coef
+    
+    return df['alpha_factor']
+```

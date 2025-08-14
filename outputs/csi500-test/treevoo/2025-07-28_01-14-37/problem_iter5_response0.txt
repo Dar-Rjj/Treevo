@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import skew, kurtosis
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Logarithmic Return
+    log_return = np.log1p(df['intraday_return'].replace(0, 1e-10))
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Combine Intraday Momentum and Volatility
+    volume_weighted_return = df['intraday_return'] * df['volume']
+    volume_weighted_range = df['intraday_range'] * df['volume']
+    combined_factor = (volume_weighted_return + volume_weighted_range) / df['volume']
+    
+    # Adjust for Skewness
+    skewness = skew(combined_factor)
+    combined_factor -= skewness
+    
+    # Adjust for Kurtosis
+    kurt = kurtosis(combined_factor)
+    combined_factor *= (3 / (kurt + 3))
+    
+    # Calculate Volume-Weighted Price Movement
+    weighted_price = (df['high'] + df['low'] + df['close']) / 3 * np.sqrt(df['volume'])
+    total_weighted_price = weighted_price.sum()
+    total_volume = df['volume'].sum()
+    volume_weighted_price_movement = total_weighted_price / total_volume
+    
+    # Calculate Momentum
+    df['momentum'] = df['close'].diff(10)
+    
+    # Calculate 50-day Exponential Moving Average (EMA)
+    ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Calculate Final Alpha Factor
+    momentum_adjusted = df['momentum'] - (ema_50 - df['close'])
+    final_factor = 0.6 * combined_factor + 0.4 * volume_weighted_price_movement
+    final_factor += momentum_adjusted
+    
+    # Final Rescaling
+    skewness = skew(final_factor)
+    final_factor -= skewness
+    kurt = kurtosis(final_factor)
+    final_factor *= (3 / (kurt + 3))
+    
+    return final_factor
+```

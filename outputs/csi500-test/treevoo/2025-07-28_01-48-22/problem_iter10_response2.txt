@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Relative Strength
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_return'] = df['intraday_return'] + df['open_to_close_return']
+    
+    # Identify Volume Spikes
+    volume_std = df['volume'].rolling(window=20).std()
+    mean_volume = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume'] > (mean_volume + 2 * volume_std)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['spiked_combined_return'] = df['combined_return'] * df['volume_spike']
+    
+    # Integrate Volume and Price Information
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['avg_high_low_range'] = df[['high', 'low']].mean(axis=1) - df[['high', 'low']].mean(axis=1).shift(1)
+    df['adjusted_close_change'] = df['close'] - df['close'].shift(1)
+    df['price_vol_info'] = 0.5 * df['volume_diff'] + 0.3 * df['avg_high_low_range'] + df['adjusted_close_change']
+    
+    # Weight by Volume and Volatility
+    df['volume_avg'] = df['volume'].rolling(window=5).mean()
+    daily_returns = df['close'].pct_change()
+    df['volatility'] = daily_returns.rolling(window=20).std()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['relative_strength'] * (df['volume_avg'] * df['volatility']) * df['price_vol_info']
+
+    return df['alpha_factor']
+```

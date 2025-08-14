@@ -1,0 +1,51 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between the closing price and the average of high and low prices
+    close_price = df['close']
+    avg_high_low = (df['high'] + df['low']) / 2
+    price_diff = close_price - avg_high_low
+    
+    # Compute a momentum factor based on the change in the close price over two periods
+    momentum_factor = df['close'].pct_change(periods=2).rolling(window=5).mean()
+    
+    # Calculate the volume-weighted average price (VWAP)
+    vwap = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    
+    # Calculate the relative strength index (RSI) for the close price
+    delta = close_price.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Exponential smoothing of the RSI
+    rsi_smoothed = rsi.ewm(span=10, adjust=False).mean()
+    
+    # Calculate the standard deviation of the close price to use as a measure of volatility
+    volatility = close_price.rolling(window=20).std()
+    
+    # Adaptive weighting based on volatility
+    weight_price_diff = 0.4 * (1 - (volatility / volatility.max()))
+    weight_momentum = 0.3 * (1 - (volatility / volatility.max()))
+    weight_vwap = 0.2 * (1 - (volatility / volatility.max()))
+    weight_rsi = 0.1 * (1 - (volatility / volatility.max()))
+    
+    # Integrate the price difference, smoothed momentum, VWAP, and smoothed RSI into a new alpha factor with adaptive weights
+    alpha_factor = (weight_price_diff * price_diff) + (weight_momentum * momentum_factor) + \
+                   (weight_vwap * (vwap - close_price)) + (weight_rsi * (rsi_smoothed - 50))
+    
+    # Add a moving average convergence divergence (MACD) factor
+    exp1 = close_price.ewm(span=12, adjust=False).mean()
+    exp2 = close_price.ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    macd_signal_diff = macd - signal
+    
+    # Incorporate the MACD factor into the alpha factor
+    weight_macd = 0.1 * (1 - (volatility / volatility.max()))
+    alpha_factor += weight_macd * macd_signal_diff
+    
+    return alpha_factor
+```

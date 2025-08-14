@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Dynamic Price Momentum
+    close_prices = df['close']
+    momentum = close_prices - close_prices.shift(10)
+    smoothed_momentum = momentum.ewm(span=10).mean()
+
+    # Incorporate Volume Dynamics
+    volume = df['volume']
+    volume_variability = volume.rolling(window=10).std()
+
+    # Evaluate Short-Term Trend
+    ema_5 = close_prices.ewm(span=5).mean()
+    short_term_trend = (close_prices > ema_5).astype(int)
+
+    # Combine Momentum and Volume
+    combined_momentum_volume = smoothed_momentum * volume_variability
+
+    # Integrate Short-Term Price Oscillations
+    def rsi(data, period=14):
+        delta = data.diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    rsi_14 = rsi(close_prices, 14)
+
+    # Enhance with Price Range Analysis
+    high = df['high']
+    low = df['low']
+    tr = pd.DataFrame(index=df.index)
+    tr['H-L'] = abs(high - low)
+    tr['H-PC'] = abs(high - close_prices.shift(1))
+    tr['L-PC'] = abs(low - close_prices.shift(1))
+    true_range = tr.max(axis=1)
+    atr_14 = true_range.rolling(window=14).mean()
+
+    # Determine Final Factor Value
+    final_factor = (combined_momentum_volume * short_term_trend) + rsi_14 - atr_14 + 0.3
+
+    return final_factor
+```

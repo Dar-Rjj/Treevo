@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, m=5):
+    # Intraday Return
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Close-to-Open Return
+    df['CloseToOpenReturn'] = df['close'].shift(1) - df['open']
+    
+    # Price Change
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    df['IntradayMidpoint'] = (df['high'] + df['low']) / 2
+    
+    # Opening Gap
+    df['OpeningGap'] = df['open'] - df['close'].shift(1)
+    
+    # Combined Intraday Features
+    df['CombinedIntradayFeatures'] = (df['open'] - df['IntradayMidpoint']) - df['OpeningGap']
+    
+    # Enhanced Intraday Factor
+    df['AverageIntradayRange'] = df['IntradayRange'].rolling(window=n).mean()
+    df['EnhancedIntradayFactor'] = df['AverageIntradayRange'] * (df['CloseToOpenReturn'] + df['PriceChange']) + df['CombinedIntradayFeatures']
+    
+    # Recent Volatility
+    df['AbsolutePriceChange'] = df['PriceChange'].abs()
+    df['RecentVolatility'] = df['AbsolutePriceChange'].rolling(window=m).mean()
+    
+    # Volume Weight
+    df['AverageVolume'] = df['volume'].rolling(window=n).mean()
+    df['VolumeWeight'] = df['volume'] / df['AverageVolume']
+    df['VolumeWeight'] = df['VolumeWeight'].apply(lambda x: 1 if x > 1 else 0.5)
+    
+    # Adjust for Combined Volume and Price Spikes
+    df['VolumeSpikeFactor'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['PriceSpikeFactor'] = (df['PriceChange'] - df['PriceChange'].shift(1)) / df['PriceChange'].shift(1)
+    df['CombinedSpikeFactor'] = df['VolumeSpikeFactor'] + df['PriceSpikeFactor']
+    df['CombinedSpikeFactor'] = df['CombinedSpikeFactor'].clip(lower=-1, upper=1)
+    
+    # Adjusted Intraday Momentum
+    df['AdjustedIntradayMomentum'] = df['high'] - df['low'] + df['close'] - df['open']
+    
+    # Overnight Return
+    df['OvernightReturn'] = df['open'] - df['close'].shift(1)
+    
+    # Daily Momentum
+    df['DailyMomentum'] = df['close'] - df['close'].shift(n)
+    
+    # Volume-Adjusted Transaction Intensity
+    df['TransactionIntensity'] = df['amount'] / df['volume']
+    df['VolumeAdjustedTransactionIntensity'] = df['TransactionIntensity'].rolling(window=n).sum()
+    
+    # Price Trend Reversal
+    df['AverageTransactionIntensity'] = df['TransactionIntensity'].rolling(window=n).mean()
+    df['PriceTrendReversal'] = df['PriceChange'] * (df['VolumeAdjustedTransactionIntensity'] / df['AverageTransactionIntensity'])
+    
+    # Intraday Volatility Standard Deviation
+    df['IntradayVolatilityStd'] = df['IntradayRange'].rolling(window=n).std()
+    
+    # Combined Alpha Factor
+    df['CombinedAlphaFactor'] = (
+        df['EnhancedIntradayFactor'] * df['OvernightReturn'] +
+        df['DailyMomentum'] +
+        df['PriceTrendReversal'] +
+        df['IntradayVolatilityStd'] * df['CloseToOpenReturn'] +
+        df['DailyMomentum']
+    )
+    
+    # Final Factor
+    df['FinalFactor'] = (
+        df['EnhancedIntradayFactor'] * df['RecentVolatility'] * df['VolumeWeight'] * df['CombinedSpikeFactor'] +
+        df['AdjustedIntradayMomentum'] +
+        df['CombinedAlphaFactor'] +
+        df['VolumeAdjustedTransactionIntensity']
+    )
+    
+    return df['FinalFactor']
+```

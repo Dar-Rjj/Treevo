@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, free_float_shares=1000000):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Determine Volatility
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    
+    # Adaptive Window Calculation
+    window_size = 60
+    df['adaptive_window'] = window_size
+    df.loc[df['volatility'] > df['volatility'].quantile(0.75), 'adaptive_window'] = int(window_size * 0.8)
+    df.loc[df['volatility'] < df['volatility'].quantile(0.25), 'adaptive_window'] = int(window_size * 1.2)
+    
+    # Liquidity Factor
+    df['turnover_ratio'] = df['volume'] / free_float_shares
+    df.loc[df['turnover_ratio'] > df['turnover_ratio'].quantile(0.75), 'adaptive_window'] -= 5
+    df.loc[df['turnover_ratio'] < df['turnover_ratio'].quantile(0.25), 'adaptive_window'] += 5
+    
+    # Seasonality Factor
+    df['month'] = df.index.month
+    monthly_volatility = df.groupby('month')['close'].std()
+    df['seasonal_adjustment'] = df['month'].map(monthly_volatility)
+    df.loc[df['seasonal_adjustment'] > df['seasonal_adjustment'].median(), 'adaptive_window'] -= 5
+    df.loc[df['seasonal_adjustment'] < df['seasonal_adjustment'].median(), 'adaptive_window'] += 5
+    
+    # Market Sentiment Factor
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_trend'] = df['sma_20'].diff()
+    df.loc[df['sma_trend'] > 0, 'adaptive_window'] -= 3
+    df.loc[df['sma_trend'] < 0, 'adaptive_window'] += 3
+    
+    # Rolling Statistics
+    df['rolling_mean'] = df['volume_weighted_return'].rolling(window=df['adaptive_window']).mean()
+    df['rolling_std'] = df['volume_weighted_return'].rolling(window=df['adaptive_window']).std()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['rolling_mean'] + df['rolling_std']) / df['rolling_std']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+```

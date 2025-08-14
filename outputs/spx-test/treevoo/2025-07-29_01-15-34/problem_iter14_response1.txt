@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Indicators
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Open_Close_Movement'] = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    total_volume = df['volume'].rolling(window=5).sum()
+    df['VWAP'] = (df['volume'] * df['Typical_Price']).rolling(window=5).sum() / total_volume
+    
+    # Combine Indicators for Predictive Factor
+    df['High_Low_to_Open_Close_Ratio'] = df['High_Low_Range'] / df['Open_Close_Movement'].abs()
+    df['VWAP_Deviation_from_Close'] = df['VWAP'] - df['close']
+    
+    # Momentum and Reversal Signals
+    df['Positive_Momentum'] = (df['High_Low_Range'] > 1.5 * df['Open_Close_Movement'].abs()).astype(int)
+    df['Potential_Reversal'] = ((df['Open_Close_Movement'] > 0.8 * df['High_Low_Range']) & 
+                                (df['VWAP_Deviation_from_Close'] < 0) & 
+                                (df['Open_Close_Movement'] < 0)).astype(int)
+    df['Momentum_Continuation'] = ((df['High_Low_Range'] > 2 * df['Open_Close_Movement'].abs()) & 
+                                   (df['VWAP'] > df['close'])).astype(int)
+    df['Reversal_Confirmation'] = ((df['Open_Close_Movement'] < -0.5 * df['High_Low_Range']) & 
+                                   (df['VWAP'] < df['close'])).astype(int)
+    
+    # Historical Price and Volume Indicators
+    df['Daily_Return'] = df['close'].pct_change()
+    lookback_window = 14
+    df['Rolling_Max_Close'] = df['close'].rolling(window=lookback_window).max()
+    df['Rolling_Min_Close'] = df['close'].rolling(window=lookback_window).min()
+    
+    # Assess Market Activity and Sentiment
+    avg_volume = df['volume'].rolling(window=lookback_window).mean()
+    df['Volume_Ratio'] = df['volume'] / avg_volume
+    df['Positive_Money_Flow'] = (df['volume'] * df['Daily_Return']).apply(lambda x: x if x > 0 else 0)
+    df['Negative_Money_Flow'] = (df['volume'] * df['Daily_Return']).apply(lambda x: x if x < 0 else 0)
+    df['Money_Flow_Ratio'] = df['Positive_Money_Flow'].rolling(window=lookback_window).sum() / df['Negative_Money_Flow'].rolling(window=lookback_window).sum().abs()
+    
+    # Combine Price and Volume Indicators
+    df['Momentum_Volume_Anomaly'] = df['Daily_Return'] * df['Volume_Ratio']
+    df['Value_Change_Peaks_Valleys_Volume'] = (df['close'] - df['Rolling_Min_Close']) / (df['Rolling_Max_Close'] - df['Rolling_Min_Close']) * df['Volume_Ratio']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Positive_Momentum'] + df['Potential_Reversal'] + df['Momentum_Continuation'] + 
+                          df['Reversal_Confirmation'] + df['Momentum_Volume_Anomaly'] + 
+                          df['Value_Change_Peaks_Valleys_Volume'])
+    
+    return df['Alpha_Factor']
+```

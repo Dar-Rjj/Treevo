@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Identify Spikes
+    volume_spike = (df['volume'] > df['volume'].shift(1) * 1.5).astype(int)
+    price_spike = (abs(df['close'] - df['close'].shift(1)) > 0.03 * df['close']).astype(int)
+    combined_spikes = volume_spike + price_spike
+    
+    # Introduce Volatility Adjustment
+    log_returns = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x == 0 else math.log(x))
+    volatility = log_returns.rolling(window=20).std()
+    
+    # Scale Intraday Momentum
+    scaled_intraday_momentum = (intraday_range / (combined_spikes + 1)).clip(upper=0.05)
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    combined_feature = (df['open'] - intraday_midpoint) - opening_gap
+    
+    # Enhance with Recent Volatility
+    abs_price_change = (df['close'] - df['close'].shift(1)).abs()
+    avg_abs_price_change = abs_price_change.rolling(window=20).mean()
+    combined_feature *= (avg_abs_price_change / volatility)
+    
+    # Adjust for Volume Spikes and Weight by Volume
+    volume_spike_factor = 1 / (1 + volume_spike)
+    final_feature = combined_feature * volume_spike_factor * df['volume']
+    
+    return final_feature
+```

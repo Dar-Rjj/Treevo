@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Calculate Intraday Reversal
+    df['intraday_reversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+
+    # Adjust for Momentum and Volume Change
+    df['momentum_adjustment'] = (1 + (df['close'] - df['close'].shift(10)) / df['close'].shift(10))
+    df['volume_change'] = (1 + (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1))
+    df['adjusted_intraday_reversal'] = df['intraday_reversal'] * df['momentum_adjustment'] * df['volume_change']
+
+    # Calculate Close to Midpoint Deviation
+    df['midpoint'] = (df['high'] + df['low']) / 2
+    df['close_to_midpoint_deviation'] = df['close'] - df['midpoint']
+
+    # Generate Day-to-Day Open Price Change
+    df['day_to_day_open_change'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combine Intraday Reversal, Close to Midpoint Deviation, and Open Price Change
+    df['combined_factors'] = df['adjusted_intraday_reversal'] * df['close_to_midpoint_deviation'] + df['day_to_day_open_change']
+
+    # Calculate Daily Volume Surprise
+    df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_surprise'] = df['volume'] - df['volume_ma_10']
+
+    # Compute Directional Adjusted Volume
+    df['upward_volume'] = (df['close'] > df['open']).astype(int) * (df['close'] - df['open']) * df['volume']
+    df['downward_volume'] = (df['close'] < df['open']).astype(int) * (df['open'] - df['close']) * df['volume']
+    df['net_directional_volume'] = df['upward_volume'].cumsum() - df['downward_volume'].cumsum()
+
+    # Calculate Cumulative Directional Price Impact
+    df['high_low_diff'] = df['high'] - df['low']
+    df['directional_price_impact'] = df['high_low_diff'] * df['net_directional_volume']
+
+    # Calculate Smoothed Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(1)
+    df['smoothed_momentum'] = df['price_momentum'].ewm(span=10, adjust=False).mean()
+
+    # Adjust by Smoothed Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    df['smoothed_volume_ratio'] = df['volume_ratio'].rolling(window=10).mean()
+    df['adjusted_momentum'] = df['smoothed_momentum'] * df['smoothed_volume_ratio']
+
+    # Compute Intraday Close-Open Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate 5-Day Moving Average of Intraday Close-Open Return
+    df['intraday_return_ma_5'] = df['intraday_return'].rolling(window=5).mean()
+
+    # Integrate Intraday Components
+    df['integrated_intraday_factor'] = df['directional_price_impact'] * df['intraday_return_ma_5'] * df['volume_surprise']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['combined_factors'] * df['integrated_intraday_factor'] * df['net_directional_volume'] +
+                          df['adjusted_intraday_reversal'] +
+                          df['adjusted_momentum'] -
+                          (df['open'] - df['close'].shift(1)) / df['close'].shift(1))
+
+    return df['alpha_factor']
+```

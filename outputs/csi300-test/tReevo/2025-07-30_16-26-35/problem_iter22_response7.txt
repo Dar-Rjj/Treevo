@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['IntradayRange'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = (df['close'] - df['open']) / df['open'].shift(1)
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+
+    # Calculate Momentum
+    df['Momentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+
+    # Calculate Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Calculate Moving Average Convergence Divergence (MACD)
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    df['MACD'] = macd_line - signal_line
+
+    # Dynamic Weighting
+    recent_weights = {
+        'IntradayRange': 0.2,
+        'CloseToOpenReturn': 0.15,
+        'VWAP': 0.15,
+        'Momentum': 0.15,
+        'RSI': 0.1,
+        'MACD': 0.1
+    }
+    
+    older_weights = {
+        'IntradayRange': 0.1,
+        'CloseToOpenReturn': 0.1,
+        'VWAP': 0.1,
+        'Momentum': 0.15,
+        'RSI': 0.15,
+        'MACD': 0.2
+    }
+
+    # Compute Weighted Components
+    for col in recent_weights:
+        df[f'Weighted_{col}'] = df[col] * (recent_weights[col] if df.index.isin(df.index[-1]) else older_weights[col])
+
+    # Final Alpha Factor
+    df['AlphaFactor'] = (
+        df['Weighted_IntradayRange'] +
+        df['Weighted_CloseToOpenReturn'] +
+        df['Weighted_VWAP'] +
+        df['Weighted_Momentum'] +
+        df['Weighted_RSI'] +
+        df['Weighted_MACD']
+    )
+
+    return df['AlphaFactor']
+```

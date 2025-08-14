@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Modified Momentum Indicator using Close Prices
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Momentum_Factor'] = (df['SMA_10'] - df['SMA_20']) / df['SMA_20'] * 100
+    
+    # Enhanced Volume-Weighted Price Movement Factor
+    df['VWAP'] = ((df['high'] + df['low'] + 2*df['close']) / 4 * df['volume']).cumsum() / df['volume'].cumsum()
+    df['EMA_VWAP_10'] = df['VWAP'].ewm(span=10, adjust=False).mean()
+    df['EMA_VWAP_50'] = df['VWAP'].ewm(span=50, adjust=False).mean()
+    df['Log_Ratio_VWAP'] = np.log(df['EMA_VWAP_10'] / df['EMA_VWAP_50'])
+    
+    # Modified Volatility Factor using High and Low Prices
+    df['ATR'] = df['high'] - df['low']
+    df['EMA_ATR_14'] = df['ATR'].ewm(span=14, adjust=False).mean()
+    df['STD_ATR_14'] = df['ATR'].rolling(window=14).std()
+    
+    # Modified Relative Strength Index (RSI) based on Close Prices
+    df['Price_Change'] = df['close'].diff(1)
+    df['Gain'] = df['Price_Change'].apply(lambda x: x if x > 0 else 0)
+    df['Loss'] = df['Price_Change'].apply(lambda x: -x if x < 0 else 0)
+    df['Avg_Gain_14'] = df['Gain'].rolling(window=14).mean()
+    df['Avg_Loss_14'] = df['Loss'].rolling(window=14).mean()
+    df['RSI'] = 100 - (100 / (1 + (df['Avg_Gain_14'] / df['Avg_Loss_14'])))
+    df['Smoothed_RSI'] = df['RSI'].ewm(span=3, adjust=False).mean()
+    df['Avg_Price_Movement_14'] = abs(df['Price_Change']).rolling(window=14).mean()
+    
+    # Modified Money Flow Index (MFI) using High, Low, Close, and Volume
+    df['Typical_Price'] = (df['high'] + df['low'] + 2*df['close']) / 4
+    df['Money_Flow'] = df['Typical_Price'] * df['volume']
+    df['Positive_MF'] = df['Money_Flow'].where(df['Typical_Price'] > df['Typical_Price'].shift(1), 0)
+    df['Negative_MF'] = df['Money_Flow'].where(df['Typical_Price'] < df['Typical_Price'].shift(1), 0)
+    df['PMF_14'] = df['Positive_MF'].rolling(window=14).sum()
+    df['NMF_14'] = df['Negative_MF'].rolling(window=14).sum()
+    df['Money_Ratio'] = df['PMF_14'] / df['NMF_14']
+    df['MFI'] = 100 - (100 / (1 + df['Money_Ratio']))
+    df['Smoothed_MFI'] = df['MFI'].ewm(span=3, adjust=False).mean()
+    df['MA_MF_14'] = df['Money_Flow'].rolling(window=14).mean()
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (df['Momentum_Factor'] + 
+                          df['Log_Ratio_VWAP'] + 
+                          df['EMA_ATR_14'] + 
+                          df['STD_ATR_14'] + 
+                          df['Smoothed_RSI'] + 
+                          df['Avg_Price_Movement_14'] + 
+                          df['Smoothed_MFI'] + 
+                          df['MA_MF_14'])
+    
+    return df['Alpha_Factor']
+```

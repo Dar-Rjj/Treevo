@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the Simple Moving Average (SMA) of closing prices over different periods
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    
+    # Compute the Rate of Change (ROC) of closing prices
+    df['ROC'] = df['close'].pct_change(periods=1)
+    
+    # Generate a Relative Strength (RS) indicator comparing the current close to the SMA
+    df['RS_SMA_30'] = df['close'] / df['SMA_30']
+    
+    # Create an On-Balance Volume (OBV) indicator by summing volume on up days and subtracting on down days
+    df['Price_Change'] = df['close'].diff()
+    df['OBV'] = ((df['Price_Change'] > 0) - (df['Price_Change'] < 0)) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Formulate a Volume Oscillator using the difference between short and long period moving averages of volume
+    df['MA_Volume_10'] = df['volume'].rolling(window=10).mean()
+    df['MA_Volume_30'] = df['volume'].rolling(window=30).mean()
+    df['Volume_Oscillator'] = df['MA_Volume_10'] - df['MA_Volume_30']
+    
+    # Identify Inside and Outside Days based on (open, high, low, close)
+    df['High_Low_Range'] = df['high'] - df['low']
+    df['Inside_Day'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+    df['Outside_Day'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    
+    # Construct a Breakout Indicator to signal when the closing price exceeds a recent price range
+    df['5D_High'] = df['high'].rolling(window=5).max()
+    df['5D_Low'] = df['low'].rolling(window=5).min()
+    df['Breakout_Up'] = (df['close'] > df['5D_High'].shift(1)).astype(int)
+    df['Breakout_Down'] = (df['close'] < df['5D_Low'].shift(1)).astype(int)
+    df['Breakout'] = df['Breakout_Up'] - df['Breakout_Down']
+    
+    # Calculate the Average True Range (ATR) with trade amount as a factor to measure volatility
+    df['True_Range'] = df[['high' - 'low', abs('high' - 'close').shift(1), abs('low' - 'close').shift(1)]].max(axis=1)
+    df['ATR'] = df['True_Range'].rolling(window=14).mean() * (df['amount'] / df['volume'])
+    
+    # Develop a Money Flow Index (MFI) that utilizes trade amount in its calculation for identifying overbought or oversold conditions
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Money_Flow'] = df['Typical_Price'] * df['volume'] * df['amount']
+    df['Positive_Money_Flow'] = df['Money_Flow'] * (df['Typical_Price'] > df['Typical_Price'].shift(1))
+    df['Negative_Money_Flow'] = df['Money_Flow'] * (df['Typical_Price'] < df['Typical_Price'].shift(1))
+    df['Positive_MF'] = df['Positive_Money_Flow'].rolling(window=14).sum()
+    df['Negative_MF'] = df['Negative_Money_Flow'].rolling(window=14).sum().abs()
+    df['MFI'] = 100 - (100 / (1 + df['Positive_MF'] / df['Negative_MF']))
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['RS_SMA_30'] + 
+        df['OBV'] + 
+        df['Volume_Oscillator'] + 
+        df['Breakout'] + 
+        df['ATR'] + 
+        df['MFI']
+    )
+    
+    return df['Alpha_Factor']
+```

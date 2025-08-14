@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Weight by Volume
+    df['volume_weighted_close_to_open_return'] = df['close_to_open_return'] * df['volume']
+    
+    # Integrate Intraday High-Low Movement
+    df['intraday_high_low_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Adjust by Volume Change
+    df['volume_change'] = df['volume'] / df['volume'].shift(1)
+    df['adjusted_intraday_high_low_ratio'] = df['intraday_high_low_ratio'] * df['volume_change']
+    
+    # Adjust for Volume Volatility
+    df['volume_moving_avg'] = df['volume'].rolling(window=20).mean()
+    df['volume_volatility'] = df['volume'].rolling(window=20).std()
+    df['volume_adjusted_intraday_high_low_ratio'] = df['adjusted_intraday_high_low_ratio'] / (df['volume_volatility'] + 1e-6)
+    
+    # Cumulative Log Return with VWAP Integration
+    df['daily_log_return'] = np.log(df['close'] / df['close'].shift(1))
+    df['cumulative_log_return'] = df['daily_log_return'].rolling(window=20).sum()
+    
+    # Calculate Daily Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume']
+    df['vwap'] = df['vwap'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # 20-Day Moving Average VWAP
+    df['vwap_20_day_ma'] = df['vwap'].rolling(window=20).mean()
+    
+    # PMI Score
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    df['sum_daily_price_changes'] = df['daily_price_change'].rolling(window=20).sum()
+    df['pmi_score'] = df['sum_daily_price_changes'] * df['vwap']
+    
+    # Final Alpha Factor
+    df['cumulative_log_return_pmi_score'] = df['cumulative_log_return'] * df['pmi_score']
+    
+    df['integrated_intraday_momentum'] = df['volume_adjusted_intraday_high_low_ratio'] + df['volume_weighted_close_to_open_return']
+    
+    df['price_oscillator'] = df['close'].rolling(window=5).mean() - df['close'].rolling(window=20).mean()
+    
+    df['final_alpha_factor'] = (df['cumulative_log_return_pmi_score'] + 
+                                df['integrated_intraday_momentum'] + 
+                                df['cumulative_log_return'] + 
+                                df['price_oscillator'])
+    
+    return df['final_alpha_factor'].dropna()
+```

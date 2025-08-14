@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 7-day and 21-day simple moving averages of close prices
+    df['SMA_7'] = df['close'].rolling(window=7).mean()
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+    
+    # Compare the current close price with the 7-day SMA
+    df['Bullish_Trend_SMA_7'] = (df['close'] > df['SMA_7']).astype(int)
+    df['Bearish_Trend_SMA_7'] = (df['close'] < df['SMA_7']).astype(int)
+    
+    # Determine if the 7-day SMA is rising or falling compared to the 21-day SMA
+    df['Rising_SMA_7'] = (df['SMA_7'] > df['SMA_21']).astype(int)
+    df['Falling_SMA_7'] = (df['SMA_7'] < df['SMA_21']).astype(int)
+    
+    # Calculate the percentage change in volume from the previous day
+    df['Volume_Change'] = df['volume'].pct_change()
+    
+    # Calculate the percentage change in close price from the previous day
+    df['Close_Price_Change'] = df['close'].pct_change()
+    
+    # Determine if high volume accompanies significant price changes
+    df['Strong_Buying_Pressure'] = ((df['Volume_Change'] > 0.1) & (df['Close_Price_Change'] > 0.05)).astype(int)
+    df['Strong_Selling_Pressure'] = ((df['Volume_Change'] > 0.1) & (df['Close_Price_Change'] < -0.05)).astype(int)
+    
+    # Calculate the difference between the current day's open price and the previous day's close price
+    df['Price_Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Categorize the gap as up, down, or no gap
+    df['Up_Gap'] = (df['Price_Gap'] > 0.05 * df['close'].shift(1)).astype(int)
+    df['Down_Gap'] = (df['Price_Gap'] < -0.05 * df['close'].shift(1)).astype(int)
+    df['No_Gap'] = ((df['Price_Gap'] <= 0.05 * df['close'].shift(1)) & (df['Price_Gap'] >= -0.05 * df['close'].shift(1))).astype(int)
+    
+    # Calculate exponential moving average (EMA) of close prices
+    df['EMA'] = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Determine the difference between EMA and 7-day SMA
+    df['EMA_SMA_Diff'] = df['EMA'] - df['SMA_7']
+    
+    # Analyze the high-low spread (High - Low)
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Evaluate the open-close price change
+    df['Open_Close_Change'] = df['close'] - df['open']
+    
+    # Measure trading volume trends
+    df['Volume_Trend'] = df['volume'].rolling(window=7).mean() - df['volume'].rolling(window=21).mean()
+    
+    # Integrate price and volume signals for a composite factor
+    df['Composite_Factor'] = (
+        df['Bullish_Trend_SMA_7'] + df['Rising_SMA_7'] + 
+        df['Strong_Buying_Pressure'] + df['Up_Gap'] + 
+        df['EMA_SMA_Diff'] + df['Open_Close_Change'] + 
+        df['Volume_Trend']
+    )
+    
+    # Return the composite factor as a Series
+    return df['Composite_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_stock_data.csv', parse_dates=['date'], index_col='date')
+# composite_factor = heuristics_v2(df)
+# print(composite_factor)
+```

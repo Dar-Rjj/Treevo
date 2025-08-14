@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'].diff()
+    
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Smooth the Price Momentum with EMA
+    ema_span = 5
+    df['smoothed_price_momentum'] = df['price_momentum'].ewm(span=ema_span, adjust=False).mean()
+    
+    # Smooth Intraday Close-Open Return
+    df['intraday_close_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Adjust by Volume Change through Volume Ratio
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Accumulate Upward Day Volume and Downward Day Volume
+    df['upward_volume'] = np.where(df['close'] > df['open'], df['volume'], 0)
+    df['downward_volume'] = np.where(df['close'] < df['open'], df['volume'], 0)
+    
+    # Compute Volume Surge
+    df['volume_surge'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close to Midpoint Deviation
+    df['midpoint_deviation'] = df['close'] - (df['high'] + df['low']) / 2
+    
+    # Combine Price Momentum and Intraday High-Low Spread
+    df['combined_momentum_intraday_pattern'] = df['smoothed_price_momentum'] * df['intraday_high_low_spread']
+    
+    # Integrate Volume Ratio and Volume Surge
+    df['integrated_volume_adjustment'] = df['volume_ratio'] + df['volume_surge']
+    
+    # Incorporate Intraday Range and Midpoint Deviation
+    df['intraday_range_midpoint_deviation'] = df['intraday_range'] * df['midpoint_deviation']
+    
+    # Incorporate Volume Influence into Momentum and Intraday Pattern
+    df['volume_influence'] = df['upward_volume'].rolling(window=ema_span).sum() / df['downward_volume'].rolling(window=ema_span).sum()
+    
+    # Final Factor Composition
+    df['alpha_factor'] = (df['combined_momentum_intraday_pattern'] * df['volume_influence'] +
+                          df['integrated_volume_adjustment'] + 
+                          df['intraday_range_midpoint_deviation'])
+    
+    return df['alpha_factor'].dropna()
+```

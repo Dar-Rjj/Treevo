@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+from talib import EMA, SMA, RSI
+
+def adaptive_moving_average(data, window):
+    alpha = 2 / (window + 1)
+    return data.ewm(alpha=alpha).mean()
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_ama_10 = adaptive_moving_average(df['volume'], 10)
+    volume_trend = df['volume'] - volume_ama_10
+    
+    # Determine if positive or negative volume trend
+    volume_trend_adjusted = volume_trend.apply(lambda x: 1.5 if x > 0 else 0.5)
+    
+    # Calculate Price Trend
+    close_ema_10 = EMA(df['close'].values, timeperiod=10)
+    price_trend = df['close'] - close_ema_10
+    price_trend_adjusted = price_trend.apply(lambda x: 1.2 if x > 0 else 0.8)
+    
+    # Calculate Volatility
+    volatility = df['close'].rolling(window=10).std()
+    volatility_adjusted = volatility.apply(lambda x: 1.3 if x > volatility.median() else 0.7)
+    
+    # Calculate Relative Strength Index
+    rsi_14 = RSI(df['close'].values, timeperiod=14)
+    rsi_adjusted = np.where(rsi_14 > 70, 1.1, np.where(rsi_14 < 30, 0.9, 1.0))
+    
+    # Assume we have sector performance in the dataframe as 'sector_close'
+    sector_ema_10 = EMA(df['sector_close'].values, timeperiod=10)
+    sector_trend = df['sector_close'] - sector_ema_10
+    sector_trend_adjusted = sector_trend.apply(lambda x: 1.15 if x > 0 else 0.85)
+    
+    # Combine all factors
+    alpha_factor = (high_low_spread * volume_trend) * volume_trend_adjusted * price_trend_adjusted * volatility_adjusted * rsi_adjusted * sector_trend_adjusted
+    
+    return alpha_factor
+```

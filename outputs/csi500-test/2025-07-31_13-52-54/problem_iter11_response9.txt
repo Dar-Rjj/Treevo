@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the Simple Moving Average (SMA) of closing prices for 50 days
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Generate a binary signal; 1 if the current close is above the SMA, 0 otherwise
+    df['Trend_Signal'] = (df['close'] > df['SMA_50']).astype(int)
+    
+    # Calculate the difference between today’s high and the previous day’s high
+    df['High_Diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day’s low
+    df['Low_Diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    df['Momentum_Score'] = df['High_Diff'] + df['Low_Diff']
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    df['Momentum_Signal'] = (df['Momentum_Score'] > 0).astype(int)
+    
+    # Evaluate the percentage change in volume from the previous day
+    df['Volume_Percent_Change'] = df['volume'].pct_change()
+    
+    # Use the volume change to infer trading activity and sentiment
+    df['Volume_Signal'] = (df['Volume_Percent_Change'] > 0).astype(int)
+    
+    # Multiply the return (close to close) by the volume traded
+    df['Intensity'] = df['close'].pct_change() * df['volume']
+    
+    # Sum of (Daily Returns * Volume) for the last 100 days
+    df['Long_Term_Volume_Weighted_Return'] = (df['close'].pct_change() * df['volume']).rolling(window=100).sum() / df['volume'].rolling(window=100).sum()
+    
+    # Sum of (Daily Returns * Volume) for the last 5 days
+    df['Short_Term_Volume_Weighted_Return'] = (df['close'].pct_change() * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Intraday Return: (High - Low) / Close
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['close']
+    
+    # Intraday Volatility: |High - Low|
+    df['Intraday_Volatility'] = (df['high'] - df['low']).abs()
+    
+    # Intraday Momentum: Intraday Return * Volume
+    df['Intraday_Momentum'] = df['Intraday_Return'] * df['volume']
+    df['Intraday_Momentum_5D'] = df['Intraday_Momentum'].rolling(window=5).sum()
+    
+    # Volume-Weighted Intraday Reversal
+    df['Volume_Weighted_Intraday_Reversal'] = -(df['Intraday_Return'] * df['volume'])
+    df['Volume_Weighted_Intraday_Reversal_10D'] = df['Volume_Weighted_Intraday_Reversal'].rolling(window=10).sum()
+    
+    # Price Momentum: n-day return of Close
+    df['Price_Momentum_Close'] = df['close'].pct_change(periods=20)
+    df['Price_Momentum_Open'] = df['open'].pct_change(periods=20)
+    df['Price_Momentum'] = (df['Price_Momentum_Close'] + df['Price_Momentum_Open']) / 2
+    
+    # Combined Alpha Factor
+    df['Combined_Alpha_Factor'] = (
+        (df['Long_Term_Volume_Weighted_Return'] - df['Short_Term_Volume_Weighted_Return']) +
+        (df['Intraday_Momentum_5D'] + df['Volume_Weighted_Intraday_Reversal_10D'])
+    ) * df['Price_Momentum']
+    
+    # Final Alpha Factor
+    alpha_factor = df['Combined_Alpha_Factor']
+    
+    return alpha_factor
+```

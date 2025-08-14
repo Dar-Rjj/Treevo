@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted Intraday Price Movement
+    df['Adjusted_Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['open'].shift(1))
+    
+    # Weight by Volume and Close Difference
+    close_diff = df['close'] - df['close'].shift(1)
+    df['Weighted_Adjusted_Intraday_Price_Movement'] = df['Adjusted_Intraday_Price_Movement'] * df['volume'] * close_diff
+    
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['Daily_Range'].rolling(window=20).mean()
+    
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * df['Reversal_Signal']
+    
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Weighted_Intraday_Return_and_Reversal_Signal'] = (df['amount'] * df['Weighted_Adjusted_Intraday_Price_Movement']) + (df['volume'] * df['Reversal_Signal'])
+    
+    # Combine Enhanced Factors
+    df['Combined_Factors'] = (df['Weighted_Adjusted_Intraday_Price_Movement'] * df['Intraday_Volatility']) * df['Volume_Weighted_Return']
+    
+    # Adjust by Average Volume
+    df['Average_Volume'] = df['volume'].rolling(window=20).mean()
+    df['Adjusted_Combined_Factors'] = df['Combined_Factors'] / df['Average_Volume']
+    
+    # Incorporate Close Price Momentum
+    df['Close_Price_Momentum'] = df['close'].rolling(window=10).mean()
+    
+    # Adjust Momentum by Intraday Volatility
+    df['Adjusted_Momentum'] = df['Close_Price_Momentum'] * df['Intraday_Volatility']
+    
+    # Final Factor Calculation
+    final_factor = (0.3 * df['Weighted_Adjusted_Intraday_Price_Movement'] + 
+                    0.3 * df['Intraday_Volatility'] + 
+                    0.4 * df['Adjusted_Momentum'])
+    
+    final_alpha_factor = (final_factor * 0.5) + (df['Weighted_Intraday_Return_and_Reversal_Signal'] * 0.5)
+    
+    return final_alpha_factor
+```

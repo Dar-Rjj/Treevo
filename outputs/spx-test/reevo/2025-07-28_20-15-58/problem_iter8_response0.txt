@@ -1,0 +1,78 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day moving average of the close price
+    df['ma_5_close'] = df['close'].rolling(window=5).mean()
+    df['ma_20_close'] = df['close'].rolling(window=20).mean()
+
+    # Calculate the difference between today's close and yesterday's close, then scale by the volume
+    df['close_diff'] = df['close'].diff()
+    df['volume_scaled_close_diff'] = df['close_diff'] * df['volume']
+
+    # Calculate a 5-day moving average of the volume-scaled close difference
+    df['ma_volume_scaled_close_diff'] = df['volume_scaled_close_diff'].rolling(window=5).mean()
+
+    # Calculate the ratio of the current day's high to the 5-day moving average of the highs
+    df['high_ma_high'] = df['high'] / df['high'].rolling(window=5).mean()
+
+    # Calculate the ratio of the current day's low to the 5-day moving average of the lows
+    df['low_ma_low'] = df['low'] / df['low'].rolling(window=5).mean()
+
+    # Calculate the 5-day and 20-day volatility (standard deviation of closing prices)
+    df['std_5_close'] = df['close'].rolling(window=5).std()
+    df['std_20_close'] = df['close'].rolling(window=20).std()
+
+    # Momentum factor: Difference between 5-day and 20-day moving averages
+    df['momentum'] = df['ma_5_close'] - df['ma_20_close']
+
+    # Relative strength: Ratio of the 5-day moving average to the 20-day moving average
+    df['relative_strength'] = df['ma_5_close'] / df['ma_20_close']
+
+    # Volatility factor: Ratio of 5-day to 20-day standard deviation
+    df['volatility_ratio'] = df['std_5_close'] / (df['std_20_close'] + 1e-7)
+
+    # Calculate the 50-day moving average of the close price
+    df['ma_50_close'] = df['close'].rolling(window=50).mean()
+
+    # Calculate the long-term trend: Difference between the 50-day and 20-day moving averages
+    df['long_term_trend'] = df['ma_50_close'] - df['ma_20_close']
+
+    # Market sentiment: Positive or negative close price change over the last 5 days
+    df['sentiment'] = np.where(df['close'].diff(periods=5) > 0, 1, -1)
+
+    # Dynamic price and volume interaction: Volume-weighted momentum
+    df['volume_weighted_momentum'] = df['momentum'] * df['volume']
+
+    # Adaptive factor weighting using machine learning
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_squared_error
+
+    # Prepare the feature matrix and target variable
+    X = df[['ma_volume_scaled_close_diff', 'high_ma_high', 'low_ma_low', 'relative_strength', 'volatility_ratio', 'long_term_trend', 'sentiment', 'volume_weighted_momentum']].dropna()
+    y = df['close'].pct_change().shift(-1).dropna()  # Target is the next day's return
+
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+    # Train a RandomForestRegressor to predict the weights
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+
+    # Predict the weights for the entire dataset
+    weights = model.predict(X)
+
+    # Combine the factors with the predicted weights to create the final alpha factor
+    alpha_factor = (
+        (df['ma_volume_scaled_close_diff'] 
+         * df['high_ma_high'] 
+         * df['low_ma_low'] 
+         * df['relative_strength'] 
+         * df['volatility_ratio'] 
+         * df['long_term_trend'] 
+         * df['sentiment'] 
+         * df['volume_weighted_momentum'])
+        * weights
+    )
+
+    return alpha_factor
+```

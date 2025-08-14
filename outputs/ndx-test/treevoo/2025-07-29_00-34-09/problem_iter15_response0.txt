@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Log Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # 20-Day EMA of Log Returns, Weigh by Volume
+    df['vol_weighted_log_returns'] = df['log_returns'] * df['volume']
+    df['20_day_ema_vol_log_returns'] = df['vol_weighted_log_returns'].ewm(span=20).mean()
+    
+    # Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # 20-Day Moving SD of High-Low Ranges
+    df['20_day_sd_high_low_range'] = df['high_low_range'].rolling(window=20).std()
+    
+    # Weight by High-Low Range Volatility
+    df['vol_adj_price_movement'] = (df['20_day_ema_vol_log_returns'] / df['20_day_sd_high_low_range']).fillna(0)
+    
+    # Calculate Rolling Average of High-to-Low Range
+    df['20_day_avg_high_low_range'] = df['high_low_range'].rolling(window=20).mean()
+    
+    # Calculate Intraday Price Change
+    df['intraday_change'] = df['close'] - df['open']
+    
+    # 5-Day and 10-Day Moving Averages of Intraday Price Change
+    df['5_day_ma_intraday_change'] = df['intraday_change'].rolling(window=5).mean()
+    df['10_day_ma_intraday_change'] = df['intraday_change'].rolling(window=10).mean()
+    
+    # Determine Reversal Signal
+    df['reversal_signal'] = 0
+    df.loc[df['5_day_ma_intraday_change'] > df['10_day_ma_intraday_change'], 'reversal_signal'] = 1
+    df.loc[df['5_day_ma_intraday_change'] < df['10_day_ma_intraday_change'], 'reversal_signal'] = -1
+    
+    # Amplify or Dampen Reversal Signal based on 20-day Avg High-Low Range
+    df['reversal_signal'] *= df['20_day_avg_high_low_range'].apply(lambda x: 1.5 if x > df['20_day_avg_high_low_range'].median() else 0.5)
+    
+    # Filter by Volume
+    df['filtered_reversal_signal'] = df['reversal_signal'] * (df['volume'] > df['volume'].quantile(0.75))
+    
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    df['price_reversals'] = ((df['high'] - df['low']) / df['open']).rolling(window=20).sum().fillna(0)
+    
+    # Assess Volume Impact on Price Movement
+    df['vol_weighted_close'] = (df['close'] * df['volume']).ewm(span=20).mean()
+    
+    # Combine Factors for Final Alpha
+    df['alpha_factor'] = (
+        0.4 * df['vol_adj_price_movement'] +
+        0.1 * df['filtered_reversal_signal'] +
+        0.3 * df['price_reversals'] +
+        0.2 * df['vol_weighted_close']
+    )
+    
+    return df['alpha_factor']
+```

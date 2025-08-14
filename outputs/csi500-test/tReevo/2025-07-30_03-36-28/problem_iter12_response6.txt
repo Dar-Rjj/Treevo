@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Parameters
+    sma_short_lookback = 20
+    vol_adj_vol_lookback = 10
+    price_momentum_lookback = 20
+    pct_change_lookback = 5
+    sma_long_lookback = 50
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Vol_Adjusted_HL'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adjusted_Vol'] = df['Vol_Adjusted_HL'].rolling(window=vol_adj_vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=price_momentum_lookback).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct_Change'] = df['close'].pct_change(periods=pct_change_lookback)
+    
+    # Calculate Long-Term SMA for Market Trend Alignment
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_lookback).mean()
+    
+    # Determine the Market Trend
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+    
+    # Define initial weights
+    bullish_weights = {'Price_Momentum': 0.5, 'Vol_Adjusted_Vol': 0.3, 'Pct_Change': 0.2}
+    bearish_weights = {'Price_Momentum': 0.3, 'Vol_Adjusted_Vol': 0.4, 'Pct_Change': 0.3}
+    
+    # Adjust Weights Based on Market Trend
+    df['Alpha_Factor'] = 0
+    for trend, weights in zip([1, 0], [bullish_weights, bearish_weights]):
+        mask = df['Trend_Indicator'] == trend
+        df.loc[mask, 'Alpha_Factor'] = (
+            df.loc[mask, 'Price_Momentum'] * weights['Price_Momentum'] +
+            df.loc[mask, 'Vol_Adjusted_Vol'] * weights['Vol_Adjusted_Vol'] +
+            df.loc[mask, 'Pct_Change'] * weights['Pct_Change']
+        )
+    
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,54 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using the log return over a dynamic lookback period (10-30 days)
+    momentum = np.log(df['close']).diff(periods=20)
+    
+    # Calculate the liquidity factor using the average volume over a dynamic lookback period (10-40 days)
+    liquidity = df['volume'].rolling(window=30).mean()
+    
+    # Calculate the market sentiment using the average money flow ratio over a dynamic lookback period (5-15 days)
+    money_flow_ratio = df['amount'] / df['volume']
+    market_sentiment = money_flow_ratio.rolling(window=10).mean()
+    
+    # Calculate the volatility factor using the standard deviation of the log returns over a dynamic lookback period (20-50 days)
+    volatility = np.log(df['close']).diff().rolling(window=40).std()
+    
+    # Calculate the intraday dynamics factor using the ratio of high to low prices over the last 5 days
+    intraday_dynamics = (df['high'] / df['low']).rolling(window=5).mean()
+    
+    # Calculate additional technical indicators
+    # Calculate the relative strength index (RSI) over a 14-day period
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the moving average convergence divergence (MACD) with 12 and 26 periods
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal_line = macd.rolling(window=9).mean()
+    macd_histogram = macd - signal_line
+    
+    # Balance and decay factor weights
+    momentum_weighted = momentum * 0.4
+    liquidity_weighted = liquidity * 0.2
+    market_sentiment_weighted = market_sentiment * 0.1
+    volatility_weighted = volatility * 0.1
+    intraday_dynamics_weighted = intraday_dynamics * 0.1
+    rsi_weighted = rsi * 0.05
+    macd_histogram_weighted = macd_histogram * 0.05
+    
+    # Create a combined factor by summing the weighted factors
+    # The idea is that stocks with positive momentum, high liquidity, strong market sentiment, lower volatility, and positive intraday dynamics may outperform
+    factor = (momentum_weighted + 
+              liquidity_weighted + 
+              market_sentiment_weighted - 
+              volatility_weighted + 
+              intraday_dynamics_weighted + 
+              rsi_weighted + 
+              macd_histogram_weighted)
+    
+    return factor
+```

@@ -1,0 +1,30 @@
+import pandas as pd
+import numpy as np
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the volume-weighted average price (VWAP)
+    vwap = (df['amount'] / df['volume']).rolling(window=7).mean()
+    
+    # Calculate the adaptive exponential moving average (EMA) of the close price 
+    ema_close = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Integrate a dynamic window for RSI calculation based on volatility
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate logarithmic returns over a 5-day period
+    log_returns = np.log(df['close'] / df['close'].shift(5))
+    
+    # Incorporate order book imbalances using the difference between high and low
+    order_imbalance = (df['high'] - df['low']) / df['close']
+    
+    # Calculate a seasonality component using the month of the year
+    month = df.index.month
+    seasonal_factor = (month - 6) / 6  # Centered around June
+    
+    # Generate the factor as a combination of trend, volatility, volume, and sentiment
+    factor = (df['close'] - ema_close) * rsi * log_returns * (vwap / df['close']) * order_imbalance * (1 + seasonal_factor)
+    
+    return factor

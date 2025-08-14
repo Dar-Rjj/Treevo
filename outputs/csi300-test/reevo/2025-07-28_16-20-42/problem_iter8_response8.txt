@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 20-day moving averages of the close price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices
+    weighted_prices = (0.1 * df['open'] + 0.3 * df['high'] + 0.3 * df['low'] + 0.3 * df['close'])
+    
+    # Calculate the ratio of (high - low) to the 5-day moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (ma_5 + 1e-7)
+    
+    # Calculate the 5-day exponential moving average of the close price
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    
+    # Calculate the 5-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=5).std()
+    
+    # Incorporate market trends by calculating the 20-day momentum
+    momentum_20 = df['close'] / df['close'].shift(20) - 1
+    
+    # Incorporate liquidity by calculating the turnover rate
+    turnover_rate = df['volume'] / (df['amount'] + 1e-7)
+    
+    # Calculate the 5-day money flow index (MFI) for additional market microstructure
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow[df['close'] > df['close'].shift(1)].fillna(0)
+    negative_money_flow = raw_money_flow[df['close'] < df['close'].shift(1)].fillna(0)
+    mfi_positive = positive_money_flow.rolling(window=5).sum()
+    mfi_negative = negative_money_flow.rolling(window=5).sum()
+    money_flow_index = 100 - (100 / (1 + mfi_positive / (mfi_negative + 1e-7)))
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (
+        (weighted_prices - ma_5) / (volatility_ratio + 1e-7) +
+        (ema_5 - df['close']) / (realized_volatility + 1e-7) +
+        0.5 * momentum_20 +
+        0.5 * turnover_rate +
+        0.2 * (money_flow_index - 50) / 50
+    )
+    return alpha_factor
+```

@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = (df['close'] > df['close'].shift(1)) * (df['close'] - df['close'].shift(1))
+    df['loss'] = (df['close'] <= df['close'].shift(1)) * (df['close'].shift(1) - df['close'])
+    
+    # Aggregate Gains and Losses over a 14-day period
+    gain_sum = df['gain'].rolling(window=14).sum()
+    loss_sum = df['loss'].rolling(window=14).sum()
+    
+    # Calculate Relative Strength
+    rs = gain_sum / loss_sum
+    
+    # Convert to ARSI
+    arsi = 100 - (100 / (1 + rs))
+    arsi = arsi * df['volume'].rolling(window=14).mean() * (df['close'] / df['open'])
+    
+    # Calculate Short-Term Return
+    short_term_return = df['close'] / df['close'].shift(5) - 1
+    
+    # Calculate Long-Term Return
+    long_term_return = df['close'] / df['close'].shift(20) - 1
+    
+    # Calculate Volume-Weighted Short-Term Return
+    volume_weighted_short_term_return = df['volume'] * short_term_return
+    
+    # Calculate Volume-Weighted Long-Term Return
+    volume_weighted_long_term_return = df['volume'] * long_term_return
+    
+    # Calculate Short-Term Volatility using Average True Range
+    true_range = df[['high', 'low']].diff(axis=1).iloc[:, 1]
+    atr = true_range.rolling(window=5).mean()
+    short_term_volatility = atr.rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    adjusted_short_term_return = volume_weighted_short_term_return / short_term_volatility
+    
+    # Calculate Price Oscillator
+    price_oscillator = df['close'].shift(5) - df['close'].shift(20)
+    
+    # Combine ARSI, Adjusted Returns, and Price Oscillator
+    factor = arsi * adjusted_short_term_return + price_oscillator - volume_weighted_long_term_return
+    
+    return factor
+```

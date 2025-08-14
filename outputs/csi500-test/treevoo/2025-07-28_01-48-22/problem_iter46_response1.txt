@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum and Reversal Alpha Factors
+    df['12_day_MA'] = df['close'].rolling(window=12).mean()
+    df['26_day_MA'] = df['close'].rolling(window=26).mean()
+    df['price_momentum'] = df['12_day_MA'] - df['26_day_MA']
+    
+    df['roc_10'] = df['close'].pct_change(10)
+    
+    daily_returns = df['close'].pct_change()
+    df['volatility_20'] = daily_returns.rolling(window=20).std()
+    
+    tr = df[['high', 'low', 'close']].apply(lambda x: x.diff().abs().max(), axis=1)
+    df['atr_14'] = tr.rolling(window=14).mean()
+    
+    df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_pct_change'] = (df['volume'] - df['volume_ma_10']) / df['volume_ma_10']
+    
+    df['intraday_return'] = df['close'] - df['open']
+    df['upper_shadow'] = df['high'] - df['close']
+    df['lower_shadow'] = df['open'] - df['low']
+    df['shadow_ratio'] = df['upper_shadow'] / df['lower_shadow']
+    
+    # Liquidity and Market Sentiment
+    df['turnover_rate'] = df['volume'] / 1e6  # Assuming 1 million outstanding shares for simplicity
+    df['turnover_rate_ma_5'] = df['turnover_rate'].rolling(window=5).mean()
+    
+    df['spread'] = df['high'] - df['low']
+    df['spread_pct'] = df['spread'] / df['close']
+    
+    df['signed_tick'] = df['close'].diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    df['cum_signed_tick_30'] = df['signed_tick'].rolling(window=30).sum()
+    
+    # Fundamental-based Alpha Factors
+    book_value_per_share = 10  # Placeholder for actual book value per share
+    df['pb_ratio'] = df['close'] / book_value_per_share
+    
+    earnings_per_share = 1  # Placeholder for actual earnings per share
+    df['earnings_yield'] = earnings_per_share / df['close']
+    
+    annual_dividend = 0.5  # Placeholder for actual annual dividend
+    df['dividend_yield'] = annual_dividend / df['close']
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['price_momentum'] + 
+        df['roc_10'] - 
+        df['volatility_20'] + 
+        df['atr_14'] + 
+        df['volume_pct_change'] + 
+        df['intraday_return'] + 
+        df['shadow_ratio'] + 
+        df['turnover_rate_ma_5'] - 
+        df['spread_pct'] + 
+        df['cum_signed_tick_30'] + 
+        1/df['pb_ratio'] + 
+        df['earnings_yield'] + 
+        df['dividend_yield']
+    )
+    
+    return alpha_factor
+```

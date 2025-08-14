@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute High-Low Difference and Close-Open Change
+    df['high_low_diff'] = df['high'] - df['low']
+    df['close_open_change'] = df['close'] - df['open']
+    
+    # Aggregate and Smooth Price Movements
+    df['sum_high_low_diff'] = df['high_low_diff'].rolling(window=20).sum()
+    df['sum_close_open_change'] = df['close_open_change'].rolling(window=20).sum()
+    df['ema_high_low_range'] = df['high_low_diff'].ewm(span=20, adjust=False).mean()
+    df['long_term_high'] = df['high'].rolling(window=50).max()
+    df['long_term_low'] = df['low'].rolling(window=50).min()
+    df['long_term_high_low_range'] = df['long_term_high'] - df['long_term_low']
+    
+    # Compute Momentum of High-Low Ranges
+    df['high_low_momentum'] = df['long_term_high_low_range'] - df['ema_high_low_range']
+    
+    # Calculate True Range
+    df['prev_close'] = df['close'].shift(1)
+    df['true_range'] = np.maximum.reduce([df['high'] - df['low'], 
+                                          df['high'] - df['prev_close'], 
+                                          df['prev_close'] - df['low']])
+    
+    # Calculate Rolling Average True Range (ATR)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Adjust Price Momentum by ATR
+    df['weighted_high_low_range'] = df['sum_high_low_diff'] / df['atr']
+    df['weighted_close_open_change'] = df['sum_close_open_change'] / df['atr']
+    df['adjusted_momentum_score'] = (df['weighted_high_low_range'] + df['weighted_close_open_change']) / 2
+    
+    # Evaluate Volume Activity
+    df['avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['high_volume_indicator'] = (df['volume'] > df['avg_volume']).astype(int)
+    df['vol_spike'] = (df['volume'] > 2 * df['volume'].rolling(window=5).mean()).astype(int)
+    
+    # Adjust Momentum Based on Volume
+    df['dampened_momentum'] = df['adjusted_momentum_score'] * np.where(df['vol_spike'] == 1, 0.7, 1)
+    
+    # Integrate Combined Factors
+    df['interim_alpha_factor'] = df['dampened_momentum'] * df['high_volume_indicator']
+    
+    # Combine ATR and Price Momentum
+    df['price_trend'] = df['close'].rolling(window=20).mean() - df['close'].rolling(window=50).mean()
+    df['trend_multiplier'] = np.where(df['price_trend'] > 0, 1.2, 0.8)
+    df['final_alpha_factor'] = df['interim_alpha_factor'] * df['trend_multiplier'] + df['high_low_momentum']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

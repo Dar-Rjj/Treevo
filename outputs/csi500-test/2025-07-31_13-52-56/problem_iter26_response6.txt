@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=10, m=50):
+    # Calculate Enhanced High-Low Range and Its Volume-Adjusted Version
+    high_low_range = df['high'] - df['low']
+    volume_adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    
+    # Evaluate Cumulative and Dynamic High-Low Measures
+    cumulative_high_low_range = volume_adjusted_high_low_range.rolling(window=n).sum()
+    high_to_low_ratio = df['high'] / df['low']
+    
+    # Analyze Volume Trends and Momentum
+    volume_moving_average = df['volume'].rolling(window=10).mean()
+    volume_trend = np.where(df['volume'] > volume_moving_average, 1, -1)
+    
+    # Measure Volume Momentum
+    aggregated_volume_t1 = df['volume'].shift(1).rolling(window=n).sum()
+    aggregated_volume_tn = df['volume'].rolling(window=n).sum()
+    volume_momentum = (aggregated_volume_tn - aggregated_volume_t1) / aggregated_volume_t1
+    
+    # Integrate Open-Close Momentum with Volatility Indicators
+    open_close_momentum = df['close'] - df['open']
+    ema_close = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Combine Volume Trend with High-Low Price Ratio
+    high_low_volume_trend = high_to_low_ratio * volume_trend
+    
+    # Incorporate Volume Momentum and Adjusted High-Low Range
+    integrated_adjusted_high_low = (high_low_range * np.sqrt(df['volume'])) * volume_momentum
+    
+    # Integrate Open-Close Momentum with Volume-Adjusted High-Low Range
+    open_close_high_low = open_close_momentum * integrated_adjusted_high_low
+    
+    # Subtract Momentum Signal from Integrated Adjusted High-Low Range
+    momentum_signal = open_close_momentum * (high_low_range * np.sqrt(df['volume']))
+    adjusted_high_low_momentum = integrated_adjusted_high_low - momentum_signal
+    
+    # Calculate Relative Strength
+    sma_close_50 = df['close'].rolling(window=m).mean()
+    relative_strength = df['close'] / sma_close_50
+    
+    # Incorporate Relative Strength into Alpha Factor
+    alpha_factor = (high_low_volume_trend + integrated_adjusted_high_low + open_close_high_low + adjusted_high_low_momentum) * relative_strength
+    
+    return alpha_factor
+```

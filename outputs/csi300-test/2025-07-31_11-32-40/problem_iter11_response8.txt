@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Momentum
+    daily_price_momentum = df['close'].diff(10)
+    
+    # Calculate High-Low Price Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Intraday Close-Open Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine High-Low Spread and Close-Open Return
+    intraday_momentum = high_low_spread * intraday_return
+    
+    # Calculate Adjusted Price Momentum
+    adjusted_momentum = (df['high'] - df['low'].shift(1))
+    ema_smoothing_factor = 0.2
+    smoothed_adjusted_momentum = adjusted_momentum.ewm(alpha=ema_smoothing_factor, adjust=False).mean()
+    
+    # Adjust by Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    sma_length = 10
+    smoothed_volume_ratio = volume_ratio.rolling(window=sma_length, min_periods=1).mean()
+    
+    # Combine Adjusted Momentum and Volume Ratio
+    combined_momentum = smoothed_adjusted_momentum * smoothed_volume_ratio
+    
+    # Calculate Volume Surprise
+    volume_ma = df['volume'].rolling(window=10, min_periods=1).mean()
+    volume_surprise = df['volume'] - volume_ma
+    intermediate_alpha_factor = daily_price_momentum * volume_surprise
+    
+    # Calculate Volume Surge
+    volume_surge = df['volume'] - df['volume'].shift(1)
+    
+    # Compute Volume Influence Ratio
+    upward_volume = df.loc[df['close'] > df['open'], 'volume'].sum()
+    downward_volume = df.loc[df['close'] < df['open'], 'volume'].sum()
+    volume_influence_ratio = upward_volume / (downward_volume + 1e-6)  # Avoid division by zero
+    
+    # Multiply High-Low Spread with Volume Influence Ratio
+    multiplied_high_low_spread = high_low_spread * volume_influence_ratio
+    
+    # Integrate All Components
+    final_alpha_factor = (
+        intermediate_alpha_factor * multiplied_high_low_spread +
+        intraday_momentum +
+        combined_momentum * volume_influence_ratio +
+        volume_surge
+    )
+    
+    return final_alpha_factor
+```

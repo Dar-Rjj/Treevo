@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Ratio
+    df['intraday_high_low_ratio'] = df['high'] / df['low']
+    
+    # Calculate Open-Close Return
+    df['open_close_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Opening Gaps
+    df['combined_metric'] = df['intraday_high_low_ratio'] * df['open_close_return']
+    
+    # Adjust by Volume
+    df['volume_adjusted_combined_metric'] = df['combined_metric'] * df['volume']
+    
+    # Calculate Intraday High-Low Range
+    df['intraday_high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Daily Returns
+    df['daily_returns'] = df['close'] - df['open']
+    
+    # Volume Adjusted Daily Return
+    df['volume_adjusted_daily_return'] = df['daily_returns'] * df['volume']
+    
+    # Intraday Range to Volume Ratio
+    df['intraday_range_to_volume_ratio'] = df['intraday_high_low_range'] / df['volume']
+    
+    # Closing Price to High-Low Range Ratio
+    df['closing_price_to_high_low_range_ratio'] = df['close'] / df['intraday_high_low_range']
+    
+    # Combine Intraday Factors
+    df['sum_volume_adjusted_daily_return'] = df['volume_adjusted_daily_return'].rolling(window=5).sum()
+    df['sum_intraday_range_to_volume_ratio'] = df['intraday_range_to_volume_ratio'].rolling(window=5).sum()
+    df['sum_closing_price_to_high_low_range_ratio'] = df['closing_price_to_high_low_range_ratio'].rolling(window=5).sum()
+    df['combined_intraday_factors'] = df['sum_volume_adjusted_daily_return'] + \
+                                      df['sum_intraday_range_to_volume_ratio'] + \
+                                      df['sum_closing_price_to_high_low_range_ratio']
+    
+    # Calculate Integrated Momentum
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    df['integrated_momentum'] = df['close'] - df['20_day_avg_close']
+    
+    # High-Low Momentum
+    df['high_momentum'] = df['high'] - df['high'].rolling(window=5).mean()
+    df['low_momentum'] = df['low'] - df['low'].rolling(window=5).mean()
+    df['high_low_momentum'] = df['high_momentum'] + df['low_momentum']
+    
+    # Combine Integrated Momentum and Intraday Volatility
+    df['combined_momentum_volatility'] = -1 * df['integrated_momentum'] + df['high_low_momentum']
+    
+    # Introduce New Factor: Price to Volume Elasticity
+    df['5_day_avg_close'] = df['close'].rolling(window=5).mean()
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['price_to_volume_elasticity'] = df['5_day_avg_close'] / df['5_day_avg_volume']
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['combined_intraday_factors'] + \
+                               df['volume_adjusted_combined_metric'] * df['combined_momentum_volatility'] + \
+                               (df['volume'].rolling(window=3).mean() - df['volume'].rolling(window=7).mean()) * \
+                               df['price_to_volume_elasticity']
+    
+    return df['final_alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

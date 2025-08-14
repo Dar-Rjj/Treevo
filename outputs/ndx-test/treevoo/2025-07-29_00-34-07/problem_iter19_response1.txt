@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted High-to-Low Range
+    df['High_Low_Range'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Daily Log Return
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Calculate Multi-Day Price Momentum
+    df['3d_Price_Return'] = (df['close'] - df['close'].shift(3)) / df['close'].shift(3)
+    df['10d_Price_Return'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['30d_Price_Return'] = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    df['Average_Momentum'] = (df['3d_Price_Return'] + df['10d_Price_Return'] + df['30d_Price_Return']) / 3
+    
+    # Adjust for Volume Changes
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Final_Volume_Adjustment'] = df['Average_Momentum'] * (1 + 2 * df['Volume_Change'])
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Volume_Weighted_CO_Return'] = ((df['close'] - df['open']) * df['volume']).rolling(window=5).sum()
+    
+    # Calculate Cumulative High-Low Momentum
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Cumulative_High_Low_Momentum'] = df['Daily_Price_Range'].rolling(window=5).sum()
+    
+    # Generate Alpha Factor based on Cumulative High-Low Momentum
+    alpha_factor_high_low = df['Cumulative_High_Low_Momentum']
+    
+    # Combine Cumulative High-Low Momentum and Volume-Weighted Close-to-Open Return
+    combined_alpha_factor = alpha_factor_high_low + df['Volume_Weighted_CO_Return']
+    
+    # Calculate Weighted Price Momentum
+    df['15d_MA_Close'] = df['close'].rolling(window=15).mean()
+    df['Weighted_Price_Momentum'] = (df['close'] - df['15d_MA_Close']) * df['Log_Return']
+    
+    # Final Factor Construction
+    final_factor = (df['Final_Volume_Adjustment'] + 
+                    df['Weighted_Price_Momentum'] + 
+                    combined_alpha_factor).dropna()
+    
+    return final_factor
+```

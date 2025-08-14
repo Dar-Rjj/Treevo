@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_range = df['high'] - df['low']
+    intraday_return = intraday_range / df['close']
+
+    # Calculate Overnight Return
+    overnight_return = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Incorporate Transaction Amount
+    amount_weighted_intraday_return = (intraday_return * df['amount']) / df['amount'].sum()
+    amount_weighted_overnight_return = (overnight_return * df['amount']) / df['amount'].sum()
+    amount_weighted_combined_return = amount_weighted_intraday_return + amount_weighted_overnight_return
+
+    # Combine Intraday and Overnight Returns
+    combined_return = intraday_return + overnight_return
+
+    # Compute Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Calculate VWAP Reversal Indicator
+    reversal_indicator = (vwap > df['close']).astype(int) * 2 - 1
+
+    # Integrate Reversal Indicator with Amount-Weighted Combined Return
+    integrated_reversal_return = amount_weighted_combined_return * reversal_indicator
+
+    # Calculate Volume-Weighted Return
+    volume_weighted_return = ((df['close'] - df['open']) / df['open']) * df['volume'] / df['volume'].sum()
+
+    # Integrate Volume-Weighted Return with Integrated Reversal Return
+    initial_alpha_factor = integrated_reversal_return + volume_weighted_return
+
+    # Calculate Rolling Averages
+    short_term_rolling_avg = df['close'].rolling(window=5).mean()
+    long_term_rolling_avg = df['close'].rolling(window=20).mean()
+
+    # Calculate Dynamic Volatility
+    daily_returns = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    short_term_volatility = daily_returns.rolling(window=10).std()
+    medium_term_volatility = daily_returns.rolling(window=20).std()
+    long_term_volatility = daily_returns.rolling(window=50).std()
+
+    # Adjust for Volatility
+    short_term_vol_adj_alpha = initial_alpha_factor / short_term_volatility
+    medium_term_vol_adj_alpha = initial_alpha_factor / medium_term_volatility
+    long_term_vol_adj_alpha = initial_alpha_factor / long_term_volatility
+
+    # Integrate Volatility-Adjusted Alpha Factors
+    final_alpha_factor = (short_term_vol_adj_alpha + medium_term_vol_adj_alpha + long_term_vol_adj_alpha)
+
+    return final_alpha_factor
+```

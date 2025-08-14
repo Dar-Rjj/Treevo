@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum indicators
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['momentum_indicator'] = df['close'] - df['SMA_10']
+    
+    # Volume-related factors
+    df['avg_volume_10'] = df['volume'].rolling(window=10).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_10']
+    
+    # Price Patterns
+    df['higher_high_5'] = (df['high'].rolling(window=5).max() == df['high'])
+    df['lower_low_5'] = (df['low'].rolling(window=5).min() == df['low'])
+    
+    df['bullish_engulfing'] = ((df['open'] < df['close'].shift(1)) & 
+                               (df['close'] > df['open'].shift(1)) & 
+                               (df['close'] > df['open']))
+    df['bearish_engulfing'] = ((df['open'] > df['close'].shift(1)) & 
+                               (df['close'] < df['open'].shift(1)) & 
+                               (df['close'] < df['open']))
+    
+    # Relationship between Open and Close Prices
+    df['pct_change_open_close'] = (df['close'] - df['open']) / df['open'] * 100
+    df['up_day_flag'] = (df['close'] > df['open']).astype(int)
+    
+    # Range and Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_daily_range_10'] = df['daily_range'].rolling(window=10).mean()
+    df['range_diff_from_avg'] = df['daily_range'] - df['avg_daily_range_10']
+    
+    # Impact of Gaps
+    df['gap_up'] = (df['open'] > df['close'].shift(1)).astype(int)
+    df['gap_down'] = (df['open'] < df['close'].shift(1)).astype(int)
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['momentum_indicator'] +
+        df['volume_ratio'] +
+        df['pct_change_open_close'] +
+        df['range_diff_from_avg'] +
+        (df['higher_high_5'] & df['lower_low_5']).astype(int) * 2 +  # Higher weight for high-high, low-low pattern
+        (df['bullish_engulfing'] - df['bearish_engulfing']) * 1.5 +  # Weighted bullish/bearish engulfing
+        (df['up_day_flag'] * 2) +  # Weighted up day
+        (df['gap_up'] - df['gap_down']) * 1.5  # Weighted gaps
+    )
+    
+    return df['alpha_factor']
+```

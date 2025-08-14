@@ -1,0 +1,30 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['next_day_open'] = df['open'].shift(-1)
+    df['close_to_open_return'] = df['next_day_open'] - df['close']
+    
+    # Volume Weighting
+    df['volume_weighted_return'] = df['volume'] * df['close_to_open_return']
+    
+    # Determine Volatility
+    df['volatility'] = df[['high', 'low', 'close']].rolling(window=20).std().mean(axis=1)
+    
+    # Adjust Window Size based on Volatility
+    min_window_size = 5
+    max_window_size = 60
+    df['adaptive_window'] = df['volatility'].apply(lambda x: min_window_size if x > df['volatility'].median() else max_window_size)
+    
+    # Rolling Statistics with Adaptive Window
+    def rolling_stats(series, window):
+        return series.rolling(window=int(window)).mean(), series.rolling(window=int(window)).std()
+    
+    df['rolling_mean'], df['rolling_std'] = zip(*df.groupby('adaptive_window')['volume_weighted_return'].transform(rolling_stats))
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['rolling_mean'] - df['rolling_std']) / (df['rolling_mean'] + df['rolling_std'])
+    
+    return df['alpha_factor'].dropna()
+```

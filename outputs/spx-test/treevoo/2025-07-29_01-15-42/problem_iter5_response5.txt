@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Daily Price Range and Daily Return
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    df['Daily_Return'] = df['close'].diff()
+
+    # Calculate Moving Average Volume and Summary Volume
+    df['MA_Volume_20'] = df['volume'].rolling(window=20).mean()
+    df['Summary_Volume_10'] = df['volume'].rolling(window=10).sum()
+
+    # Generate Alpha Signal Based on Enhanced Price-Volume Relationship
+    df['Volume_Adjusted_Price_Range'] = df['Daily_Price_Range'] / df['MA_Volume_20']
+
+    # Volume-Adjusted Momentum
+    df['SMA_Return_5'] = df['Daily_Return'].rolling(window=5).mean()
+    df['Volume_Adjusted_Momentum'] = df['SMA_Return_5'] / df['Summary_Volume_10']
+
+    # Calculate Intraday and Open-to-Close Returns
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['close'].shift(1)
+    df['Open_to_Close_Return'] = (df['close'] - df['open']) / df['open']
+
+    # Combine Intraday and Open-to-Close Returns
+    df['Combined_Return'] = 0.5 * df['Intraday_Return'] + 0.5 * df['Open_to_Close_Return']
+
+    # Synthesize Final Alpha Factor
+    threshold = df['Volume_Adjusted_Price_Range'].std()  # Using standard deviation as the threshold
+    df['Alpha_Factor'] = 0
+    df.loc[df['Volume_Adjusted_Price_Range'] > threshold, 'Alpha_Factor'] = 1
+    df.loc[df['Volume_Adjusted_Price_Range'] < -threshold, 'Alpha_Factor'] = -1
+    df.loc[(df['Volume_Adjusted_Price_Range'] <= threshold) & (df['Volume_Adjusted_Price_Range'] >= -threshold), 'Alpha_Factor'] = \
+        df['Volume_Adjusted_Momentum'] + df['Combined_Return']
+
+    return df['Alpha_Factor'].dropna()
+```

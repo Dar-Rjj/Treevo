@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    df['combined_factor'] = df['intraday_return'] * df['high_low_range']
+    
+    # Smooth using Exponential Moving Average (EMA) with a period of 14 days
+    df['smoothed_combined_factor'] = df['combined_factor'].ewm(span=14, adjust=False).mean()
+    
+    # Apply Volume Weighting
+    df['volume_weighted_smoothed_factor'] = df['smoothed_combined_factor'] * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    df['closing_gap'] = df['open'].shift(-1) - df['close']
+    df['volume_weighted_with_gap'] = df['volume_weighted_smoothed_factor'] + df['closing_gap']
+    
+    # Integrate Long-Term Momentum
+    df['long_term_return'] = df['close'] - df['close'].shift(50)
+    df['adjusted_long_term_return'] = df['long_term_return'] / df['high_low_range']
+    
+    # Include Dynamic Volatility Component
+    df['intraday_returns_rolling_std'] = df['intraday_return'].rolling(window=20).std()
+    df['atr'] = (df['high'] - df['low']).rolling(window=14).mean()  # Simplified ATR calculation
+    df['volatility_component'] = (df['intraday_returns_rolling_std'] + df['atr']) * df['volume']
+    
+    # Final Factor Calculation
+    df['final_factor'] = (
+        df['volume_weighted_with_gap'] + 
+        df['adjusted_long_term_return'] + 
+        df['volatility_component']
+    )
+    
+    # Apply Non-Linear Transformation
+    df['alpha_factor'] = np.log1p(df['final_factor'])
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['DailyRange'] = df['high'] - df['low']
+    
+    # Calculate Long-Term Momentum
+    df['LTMomentum'] = (df['close'] - df['close'].shift(20)) / df['DailyRange'].rolling(window=22).mean()
+    
+    # Calculate Short-Term Momentum
+    df['STMomentum'] = (df['close'] - df['close'].shift(5)) / df['DailyRange'].rolling(window=7).mean()
+    
+    # Combine Momentum Indicators
+    df['CombinedMomentum'] = 0.6 * df['LTMomentum'] + 0.4 * df['STMomentum']
+    
+    # Calculate Intraday Price Movement
+    df['IntradayRange'] = df['high'] - df['low']
+    df['IntradayDirection'] = df['close'] - df['open']
+    
+    # Calculate Weighted Volume Activity
+    n = 20
+    df['AverageVolume'] = df['volume'].rolling(window=n).mean()
+    df['RelativeVolume'] = df['volume'] / df['AverageVolume']
+    
+    # Incorporate Volume Spike
+    df['VolumeChangeRatio'] = df['volume'] / df['volume'].shift(1)
+    df['Volatility'] = df['close'].pct_change().rolling(window=20).std()
+    threshold = 1.5
+    df['VolumeSpike'] = (df['VolumeChangeRatio'] > (1 + threshold * df['Volatility'])).astype(int)
+    
+    # Combine Intraday and Historical Momentum with Volume Metrics
+    df['WeightedIntradayRange'] = df['IntradayRange'] * df['RelativeVolume']
+    df['WeightedIntradayDirection'] = df['IntradayDirection'] * df['RelativeVolume']
+    df['WeightedMomentum'] = 0.7 * df['CombinedMomentum']
+    
+    # Generate Final Alpha Factor
+    df['AlphaFactor'] = df['WeightedIntradayRange'] + df['WeightedIntradayDirection'] + df['WeightedMomentum']
+    
+    return df['AlphaFactor']
+```

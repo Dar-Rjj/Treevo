@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate Price Gap
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+
+    # Adjust Daily Return by Price Gap
+    adjustment = df['price_gap'].apply(lambda x: x if x > 0 else -x)
+    df['adjusted_daily_return'] = df['daily_return'] - (np.sign(adjustment) * adjustment * np.exp(-1))
+
+    # Evaluate Momentum Over Time
+    df['momentum_10d'] = df['daily_return'].rolling(window=10).sum()
+
+    # Compute Volume Weighted Momentum
+    df['volume_weighted_momentum'] = (df['momentum_10d'] * df['volume']) / df['volume'].rolling(window=10).mean()
+
+    # Adjust for Volume Spike Indicator
+    df['volume_ma_10d'] = df['volume'].rolling(window=10).mean()
+    df['volume_spike'] = (df['volume'] > 1.5 * df['volume_ma_10d']).astype(float)
+    df['volume_adjusted_momentum'] = df['volume_weighted_momentum'] * (1 + 0.2 * df['volume_spike'])
+
+    # Adjust for Volatility
+    df['historical_volatility'] = df['daily_return'].rolling(window=10).std()
+    df['volatility_multiplier'] = (np.abs(df['close'] - df['close'].shift(1)) > 2 * df['historical_volatility']).astype(float)
+    df['volatility_adjusted_momentum'] = df['volume_adjusted_momentum'] * (1 + 0.3 * df['volatility_multiplier'])
+
+    # Calculate High-to-Low Price Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['price_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+
+    # Adjust by Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['integrated_price_range_momentum'] = df['price_range_momentum'] * df['volume_change']
+
+    # Combine Adjusted Daily Return with Price Range Momentum
+    df['combined_factor'] = (df['adjusted_daily_return'] * df['volume']) + df['integrated_price_range_momentum']
+
+    # Calculate 5-day Exponential Moving Average for Price
+    df['ema_5d_close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['price_momentum'] = df['ema_5d_close'] - df['ema_5d_close'].shift(1)
+
+    # Calculate 5-day Exponential Moving Average for Volume
+    df['ema_5d_volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['volume_acceleration'] = df['ema_5d_volume'] - df['ema_5d_volume'].shift(1)
+
+    # Combine Factors
+    df['combined_factor'] += df['price_momentum'] * df['volume_weighted_momentum']
+    df['combined_factor'] *= df['volume_acceleration']
+    df['final_alpha_factor'] = df['combined_factor'] / df['volume'].rolling(window=5).sum()
+
+    # Ensure Positive Factor
+    df['final_alpha_factor'] = df['final_alpha_factor'].apply(lambda x: max(x, 0))
+
+    # Introduce New Factor: High-Frequency Price Oscillation
+    df['high_freq_oscillation'] = (df['high'] - df['low']) / df['close']
+    df['smoothed_oscillation'] = df['high_freq_oscillation'].ewm(span=5, adjust=False).mean()
+    df['final_alpha_factor'] += df['smoothed_oscillation'] * df['volume_weighted_momentum']
+
+    return df['final_alpha_factor']
+```

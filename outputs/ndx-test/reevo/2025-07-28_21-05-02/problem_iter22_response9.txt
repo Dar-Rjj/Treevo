@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 300-day and 600-day exponential moving averages of the closing price for even more stable trend representation
+    df['close_300_ema'] = df['close'].ewm(span=300, adjust=False).mean()
+    df['close_600_ema'] = df['close'].ewm(span=600, adjust=False).mean()
+    
+    # Calculate the 200-day standard deviation of the closing price for a robust volatility measure
+    df['close_200_std'] = df['close'].rolling(window=200).std()
+    
+    # Calculate the 300-day standard deviation of the volume for a robust volatility measure
+    df['volume_300_std'] = df['volume'].rolling(window=300).std()
+    
+    # Non-linear transformation: Square root of the difference between the closing price and the 300-day EMA
+    factor_1 = ((df['close'] - df['close_300_ema']) / df['close_200_std']).apply(np.sqrt)
+    
+    # Non-linear transformation: Logarithm of the difference between the 300-day EMA and the 600-day EMA
+    factor_2 = ((df['close_300_ema'] - df['close_600_ema']) / df['close_200_std']).apply(np.log1p)
+    
+    # Non-linear transformation: Cube root of the volume divided by its 300-day standard deviation
+    factor_3 = (df['volume'] / df['volume_300_std']).apply(np.cbrt)
+    
+    # Calculate the rate of change over 90 days for the 300-day EMA to capture longer-term momentum
+    factor_4 = df['close_300_ema'].pct_change(periods=90)
+    
+    # Calculate the market sentiment as the difference between the 300-day EMA and the 600-day EMA
+    market_sentiment = df['close_300_ema'] - df['close_600_ema']
+    
+    # Additional market indicators
+    # Calculate the 70-day simple moving average of the high price
+    df['high_70_sma'] = df['high'].rolling(window=70).mean()
+    
+    # Calculate the 70-day simple moving average of the low price
+    df['low_70_sma'] = df['low'].rolling(window=70).mean()
+    
+    # Calculate the 70-day simple moving average of the open price
+    df['open_70_sma'] = df['open'].rolling(window=70).mean()
+    
+    # Non-linear transformation: Square of the difference between the high price and its 70-day SMA
+    factor_5 = ((df['high'] - df['high_70_sma']) / df['close_200_std']).apply(np.square)
+    
+    # Non-linear transformation: Exponential of the difference between the low price and its 70-day SMA
+    factor_6 = ((df['low'] - df['low_70_sma']) / df['close_200_std']).apply(np.exp)
+    
+    # Non-linear transformation: Absolute value of the difference between the open price and its 70-day SMA
+    factor_7 = ((df['open'] - df['open_70_sma']) / df['close_200_std']).apply(abs)
+    
+    # Dynamic weighting: Use the absolute value of the 90-day percentage change in the 300-day EMA to weight the factors
+    dynamic_weight = abs(factor_4)
+    
+    # Adjust the dynamic weights to ensure they sum up to 1
+    total_weight = 0.2 * dynamic_weight + 0.18 * dynamic_weight + 0.12 * dynamic_weight + 0.08 * dynamic_weight + 0.06 * dynamic_weight + 0.06 * dynamic_weight + 0.06 * dynamic_weight + 0.06 * dynamic_weight
+    normalized_weight = dynamic_weight / total_weight
+    
+    # Combine the factors into a single factor value with dynamically weighted contributions, including market sentiment
+    factor_values = (0.2 * factor_1 + 0.18 * factor_2 + 0.12 * factor_3 + 0.08 * factor_4 + 0.06 * market_sentiment + 0.06 * factor_5 + 0.06 * factor_6 + 0.0

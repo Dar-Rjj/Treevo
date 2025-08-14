@@ -1,0 +1,44 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low price
+    diff_high_low = df['high'] - df['low']
+    
+    # Calculate the relative position of the close price within the range of high and low
+    rel_pos_close = (df['close'] - df['low']) / diff_high_low
+    
+    # Calculate a weighted volume where the weight is based on the ratio of close to high
+    weighted_volume = df['volume'] * (df['close'] / df['high'])
+    
+    # Compute a new factor as the product of the relative position and the weighted volume
+    factor = rel_pos_close * weighted_volume
+    
+    # Integrate smoothed momentum by calculating the 10-day Exponential Moving Average (EMA) of the close price
+    momentum_ema_10day = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Integrate volatility by calculating the 10-day standard deviation of the close price
+    volatility_10day = df['close'].rolling(window=10).std()
+    
+    # Combine the factor with smoothed momentum and volatility
+    combined_factor = (factor + momentum_ema_10day) / (volatility_10day + 1e-6)
+    
+    # Incorporate market depth by adding the ratio of volume to the 10-day EMA of volume
+    volume_ema_10day = df['volume'].ewm(span=10, adjust=False).mean()
+    market_depth = df['volume'] / volume_ema_10day
+    
+    # Add a new factor for recent price change
+    price_change = df['close'] - df['close'].shift(1)
+    
+    # Integrate short-term price changes for improved responsiveness
+    recent_price_change_5day = df['close'] - df['close'].shift(5)
+    
+    # Incorporate the ratio of high to open price to capture intraday volatility
+    high_open_ratio = df['high'] / df['open']
+    
+    # Integrate long-term price changes for trend following
+    long_term_price_change_30day = df['close'] - df['close'].shift(30)
+    
+    # Final factor combining all elements
+    final_factor = (combined_factor * market_depth + price_change + recent_price_change_5day + high_open_ratio + long_term_price_change_30day) / (volatility_10day + 1e-6)
+    
+    return final_factor
+```

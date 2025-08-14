@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    open_close_momentum = (df['close'] - df['open']) / df['open']
+    
+    # Integrate Intraday and Open-to-Close Momentum
+    integrated_momentum = high_low_range + open_close_momentum
+    
+    # Apply Volume Filter
+    volume_rolling_mean = df['volume'].rolling(window=5).mean()
+    volume_threshold = volume_rolling_mean * 1.5
+    high_volume_days = df['volume'] > volume_threshold
+    filtered_integrated_momentum = integrated_momentum.where(high_volume_days, 0)
+    
+    # Calculate Short-Term Exponential Moving Average (EMA)
+    short_term_ema = df['close'].ewm(span=7, adjust=False).mean()
+    
+    # Calculate Long-Term Exponential Moving Average (EMA)
+    long_term_ema = df['close'].ewm(span=25, adjust=False).mean()
+    
+    # Calculate EMA Difference
+    ema_difference = short_term_ema - long_term_ema
+    
+    # Calculate Short-Term Price Momentum
+    close_diff_7 = df['close'] - df['close'].shift(7)
+    short_term_momentum = close_diff_7.rolling(window=7).sum() / 7
+    
+    # Calculate Long-Term Price Momentum
+    close_diff_25 = df['close'] - df['close'].shift(25)
+    long_term_momentum = close_diff_25.rolling(window=25).sum() / 25
+    
+    # Calculate Volume Trend
+    daily_volume_change = df['volume'].diff()
+    total_volume_change_7 = daily_volume_change.rolling(window=7).sum()
+    
+    # Adjust Momentum by Volume Shock
+    momentum_adjustment = (short_term_momentum - long_term_momentum) * (total_volume_change_7 / 7)
+    
+    # Synthesize Momentum and Volume Shock
+    synthesized_momentum = filtered_integrated_momentum + momentum_adjustment
+    
+    # Calculate Weighted EMA Difference
+    weighted_ema_difference = ema_difference * 1.8
+    
+    # Calculate EMAs for final signal
+    short_term_ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    long_term_ema_30 = df['close'].ewm(span=30, adjust=False).mean()
+    final_ema_difference = short_term_ema_10 - long_term_ema_30
+    
+    # Adjusted Momentum Signal
+    adjusted_momentum_signal = (final_ema_difference * df['volume']) + (df['high'] - df['low'])
+    
+    # Final Alpha Factor
+    final_alpha_factor = (synthesized_momentum * df['close']) + adjusted_momentum_signal
+    
+    return final_alpha_factor
+```

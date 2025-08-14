@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Volume Weighted Close-to-Open Return
+    df['close_to_open_return'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['volume_weighted_return'] = df['close_to_open_return'] * df['volume']
+
+    # Calculate Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate 21-Day Rolling Sum of High-Low Range
+    df['avg_high_low_range_21'] = df['high_low_range'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = df['high_low_range'] / df['avg_high_low_range_21']
+    
+    # Combine Breakout Strength with Volume-Weighted Close-to-Open Return
+    df['combined_breakout_vw_return'] = df['breakout_strength'] * df['volume_weighted_return']
+
+    # Calculate Price Momentum
+    df['7_day_return'] = (df['close'] / df['close'].shift(7)) - 1
+    df['21_day_return'] = (df['close'] / df['close'].shift(21)) - 1
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+
+    # Calculate Volume Activity
+    df['avg_volume_7'] = df['volume'].rolling(window=7).mean()
+    df['avg_volume_21'] = df['volume'].rolling(window=21).mean()
+    df['volume_activity'] = df['avg_volume_7'] / df['avg_volume_21']
+
+    # Integrate Combined Breakout-VW Return with Price Momentum and Volume Activity
+    df['integrated_component'] = (df['combined_breakout_vw_return'] * 0.8 +
+                                  df['price_momentum'] * 0.5 +
+                                  df['volume_activity'] * 0.7)
+
+    # Incorporate High-Low Range Signal
+    n_days = 21
+    df['avg_high_low_range_n'] = df['high_low_range'].rolling(window=n_days).mean()
+    df['high_low_signal'] = (df['high_low_range'] > df['avg_high_low_range_n']).astype(int)
+
+    # Integrate Integrated Component with High-Low Range Signal
+    df['integrated_with_signal'] = (df['integrated_component'] * 0.6 +
+                                    df['high_low_signal'] * 0.4)
+
+    # Calculate Relative Strength Index (RSI)
+    n_rsi = 14
+    df['gain'] = df['close'].diff().clip(lower=0)
+    df['loss'] = df['close'].diff().clip(upper=0).abs()
+    df['avg_gain'] = df['gain'].rolling(window=n_rsi).mean()
+    df['avg_loss'] = df['loss'].rolling(window=n_rsi).mean()
+    df['relative_strength'] = df['avg_gain'] / df['avg_loss']
+    df['rsi'] = 100 - (100 / (1 + df['relative_strength']))
+
+    # Integrate RSI with Integrated Component
+    df['final_factor'] = (df['integrated_with_signal'] * 0.7 +
+                           df['rsi'] * 0.3)
+
+    return df['final_factor']
+```

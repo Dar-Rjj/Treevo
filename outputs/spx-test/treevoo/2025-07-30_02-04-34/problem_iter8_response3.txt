@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Spread
+    df['close_open_spread'] = df['close'] - df['open']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Momentum Indicator
+    df['momentum_indicator'] = df['intraday_high_low_spread'] / df['close_open_spread']
+    
+    # Integrate Volume Impact
+    df['avg_5d_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_adjusted_momentum'] = (df['momentum_indicator'] * df['volume']) / df['avg_5d_volume']
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['avg_20d_volume_change'] = df['volume_change'].rolling(window=20).mean()
+    df['is_volume_spike'] = (df['volume_change'] > 1.5 * df['avg_20d_volume_change']).astype(int)
+    
+    # Combine Factors
+    df['normalized_volume_shock'] = df['volume'] / df['avg_5d_volume']
+    df['intraday_return_normalized'] = df['intraday_return'] * df['normalized_volume_shock']
+    df['initial_alpha_signal'] = df['volume_adjusted_momentum'] * df['is_volume_spike'] + df['intraday_return_normalized']
+    
+    # Calculate Price Momentum
+    n = 5
+    df['price_momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    
+    # Adjust Price Momentum by Volume
+    df['weighted_avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['adjusted_price_momentum'] = df['price_momentum'] * (df['volume'] / df['weighted_avg_volume'])
+    
+    # Calculate Intraday Momentum
+    df['intraday_momentum'] = df['high'] - df['low'] - df['open']
+    
+    # Compute Next Day Open to Current Day Close
+    df['next_day_open_to_close'] = df['open'].shift(-1) - df['close']
+    
+    # Combine for Initial Alpha Signal
+    df['initial_alpha_signal'] += df['volume'] * df['next_day_open_to_close']
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Compute Smoothed Price Momentum
+    df['smoothed_price_momentum'] = df['daily_price_change'].rolling(window=5).mean()
+    
+    # Compute Weighted Volume Indicator
+    df['weighted_volume_indicator'] = (df['volume_change'] * df['volume_change'].apply(lambda x: 1 if x >= 0 else -1)).rolling(window=5).mean()
+    
+    # Final Alpha Signal
+    df['final_alpha_signal'] = (df['adjusted_price_momentum'] * df['smoothed_price_momentum'] * df['weighted_volume_indicator']) + df['initial_alpha_signal']
+    
+    return df['final_alpha_signal']
+```

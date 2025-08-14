@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=10, K=10, period=5, reversal_period=3):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread
+    df['avg_intraday_high_low_spread'] = df['intraday_high_low_spread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['high_low_momentum_score'] = (df['intraday_high_low_spread'] > df['avg_intraday_high_low_spread']).astype(int) * 2 - 1
+    df['high_low_momentum_score'] *= df['volume']
+    
+    # Calculate Price Momentum
+    df['price_change'] = df['close'] - df['close'].shift(period)
+    df['price_momentum'] = df['price_change'].rolling(window=period).sum()
+    
+    # Calculate Volume Trend
+    df['volume_change'] = df['volume'] - df['volume'].shift(period)
+    df['volume_trend'] = df['volume_change'].rolling(window=period).sum()
+    
+    # Enhance Market Sentiment Analysis
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_daily_range'] = df['daily_range'].rolling(window=M).mean()
+    df['range_momentum'] = (df['daily_range'] > df['avg_daily_range']).astype(int) * 2 - 1
+    
+    df['open_close_diff'] = df['close'] - df['open']
+    df['open_close_movement'] = df['open_close_diff'].rolling(window=period).sum()
+    
+    # Incorporate Intraday Volatility
+    df['intraday_volatility'] = 0.5 * np.log(df['high'] / df['low'])**2 - (2 * np.log(2) - 1) * np.log(df['close'] / df['open'])**2
+    df['avg_intraday_volatility'] = df['intraday_volatility'].rolling(window=K).mean()
+    df['volatility_score'] = (df['intraday_volatility'] > df['avg_intraday_volatility']).astype(int) * 2 - 1
+    
+    # Combine Factors
+    df['alpha_factor'] = (
+        0.3 * df['high_low_momentum_score'] +
+        0.2 * df['price_momentum'] +
+        0.1 * df['volume_trend'] +
+        0.1 * df['range_momentum'] +
+        0.1 * df['open_close_movement'] +
+        0.2 * df['volatility_score']
+    )
+    
+    # Integrate Short-Term Price Reversal Indicator
+    df['short_term_price_change'] = df['close'] - df['close'].shift(reversal_period)
+    df['short_term_reversal'] = -0.1 * df['short_term_price_change']
+    
+    df['alpha_factor'] += df['short_term_reversal']
+    
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+```

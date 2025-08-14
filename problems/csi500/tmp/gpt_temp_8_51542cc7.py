@@ -1,0 +1,50 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    short_term_avg = df['close'].rolling(window=10).mean()
+    short_term_momentum = short_term_avg - df['close']
+    
+    # Calculate Medium-Term Price Momentum
+    medium_term_avg = df['close'].rolling(window=30).mean()
+    medium_term_momentum = medium_term_avg - df['close']
+    
+    # Calculate Long-Term Price Momentum
+    long_term_avg = df['close'].rolling(window=50).mean()
+    long_term_momentum = long_term_avg - df['close']
+    
+    # Combine Multi-Period Momenta
+    combined_momentum = short_term_momentum + medium_term_momentun + long_term_momentum
+    
+    # Calculate Volume-Weighted Average Return
+    daily_returns = (df['close'] - df['open']) / df['open']
+    volume_weighted_returns = (daily_returns * df['volume']).sum() / df['volume'].sum()
+    
+    # Adjust Combined Momentum by Volume-Weighted Average Return
+    adjusted_combined_momentum = combined_momentum * volume_weighted_returns
+    
+    # Assess Trend Following Potential
+    long_term_direction = df['close'].rolling(window=50).mean()
+    trend_following_weight = (long_term_direction > df['close']).astype(float) * 0.5 + 0.5
+    trend_following_component = adjusted_combined_momentum * trend_following_weight
+    
+    # Determine Final Factor Value
+    final_factor_value = trend_following_component
+    
+    # Incorporate Liquidity Factor
+    average_daily_volume = df['volume'].rolling(window=50).mean()
+    turnover_ratio = (df['amount'].rolling(window=50).mean() / df['close'].rolling(window=50).mean())
+    liquidity_metric = average_daily_volume * turnover_ratio
+    final_factor_value *= liquidity_metric
+    
+    # Incorporate Sentiment Factor
+    high_low_range = (df['high'] - df['low']).rolling(window=50).mean()
+    open_close_range = (df['close'] - df['open']).rolling(window=50).mean()
+    sentiment_metric = high_low_range + open_close_range
+    final_factor_value *= sentiment_metric
+    
+    # Re-evaluate Final Factor Value
+    final_factor_value += trend_following_component
+    
+    return final_factor_value

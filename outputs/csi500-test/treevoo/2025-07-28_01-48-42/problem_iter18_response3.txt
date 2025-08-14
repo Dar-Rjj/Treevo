@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate 5-day, 10-day, and 20-day average daily returns
+    df['5_day_avg_return'] = df['daily_return'].rolling(window=5).mean()
+    df['10_day_avg_return'] = df['daily_return'].rolling(window=10).mean()
+    df['20_day_avg_return'] = df['daily_return'].rolling(window=20).mean()
+    
+    # Calculate 14-day RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['14_day_RSI'] = 100 - (100 / (1 + rs))
+    
+    # Calculate 7-day RSI
+    avg_gain_7 = gain.rolling(window=7).mean()
+    avg_loss_7 = loss.rolling(window=7).mean()
+    rs_7 = avg_gain_7 / avg_loss_7
+    df['7_day_RSI'] = 100 - (100 / (1 + rs_7))
+    
+    # Calculate True Range
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate 10-day and 20-day ATR
+    df['10_day_ATR'] = true_range.rolling(window=10).mean()
+    df['20_day_ATR'] = true_range.rolling(window=20).mean()
+    
+    # Calculate volume change
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Calculate 5-day and 10-day moving sum of volume change
+    df['5_day_vol_change_sum'] = df['volume_change'].rolling(window=5).sum()
+    df['10_day_vol_change_sum'] = df['volume_change'].rolling(window=10).sum()
+    
+    # Calculate VWAP
+    vwap_numerator = df['volume'] * (df['high'] + df['low'] + df['close']) / 3
+    total_volume = df['volume'].rolling(window=1).sum()
+    df['VWAP'] = vwap_numerator.rolling(window=1).sum() / total_volume
+    
+    # Calculate 14-day MFI
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    df['14_day_MFI'] = 100 - (100 / (1 + money_ratio))
+    
+    # Calculate high-low difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Calculate 5-day and 10-day moving average of high-low difference
+    df['5_day_high_low_ma'] = df['high_low_diff'].rolling(window=5).mean()
+    df['10_day_high_low_ma'] = df['high_low_diff'].rolling(window=10).mean()
+    
+    # Combine factors into a composite alpha factor
+    df['composite_alpha'] = (
+        0.5 * df['20_day_avg_return'] +
+        0.3 * df['10_day_ATR'] +
+        0.2 * df['14_day_RSI']
+    )
+    
+    return df['composite_alpha'].dropna()
+```

@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+
+    # Calculate Average Price
+    df['Average_Price'] = (df['high'] + df['low'] + df['close']) / 3
+
+    # Compute Volume Adjusted Range
+    df['Volume_Adjusted_Range'] = (df['Daily_Price_Range'] / df['Average_Price']).replace([np.inf, -np.inf], np.nan) * df['volume']
+
+    # Calculate Short-Term and Long-Term Rolling Averages of Volume Adjusted Range
+    df['Short_Term_Volume_Adjusted_Range'] = df['Volume_Adjusted_Range'].rolling(window=10).mean()
+    df['Long_Term_Volume_Adjusted_Range'] = df['Volume_Adjusted_Range'].rolling(window=20).mean()
+
+    # Calculate Intraday High-Low Spread and Close-Open Difference
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Close_Open_Difference'] = df['close'] - df['open']
+
+    # Combine Intraday Measures
+    df['Combined_Intraday_Measure'] = (df['Intraday_High_Low_Spread'] + df['Close_Open_Difference']) * df['volume']
+
+    # Calculate Short-Term Price Momentum
+    df['5_day_EMA_Close'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['10_day_EMA_Close'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Short_Term_Price_Momentum'] = df['5_day_EMA_Close'] - df['10_day_EMA_Close']
+
+    # Calculate Volume Momentum
+    df['5_day_EMA_Volume'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['10_day_EMA_Volume'] = df['volume'].ewm(span=10, adjust=False).mean()
+    df['Volume_Momentum'] = df['5_day_EMA_Volume'] - df['10_day_EMA_Volume']
+
+    # Final Factor Adjustment
+    df['Final_Factor_Adjustment'] = (df['Short_Term_Price_Momentum'] * df['Volume_Momentum']) / df['Combined_Intraday_Measure'].replace(0, np.nan)
+
+    # Calculate 30-Day Average Range
+    df['30_Day_Average_Range'] = df['Daily_Price_Range'].rolling(window=30).mean()
+
+    # Calculate Volume Deviation
+    df['30_Day_Average_Volume'] = df['volume'].rolling(window=30).mean()
+    df['Volume_Deviation'] = df['volume'] - df['30_Day_Average_Volume']
+
+    # Calculate 50-Day and 200-Day Moving Averages
+    df['50_Day_MA'] = df['close'].rolling(window=50).mean()
+    df['200_Day_MA'] = df['close'].rolling(window=200).mean()
+
+    # Calculate Moving Average Crossover Signal
+    df['MA_Crossover_Signal'] = (df['50_Day_MA'] > df['200_Day_MA']).astype(int)
+
+    # Adjust Momentum
+    df['30_Day_Percentage_Change'] = df['close'].pct_change(30)
+    df['Adjusted_Momentum'] = df['30_Day_Percentage_Change'] * (1 / df['30_Day_Average_Range'])
+
+    # Combine Factors
+    df['Combined_Factors'] = (df['Short_Term_Volume_Adjusted_Range'] 
+                              - df['Long_Term_Volume_Adjusted_Range'] 
+                              + df['Final_Factor_Adjustment'] 
+                              + df['Adjusted_Momentum'] 
+                              + df['Volume_Deviation'] 
+                              + df['MA_Crossover_Signal'])
+
+    # Final Alpha Factor
+    alpha_factor = df['Combined_Factors'].copy()
+
+    return alpha_factor
+```

@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Short-Term Momentum (5-day Return)
+    df['short_term_momentum'] = np.log(df['close'] / df['close'].shift(5))
+    
+    # Medium-Term Momentum (20-day Return)
+    df['medium_term_momentum'] = np.log(df['close'] / df['close'].shift(20))
+    
+    # Long-Term Momentum (100-day Return)
+    df['long_term_momentum'] = np.log(df['close'] / df['close'].shift(100))
+    
+    # Short-Term Volume Change (5-day Change)
+    df['short_term_volume_change'] = (df['volume'] / df['volume'].shift(5) - 1) * 100
+    
+    # Medium-Term Volume Change (20-day Change)
+    df['medium_term_volume_change'] = (df['volume'] / df['volume'].shift(20) - 1) * 100
+    
+    # Long-Term Volume Change (100-day Change)
+    df['long_term_volume_change'] = (df['volume'] / df['volume'].shift(100) - 1) * 100
+    
+    # Daily Log Returns
+    df['daily_log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Historical Volatility (20-day Standard Deviation of Log Returns)
+    df['historical_volatility'] = df['daily_log_returns'].rolling(window=20).std()
+    
+    # Short-Term Moving Average (5-day SMA)
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    
+    # Long-Term Moving Average (20-day SMA)
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    
+    # Price Oscillator (SMA_5 - SMA_20)
+    df['price_oscillator'] = df['sma_5'] - df['sma_20']
+    
+    # On-Balance Volume (OBV)
+    df['obv'] = 0
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            df['obv'].iloc[i] = df['obv'].iloc[i-1] + df['volume'].iloc[i]
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            df['obv'].iloc[i] = df['obv'].iloc[i-1] - df['volume'].iloc[i]
+        else:
+            df['obv'].iloc[i] = df['obv'].iloc[i-1]
+    
+    # True Range
+    df['true_range'] = np.maximum(df['high'] - df['low'], 
+                                  np.maximum(abs(df['high'] - df['close'].shift(1)), 
+                                             abs(df['low'] - df['close'].shift(1))))
+    
+    # Average True Range (ATR) over 14 days
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Combine all indicators into a single factor
+    df['alpha_factor'] = (
+        df['short_term_momentum'] + 
+        df['medium_term_momentum'] + 
+        df['long_term_momentum'] + 
+        df['short_term_volume_change'] + 
+        df['medium_term_volume_change'] + 
+        df['long_term_volume_change'] + 
+        df['historical_volatility'] + 
+        df['price_oscillator'] + 
+        df['obv'] + 
+        df['atr']
+    )
+    
+    return df['alpha_factor']
+```

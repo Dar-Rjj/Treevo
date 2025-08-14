@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Determine Previous Day's High and Low
+    df['prev_high'] = df['high'].shift(1)
+    df['prev_low'] = df['low'].shift(1)
+    
+    # Calculate Today's High-Low Range Relative to Previous Day
+    df['high_breakout'] = (df['high'] > df['prev_high']).astype(int)
+    df['low_breakout'] = (df['low'] < df['prev_low']).astype(int)
+    
+    # Determine If Breakout Occurs
+    df['breakout'] = df['high_breakout'] + df['low_breakout']
+    
+    # Calculate Breakout Momentum
+    df['momentum'] = 0
+    df.loc[df['high_breakout'] == 1, 'momentum'] = df['close'] - df['open']
+    df.loc[df['low_breakout'] == 1, 'momentum'] = df['open'] - df['close']
+    
+    # Calculate Intraday High-Low Range Ratio
+    df['intraday_range_ratio'] = df['high_low_range'] / df['open']
+    
+    # Calculate Intraday High-Close and Low-Close Movements
+    df['high_close_movement'] = df['high'] - df['close']
+    df['low_close_movement'] = df['close'] - df['low']
+    
+    # Combine High-Close and Low-Close Movements
+    df['combined_movement'] = (df['high_close_movement'] + df['low_close_movement']) * df['volume']
+    
+    # Sum over a period and divide by total volume over the period
+    df['sum_movement'] = df['combined_movement'].rolling(window=5).sum()
+    df['total_volume'] = df['volume'].rolling(window=5).sum()
+    df['normalized_movement'] = df['sum_movement'] / df['total_volume']
+    
+    # Generate Final Factor
+    df['final_factor'] = df['momentum'] * df['intraday_range_ratio'] * df['normalized_movement']
+    
+    # Apply smoothing to reduce noise
+    df['smoothed_factor'] = df['final_factor'].rolling(window=10).mean()
+    
+    return df['smoothed_factor'].dropna()
+```

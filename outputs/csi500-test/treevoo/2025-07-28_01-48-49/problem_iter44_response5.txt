@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['close'].shift(1))
+
+    # Weight by Volume and Close Difference
+    df['Close_Diff'] = df['close'] - df['close'].shift(1)
+    df['Weighted_Intraday_Price_Movement'] = df['Intraday_Price_Movement'] * (df['volume'] * df['Close_Diff'])
+
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Volatility'] = df['Daily_Range'].rolling(window=20).mean()
+
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+
+    # Construct Weighted Intraday Return and Reversal Signal
+    weight = (df['volume'] + df['amount']) / 2
+    df['Weighted_Factor'] = (weight * df['Intraday_Price_Movement']) + (weight * df['Reversal_Signal'])
+
+    # Combine Enhanced Factors
+    df['Combined_Factor'] = df['Weighted_Intraday_Price_Movement'] * df['Volatility'] * df['Close_Diff']
+
+    # Adjust by Average Volume
+    df['Avg_Volume'] = df['volume'].rolling(window=35).mean()
+    df['Adjusted_Combined_Factor'] = df['Combined_Factor'] / df['Avg_Volume']
+
+    # Incorporate Close Price Momentum
+    df['Momentum'] = df['close'].rolling(window=30).mean()
+    df['Adjusted_Momentum'] = df['Momentum'] * df['Volatility']
+
+    # Adjusted Price Momentum
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['Momentum_Adjustment'] = df['EMA_10'] - df['Momentum']
+
+    # Final Factor Calculation
+    df['Final_Factor'] = 0.5 * df['Adjusted_Combined_Factor'] + 0.275 * df['Volatility'] + 0.225 * df['Momentum_Adjustment']
+
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Final_Factor'] * 0.75) + (df['Weighted_Factor'] * 0.25)
+
+    return df['Alpha_Factor']
+```

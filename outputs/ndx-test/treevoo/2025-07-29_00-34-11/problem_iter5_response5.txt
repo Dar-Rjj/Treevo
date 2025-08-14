@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+    
+    # Determine Gain and Loss
+    df['gain'] = (df['close'] > df['close'].shift(1)) * (df['close'] - df['close'].shift(1))
+    df['loss'] = (df['close'] <= df['close'].shift(1)) * (df['close'].shift(1) - df['close'])
+    
+    # Aggregate Gains and Losses over 14 days
+    df['sum_gain'] = df['gain'].rolling(window=14).sum()
+    df['sum_loss'] = df['loss'].rolling(window=14).sum().apply(lambda x: max(x, 0.0001))  # avoid division by zero
+    
+    # Calculate Relative Strength
+    df['rs'] = df['sum_gain'] / df['sum_loss']
+    
+    # Convert to ARSI
+    df['arsi'] = 100 - (100 / (1 + df['rs']))
+    
+    # Adjust for Advanced Features
+    df['volume_avg'] = df['volume'].rolling(window=14).mean()
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    df['adjusted_arsi'] = df['arsi'] * df['volume_avg'] * df['close_to_open_return']
+    
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'].shift(1) / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'].shift(1) / df['close'].shift(20)) - 1
+    
+    # Calculate Volume-Weighted Short-Term Return
+    df['vw_short_term_return'] = df['volume'] * df['short_term_return']
+    
+    # Calculate Volume-Weighted Long-Term Return
+    df['vw_long_term_return'] = df['volume'] * df['long_term_return']
+    
+    # Calculate Short-Term Volatility
+    df['atr'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Adjust for Volatility
+    df['volatility_adjusted'] = (df['vw_short_term_return'] / df['atr']) - df['vw_long_term_return']
+    
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    df['close_to_close_return'] = (df['close'] / df['close'].shift(1)) - 1
+    
+    # Combine Intraday Volatility and Close-to-Close Return
+    df['combined'] = df['intraday_volatility'] * df['close_to_close_return']
+    
+    # Final Adjustment
+    df['factor'] = df['volatility_adjusted'] + df['combined']
+    
+    return df['factor']
+```

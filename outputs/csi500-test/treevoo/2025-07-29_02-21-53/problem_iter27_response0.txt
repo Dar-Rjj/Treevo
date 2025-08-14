@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['high_low_range'] = df['high'] - df['low']
+    df['close_open_change'] = df['close'] - df['open']
+
+    # Aggregate Price Movements
+    period = 20
+    df['sum_high_low_range'] = df['high_low_range'].rolling(window=period).sum()
+    df['sum_close_open_change'] = df['close_open_change'].rolling(window=period).sum()
+
+    # Smooth High-Low Range
+    df['smoothed_high_low_range'] = df['high_low_range'].ewm(span=20, adjust=False).mean()
+
+    # Calculate Long-Term High-Low Range
+    long_period = 50
+    df['long_term_high_low_range'] = df['high_low_range'].rolling(window=long_period).max()
+
+    # Compute Momentum of High-Low Ranges
+    df['momentum_high_low_range'] = df['long_term_high_low_range'] - df['smoothed_high_low_range']
+
+    # Calculate True Range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['tr3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Calculate Rolling Average True Range (ATR)
+    atr_period = 14
+    df['atr'] = df['true_range'].rolling(window=atr_period).mean()
+
+    # Adjust Price Momentum by ATR
+    df['adjusted_momentum'] = (df['sum_high_low_range'] + df['sum_close_open_change']) / df['atr']
+
+    # Evaluate Volume Activity
+    volume_period = 20
+    df['avg_volume'] = df['volume'].rolling(window=volume_period).mean()
+    df['high_volume'] = df['volume'] > df['avg_volume'] * 1.5
+
+    # Detect Volume Spike
+    spike_period = 5
+    df['volume_spike'] = df['volume'] > df['volume'].rolling(window=spike_period).mean() * 2
+
+    # Adjust Momentum Based on Volume
+    df['final_momentum'] = df['adjusted_momentum'] * (0.7 if df['volume_spike'] else 1.0)
+
+    # Integrate Combined Factors
+    df['combined_factor'] = df['final_momentum'] * df['high_volume'].astype(int)
+
+    # Combine ATR and Price Momentum
+    df['interpretable_factor'] = df['combined_factor']
+
+    # Incorporate Recent Price Trend
+    trend_period = 20
+    df['recent_price_trend'] = df['close'].rolling(window=trend_period).mean()
+    df['trend_multiplier'] = df['recent_price_trend'] > df['close'].shift(trend_period)
+    df['trend_multiplier'] = df['trend_multiplier'].apply(lambda x: 1.2 if x else 0.8)
+    df['interpretable_factor'] *= df['trend_multiplier']
+
+    # Incorporate Volume Trend
+    volume_trend_period = 20
+    df['recent_volume_trend'] = df['volume'].rolling(window=volume_trend_period).mean()
+    df['volume_trend_multiplier'] = df['recent_volume_trend'] > df['volume'].shift(volume_trend_period)
+    df['volume_trend_multiplier'] = df['volume_trend_multiplier'].apply(lambda x: 1.2 if x else 0.8)
+    df['interpretable_factor'] *= df['volume_trend_multiplier']
+
+    return df['interpretable_factor']
+```

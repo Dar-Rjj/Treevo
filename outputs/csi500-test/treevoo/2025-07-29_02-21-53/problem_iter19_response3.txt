@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day, 10-Day, and 20-Day Simple Moving Averages (SMA) of Close Prices
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Compute the difference between 10-Day SMA and 20-Day SMA as a Momentum Indicator
+    df['Momentum_10_20'] = df['SMA_10'] - df['SMA_20']
+    
+    # Identify Days Where Close Price Exceeds Highest High or Lowest Low over Last 30 Days
+    df['Highest_High_30'] = df['high'].rolling(window=30).max()
+    df['Lowest_Low_30'] = df['low'].rolling(window=30).min()
+    df['Breakout_Score'] = 0
+    breakout_cond = (df['close'] > df['Highest_High_30']) | (df['close'] < df['Lowest_Low_30'])
+    df.loc[breakout_cond, 'Breakout_Score'] = df.groupby((~breakout_cond).cumsum())['Breakout_Score'].transform('count')
+    
+    # Calculate the Percentage Change in Volume from Previous Day
+    df['Volume_Change_Pct'] = df['volume'].pct_change() * 100
+    
+    # Mark Days with Large Volume Increase (>10%) and Associated Price Movement (>2%)
+    df['Large_Volume_Price_Move'] = 0
+    large_volume_price_move_cond = (df['Volume_Change_Pct'] > 10) & (df['close'].pct_change() * 100 > 2)
+    df.loc[large_volume_price_move_cond, 'Large_Volume_Price_Move'] = 1
+    
+    # Determine if the Stock Opened Higher but Closed Lower (Bearish Signal)
+    df['Bearish_Signal'] = (df['open'] > df['close']).astype(int)
+    
+    # Determine if the Stock Opened Lower but Closed Higher (Bullish Signal)
+    df['Bullish_Signal'] = (df['open'] < df['close']).astype(int)
+    
+    # Calculate the Ratio of Amount to Volume (Price Weighted Volume)
+    df['Amount_Volume_Ratio'] = df['amount'] / df['volume']
+    
+    # Measure the Difference Between Today’s Open and Yesterday’s Close
+    df['Gap_Opening'] = df['open'] - df['close'].shift(1)
+    
+    # Categorize Gaps as Up-Gap (Open > Yesterday's Close) or Down-Gap (Open < Yesterday's Close)
+    df['Up_Gap'] = (df['Gap_Opening'] > 0).astype(int)
+    df['Down_Gap'] = (df['Gap_Opening'] < 0).astype(int)
+    
+    # Compute the Range (High - Low) for Each Day
+    df['Daily_Range'] = df['high'] - df['low']
+    
+    # Track Moving Average of Daily Ranges to Assess Volatility Trends
+    df['Volatility_MA'] = df['Daily_Range'].rolling(window=10).mean()
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['Momentum_10_20'] + 
+        df['Breakout_Score'] + 
+        df['Large_Volume_Price_Move'] + 
+        df['Bearish_Signal'] * (-1) + 
+        df['Bullish_Signal'] + 
+        df['Amount_Volume_Ratio'] + 
+        df['Up_Gap'] + 
+        df['Down_Gap'] * (-1) + 
+        df['Volatility_MA']
+    )
+    
+    return df['alpha_factor']
+```

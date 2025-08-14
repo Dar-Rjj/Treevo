@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    short_term_ema = df['close'].ewm(span=7, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=25, adjust=False).mean()
+    price_momentum = short_term_ema - long_term_ema
+    
+    # Volume Acceleration
+    smoothed_volume = df['volume'].ewm(span=5, adjust=False).mean()
+    volume_acceleration = price_momentum / smoothed_volume
+    
+    # Calculate Volume-Adjusted High-Low Spread
+    high_low_spread = (df['high'] - df['low']) * np.sqrt(df['volume'])
+    
+    # Calculate 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    moving_sum_high_low_spread = high_low_spread.rolling(window=10).sum()
+    
+    # Combine Volume-Adjusted High-Low Spread and Price Momentum
+    combined_factor = moving_sum_high_low_spread * price_momentum
+    
+    # Calculate Cumulative Daily Price Change (N=14 days)
+    cumulative_price_change = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    
+    # Calculate Average Volume (N=14 days)
+    average_volume = df['volume'].rolling(window=14).mean()
+    
+    # Weighted Cumulative Daily Price Change
+    weighted_cumulative_price_change = cumulative_price_change * np.sqrt(average_volume)
+    
+    # Incorporate High-Low Range
+    daily_high_low_range = (df['high'] - df['low']) / df['open']
+    cumulative_momentum_impact = weighted_cumulative_price_change * daily_high_low_range
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Proportional Movement Index
+    proportional_movement_index = (df['high'] - df['low']) * intraday_return
+    
+    # Calculate Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = np.sqrt(df['volume']) * intraday_return
+    
+    # Combine Factors
+    final_alpha_factor = (
+        proportional_movement_index 
+        + volume_weighted_intraday_return 
+        + combined_factor
+    )
+    
+    return final_alpha_factor
+```

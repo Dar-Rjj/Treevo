@@ -1,0 +1,36 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between high and low prices
+    price_range = df['high'] - df['low']
+    
+    # Calculate the volume-weighted average of (high - close) and (close - low)
+    vol_weighted_diff = (df['volume'] * ((df['high'] - df['close']) + (df['close'] - df['low'])) / 2)
+    
+    # Calculate a smoothed version of the volume-weighted difference
+    smooth_vol_weighted_diff = vol_weighted_diff.ewm(span=5, adjust=False).mean().fillna(0)
+    
+    # Calculate the amount-weighted average of (high - open) and (open - low)
+    amount_weighted_diff = (df['amount'] * ((df['high'] - df['open']) + (df['open'] - df['low'])) / 2)
+    
+    # Calculate a smoothed version of the amount-weighted difference
+    smooth_amount_weighted_diff = amount_weighted_diff.ewm(span=5, adjust=False).mean().fillna(0)
+    
+    # Calculate the momentum factor as the 10-day return
+    momentum_factor = (df['close'] / df['close'].shift(10) - 1).fillna(0)
+    
+    # Calculate the volatility factor as the standard deviation of the last 10 days' returns
+    volatility_factor = df['close'].pct_change().rolling(window=10).std().fillna(0)
+    
+    # Calculate the volume trend factor as the 20-day exponential moving average of volume
+    volume_trend = df['volume'].ewm(span=20, adjust=False).mean().fillna(0)
+    
+    # Calculate the amount trend factor as the 20-day exponential moving average of amount
+    amount_trend = df['amount'].ewm(span=20, adjust=False).mean().fillna(0)
+    
+    # Final alpha factor: the ratio of the smoothed volume-weighted difference to the price range,
+    # plus the ratio of the smoothed amount-weighted difference to the price range,
+    # adjusted by the momentum and volatility factors, and further adjusted by the volume and amount trends
+    alpha_factor = ((smooth_vol_weighted_diff + smooth_amount_weighted_diff) / (price_range + 1e-7)) * (momentum_factor + 1) * (1 / (volatility_factor + 1e-7)) * (volume_trend / (volume_trend.shift(1) + 1e-7)) * (amount_trend / (amount_trend.shift(1) + 1e-7))
+    
+    return alpha_factor
+```

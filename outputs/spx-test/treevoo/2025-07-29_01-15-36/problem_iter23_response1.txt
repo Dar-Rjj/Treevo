@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, sma_window=20, vol_shock_threshold=1.5, amount_shock_threshold=1.5):
+    # Calculate Intraday High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    open_close_momentum = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    intraday_indicator = (high_low_spread * open_close_momentum) + open_close_momentum
+    
+    # Calculate N-Day Moving Average of Price Range
+    price_range = df['high'] - df['low']
+    n_day_price_range_ma = price_range.rolling(window=n).mean()
+    
+    # Calculate N-Day RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=n).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=n).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Detect Volume and Amount Shock
+    volume_change = df['volume'].pct_change()
+    amount_change = df['amount'].pct_change()
+    volume_shock = (volume_change > vol_shock_threshold).astype(int)
+    amount_shock = (amount_change > amount_shock_threshold).astype(int)
+    
+    # Calculate N-Day Exponential Moving Average of Volume
+    n_day_vol_ema = df['volume'].ewm(span=n, adjust=False).mean()
+    
+    # Calculate Volume Trend
+    volume_trend = (df['volume'] > n_day_vol_ema).astype(int) * 2 - 1
+    
+    # Adjust Momentum Factors with Volume and Amount Shock
+    adj_n_day_price_range_ma = n_day_price_range_ma * volume_shock
+    adj_rsi = rsi * volume_shock
+    adj_intraday_spread = intraday_indicator * (volume_shock + amount_shock)
+    
+    # Calculate N-Day Trade Imbalance
+    midpoint = (df['high'] + df['low']) / 2
+    buy_volume = (df['close'] >= midpoint) * df['volume']
+    sell_volume = (df['close'] < midpoint) * df['volume']
+    n_day_buy_volume = buy_volume.rolling(window=n).sum()
+    n_day_sell_volume = sell_volume.rolling(window=n).sum()
+    trade_imbalance = n_day_buy_volume - n_day_sell_volume
+    
+    # Combine All Adjusted Momentum Factors
+    combined_adjusted_momentum = (adj_n_day_price_range_ma + adj_rsi + adj_intraday_spread) * volume_trend * trade_imbalance
+    
+    # Calculate Simple Moving Average (SMA) of Close prices
+    sma = df['close'].rolling(window=sma_window).mean()
+    
+    # Calculate SMA Momentum
+    sma_momentum = sma - df['close']
+    
+    # Integrate RSI and SMA Momentum
+    final_momentum_combination = combined_adjusted_momentum + sma_momentum
+    
+    return final_momentum_combination
+```

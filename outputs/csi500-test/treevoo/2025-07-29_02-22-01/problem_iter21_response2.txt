@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate EMAs
+    df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Momentum Component
+    df['momentum'] = df['EMA_5'] - df['EMA_20']
+    
+    # Daily Price Change
+    df['daily_change'] = df['close'].diff()
+    
+    # Momentum Calculation
+    N = 20
+    df['cumulative_momentum'] = df['daily_change'].rolling(window=N).sum()
+    
+    # Volatility Calculation
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['volatility'] = df['log_returns'].rolling(window=20).std()
+    
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = ((df['high'] + df['low'] + 2 * df['close']) / 4) * df['volume'] / df['volume'].rolling(window=1).sum()
+    
+    # Volume Confirmation
+    M = 10
+    df['volume_change'] = df['volume'].diff()
+    df['positive_volume_increase'] = (df['volume_change'] > 0).rolling(window=M).sum()
+    df['volume_confirmation'] = df['volume_change'][df['volume_change'] > 0].rolling(window=M).sum() / df['positive_volume_increase']
+    
+    # Volume-Weighted Adjusted Return
+    df['intraday_return'] = df['close'] - df['open']
+    df['volume_weighted_return'] = df['intraday_return'] * df['volume']
+    
+    # Proportional Movement Index
+    df['proportional_movement'] = df['high'] - df['low'] / df['open']
+    
+    # Combine All Factors
+    df['combined_factor'] = df['proportional_movement'] + df['volume_weighted_return'] + df['momentum'] / df['volatility']
+    
+    # Cumulative Daily Price Change
+    N = 20
+    df['cumulative_price_change'] = df['daily_change'].rolling(window=N).sum()
+    
+    # Average Volume
+    df['average_volume'] = df['volume'].rolling(window=N).mean()
+    
+    # Weighted Cumulative Daily Price Change
+    df['weighted_cumulative_price_change'] = df['cumulative_price_change'] * df['average_volume']
+    
+    # Incorporate High-Low Range
+    df['high_low_range'] = (df['high'] - df['low']) / ((df['high'] + df['low'] + df['close']) / 3)
+    df['enhanced_alpha'] = df['high_low_range'] * df['weighted_cumulative_price_change']
+    
+    # Incorporate Open-Close Spread
+    df['open_close_spread'] = abs(df['open'] - df['close'])
+    df['final_enhanced_alpha'] = df['enhanced_alpha'] + df['open_close_spread']
+    
+    # Integrate Intraday and Historical Effects
+    df['integrated_effect'] = df['intraday_return'] * df['volume'] * (1 / df['volatility'])
+    
+    # Measure Sequential Momentum
+    df['sequential_momentum'] = df['integrated_effect'].rolling(window=5).sum().ewm(span=3, adjust=False).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['sequential_momentum'] * df['final_enhanced_alpha']
+    df['final_alpha_factor_adjusted'] = np.where(df['volume_confirmation'] > 0, df['final_alpha_factor'], df['final_alpha_factor'] * 0.9)
+    
+    return df['final_alpha_factor_adjusted']
+```

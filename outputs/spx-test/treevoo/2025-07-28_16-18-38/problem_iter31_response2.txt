@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Daily Return: (Close - Open) / Open
+    daily_return = (df['close'] - df['open']) / df['open']
+    
+    # Intraday Volatility: (High - Low) / Open
+    intraday_volatility = (df['high'] - df['low']) / df['open']
+    
+    # Simple Moving Average (SMA) of Close prices over a certain period
+    sma_close = df['close'].rolling(window=20).mean()
+    sma_ratio = df['close'] / sma_close
+    
+    # Exponential Moving Average (EMA) of Close prices for more recent data emphasis
+    ema_close = df['close'].ewm(span=20, adjust=False).mean()
+    ema_ratio = df['close'] / ema_close
+    
+    # 7-day EMA of High-to-Low Range
+    ema_high_low_7 = (df['high'] - df['low']).ewm(span=7, adjust=False).mean()
+    
+    # 21-day EMA of High-to-Low Range
+    ema_high_low_21 = (df['high'] - df['low']).ewm(span=21, adjust=False).mean()
+    
+    # Adjusted Momentum Factor
+    adjusted_momentum = (ema_high_low_7 / ema_high_low_21) * (df['high'] - df['low'])
+    
+    # Volume Ratio: Current Volume / SMA(Volume)
+    sma_volume = df['volume'].rolling(window=20).mean()
+    volume_ratio = df['volume'] / sma_volume
+    
+    # Price-Volume Momentum: (Close - Open) * Volume
+    price_volume_momentum = (df['close'] - df['open']) * df['volume']
+    
+    # Volume Change: Percentage change in volume from one day to the next
+    volume_change = df['volume'].pct_change()
+    
+    # Volume Spike: Identify days where volume is significantly higher than a recent average
+    volume_spike = (df['volume'] > 2 * sma_volume).astype(int)
+    
+    # Volume-Weighted High-Low Difference: (High - Low) * Volume
+    volume_weighted_hl = (df['high'] - df['low']) * df['volume']
+    
+    # Composite factor
+    composite_factor = (sma_ratio + ema_ratio + intraday_volatility + volume_ratio + price_volume_momentum)
+    
+    # Final Alpha Factor
+    final_alpha_factor = 0.5 * adjusted_momentum + 0.5 * volume_weighted_hl
+    final_alpha_factor *= (daily_return > 0).astype(int) + volume_spike
+    
+    return final_alpha_factor.dropna()
+```

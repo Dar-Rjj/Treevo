@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['ShortTermReturn'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['LongTermReturn'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Daily Log Return
+    df['LogReturn'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    
+    # 20-Day Momentum
+    df['Momentum20D'] = df['LogReturn'].rolling(window=20).sum()
+    
+    # Intraday Momentum Component
+    df['IntradayMomentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    
+    # Historical Momentum Component
+    df['HistMomentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    
+    # Combined Momentum
+    df['CombinedMomentum'] = df['IntradayMomentum'] + df['HistMomentum']
+    
+    # Smooth Combined Momentum
+    df['SmoothMomentum'] = df['CombinedMomentum'].ewm(span=7, adjust=False).mean()
+    
+    # 20-Day Volume Volatility
+    df['VolumeVolatility'] = df['volume'].diff().rolling(window=20).std()
+    
+    # Average Volume
+    df['AvgVolume'] = df['volume'].rolling(window=10).mean()
+    
+    # Adjusted Smoothed Momentum
+    df['AdjSmoothMomentum'] = df['SmoothMomentum'] / df['VolumeVolatility'] * df['AvgVolume']
+    
+    # Volume-Price Indicator
+    df['VolumeDiff'] = df['volume'] - df['volume'].shift(1)
+    df['AdjCloseChange'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['AvgHighLowRange'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['VolumePriceIndicator'] = (df['VolumeDiff'] * 0.6) + (df['AvgHighLowRange'] * 0.4) + df['AdjCloseChange']
+    
+    # Relative Strength
+    df['RelativeStrength'] = df['ShortTermReturn'] - df['LongTermReturn']
+    
+    # Volume Spikes
+    df['VolumeStdDev'] = df['volume'].rolling(window=20).std()
+    df['VolumeSpikeIndicator'] = (df['volume'] > (df['volume'].rolling(window=20).mean() + 3 * df['VolumeStdDev'])).astype(int)
+    
+    # Multiply Relative Strength by Volume Spike Indicator
+    df['RelStrVolSpike'] = df['RelativeStrength'] * df['VolumeSpikeIndicator']
+    
+    # High-Low Range Over Average
+    df['HighLowRange'] = df['high'] - df['low']
+    df['AvgHighLowRange'] = df['HighLowRange'].rolling(window=5).mean()
+    df['HighLowOverAvg'] = df['HighLowRange'] / df['AvgHighLowRange']
+    
+    # Final Factor
+    df['FinalFactor'] = (df['AdjSmoothMomentum'] +
+                         df['VolumePriceIndicator'] +
+                         df['RelStrVolSpike'] +
+                         df['HighLowOverAvg']) * df['AvgVolume'] * df['LogReturn'].rolling(window=20).std()
+    
+    return df['FinalFactor']
+```

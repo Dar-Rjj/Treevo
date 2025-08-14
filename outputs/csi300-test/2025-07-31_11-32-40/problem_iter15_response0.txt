@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Price Difference
+    high_low_diff = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    upward_volume = (df['close'] > df['open']) * df['volume']
+    downward_volume = (df['close'] < df['open']) * df['volume']
+    volume_influence_ratio = upward_volume / (downward_volume + 1e-6)  # Avoid division by zero
+    
+    # Multiply High-Low Difference with Volume Influence Ratio
+    high_low_vol_influence = high_low_diff * volume_influence_ratio
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Identify Volume Momentum
+    df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+    daily_volume_change = df['volume'] - df['volume_ma_10']
+    volume_momentum_strength = np.where(daily_volume_change > 0, 1.5, 0.5)
+    
+    # Combine High-Low Difference, Volume Influence, and Intraday Return
+    combined_high_low_intraday = high_low_vol_influence * intraday_return * volume_momentum_strength
+    
+    # Calculate Daily Price Reversal
+    close_shifted = df['close'].shift(1)
+    price_reversal = df['close'] - close_shifted
+    price_reversal = np.where(close_shifted > df['close'].shift(2), -price_reversal, price_reversal)
+    
+    # Calculate Volume Surprise
+    volume_surprise = df['volume'] - df['volume_ma_10']
+    price_reversal_vol_surprise = price_reversal * volume_surprise
+    
+    # Integrate Short-Term Price Volatility
+    close_std_5 = df['close'].rolling(window=5).std()
+    final_alpha_factor = (combined_high_low_intraday + price_reversal_vol_surprise) / (close_std_5 + 1e-6)  # Avoid division by zero
+    
+    return final_alpha_factor
+```

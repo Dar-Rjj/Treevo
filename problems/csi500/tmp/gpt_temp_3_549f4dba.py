@@ -1,0 +1,42 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # 30-Day Price Momentum
+    df['Ct_30'] = df['close'].shift(30)
+    df['Price_Momentum'] = (df['close'] - df['Ct_30']) / df['Ct_30']
+    
+    # Volume Shock
+    df['Avg_Vt_30'] = df['volume'].rolling(window=30).mean()
+    df['Volume_Shock'] = (df['volume'] > 2 * df['Avg_Vt_30']).astype(int)
+    
+    # High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # High-Low Range Momentum
+    df['Range_Momentum'] = df['High_Low_Range'] - df['High_Low_Range'].shift(30)
+    
+    # Combine Components for High-Low Range Momentum with Volume Shock
+    df['HLR_VS'] = df['Price_Momentum'] * df['Volume_Shock'] + df['Range_Momentum']
+    
+    # High-to-Low Price Ratio with Volume Trend
+    df['H_to_L_Ratio'] = df['high'] / df['low']
+    df['Vol_Trend'] = (df['volume'] > df['volume'].rolling(window=10).mean()).astype(int) * 2 - 1
+    df['H_to_L_Ratio_Adjusted'] = df['H_to_L_Ratio'] * df['Vol_Trend']
+    
+    # Volume and Price Momentum
+    df['Volume_Momentum'] = df['volume'].rolling(window=10).sum()
+    df['True_Range'] = df[['high' - 'low', 
+                            ('high' - df['close'].shift(1)).abs(), 
+                            ('low' - df['close'].shift(1)).abs()]].max(axis=1)
+    df['Price_Volatility'] = df['True_Range'].rolling(window=10).std()
+    df['Inverted_Volume_Momentum'] = 1 / df['Volume_Momentum']
+    df['Combined_Vol_Price'] = df['Inverted_Volume_Momentum'] + df['Price_Volatility']
+    
+    # Adjusted High-Low Range Ratio
+    df['Adjusted_HLR_Ratio'] = df['H_to_L_Ratio_Adjusted'] * df['Volume_Momentum'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['HLR_VS'] + df['Adjusted_HLR_Ratio'] + df['Combined_Vol_Price']
+    
+    return df['Final_Alpha_Factor']

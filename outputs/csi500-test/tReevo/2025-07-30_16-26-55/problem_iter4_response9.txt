@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Price Momentum
+    df['10_day_SMA'] = df['close'].rolling(window=10).mean()
+    df['short_term_momentum'] = df['close'] - df['10_day_SMA']
+    df['positive_short_term_momentum'] = df['short_term_momentum'].where(df['short_term_momentum'] > 0, 0)
+    df['5_day_positive_short_term_momentum_sum'] = df['positive_short_term_momentum'].rolling(window=5).sum()
+
+    # Calculate Long-Term Price Momentum
+    df['30_day_SMA'] = df['close'].rolling(window=30).mean()
+    df['long_term_momentum'] = df['close'] - df['30_day_SMA']
+    df['positive_long_term_momentum'] = df['long_term_momentum'].where(df['long_term_momentum'] > 0, 0)
+    df['20_day_positive_long_term_momentum_sum'] = df['positive_long_term_momentum'].rolling(window=20).sum()
+
+    # Compute Price Breakout Indicator
+    df['20_day_high'] = df['high'].rolling(window=20).max()
+    df['20_day_low'] = df['low'].rolling(window=20).min()
+    df['20_day_range'] = df['20_day_high'] - df['20_day_low']
+    df['price_breakout_percentage'] = (df['close'] - df['20_day_low']) / df['20_day_range']
+
+    # Volume Adjust Factor
+    df['20_day_avg_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_adjust_factor'] = df['volume'] / df['20_day_avg_volume']
+
+    # Incorporate Volatility
+    df['20_day_std_dev'] = df['close'].rolling(window=20).std()
+    df['20_day_avg_close'] = df['close'].rolling(window=20).mean()
+    df['volatility_factor'] = df['20_day_std_dev'] / df['20_day_avg_close']
+
+    # Dynamic Momentum Adjustment
+    df['momentum_direction'] = 0
+    df.loc[(df['short_term_momentum'] > 0) & (df['long_term_momentum'] > 0), 'momentum_direction'] = 1
+    df.loc[(df['short_term_momentum'] < 0) & (df['long_term_momentum'] < 0), 'momentum_direction'] = -1
+
+    # Weighted Momentum
+    short_term_weight = 0.6
+    long_term_weight = 0.4
+    df['adjusted_short_term_momentum'] = df['5_day_positive_short_term_momentum_sum'] * df['momentum_direction']
+    df['adjusted_long_term_momentum'] = df['20_day_positive_long_term_momentum_sum'] * df['momentum_direction']
+    df['weighted_momentum'] = (df['adjusted_short_term_momentum'] * short_term_weight +
+                               df['adjusted_long_term_momentum'] * long_term_weight)
+
+    # Enhanced Breakout Signal
+    df['breakout_signal'] = 0
+    df.loc[df['close'] > df['20_day_high'], 'breakout_signal'] = 1
+    df.loc[df['close'] < df['20_day_low'], 'breakout_signal'] = -1
+
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['weighted_momentum'] * df['volume_adjust_factor'] + 
+                                df['breakout_signal'] + df['volatility_factor'])
+
+    return df['final_alpha_factor']
+```

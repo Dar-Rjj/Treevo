@@ -1,0 +1,35 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 3-day and 10-day simple moving average of the close price
+    sma_3 = df['close'].rolling(window=3).mean()
+    sma_10 = df['close'].rolling(window=10).mean()
+    
+    # Calculate a weighted sum of the open, high, low, and close prices with dynamic weights based on volume
+    total_volume = df['volume'].rolling(window=3).mean()
+    weight_open = df['volume'] / (total_volume + 1e-7)
+    weight_high_low_close = (1 - weight_open) / 3
+    weighted_prices = (weight_open * df['open'] + weight_high_low_close * df['high'] + weight_high_low_close * df['low'] + weight_high_low_close * df['close'])
+    
+    # Calculate the ratio of (high - low) to the 10-day simple moving average of the close price for volatility
+    volatility_ratio = (df['high'] - df['low']) / (sma_10 + 1e-7)
+    
+    # Calculate the 3-day exponential moving average of the close price
+    ema_3 = df['close'].ewm(span=3, adjust=False).mean()
+    
+    # Calculate the 3-day realized volatility using the standard deviation of log returns
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    realized_volatility = log_returns.rolling(window=3).std()
+    
+    # Momentum factor: difference between 3-day EMA and 10-day SMA
+    momentum_factor = (ema_3 - sma_10) / (sma_10 + 1e-7)
+    
+    # Liquidity factor: ratio of amount to volume
+    liquidity_factor = df['amount'] / (df['volume'] + 1e-7)
+    
+    # Mean reversion factor: difference between close and 10-day SMA
+    mean_reversion_factor = (df['close'] - sma_10) / (sma_10 + 1e-7)
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (weighted_prices - sma_3) / (volatility_ratio + 1e-7) + (ema_3 - df['close']) / (realized_volatility + 1e-7) + momentum_factor + liquidity_factor + mean_reversion_factor
+    return alpha_factor
+```

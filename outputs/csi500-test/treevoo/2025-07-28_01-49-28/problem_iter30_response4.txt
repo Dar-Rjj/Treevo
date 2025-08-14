@@ -1,0 +1,88 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Volume-Adjusted High-Low Spread
+    volume_adjusted_high_low_spread = high_low_spread * df['volume']
+    
+    # Moving Average of Volume-Adjusted High-Low Spread
+    ma_volume_adjusted_high_low_spread = volume_adjusted_high_low_spread.rolling(window=20).mean()
+    
+    # Volume and Momentum Enhanced High-Low Spread
+    enhanced_high_low_spread = volume_adjusted_high_low_spread - ma_volume_adjusted_high_low_spread.shift(1)
+    
+    # Calculate Close-Open Spread
+    close_open_spread = df['close'] - df['open']
+    
+    # Volume-Adjusted Close-Open Spread
+    volume_adjusted_close_open_spread = close_open_spread * df['volume']
+    
+    # Moving Sum of Volume-Adjusted Close-Open Spread
+    ms_volume_adjusted_close_open_spread = volume_adjusted_close_open_spread.rolling(window=10).sum()
+    
+    # Volume, Momentum, and Close-Open Integrated Spread
+    integrated_close_open_spread = volume_adjusted_close_open_spread - ms_volume_adjusted_close_open_spread.shift(1)
+    
+    # Volume-Weighted Momentum
+    momentum = df['close'].diff()
+    volume_weighted_momentum = momentum * df['volume']
+    
+    # Smoothed Momentum
+    smoothed_momentum = (df['close'] / df['close'].shift(10)).cumprod() - 1
+    
+    # Price Change Ratio
+    price_change_ratio = df['close'] / df['open']
+    
+    # Proximity to 10-Day Range
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_high = df['close'] - ten_day_high
+    proximity_to_low = df['close'] - ten_day_low
+    min_proximity = proximity_to_high.abs().combine(proximity_to_low.abs(), min)
+    inverted_proximity = 1 / min_proximity
+    
+    # Adjust for Volatility
+    std_dev_10day = df['close'].pct_change().rolling(window=10).std()
+    adjusted_proximity = inverted_proximity / std_dev_10day
+    
+    # Enhanced Volatility Adjustment
+    ema_10day_returns = df['close'].pct_change().ewm(span=10).mean()
+    enhanced_adjusted_proximity = adjusted_proximity / ema_10day_returns
+    
+    # Combine Factors
+    combined_factors = (enhanced_high_low_spread + volume_weighted_momentum) * price_change_ratio * smoothed_momentum * enhanced_adjusted_proximity + integrated_close_open_spread
+    
+    # Calculate 5-Day High-Low Spread
+    five_day_high_low_spread = df['high'].rolling(window=5).max() - df['low'].rolling(window=5).min()
+    
+    # Volume-Adjusted 5-Day High-Low Spread
+    volume_adjusted_five_day_high_low_spread = five_day_high_low_spread * df['volume']
+    
+    # Moving Average of Volume-Adjusted 5-Day High-Low Spread
+    ma_volume_adjusted_five_day_high_low_spread = volume_adjusted_five_day_high_low_spread.rolling(window=10).mean()
+    
+    # Volume and Momentum Enhanced 5-Day High-Low Spread
+    enhanced_five_day_high_low_spread = volume_adjusted_five_day_high_low_spread - ma_volume_adjusted_five_day_high_low_spread.shift(1)
+    
+    # Volume-Weighted 5-Day Momentum
+    five_day_momentum = df['close'] - df['close'].shift(5)
+    volume_weighted_five_day_momentum = five_day_momentum * df['volume']
+    
+    # Smoothed 5-Day Momentum
+    smoothed_five_day_momentum = (df['close'] / df['close'].shift(5)).cumprod() - 1
+    
+    # Integrate 5-Day Momentum into Combined Factors
+    integrated_five_day_factors = (enhanced_five_day_high_low_spread + volume_weighted_five_day_momentum) * price_change_ratio * smoothed_five_day_momentum * enhanced_adjusted_proximity
+    combined_factors += integrated_five_day_factors
+    
+    # Calculate 10-Day Simple Moving Average
+    sma_10day = df['close'].rolling(window=10).mean()
+    
+    # Calculate 10-Day Exponential Moving Average
+    ema_10day = df['close'].ewm(span=10).mean()
+    
+    # Trend Following Indicator
+    trend_following_indicator = (sma_10day - ema

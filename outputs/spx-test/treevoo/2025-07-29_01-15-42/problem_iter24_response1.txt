@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['close_to_open_return'] = df['close'].shift(-1) - df['open']
+    
+    # Smooth with EMA (10 days)
+    df['ema_smoothed_return'] = df['close_to_open_return'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    df['total_volume_ema'] = df['volume'].rolling(window=10).sum()
+    df['total_amount_ema'] = df['amount'].rolling(window=10).sum()
+    df['adjusted_ema_return'] = df['ema_smoothed_return'] / (df['total_volume_ema'] + df['total_amount_ema'])
+    
+    # Combine Long-Term and Short-Term Momentum
+    df['long_term_momentum'] = df['close'] / df['close'].shift(28)
+    df['short_term_momentum'] = df['close'] / df['close'].shift(7)
+    df['combined_momentum'] = df['long_term_momentum'] + df['short_term_momentum']
+    
+    # Calculate Price Range Ratio
+    df['price_range_ratio'] = (df['high'] - df['low']) / df['close']
+    
+    # Compute RTSI
+    df['gains'] = df['close'].diff().apply(lambda x: x if x > 0 else 0)
+    df['losses'] = df['close'].diff().apply(lambda x: -x if x < 0 else 0)
+    df['ema_gains'] = df['gains'].ewm(span=14, adjust=False).mean()
+    df['ema_losses'] = df['losses'].ewm(span=14, adjust=False).mean()
+    df['rtsi'] = (df['ema_gains'] / (df['ema_gains'] + df['ema_losses'])) * 100
+    
+    # Calculate Realized Volatility
+    df['realized_volatility'] = df['close'].pct_change().rolling(window=10).std() * np.sqrt(252)
+    
+    # Weighted Average of Combined Components
+    df['weighted_average'] = (
+        0.4 * df['combined_momentum'] +
+        0.2 * df['price_range_ratio'] +
+        0.2 * df['rtsi'] +
+        0.2 * df['realized_volatility']
+    )
+    
+    # Final Factor
+    df['alpha_factor'] = df['weighted_average'] * df['adjusted_ema_return']
+    
+    return df['alpha_factor']
+```

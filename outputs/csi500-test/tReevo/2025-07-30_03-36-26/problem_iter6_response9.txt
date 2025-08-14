@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily VWAP
+    df['total_volume'] = df['volume'].sum()
+    df['total_dollar_value'] = (df['volume'] * df['close']).sum()
+    df['vwap'] = df['total_dollar_value'] / df['total_volume']
+
+    # Calculate VWAP Deviation
+    df['vwap_deviation'] = df['close'] - df['vwap']
+
+    # Calculate Exponential Moving Average (EMA) of VWAP
+    alpha = 0.1  # Smoothing factor
+    df['vwap_ema'] = df['vwap'].ewm(alpha=alpha, adjust=False).mean()
+
+    # Calculate VWAP EMA Deviation
+    df['vwap_ema_deviation'] = df['vwap'] - df['vwap_ema']
+
+    # Calculate Cumulative VWAP Deviation over a window
+    window = 20
+    df['cumulative_vwap_deviation'] = df['vwap_deviation'].rolling(window=window).sum()
+
+    # Calculate Volume Trend
+    df['volume_trend'] = df['volume'].pct_change()
+
+    # Calculate Multi-Period Momentum
+    momentum_window = 10
+    df['multi_period_momentum'] = df['close'].pct_change(momentum_window).sum()
+
+    # Calculate True Range
+    df['high_low_diff'] = df['high'] - df['low']
+    df['high_prev_close_diff'] = (df['high'] - df['close'].shift(1)).abs()
+    df['low_prev_close_diff'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['high_low_diff', 'high_prev_close_diff', 'low_prev_close_diff']].max(axis=1)
+
+    # Calculate Average True Range (ATR)
+    atr_window = 14
+    df['atr'] = df['true_range'].rolling(window=atr_window).mean()
+
+    # Integrate Factors into Final Alpha Signal
+    df['alpha_signal'] = (
+        df['cumulative_vwap_deviation'] +
+        df['vwap_ema_deviation'] +
+        df['volume_trend'] +
+        df['multi_period_momentum'] +
+        df['atr']
+    )
+
+    return df['alpha_signal']
+```

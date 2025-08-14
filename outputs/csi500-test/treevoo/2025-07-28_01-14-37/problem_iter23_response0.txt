@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+
+    # Determine Trend Direction
+    trend_direction = (short_term_ma > long_term_ma).astype(int) * 2 - 1
+
+    # Confirm with Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    adjusted_momentum = trend_direction * volume_change
+
+    # Calculate Relative Strength
+    price_momentum = short_term_ma - long_term_ma
+    weighted_price = (df['high'] + df['low'] + 2 * df['close']) / 4 * df['volume']
+    total_weighted_price = weighted_price.rolling(window=20).sum()
+    total_volume = df['volume'].rolling(window=20).sum()
+    volume_weighted_price_movement = total_weighted_price / total_volume
+    relative_strength = (price_momentum - long_term_ma) / volume_weighted_price_movement
+
+    # Calculate High-to-Low Range
+    high_to_low_range = df['high'] - df['low']
+
+    # Compute Weighted Momentum
+    weighted_momentum = (df['high'] + df['low'] + 2 * df['close']) / 4 * df['volume']
+    close_price_change = df['close'] - df['close'].shift(1)
+    weighted_close_change = close_price_change / weighted_momentum
+
+    # Adjust for Volatility
+    volatility_adjusted_momentum = weighted_momentum / high_to_low_range
+
+    # Incorporate Price Oscillator
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    price_oscillator = short_term_ema - long_term_ema
+
+    # Calculate Daily Return
+    daily_return = df['close'] / df['close'].shift(1) - 1
+
+    # Calculate Cumulative Return
+    cumulative_return = daily_return.rolling(window=5).sum()
+
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+
+    # Adjust by Price Volatility
+    price_volatility = df['close'].rolling(window=5).std()
+    adjusted_cumulative_return = (adjusted_cumulative_return / price_volatility) + 1
+
+    # Calculate Intraday Volatility
+    high_low_range = df['high'] - df['low']
+    intraday_volatility = high_low_range.rolling(window=5).mean()
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    combined_factor = (relative_strength - price_oscillator) / volume_weighted_price_movement
+    combined_factor += adjusted_cumulative_return * trend_direction * price_oscillator
+
+    # Final Factor
+    final_factor = (volatility_adjusted_momentum * volume_change * trend_direction * intraday_volatility) + \
+                   (adjusted_cumulative_return * trend_direction * price_oscillator)
+
+    return final_factor
+```

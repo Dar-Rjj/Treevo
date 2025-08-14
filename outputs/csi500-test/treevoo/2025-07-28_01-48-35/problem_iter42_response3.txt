@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = (df['high'] - df['low']) / df['close'] * df['volume']
+    
+    # Short-Term Price Change
+    short_term_price_change = df['close'].diff(5)
+    
+    # Close to Intraday Range Ratio
+    close_to_intraday_range_ratio = df['close'] / intraday_range
+    
+    # Adjust for Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine High-Low and Open-Close
+    combined_high_low_open_close = intraday_range + opening_gap
+    
+    # Measure Closing Behavior
+    close_to_previous_close_return = df['close'] / df['close'].shift(1) - 1
+    final_combined_factor = combined_high_low_open_close * close_to_previous_close_return
+    final_combined_factor = final_combined_factor.apply(lambda x: max(x, 0))
+    
+    # Volume-Adjusted Momentum
+    avg_volume_5_days = df['volume'].rolling(window=5).mean()
+    volume_adjusted_momentum = (df['volume'] / avg_volume_5_days) * close_to_intraday_range_ratio
+    
+    # Volume-Weighted High-Low Spread
+    volume_weighted_high_low_spread = (df['high'] - df['low']) * (df['volume'] / avg_volume_5_days)
+    
+    # Price Momentum
+    price_momentum = df['close'] - df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Combined Signal
+    combined_signal = volume_weighted_intraday_return + short_term_price_change + volume_weighted_high_low_spread
+    
+    # Volume Trend Indicator
+    volume_trend_indicator = (df['volume'].diff(10) > 0).astype(int) * 3 - 3
+    
+    # Composite Factor
+    composite_factor = final_combined_factor * price_momentum + combined_signal
+    composite_factor = composite_factor.apply(lambda x: max(x, 0))
+    
+    # Smooth the Composite Factor
+    smoothed_composite_factor = composite_factor.rolling(window=7).mean()
+    
+    # Adaptive Volume Trend Coefficient
+    volume_change_5_days = df['volume'] - df['volume'].shift(5)
+    avg_volume_10_days = df['volume'].rolling(window=10).mean()
+    volume_change_rate = volume_change_5_days / avg_volume_10_days
+    adaptive_coefficient = volume_change_rate.apply(lambda x: 2.0 if x > 1.5 else (-1.5 if x < -1 else 0.5))
+    volume_trend_score = adaptive_coefficient * volume_trend_indicator
+    
+    # Volume-Weighted Intraday Return (Adjusted)
+    scaled_volume = df['volume'] / df['volume'].rolling(window=15).mean()
+    volume_weighted_intraday_return_adj = (df['close'] - df['open']) * scaled_volume
+    
+    # Volume-Adjusted High-Low Spread (Adjusted)
+    volume_adjusted_high_low_spread_adj = (df['high'] - df['low']) * scaled_volume
+    
+    # Final Combined Factor
+    final_combined_factor = (price_momentum * volume_trend_score) + volume_weighted_intraday_return_adj + volume_adjusted_high_low_spread_adj
+    
+    # Opening Impact Adjustment
+    open_to_close_return = (df['close'] - df['open']) / df['open']
+    alpha_factor = final_combined_factor - open_to_close_return
+    
+    return alpha_factor
+```

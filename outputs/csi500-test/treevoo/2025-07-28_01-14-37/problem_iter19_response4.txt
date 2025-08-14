@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=10):
+    # Calculate Intraday Volatility
+    df['High-Low_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['High-Low_Range'].rolling(window=n).mean()
+    
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'] / df['close'].shift(1) - 1
+    
+    # Calculate Cumulative Return over a specified window (e.g., 5 days)
+    df['Cumulative_Return'] = df['Daily_Return'].rolling(window=n).sum()
+    
+    # Adjust by Volume
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Adjusted_Cumulative_Return'] = df['Cumulative_Return'] * df['Average_Volume']
+    
+    # Adjust by Price Volatility
+    df['Price_Volatility'] = df['close'].rolling(window=n).std()
+    df['Final_Adjusted_Cumulative_Return'] = (df['Adjusted_Cumulative_Return'] / df['Price_Volatility']) + 1
+    
+    # Calculate Momentum
+    df['Log_Return'] = np.log(df['close'] / df['close'].shift(m))
+    df['Momentum'] = df['Log_Return'].rolling(window=m).sum()
+    
+    # Adjust by Intraday Volatility and Volume
+    df['Weighted_Momentum'] = (df['Momentum'] * df['Average_Volume']) / df['Intraday_Volatility']
+    
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['Momentum_SMA_50'] = df['Momentum'].rolling(window=50).mean()
+    df['Relative_Strength'] = df['Momentum'] - df['Momentum_SMA_50']
+    df['Integrated_Factor'] = df['Relative_Strength'] + df['Final_Adjusted_Cumulative_Return']
+    
+    # Calculate Intraday Movement
+    df['Intraday_Movement'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Close_To_Open_Return'] = df['open'] / df['close'].shift(1) - 1
+    
+    # Combine Factors
+    df['Combined_Factors'] = df['Intraday_Movement'] + df['Close_To_Open_Return']
+    df['Price_Range_Ratio'] = df['Intraday_Movement'] / df['close']
+    df['Combined_Factors_Weighted'] = df['Combined_Factors'] * df['Price_Range_Ratio']
+    
+    # Synthesize Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Integrated_Factor'] + df['Combined_Factors_Weighted']
+    
+    return df['Final_Alpha_Factor'].dropna()
+```

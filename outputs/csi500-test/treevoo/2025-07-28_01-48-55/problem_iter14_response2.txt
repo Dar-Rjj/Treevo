@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Reversal
+    intraday_reversal = (df['high'] - df['low']) - (df['open'] - df['close'])
+    
+    # Volume Change
+    volume_change = df['volume'] - df['volume'].shift(1)
+    
+    # Weighted Moving Average (WMA)
+    weights = np.arange(1, 11)
+    wma = df['close'].rolling(window=10).apply(lambda x: (x * weights).sum() / weights.sum(), raw=True)
+    
+    # Price Momentum
+    price_momentum = df['close'] - wma
+    
+    # Daily Log Return
+    daily_log_return = np.log(df['close'] / df['close'].shift(1))
+    
+    # Integrated Momentum
+    integrated_momentum = (daily_log_return * volume_change).rolling(window=10).sum()
+    
+    # Moving Average Crossover
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    crossover_signal = np.where(ema_5 > ema_20, 1, np.where(ema_5 < ema_20, -1, 0))
+    integrated_momentum += crossover_signal
+    
+    # High-Low Range
+    high_low_range = df['high'] - df['low']
+    integrated_momentum *= high_low_range
+    
+    # Intraday Momentum
+    intraday_momentum = (df['high'] - df['low']) / df['low']
+    
+    # Enhanced Volume Thrust
+    upward_thrust = np.where(df['close'] > df['open'], df['volume'] * (df['close'] - df['open']), 0)
+    downward_thrust = np.where(df['close'] <= df['open'], df['volume'] * (df['open'] - df['close']), 0)
+    price_range_factor = (df['high'] - df['low']) / df['open']
+    enhanced_volume_thrust = (upward_thrust - downward_thrust) + price_range_factor
+    
+    # Composite Factor
+    composite_factor = intraday_reversal * volume_change
+    
+    # Volume Adjusted Spread
+    spread = df['high'] - df['low']
+    average_volume = df['volume'].rolling(window=20).mean()
+    relative_volume = df['volume'] / average_volume
+    volume_adjusted_spread = spread * relative_volume
+    
+    # Final Alpha Factor
+    final_alpha_factor = integrated_momentum + intraday_momentum + enhanced_volume_thrust + price_momentum - volume_adjusted_spread
+    
+    return final_alpha_factor
+```

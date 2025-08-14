@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    N = 14
+    df['momentum_close'] = df['close'] - df['close'].rolling(window=N).mean()
+    df['pct_change_close'] = df['close'].pct_change()
+
+    # Volatility Indicators
+    M = 20
+    P = 14
+    df['daily_returns'] = df['close'].pct_change()
+    df['volatility_std'] = df['daily_returns'].rolling(window=M).std()
+    
+    def average_true_range(high, low, close, period):
+        tr = pd.Series(0.0, index=high.index)
+        for i in range(1, len(high)):
+            hl = high[i] - low[i]
+            hpc = abs(high[i] - close[i-1])
+            lpc = abs(low[i] - close[i-1])
+            tr[i] = max(hl, hpc, lpc)
+        return tr.rolling(window=period).mean()
+    
+    df['atr'] = average_true_range(df['high'], df['low'], df['close'], P)
+
+    # Volume and Amount Based Indicators
+    Q = 10
+    R = 14
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=Q).mean()
+    
+    def money_flow_index(high, low, close, volume, period):
+        typical_price = (high + low + close) / 3
+        raw_money_flow = typical_price * volume
+        positive_money_flow = raw_money_flow.where(close > close.shift(1), 0).fillna(0).rolling(window=period).sum()
+        negative_money_flow = raw_money_flow.where(close < close.shift(1), 0).fillna(0).rolling(window=period).sum()
+        money_flow_ratio = positive_money_flow / negative_money_flow
+        mfi = 100 - 100 / (1 + money_flow_ratio)
+        return mfi
+    
+    df['mfi'] = money_flow_index(df['high'], df['low'], df['close'], df['volume'], R)
+
+    # Pattern Recognition in OHLC Data
+    df['doji'] = ((df['close'] - df['open']) / df['open']).abs() < 0.005
+    df['engulfing_bullish'] = (df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+    df['engulfing_bearish'] = (df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))
+
+    # Trend Following Indicators
+    short_term = 10
+    long_term = 30
+    df['sma_short'] = df['close'].rolling(window=short_term).mean()
+    df['sma_long'] = df['close'].rolling(window=long_term).mean()
+    df['sma_crossover'] = df['sma_short'] > df['sma_long']
+
+    weights = np.arange(1, short_term + 1)
+    df['wma'] = df['close'].rolling(window=short_term).apply(lambda prices: np.dot(prices, weights)/weights.sum(), raw=True)
+
+    # Oscillator Indicators
+    T = 14
+    df['custom_oscillator'] = (df['close'] - df['low'].rolling(window=T).min()) / (df['high'].rolling(window=T).max() - df['low'].rolling(window=T).min())
+    df['stochastic_oscillator_k'] = 100 * (df['close'] - df['low'].rolling(window=T).min()) / (df['high'].rolling(window=T).max() - df['low'].rolling(window=T).min())
+    df['stochastic_oscillator_d'] = df['stochastic_oscillator_k'].rolling(window=3).mean()
+
+    # Liquidity Indicators
+    U = 20
+    df['spread'] = df['high'].rolling(window=U).max() - df['low'].rolling(window=U).min()
+    df['bollinger_upper'] = df['close'].rolling(window=U).mean() + 2 * df['close'].rolling(window=U).std()
+    df['bollinger_lower'] = df['close'].rolling(window=U

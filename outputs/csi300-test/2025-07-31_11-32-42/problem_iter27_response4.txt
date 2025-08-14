@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Simple Moving Average (SMA) over 50 days
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    
+    # Exponential Moving Average (EMA) over 20 days
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Price Rate of Change (ROC) over 14 days
+    df['ROC_14'] = df['close'].pct_change(periods=14)
+    
+    # Acceleration Band
+    sma_20 = df['close'].rolling(window=20).mean()
+    df['Upper_Band'] = sma_20 * (1 + 4 * df['close'].rolling(window=20).std() / sma_20)
+    df['Lower_Band'] = sma_20 * (1 - 4 * df['close'].rolling(window=20).std() / sma_20)
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    df['OBV'] = df['OBV'].cumsum()
+    
+    # Volume Rate of Change (Volume ROC) over 10 days
+    df['Volume_ROC_10'] = df['volume'].pct_change(periods=10)
+    
+    # Average True Range (ATR) over 14 days
+    df['TR'] = df[['high', 'low']].max(axis=1) - df[['high', 'low']].min(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Standard Deviation over 20 days
+    df['Std_20'] = df['close'].rolling(window=20).std()
+    
+    # High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    
+    # Close-to-High Ratio
+    df['Close_to_High_Ratio'] = df['close'] / df['high']
+    
+    # Relative Strength Index (RSI) over 14 days
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # Money Flow Index (MFI) over 14 days
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0).rolling(window=14).sum()
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0).rolling(window=14).sum()
+    money_ratio = positive_money_flow / negative_money_flow
+    df['MFI_14'] = 100 - (100 / (1 + money_ratio))
+    
+    # Combine all factors into a single alpha factor
+    df['Alpha_Factor'] = (
+        df['SMA_50'] + 
+        df['EMA_20'] + 
+        df['ROC_14'] + 
+        df['Upper_Band'] - df['Lower_Band'] + 
+        df['OBV'] + 
+        df['Volume_ROC_10'] + 
+        df['ATR_14'] + 
+        df['Std_20'] + 
+        df['High_Low_Spread'] + 
+        df['Close_to_High_Ratio'] + 
+        df['RSI_14'] + 
+        df['MFI_14']
+    )
+    
+    return df['Alpha_Factor']
+```

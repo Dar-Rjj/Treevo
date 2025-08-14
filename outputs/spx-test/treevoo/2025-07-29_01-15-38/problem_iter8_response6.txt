@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Price Momentum
+    df['5DayMomentum'] = df['close'].rolling(window=5).mean()
+    
+    # Incorporate Volume Influence
+    df['5DayAvgVolume'] = df['volume'].rolling(window=5).mean()
+    df['RelativeVolume'] = df['volume'] / df['5DayAvgVolume']
+    df['AdjustedMomentum'] = df['5DayMomentum'] * df['RelativeVolume']
+    
+    # Calculate Intraday Returns
+    df['IntradayReturns'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    df['OpenToCloseReturns'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['CombinedReturns'] = df['IntradayReturns'] + df['OpenToCloseReturns']
+    
+    # Analyze Volume Change
+    df['VolumeRatio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    def classify_volume_trend(volume_ratio):
+        if volume_ratio > 1.5:
+            return 2
+        elif 0.5 <= volume_ratio <= 1.5:
+            return 0
+        else:
+            return -2
+    df['VolumeTrend'] = df['VolumeRatio'].apply(classify_volume_trend)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['AdjustedCombinedReturns'] = df['CombinedReturns'] * df['VolumeTrend']
+    
+    # Calculate Short-Term and Long-Term Momentum
+    df['ShortTermMomentum'] = df['close'].rolling(window=5).mean()
+    df['LongTermMomentum'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Oscillator
+    df['MomentumOscillator'] = df['ShortTermMomentum'] - df['LongTermMomentum']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['HighLowSpread'] = (df['high'] - df['low']) * df['RelativeVolume']
+    
+    # Weight by Volume Surge
+    df['VolumeRatio10Day'] = df['volume'] / df['volume'].rolling(window=10).mean().shift(1)
+    def volume_surge_weight(volume_ratio_10_day):
+        if volume_ratio_10_day > 1.5:
+            return 1.5
+        elif 1 < volume_ratio_10_day <= 1.5:
+            return 1.2
+        else:
+            return 1
+    df['VolumeWeight'] = df['VolumeRatio10Day'].apply(volume_surge_weight)
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (df['AdjustedCombinedReturns'] * df['MomentumOscillator'] + df['HighLowSpread']) * df['VolumeWeight']
+    
+    return df['FinalAlphaFactor']
+```

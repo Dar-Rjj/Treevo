@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Daily Momentum
+    adjusted_momentum = df['close'].diff(10)
+    
+    # Adjust by High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    ema_high_low_spread = high_low_spread.ewm(span=10, adjust=False).mean()
+    
+    # Incorporate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Combine Adjusted Momentum, High-Low Spread, and Intraday Return
+    combined_adjusted_momentum = adjusted_momentum * ema_high_low_spread + intraday_return
+    
+    # Calculate Volume Surprise
+    volume_ma = df['volume'].rolling(window=20).mean()
+    volume_surprise = df['volume'] - volume_ma
+    
+    # Adjust by Volume Change
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    smoothed_volume_ratio = volume_ratio.ewm(span=5, adjust=False).mean()
+    
+    # Combine Volume Impact Factors
+    combined_volume_impact = volume_surprise * smoothed_volume_ratio
+    
+    # Compute Volume Influence Ratio
+    upward_volume = df[df['close'] > df['open']]['volume'].sum()
+    downward_volume = df[df['close'] < df['open']]['volume'].sum()
+    volume_influence_ratio = upward_volume / downward_volume
+    
+    # Intermediate Alpha Factor Synthesis
+    intermediate_alpha = combined_adjusted_momentum * combined_volume_impact
+    
+    # Final Alpha Factor
+    final_alpha = (intermediate_alpha 
+                   + intraday_return 
+                   * volume_influence_ratio 
+                   + volume_surprise)
+    
+    return final_alpha
+```

@@ -1,0 +1,34 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=20, M=10):
+    # Calculate the basic momentum
+    df['momentum'] = df['close'].pct_change(N)
+    
+    # Calculate VWAP for each day
+    df['vwap'] = (df['amount'] / df['volume']).rolling(window=N).mean()
+    df['vwap_momentum'] = df['vwap'].pct_change(N)
+    
+    # Calculate ATR
+    df['true_range'] = df[['high', 'low', 'close']].diff(axis=1).abs().max(axis=1)
+    df['atr'] = df['true_range'].rolling(window=N).mean()
+    
+    # Adjust momentum and VWAP momentum by ATR
+    df['momentum_atr_adj'] = df['momentum'] / df['atr']
+    df['vwap_momentum_atr_adj'] = df['vwap_momentum'] / df['atr']
+    
+    # Reversal indicator
+    df['5_day_low'] = df['low'].rolling(window=5).min()
+    df['5_day_high'] = df['high'].rolling(window=5).max()
+    df['reversal_score'] = (df['close'] - df['5_day_low']) / (df['5_day_high'] - df['5_day_low'])
+    
+    # Volume change
+    df['recent_volume'] = df['volume'].rolling(window=N).sum()
+    df['previous_volume'] = df['volume'].shift(N).rolling(window=M).sum()
+    df['volume_change'] = df['recent_volume'] / df['previous_volume']
+    
+    # Combine all factors
+    df['alpha_factor'] = (df['vwap_momentum_atr_adj'] + df['momentum_atr_adj']) * df['reversal_score'] * df['volume_change']
+    
+    return df['alpha_factor']
+```

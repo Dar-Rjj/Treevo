@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum (n-day return using Close price)
+    n = 10
+    df['Price_Momentum'] = df['close'].pct_change(n)
+
+    # Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = (df['high'] - df['low']) * df['volume']
+
+    # Volume-Adjusted Volatility
+    df['Range'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = df['Range'] * df['volume']
+
+    # Trade Frequency Adjusted Return
+    df['Trade_Frequency'] = df['volume'].apply(lambda x: 1 if x > 0 else 0)
+    df['Trade_Frequency_Adjusted_Return'] = df['close'].pct_change(n) * df['Trade_Frequency'].rolling(window=n).sum()
+
+    # Trend Following Alpha Factor using close prices (SMA)
+    sma_period = 50
+    df['SMA'] = df['close'].rolling(window=sma_period).mean()
+    df['Trend_Signal'] = (df['close'] > df['SMA']).astype(int)
+
+    # Explore momentum in high and low prices
+    df['High_Momentum'] = df['high'] - df['high'].shift(1)
+    df['Low_Momentum'] = df['low'] - df['low'].shift(1)
+    df['Combined_Momentum'] = df['High_Momentum'] + df['Low_Momentum']
+
+    # Analyze volume patterns
+    df['Volume_Change'] = df['volume'].pct_change()
+    df['Volume_Intensity'] = df['Volume_Change'].apply(lambda x: 1 if x > 0 else -1)
+
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    long_term_window = 100
+    df['Daily_Return'] = df['close'].pct_change()
+    df['Long_Term_Volume_Weighted_Return'] = (df['Daily_Return'] * df['volume']).rolling(window=long_term_window).sum() / df['volume'].rolling(window=long_term_window).sum()
+
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    short_term_window = 5
+    df['Short_Term_Volume_Weighted_Return'] = (df['Daily_Return'] * df['volume']).rolling(window=short_term_window).sum() / df['volume'].rolling(window=short_term_window).sum()
+
+    # Intraday Return
+    df['Intraday_Return'] = df['high'] - df['low']
+
+    # Intraday Volatility
+    df['Intraday_Volatility'] = (df['high'] - df['low']).abs().rolling(window=20).sum()
+
+    # Intraday Momentum
+    df['Intraday_Momentum'] = (df['Intraday_Return'] * df['volume']).rolling(window=5).sum()
+
+    # Volume-Weighted Intraday Reversal
+    df['Volume_Weighted_Intraday_Reversal'] = -(df['Intraday_Return'] * df['volume']).rolling(window=10).sum()
+
+    # Weighted High-Low Spread Adjusted for Volume
+    average_volume = df['volume'].rolling(window=5).mean()
+    df['Weighted_High_Low_Spread'] = (df['high'] - df['low']) * (df['volume'] / average_volume)
+
+    # Combined Alpha Factor
+    df['Combined_Alpha_Factor'] = (
+        (df['Long_Term_Volume_Weighted_Return'] - df['Short_Term_Volume_Weighted_Return']) +
+        (df['Intraday_Momentum'] + df['Volume_Weighted_Intraday_Reversal'])
+    ) * df['Price_Momentum'] + df['Price_Momentum']
+
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (
+        df['Combined_Alpha_Factor'] +
+        df['Trend_Signal'] +
+        df['Combined_Momentum'] +
+        df['Volume_Intensity']
+    )
+
+    # Return the final alpha factor as a Series
+    return df['Final_Alpha_Factor']
+```

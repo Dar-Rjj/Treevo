@@ -1,0 +1,43 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 10-day moving averages of the close price
+    df['close_ma_5'] = df['close'].rolling(window=5).mean()
+    df['close_ma_10'] = df['close'].rolling(window=10).mean()
+    df['close_ma_20'] = df['close'].rolling(window=20).mean()
+
+    # Relative close price compared to its 5-day, 10-day, and 20-day moving averages
+    df['close_relative_5'] = df['close'] / (df['close_ma_5'] + 1e-7)
+    df['close_relative_10'] = df['close'] / (df['close_ma_10'] + 1e-7)
+    df['close_relative_20'] = df['close'] / (df['close_ma_20'] + 1e-7)
+
+    # Percentage change in close price
+    df['close_change'] = (df['close'].diff() / df['close'].shift(1)).fillna(0)
+
+    # Volume relative to its 5-period and 20-period moving averages
+    df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_relative_5'] = df['volume'] / (df['volume_ma_5'] + 1e-7)
+    df['volume_relative_20'] = df['volume'] / (df['volume_ma_20'] + 1e-7)
+
+    # Calculate the 14-day ATR (Average True Range)
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14'] = df['tr'].ewm(alpha=1/14, adjust=False).mean()
+
+    # Adaptive momentum factor
+    df['momentum_5_10'] = df['close_ma_5'] - df['close_ma_10']
+    df['momentum_10_20'] = df['close_ma_10'] - df['close_ma_20']
+
+    # Trend strength indicator
+    df['trend_strength'] = (df['close_ma_20'] - df['close'].shift(20)) / df['close'].shift(20)
+
+    # Combine factors with adaptive weights
+    alpha_factor = (
+        df['close_change'] * 
+        (df['close_relative_5'] + df['close_relative_10'] + df['close_relative_20']) / 3 * 
+        (df['volume_relative_5'] + df['volume_relative_20']) / 2 * 
+        (df['momentum_5_10'] + df['momentum_10_20']) / (2 * df['atr_14']) * 
+        (1 + df['trend_strength'])
+    )
+
+    return alpha_factor
+```

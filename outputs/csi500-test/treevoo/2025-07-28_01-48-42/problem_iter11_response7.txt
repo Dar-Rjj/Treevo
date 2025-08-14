@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Calculate Price Change
+    price_change = df['close'].diff()
+    
+    # Compute Momentum (sum of price change over the last 10 days)
+    momentum = price_change.rolling(window=10).sum()
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * df['amount']
+    adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Adjust Momentum by Open-Close Spread
+    adjusted_momentum = momentum * open_close_spread.abs()
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    combined_signal = adjusted_momentum / adjusted_range
+    
+    # Enhance Combined Signal with Smoothing (EMA with span 5)
+    enhanced_signal = combined_signal.ewm(span=5, adjust=False).mean()
+    
+    # Calculate Price Momentum (Smoothed Close Price Returns, EMA with period 12)
+    close_price_return = df['close'].pct_change()
+    smoothed_momentum = close_price_return.ewm(span=12, adjust=False).mean()
+    
+    # Calculate Volume Spike Factor
+    volume_change = df['volume'].diff()
+    volume_std = df['volume'].rolling(window=20).std()
+    volume_spike_factor = (volume_change > 2 * volume_std).astype(int)
+    
+    # Final Alpha Factor
+    alpha_factor = enhanced_signal * smoothed_momentum * volume_spike_factor
+    
+    return alpha_factor
+```

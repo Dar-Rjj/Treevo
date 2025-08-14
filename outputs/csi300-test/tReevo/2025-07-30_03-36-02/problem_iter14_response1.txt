@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Weight by Volume
+    weighted_volatility = intraday_volatility * df['volume']
+    
+    # Calculate Intraday Momentum
+    daily_momentum = df['close'] - df['open']
+    rolling_window_size = 10
+    intraday_momentum = daily_momentum.rolling(window=rolling_window_size).sum()
+    
+    # Integrate Momentum and Volatility
+    integrated_metric = weighted_volatility + intraday_momentum
+    
+    # Apply Dynamic Exponential Smoothing
+    base_smoothing_factor = 0.9
+    recent_volatility = intraday_volatility.rolling(window=5).mean()
+    smoothing_factor = base_smoothing_factor * (1 - recent_volatility / max(recent_volatility))
+    
+    smoothed_value = integrated_metric.ewm(alpha=smoothing_factor, adjust=False).mean()
+    
+    # Ensure values are positive
+    small_constant = 1e-6
+    smoothed_value = smoothed_value + small_constant
+    
+    # Adapt for Market-Wide Indicators
+    market_volatility = (df['high'].max() - df['low'].min()).rolling(window=5).mean()
+    if market_volatility.max() > 0:
+        market_smoothing_factor = 1 - (market_volatility / market_volatility.max())
+        smoothed_value = smoothed_value.ewm(alpha=market_smoothing_factor, adjust=False).mean()
+    
+    # Apply Logarithmic Transformation
+    log_smoothed_value = np.log(smoothed_value)
+    
+    return log_smoothed_value
+```

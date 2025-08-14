@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+import numpy as np
+from ta.momentum import RSIIndicator, StochasticOscillator
+from ta.volatility import AverageTrueRange, BollingerBands
+from ta.volume import OnBalanceVolumeIndicator, ChaikinMoneyFlowIndicator
+from sklearn.decomposition import PCA
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    rsi = RSIIndicator(close=df['close'], window=14)
+    df['RSI'] = rsi.rsi()
+    
+    stoch = StochasticOscillator(high=df['high'], low=df['low'], close=df['close'], window=14, smooth_window=3)
+    df['%K'] = stoch.stoch()
+    df['%D'] = stoch.stoch_signal()
+    
+    # Volatility Indicators
+    atr = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14)
+    df['ATR'] = atr.average_true_range()
+    
+    bb = BollingerBands(close=df['close'], window=20, window_dev=2)
+    df['BB_upper'] = bb.bollinger_hband()
+    df['BB_lower'] = bb.bollinger_lband()
+    
+    # Volume Based Factors
+    df['Volume_MA_20'] = df['volume'].rolling(window=20).mean()
+    df['Volume_Spike'] = (df['volume'] > 3 * df['Volume_MA_20']).astype(int)
+    
+    # Combined Price and Volume Factors
+    obv = OnBalanceVolumeIndicator(close=df['close'], volume=df['volume'])
+    df['OBV'] = obv.on_balance_volume()
+    
+    cmf = ChaikinMoneyFlowIndicator(high=df['high'], low=df['low'], close=df['close'], volume=df['volume'], window=20)
+    df['CMF'] = cmf.chaikin_money_flow()
+    
+    # Advanced Factors
+    df['SMA_50_RSI'] = df['SMA_50'] * df['RSI']
+    
+    # Feature Engineering: Interaction terms
+    interaction_terms = df[['SMA_50', 'EMA_20', 'RSI', 'ATR', 'BB_upper', 'BB_lower', 'Volume_MA_20', 'OBV', 'CMF']].dropna()
+    pca = PCA(n_components=1)
+    principal_components = pca.fit_transform(interaction_terms)
+    df['PCA_Factor'] = np.nan
+    df.loc[interaction_terms.index, 'PCA_Factor'] = principal_components
+    
+    # Return the final factor
+    return df['PCA_Factor']
+```

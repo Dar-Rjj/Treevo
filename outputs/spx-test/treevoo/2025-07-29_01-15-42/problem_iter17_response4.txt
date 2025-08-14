@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_adjusted_intraday_spread = intraday_high_low_spread * df['volume']
+    volume_adjusted_close_to_open_change = close_to_open_change * df['volume']
+    
+    # Analyze Volume Trends
+    moving_average_volume = df['volume'].rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    sum_of_volume_adjusted_spreads = volume_adjusted_intraday_spread + volume_adjusted_close_to_open_change
+    
+    # Identify Positive and Negative Price-Volume Imbalances
+    price_range = df['high'] - df['low']
+    volume_adjusted_price_range = price_range / moving_average_volume
+    threshold = 0.5  # You can adjust this threshold
+    positive_imbalance = (volume_adjusted_price_range > threshold).astype(int)
+    negative_imbalance = (volume_adjusted_price_range < -threshold).astype(int)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_alpha_signal = positive_imbalance - negative_imbalance
+    
+    # Calculate Long-Term and Short-Term Price Momentum
+    long_term_momentum = df['close'].shift(28) - df['close']
+    short_term_momentum = df['close'].shift(10) - df['close']
+    combined_momentum = long_term_momentum + short_term_momentum
+    
+    # Adjust High-to-Low Range by Average Volume
+    adjusted_high_to_low_range = (df['high'] - df['low']) / moving_average_volume
+    
+    # Weighted Average of Combined Components
+    weighted_average = (
+        0.4 * combined_momentum +
+        0.3 * volume_adjusted_intraday_spread +
+        0.2 * volume_adjusted_close_to_open_change +
+        0.1 * adjusted_high_to_low_range
+    )
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].rolling(window=20).std()
+    median_realized_volatility = realized_volatility.median()
+    
+    # Apply Volatility Filter
+    volatility_filtered_alpha = preliminary_alpha_signal.where(realized_volatility < median_realized_volatility, other=0)
+    
+    # Calculate Volume Acceleration
+    volume_acceleration = df['volume'] - df['volume'].shift(10)
+    
+    # Generate Final Alpha Signal
+    final_alpha_signal = (
+        (preliminary_alpha_signal > 0) & (realized_volatility < median_realized_volatility)).astype(int) * (combined_momentum + weighted_average) + \
+        ((preliminary_alpha_signal < 0) & (realized_volatility < median_realized_volatility)).astype(int) * (combined_momentum - weighted_average) + \
+        ((preliminary_alpha_signal == 0) & (realized_volatility < median_realized_volatility)).astype(int) * combined_momentum + \
+        (volatility_filtered_alpha == 0).astype(int) * (weighted_average * volume_acceleration)
+    
+    return final_alpha_signal
+```

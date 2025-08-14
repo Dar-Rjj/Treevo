@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data, window_size=10, w1=0.1, w2=0.1, w3=0.1, w4=0.1, w5=0.1, w6=0.1, w7=0.1, w8=0.1, n=5):
+    # Price Movements and Intraday Dynamics
+    data['price_change'] = data['close'].diff()
+    data['intraday_return'] = data['close'] - data['open']
+    data['price_range'] = data['high'] - data['low']
+    data['intraday_momentum'] = data['high'] - data['low']
+
+    # Volume Trends
+    data['volume_change'] = data['volume'].diff()
+    data['volume_adjustment'] = data['volume'] / data['volume'].rolling(window_size).mean()
+    data['volume_trend_classification'] = data['volume'] / data['volume'].shift(1)
+    data['volume_trend_classification'] = data['volume_trend_classification'].apply(
+        lambda x: 2 if x > 1.5 else (0 if x > 0.5 else -2))
+
+    # Combine Price and Volume Factors with Intraday Momentum
+    data['price_volume_factor'] = data['price_change'] * data['volume_change']
+    data['pricerange_volume_ratio'] = data['price_range'] / data['volume']
+    data['weighted_high_low_spread'] = data['intraday_momentum'] * data['volume_adjustment']
+
+    # Momentum and Reversal
+    data['n_day_return'] = (data['close'] / data['close'].shift(n)) - 1
+    data['short_term_reversal'] = (data['close'].shift(1) / data['close'].shift(2)) - 1
+    data['five_day_price_momentum'] = data['close'].rolling(5).sum() / 5
+    data['relative_volume'] = data['volume'] / (data['volume'].rolling(5).sum() / 5)
+    data['adjusted_five_day_momentum'] = data['five_day_price_momentum'] * data['relative_volume']
+
+    # Market Sentiment
+    data['positive_closes'] = (data['price_change'] > 0).cumsum()
+    data['negative_closes'] = (data['price_change'] < 0).cumsum()
+    data['sentiment_score'] = data['positive_closes'] - data['negative_closes']
+
+    # Technical Indicators
+    data['sma'] = data['close'].rolling(window_size).mean()
+    data['gains'] = (data['price_change'].clip(lower=0)).rolling(window_size).mean()
+    data['losses'] = (-data['price_change'].clip(upper=0)).rolling(window_size).mean()
+    data['rsi'] = 100 - (100 / (1 + (data['gains'] / data['losses'])))
+
+    # Combined Returns
+    data['combined_returns'] = data['intraday_return'] + data['weighted_high_low_spread'] + data['adjusted_five_day_momentum']
+
+    # Alpha Factor Synthesis
+    data['alpha_factor'] = (
+        w1 * data['price_volume_factor'] +
+        w2 * data['pricerange_volume_ratio'] +
+        w3 * data['n_day_return'] +
+        w4 * data['short_term_reversal'] +
+        w5 * data['sentiment_score'] +
+        w6 * (data['sma'] - data['close']) +
+        w7 * data['rsi'] +
+        w8 * data['combined_returns'] * data['volume_trend_classification']
+    )
+
+    # Cumulative Movement
+    data['cumulative_factor'] = data['alpha_factor'].rolling(window_size).sum()
+
+    return data['cumulative_factor']
+
+# Example usage:
+# df = pd.DataFrame({'open': [..], 'high': [..], 'low': [..], 'close': [..], 'volume': [..]})
+# factor_values = heuristics_v2(df)
+```

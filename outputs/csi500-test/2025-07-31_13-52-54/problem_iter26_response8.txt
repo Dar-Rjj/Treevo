@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the difference between closing price and opening price
+    df['daily_diff'] = df['close'] - df['open']
+    
+    # 5-day moving average of the daily price difference
+    df['5d_ma_daily_diff'] = df['daily_diff'].rolling(window=5).mean()
+    
+    # 20-day standard deviation of the 5-day moving average of the daily price difference
+    df['20d_std_5d_ma_daily_diff'] = df['5d_ma_daily_diff'].rolling(window=20).std()
+    
+    # Volatility-adjusted trend strength
+    df['vol_adj_trend_strength'] = df['5d_ma_daily_diff'] / df['20d_std_5d_ma_daily_diff']
+    
+    # 14-day Exponential Moving Average (EMA) of the closing prices
+    df['14d_ema_close'] = df['close'].ewm(span=14, adjust=False).mean()
+    
+    # Difference between the current closing price and the 14-day EMA
+    df['diff_close_14d_ema'] = df['close'] - df['14d_ema_close']
+    
+    # Count the number of days in the past month where the closing price was above the opening price
+    df['up_days'] = (df['close'] > df['open']).astype(int)
+    df['ratio_up_days'] = df['up_days'].rolling(window=20).sum() / 20
+    
+    # Calculate the highest high and lowest low over the last 20 days
+    df['20d_highest_high'] = df['high'].rolling(window=20).max()
+    df['20d_lowest_low'] = df['low'].rolling(window=20).min()
+    
+    # Range percentage
+    df['range_percentage'] = (df['20d_highest_high'] - df['20d_lowest_low']) / df['20d_lowest_low']
+    
+    # Sum of volume on days when the closing price is higher than the opening price, divided by the total volume over the same period
+    df['volume_up_days'] = df['volume'] * (df['close'] > df['open'])
+    df['buying_pressure_ratio'] = df['volume_up_days'].rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Return based on the close-to-close price change
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Cumulative return over the past 30 trading days
+    df['cumulative_return_30d'] = (1 + df['daily_return']).rolling(window=30).apply(np.prod, raw=True) - 1
+    
+    # Rate of change of the amount traded over the past 7 days
+    df['roc_amount_7d'] = df['amount'].pct_change(periods=7)
+    
+    # Compute the average true range (ATR) over the past 14 days
+    df['tr'] = df[['high', 'low']].apply(lambda x: x[0] - x[1], axis=1)
+    df['atr_14d'] = df['tr'].rolling(window=14).mean()
+    df['rel_volatility_today'] = df['tr'] / df['atr_14d']
+    
+    # Determine the direction and magnitude of the price gap
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['gap_direction'] = np.where(df['gap'] > 0, 'up', np.where(df['gap'] < 0, 'down', 'no_gap'))
+    
+    # Calculate the ratio of high price to low price for the day
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    # Analyze the relationship between the day's high and the 20-day moving average of the closing price
+    df['20d_ma_close'] = df['close'].rolling(window=20).mean()
+    df['high_vs_20d_ma'] = df['high'] / df['20d_ma_close'] - 1
+    
+    # Volume-Weighted High-Low Spread
+    df['vwhl_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Volume-Weighted Close Price
+    df['vw_close'] = df['close'] * df['volume']
+    
+    # Ratio
+    df['vwhl_vw_close_ratio'] = df['vwhl_spread'].sum() / df['vw_close'].sum()
+    
+    # Factor

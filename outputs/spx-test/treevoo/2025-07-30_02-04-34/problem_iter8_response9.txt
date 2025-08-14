@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Parameters
+    n = 5  # Number of days for raw momentum
+    m = 5  # Number of days for moving average of volume
+    spike_threshold = 1.5  # Threshold for volume spike
+
+    # Calculate Raw Momentum
+    df['RawMomentum'] = df['close'].diff(periods=1)
+
+    # Identify Volume Spikes
+    df['VolumeMA'] = df['volume'].rolling(window=m).mean()
+    df['VolumeSpike'] = (df['volume'] > df['VolumeMA'] * spike_threshold).astype(int)
+
+    # Adjust Raw Momentum
+    df['AdjustedMomentum'] = df['RawMomentum'] * (1 - 0.5 * df['VolumeSpike'])
+
+    # Calculate Intraday High-Low Spread
+    df['IntradayHLSpread'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = df['close'] - df['open']
+
+    # Combine Intraday Factors
+    df['CombinedIntradayFactors'] = df['IntradayHLSpread'] + df['CloseToOpenReturn']
+
+    # Calculate Weighted Price Movement
+    df['WeightedPriceMovement'] = (df['close'] - df['open']) * df['volume']
+    df['AverageVolume'] = df['volume'].rolling(window=5).mean()
+    df['NormalizedWeightedPriceMovement'] = df['WeightedPriceMovement'] / df['AverageVolume']
+
+    # Integrate Volume Impact
+    df['VolumeImpact'] = df['NormalizedWeightedPriceMovement'] * (df['volume'] / df['AverageVolume'])
+
+    # Combine for Initial Alpha Signal
+    df['InitialAlphaSignal'] = df['CombinedIntradayFactors'] * df['volume']
+
+    # Calculate Daily Price Change
+    df['DailyPriceChange'] = df['close'].diff()
+
+    # Calculate Volume Change
+    df['VolumeChange'] = df['volume'].diff()
+
+    # Compute Smoothed Price Momentum
+    df['SmoothedPriceMomentum'] = df['DailyPriceChange'].rolling(window=5).mean()
+
+    # Compute Weighted Volume Indicator
+    df['WeightedVolumeIndicator'] = (df['VolumeChange'] * np.sign(df['VolumeChange'])).rolling(window=5).mean()
+
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = (
+        df['AdjustedMomentum'] *
+        df['CombinedIntradayFactors'] *
+        df['VolumeImpact'] *
+        df['InitialAlphaSignal'] *
+        df['SmoothedPriceMomentum'] *
+        df['WeightedVolumeIndicator']
+    )
+
+    # Adjust for Volatility
+    df['Volatility'] = df['close'].rolling(window=10).std()
+    df['FinalAlphaFactor'] = df['FinalAlphaFactor'] / (1 + df['Volatility'])
+
+    return df['FinalAlphaFactor']
+```

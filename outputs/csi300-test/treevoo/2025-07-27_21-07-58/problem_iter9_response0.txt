@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily returns
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute short-term momentum
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    
+    # Compute long-term momentum
+    df['long_term_momentum'] = df['daily_return'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Determine True Range
+    df['true_range'] = df[['high', 'low', 'close']].apply(lambda x: max(x['high'] - x['low'], 
+                                                                        abs(x['high'] - df['close'].shift(1)), 
+                                                                        abs(x['low'] - df['close'].shift(1))), axis=1)
+    
+    # Compute 14-day Simple Moving Average of True Range (ATR)
+    df['atr'] = df['true_range'].rolling(window=14).mean()
+    
+    # Weighted sum of short-term and long-term momentum
+    df['weighted_momentum'] = df['short_term_momentum'] * 0.6 + df['long_term_momentum'] * 0.4
+    
+    # Multiply by the inverse of ATR
+    df['momentum_volatility'] = df['weighted_momentum'] / df['atr']
+    
+    # Add a trend-following component
+    df['30_day_sma'] = df['close'].rolling(window=30).mean()
+    df['trend_multiplier'] = df.apply(lambda x: 1.25 if x['close'] > x['30_day_sma'] else 1, axis=1)
+    
+    # Final alpha factor
+    df['alpha_factor'] = df['momentum_volatility'] * df['trend_multiplier']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

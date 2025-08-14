@@ -1,0 +1,52 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, sector_data):
+    """
+    Generate a novel and interpretable alpha factor that could help predict future stock returns.
+    
+    Parameters:
+    - df: pandas DataFrame with (date) index and columns (open, high, low, close, amount, volume)
+    - sector_data: pandas DataFrame with (date) index and columns for each sector's EMA
+    
+    Returns:
+    - pandas Series indexed by (date) representing the factor values
+    """
+    
+    # Calculate raw return over a short-term window (10 days)
+    df['return'] = df['close'].pct_change()
+    
+    # Weight the returns by the trading volume of each day
+    df['volume_weighted_return'] = df['return'] * df['volume']
+    
+    # Sum the volume-weighted returns to get the volume-weighted momentum
+    df['volume_weighted_momentum'] = df['volume_weighted_return'].rolling(window=10).sum()
+    
+    # Calculate the standard deviation of returns over the same short-term window
+    df['std_dev'] = df['return'].rolling(window=10).std()
+    
+    # Adjust the volume-weighted momentum by dividing it by the standard deviation
+    df['adaptive_momentum'] = df['volume_weighted_momentum'] / df['std_dev']
+    
+    # Identify the sector of the stock
+    # Assume sector_data has a column 'sector_ema' for the specific sector EMA
+    df['sector_ema'] = sector_data['sector_ema']
+    
+    # Adjust the adaptive momentum factor by subtracting the sector EMA
+    df['adjusted_momentum'] = df['adaptive_momentum'] - df['sector_ema']
+    
+    # Calculate the average daily trading volume over the short-term window
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    
+    # Adjust the final factor by multiplying it by the average daily trading volume
+    df['final_factor'] = df['adjusted_momentum'] * df['avg_volume']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('stock_prices.csv', parse_dates=['date'], index_col='date')
+# sector_data = pd.read_csv('sector_ema.csv', parse_dates=['date'], index_col='date')
+# factor_values = heuristics_v2(df, sector_data)
+# print(factor_values)

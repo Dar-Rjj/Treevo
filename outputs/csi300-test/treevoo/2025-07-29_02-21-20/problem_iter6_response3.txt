@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5):
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['High'] - df['Low']
+    
+    # Calculate Typical Price
+    df['Typical_Price'] = (df['High'] + df['Low'] + 2 * df['Close']) / 4
+    
+    # Calculate Volume-Adjusted Typical Price (VATP)
+    df['Volume_Adjusted_Typical_Price'] = df['Typical_Price'] * np.sqrt(df['Volume'])
+    total_volume = df['Volume'].sum()
+    VATP = (df['Volume_Adjusted_Typical_Price'] * df['Volume']).sum() / total_volume
+    
+    # Integrate Price Trend
+    df['VATP_Shifted'] = df['Volume_Adjusted_Typical_Price'].shift(1)
+    df['Price_Trend'] = df['Volume_Adjusted_Typical_Price'] - df['VATP_Shifted']
+    df['Momentum_Factor'] = df['Intraday_Volatility'] + df['Price_Trend']
+    
+    # Combine Intraday Volatility and VATP
+    df['High_VATP_Diff'] = df['High'] - VATP
+    df['VATP_Low_Diff'] = VATP - df['Low']
+    df['Combined_Factor'] = df['High_VATP_Diff'] + df['VATP_Low_Diff']
+    
+    # Apply a weighted moving average to smooth the factor
+    def weighted_moving_average(values, volumes):
+        weights = volumes / volumes.sum()
+        return (values * weights).sum()
+    
+    df['Smoothed_Factor'] = df['Combined_Factor'].rolling(window=n).apply(
+        lambda x: weighted_moving_average(x, df.loc[x.index, 'Volume']), raw=False
+    )
+    
+    return df['Smoothed_Factor']
+```

@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Simple Moving Averages (SMA)
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+
+    # Subtract Longer SMA from Shorter SMA
+    sma_diff_100_200 = sma_100 - sma_200
+    sma_diff_50_100 = sma_50 - sma_100
+
+    # Calculate Daily Price Return
+    daily_return = df['close'].pct_change()
+
+    # Calculate 20-Day Weighted Moving Average of Returns
+    weighted_returns = (daily_return * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+
+    # Adjust for Price Volatility
+    avg_daily_price_range = (df['high'] - df['low']).rolling(window=22).mean()
+    adjusted_weighted_returns = weighted_returns - avg_daily_price_range
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Determine Reversal Signal
+    reversal_signal = np.where(intraday_return > 0, -1, 1)
+
+    # Multiply Subtracted SMA by Reversal Signal
+    sma_diff_100_200_reversed = sma_diff_100_200 * reversal_signal
+    sma_diff_50_100_reversed = sma_diff_50_100 * reversal_signal
+
+    # Compute Average True Range (ATR)
+    tr = pd.DataFrame(index=df.index)
+    tr['h-l'] = df['high'] - df['low']
+    tr['h-pc'] = abs(df['high'] - df['close'].shift(1))
+    tr['l-pc'] = abs(df['low'] - df['close'].shift(1))
+    tr['tr'] = tr.max(axis=1)
+    atr = tr['tr'].rolling(window=14).mean()
+
+    # Multiply ATR by Combined Signal
+    atr_combined_signal = atr * (sma_diff_100_200_reversed + sma_diff_50_100_reversed)
+
+    # Smooth Result with Exponential Moving Average (EMA)
+    ema_atr_combined = atr_combined_signal.ewm(span=20, adjust=False).mean()
+
+    # High-Low Range Momentum with Volume Adjustment
+    high_low_range = df['high'] - df['low']
+    high_low_momentum = high_low_range - high_low_range.shift(1)
+    avg_volume_30 = df['volume'].rolling(window=30).mean()
+    high_low_momentum_adjusted = high_low_momentum / avg_volume_30
+
+    # Final Alpha Factor Combination
+    price_momentum = sma_diff_50_100_reversed + sma_diff_100_200_reversed
+    final_alpha_factor = (price_momentum + ema_atr_combined) * 0.5 + high_low_momentum_adjusted * 0.3 + adjusted_weighted_returns * 0.2
+
+    return final_alpha_factor
+```

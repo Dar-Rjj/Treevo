@@ -1,0 +1,85 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Compute Average Price Momentum over 5 Days
+    df['avg_price_momentum_5d'] = df['price_change'].rolling(window=5).mean()
+    
+    # Calculate Daily Volume Change
+    df['volume_change'] = df['volume'].diff()
+    
+    # Compute Average Volume Change over 10 Days
+    df['avg_volume_change_10d'] = df['volume_change'].rolling(window=10).mean()
+    
+    # Combine Price Momentum and Volume Surge
+    df['combined_momentum'] = df['avg_price_momentum_5d'] * df['avg_volume_change_10d']
+    
+    # Calculate Daily Return
+    df['daily_return'] = df['close'] - df['open']
+    
+    # Compute Moving Sum of Positive Returns
+    df['positive_returns'] = df['daily_return'].apply(lambda x: x if x > 0 else 0)
+    df['moving_sum_positive_returns'] = df['positive_returns'].rolling(window=21).sum()
+    
+    # Volume Adjusted Momentum
+    df['cumulative_volume'] = df['volume'].rolling(window=21).sum()
+    df['volume_adjusted_momentum'] = (df['moving_sum_positive_returns'] * df['cumulative_volume']) / 21
+    
+    # Compute High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'].diff()
+    
+    # Combine High-Low Range and Volume
+    df['high_low_vol_ratio'] = (df['change_high_low_range'] * df['volume']) / df['close']
+    
+    # Adjust by Average Volume
+    n = 30
+    df['average_volume_n'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['average_volume_n']
+    
+    # Adjust by Average Amount
+    m = 30
+    df['average_amount_m'] = df['amount'].rolling(window=m).mean()
+    df['amount_ratio'] = df['amount'] / df['average_amount_m']
+    
+    # Introduce Weighting Factors
+    w1, w2, w3, w4, w5 = 0.2, 0.3, 0.2, 0.1, 0.2
+    
+    # Combine Weighted Components
+    df['weighted_high_low_vol'] = w1 * df['high_low_vol_ratio']
+    df['weighted_price_momentum'] = w2 * df['avg_price_momentum_5d']
+    df['weighted_volume_surge'] = w3 * df['avg_volume_change_10d']
+    df['weighted_volume_ratio'] = w4 * df['volume_ratio']
+    df['weighted_amount_ratio'] = w5 * df['amount_ratio']
+    
+    # Introduce New Component: Price-Volume Divergence
+    df['volume_change_percentage'] = df['volume'].pct_change()
+    df['price_volume_divergence'] = df['daily_return'] - df['volume_change_percentage']
+    
+    # Combine Components
+    df['combined_factors'] = (df['combined_momentum'] + 
+                              df['volume_adjusted_momentum'] + 
+                              df['weighted_high_low_vol'] + 
+                              df['weighted_price_momentum'] + 
+                              df['weighted_volume_surge'] + 
+                              df['weighted_volume_ratio'] + 
+                              df['weighted_amount_ratio'] + 
+                              df['price_volume_divergence'])
+    
+    # Calculate 21-Day Price Volatility
+    df['volatility_21d'] = df['close'].rolling(window=21).std()
+    
+    # Adjust by Price Volatility
+    volatility_threshold = 0.05
+    df['volatility_adjustment'] = df['volatility_21d'].apply(lambda x: 1.5 if x > volatility_threshold else 1.0)
+    
+    # Final Combined Alpha Factor
+    df['alpha_factor'] = df['combined_factors'] * df['volatility_adjustment']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Impact Score
+    rolling_volume_sum = df['volume'].rolling(window=10).sum()
+    avg_high_10d = df['high'].rolling(window=10).mean()
+    avg_low_10d = df['low'].rolling(window=10).mean()
+    price_range_10d = avg_high_10d - avg_low_10d
+    df['volume_impact_score'] = price_range_10d / rolling_volume_sum
+    
+    # Generate Intermediate Factor 1
+    df['intermediate_factor_1'] = df['intraday_return'] * df['volume_impact_score']
+    
+    # Calculate Adjusted Price Momentum
+    recent_close = df['close']
+    close_10d_ago = df['close'].shift(10)
+    price_momentum = recent_close - close_10d_ago
+    adjusted_price_momentum = price_momentum / rolling_volume_sum
+    df['adjusted_price_momentum'] = adjusted_price_momentum
+    
+    # Confirm with Volume Trend
+    avg_volume_5d = df['volume'].rolling(window=5).mean()
+    volume_ratio = df['volume'] / avg_volume_5d
+    
+    # Combine Price and Intraday Momentum if Volume Ratio > 1.2
+    combined_momentum = df['intraday_return'] * adjusted_price_momentum
+    aggregated_momentum = combined_momentum.rolling(window=10).sum() / rolling_volume_sum
+    
+    # Final Factor
+    df['final_factor'] = 0
+    df.loc[volume_ratio > 1.2, 'final_factor'] = df['intermediate_factor_1'] * aggregated_momentum
+    
+    return df['final_factor']
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the 7-day and 21-day simple moving averages of close prices
+    df['SMA_7'] = df['close'].rolling(window=7).mean()
+    df['SMA_21'] = df['close'].rolling(window=21).mean()
+    
+    # Compare the current close price with the 7-day SMA
+    df['trend_signal'] = 0
+    df.loc[df['close'] > df['SMA_7'], 'trend_signal'] = 1  # Bullish
+    df.loc[df['close'] < df['SMA_7'], 'trend_signal'] = -1  # Bearish
+    
+    # Determine if the 7-day SMA is rising or falling compared to the 21-day SMA
+    df['SMA_7_trend'] = 0
+    df.loc[df['SMA_7'] > df['SMA_21'], 'SMA_7_trend'] = 1  # Rising
+    df.loc[df['SMA_7'] < df['SMA_21'], 'SMA_7_trend'] = -1  # Falling
+    
+    # Calculate the percentage change in volume and close price from the previous day
+    df['volume_change_pct'] = df['volume'].pct_change()
+    df['close_change_pct'] = df['close'].pct_change()
+    
+    # Determine if high volume accompanies significant price changes
+    df['volume_price_signal'] = 0
+    high_volume_threshold = df['volume_change_pct'].quantile(0.75)
+    large_price_change_threshold = df['close_change_pct'].quantile(0.75)
+    df.loc[(df['volume_change_pct'] > high_volume_threshold) & (df['close_change_pct'] > large_price_change_threshold), 'volume_price_signal'] = 1  # Strong buying pressure
+    df.loc[(df['volume_change_pct'] > high_volume_threshold) & (df['close_change_pct'] < -large_price_change_threshold), 'volume_price_signal'] = -1  # Strong selling pressure
+    
+    # Calculate the difference between the current day's open price and the previous day's close price
+    df['price_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Categorize the gap as up, down, or no gap
+    df['gap_signal'] = 0
+    significant_gap_threshold = df['price_gap'].abs().quantile(0.75)
+    df.loc[df['price_gap'] > significant_gap_threshold, 'gap_signal'] = 1  # Up gap
+    df.loc[df['price_gap'] < -significant_gap_threshold, 'gap_signal'] = -1  # Down gap
+    
+    # Combine all signals into a single alpha factor
+    df['alpha_factor'] = df['trend_signal'] + df['SMA_7_trend'] + df['volume_price_signal'] + df['gap_signal']
+    
+    return df['alpha_factor']
+```

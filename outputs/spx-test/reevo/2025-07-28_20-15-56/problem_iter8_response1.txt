@@ -1,0 +1,45 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day return as a momentum indicator
+    df['momentum_5d'] = df['close'].pct_change(periods=5)
+    
+    # Calculate the 20-day rolling standard deviation of log returns as a volatility factor
+    df['log_returns'] = np.log(df['close']).diff()
+    df['volatility_20d'] = df['log_returns'].rolling(window=20).std()
+    
+    # Smoothed volume using Exponential Moving Average (EMA) with a span of 10
+    df['smoothed_volume_ema_10'] = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the relative strength index (RSI) as a trend measure
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-7)
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+    
+    # Integrate market sentiment using the ratio of high and low prices
+    df['market_sentiment'] = df['high'] / df['low']
+    
+    # Calculate the adaptive momentum with a 10-day EMA
+    df['adaptive_momentum_10d'] = df['close'].ewm(span=10, adjust=False).mean().pct_change(periods=5)
+    
+    # Calculate the adaptive volatility with a 10-day EMA
+    df['log_returns_ema_10'] = df['log_returns'].ewm(span=10, adjust=False).mean()
+    df['adaptive_volatility_10d'] = df['log_returns_ema_10'].rolling(window=20).std()
+    
+    # Calculate the inverse of adaptive volatility
+    df['inv_adaptive_volatility'] = 1 / (df['adaptive_volatility_10d'] + 1e-7)
+    
+    # Calculate the liquidity measure using the price-to-volume ratio
+    df['price_to_volume_ratio'] = df['close'] / df['volume']
+    
+    # Calculate the dynamic weighting factor for RSI
+    df['rsi_weight'] = df['rsi_14'] / 100  # Normalize RSI to [0, 1]
+    
+    # Calculate the alpha factor as the product of adaptive momentum, the inverse of adaptive volatility,
+    # weighted by the smoothed volume, and adjusted by the RSI, market sentiment, and liquidity measure
+    alpha_factor = (df['adaptive_momentum_10d'] * df['inv_adaptive_volatility'] * df['smoothed_volume_ema_10'] *
+                    df['rsi_weight'] * df['market_sentiment'] * df['price_to_volume_ratio'])
+    
+    return alpha_factor
+```

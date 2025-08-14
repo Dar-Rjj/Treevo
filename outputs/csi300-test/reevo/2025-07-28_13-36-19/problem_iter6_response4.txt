@@ -1,0 +1,47 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    import numpy as np
+    import pandas as pd
+
+    # Calculate the log of the volume
+    df['log_volume'] = np.log(df['volume'])
+
+    # Calculate the 10-day and 30-day moving averages of the closing price
+    df['ma_close_10'] = df['close'].rolling(window=10).mean()
+    df['ma_close_30'] = df['close'].rolling(window=30).mean()
+
+    # Calculate the relative strength, which is the ratio of the closing price to the 10-day moving average of the closing price
+    relative_strength = df['close'] / df['ma_close_10']
+
+    # Calculate the long-term momentum, which is the ratio of the 10-day moving average to the 30-day moving average
+    long_term_momentum = df['ma_close_10'] / df['ma_close_30']
+
+    # Calculate the daily return
+    daily_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate the volatility, which is the standard deviation of the last 10 days' daily returns
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    volatility = df['daily_return'].rolling(window=10).std()
+
+    # Calculate the accumulation/distribution line
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    ad_line = money_flow_volume.cumsum()
+
+    # Calculate the Williams %R
+    high_14 = df['high'].rolling(window=14).max()
+    low_14 = df['low'].rolling(window=14).min()
+    williams_r = (high_14 - df['close']) / (high_14 - low_14)
+
+    # Calculate the Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = raw_money_flow.where(typical_price < typical_price.shift(1), 0)
+    mfi = 100 - (100 / (1 + (positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum())))
+
+    # Combine the factors: relative strength, long-term momentum, daily return, log of volume, AD line, Williams %R, and MFI, adjusted by volatility
+    alpha_factor = (relative_strength * long_term_momentum * daily_return * df['log_volume'] * ad_line * (1 - williams_r) * mfi) / (volatility + 1e-7)
+
+    return alpha_factor
+```

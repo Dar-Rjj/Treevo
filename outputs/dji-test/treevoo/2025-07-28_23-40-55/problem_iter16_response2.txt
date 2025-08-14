@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close Price Difference
+    df['price_velocity'] = df['close'].diff()
+    
+    # Calculate Short-Term EMA (12-day span)
+    df['short_ema'] = df['close'].ewm(span=12, adjust=False).mean()
+    
+    # Calculate Long-Term EMA (26-day span)
+    df['long_ema'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate EMA Difference
+    df['ema_diff'] = df['short_ema'] - df['long_ema']
+    
+    # Calculate Short-Term Momentum
+    df['short_momentum'] = df['close'].shift(1) - df['close'].shift(7)
+    
+    # Calculate Long-Term Momentum
+    df['long_momentum'] = df['close'].shift(1) - df['close'].shift(30)
+    
+    # Calculate Daily Volume Change
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Adjust Momentum by Volume Shock
+    df['adjusted_momentum'] = (df['short_momentum'] - df['long_momentum']) * df['volume_change']
+    
+    # Calculate Intraday High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    df['open_close_momentum'] = df['close'] - df['open']
+    
+    # Integrate Intraday and Open-to-Close Momentum
+    df['integrated_intraday_momentum'] = df['high_low_range'] + df['open_close_momentum']
+    
+    # Synthesize Final Alpha Factor
+    df['alpha_factor'] = df['price_velocity'] + df['adjusted_momentum'] + df['ema_diff'] + df['integrated_intraday_momentum']
+    
+    # Apply Volume Filter
+    df['volume_rolling_mean'] = df['volume'].rolling(window=10).mean()
+    high_volume_threshold = df['volume_rolling_mean'].quantile(0.8)
+    df['high_volume_flag'] = df['volume'] > high_volume_threshold
+    df['final_alpha_factor'] = df['alpha_factor'] * df['high_volume_flag']
+    
+    # Incorporate Price and Volume Correlation
+    df['price_vol_corr'] = df['close'].rolling(window=10).corr(df['volume'])
+    df['final_alpha_factor'] = 0.5 * df['final_alpha_factor'] + 0.5 * df['price_vol_corr']
+    
+    return df['final_alpha_factor']
+```

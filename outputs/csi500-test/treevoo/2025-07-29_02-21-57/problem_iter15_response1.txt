@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14, threshold=1000):
+    """
+    Generate a novel and interpretable alpha factor.
+    
+    :param df: DataFrame with (date) as index and columns (open, high, low, close, amount, volume)
+    :param n: lookback period for moving calculations
+    :param threshold: threshold for large transaction value
+    :return: Series with the alpha factor values
+    """
+    
+    # Daily Price Features
+    df['open_to_close_change'] = df['close'] - df['open']
+    df['high_low_spread'] = df['high'] - df['low']
+    df['daily_range_percentage'] = (df['high'] - df['low']) / df['open'] * 100
+    
+    # Trend Indicators and Momentum Analysis
+    df['short_ema'] = df['close'].ewm(span=n//2, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=n, adjust=False).mean()
+    df['ema_crossover'] = df['short_ema'] - df['long_ema']
+    
+    gain = df['close'].diff()
+    gain_gain = gain.clip(lower=0)
+    loss_loss = -gain.clip(upper=0)
+    avg_gain = gain_gain.rolling(window=n).mean()
+    avg_loss = loss_loss.rolling(window=n).mean()
+    df['rsi'] = 100 - (100 / (1 + (avg_gain / avg_loss)))
+    
+    df['roc'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n) * 100
+    
+    # Volatility and Range Metrics
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x[0] - x[1], abs(x[0] - x[2].shift(1)), abs(x[1] - x[2].shift(1))), axis=1
+    )
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Volume-Price Dynamics
+    df['obv'] = (df['volume'] * ((df['close'] > df['close'].shift(1)).astype(int) - (df['close'] < df['close'].shift(1)).astype(int))).cumsum()
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(n)
+    
+    # Amount-Related Alpha Factors
+    df['average_transaction_value'] = df['amount'] / df['volume']
+    df['large_transaction_indicator'] = (df['average_transaction_value'] > threshold).astype(int)
+    df['total_amount_flow'] = df['amount'].rolling(window=n).sum()
+    df['cumulative_volume_adjusted_by_amount'] = (df['volume'] * (df['amount'] / df['volume'])).rolling(window=n).sum()
+    
+    # Combine multiple factors into one interpretable alpha factor
+    alpha_factor = (
+        df['open_to_close_change'] 
+        + df['high_low_spread'] 
+        + df['daily_range_percentage'] 
+        + df['ema_crossover'] 
+        + df['rsi'] 
+        + df['roc'] 
+        + df['atr'] 
+        + df['obv'] 
+        + df['volume_change_ratio'] 
+        + df['average_transaction_value'] 
+        + df['large_transaction_indicator'] 
+        + df['total_amount_flow'] 
+        + df['cumulative_volume_adjusted_by_amount']
+    )
+    
+    return alpha_factor
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the difference between the closing price and the opening price
+    df['daily_performance'] = df['close'] - df['open']
+    
+    # Count the number of days the daily performance was positive in the last 5 days
+    df['positive_perf_5d'] = df['daily_performance'].rolling(window=5).apply(lambda x: (x > 0).sum())
+    
+    # Calculate the average daily performance over the past 20 trading days
+    df['avg_daily_perf_20d'] = df['daily_performance'].rolling(window=20).mean()
+    
+    # Evaluate if the current day's performance is above or below this 20-day average
+    df['perf_above_avg_20d'] = (df['daily_performance'] > df['avg_daily_perf_20d']).astype(int)
+    
+    # Compute the ratio of the closing price to the highest price of the day
+    df['close_to_high_ratio'] = df['close'] / df['high']
+    
+    # Measure the consistency of this ratio over the past 10 days
+    df['consistency_close_to_high_10d'] = df['close_to_high_ratio'].rolling(window=10).std()
+    
+    # Compare today's volume with the average volume over the past 30 days
+    df['volume_ratio_30d'] = df['volume'] / df['volume'].rolling(window=30).mean()
+    
+    # Calculate the correlation between the daily amount and the closing price over the last 60 days
+    df['corr_amount_close_60d'] = df[['amount', 'close']].rolling(window=60).corr().unstack().iloc[::2, 1]
+    
+    # Mark the days when the low price was lower than the lowest price of the past 9 days
+    df['low_breakout_10d'] = (df['low'] < df['low'].rolling(window=10).min()).astype(int)
+    
+    # Combine all the factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['positive_perf_5d'] * 0.2 +
+        df['perf_above_avg_20d'] * 0.15 +
+        (1 - df['consistency_close_to_high_10d']) * 0.15 +
+        df['volume_ratio_30d'] * 0.15 +
+        df['corr_amount_close_60d'] * 0.15 +
+        df['low_breakout_10d'] * 0.2
+    )
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,44 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['open'].shift(-1) - df['close']
+    
+    # Volume Weighting
+    df['Volume_Weighted_Return'] = df['volume'] * df['Close_to_Open_Return']
+    
+    # Adaptive Window Calculation
+    # Determine Volatility
+    df['True_Range'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    fixed_window = 20
+    df['Rolling_Volatility'] = df['True_Range'].rolling(window=fixed_window).std()
+    mean_volatility = df['Rolling_Volatility'].mean()
+    
+    def adjust_window(std, mean_volatility):
+        if std > mean_volatility:
+            return int(fixed_window * 0.8)  # Decrease window size
+        else:
+            return int(fixed_window * 1.2)  # Increase window size
+    
+    # Apply the adaptive window adjustment
+    df['Adaptive_Window'] = df['Rolling_Volatility'].apply(lambda x: adjust_window(x, mean_volatility))
+    
+    # Rolling Statistics
+    rolling_mean = df['Volume_Weighted_Return'].rolling(window=df['Adaptive_Window']).mean()
+    rolling_std = df['Volume_Weighted_Return'].rolling(window=df['Adaptive_Window']).std()
+    
+    # The final factor is the standardized rolling mean
+    df['Alpha_Factor'] = (rolling_mean - rolling_mean.mean()) / rolling_std
+    
+    # Drop rows with NaN values created by the rolling calculations
+    df.dropna(inplace=True)
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

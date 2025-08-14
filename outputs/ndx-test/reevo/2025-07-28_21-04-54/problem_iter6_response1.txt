@@ -1,0 +1,68 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between current close and previous close, indicating the momentum
+    momentum = df['close'].diff()
+    
+    # Calculate the percentage change in volume, indicating changes in liquidity or interest
+    vol_change = df['volume'].pct_change().fillna(0)
+    
+    # Calculate a weighted difference of high and low prices, giving more importance to the high price,
+    # this could indicate the strength of positive price movement
+    weighted_price_diff = (1.5 * df['high'] - 0.5 * df['low']) / (df['close'] + 1e-7)
+    
+    # Calculate the 5-day moving average of the close price
+    ma_5 = df['close'].rolling(window=5).mean()
+    
+    # Calculate the 5-day moving average of the volume
+    vol_ma_5 = df['volume'].rolling(window=5).mean()
+    
+    # Calculate the 14-day RSI (Relative Strength Index) to measure the speed and change of price movements
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate the 20-day Bollinger Bands to measure volatility
+    ma_20 = df['close'].rolling(window=20).mean()
+    std_20 = df['close'].rolling(window=20).std()
+    upper_band = ma_20 + 2 * std_20
+    lower_band = ma_20 - 2 * std_20
+    bollinger_width = (upper_band - lower_band) / ma_20
+    
+    # Calculate the 10-day and 30-day standard deviation of daily returns for short and medium-term volatility
+    daily_return = df['close'].pct_change().fillna(0)
+    short_term_volatility = daily_return.rolling(window=10).std()
+    medium_term_volatility = daily_return.rolling(window=30).std()
+    
+    # Calculate the 50-day moving average of the close price
+    ma_50 = df['close'].rolling(window=50).mean()
+    
+    # Calculate the 50-day moving average of the volume
+    vol_ma_50 = df['volume'].rolling(window=50).mean()
+    
+    # Calculate the 14-day ADX (Average Directional Index) to measure the strength of the trend
+    tr = pd.Series(np.maximum(np.maximum(df['high'] - df['low'], np.abs(df['high'] - df['close'].shift())),
+                              np.abs(df['low'] - df['close'].shift())), name='tr')
+    atr = tr.rolling(window=14).mean()
+    plus_di = (df['high'] - df['high'].shift()).fillna(0)
+    minus_di = (df['low'].shift() - df['low']).fillna(0)
+    plus_dm = plus_di.apply(lambda x: x if x > 0 else 0)
+    minus_dm = minus_di.apply(lambda x: x if x > 0 else 0)
+    plus_smooth = plus_dm.ewm(span=14, adjust=False).mean()
+    minus_smooth = minus_dm.ewm(span=14, adjust=False).mean()
+    adx = 100 * (plus_smooth - minus_smooth) / (plus_smooth + minus_smooth)
+    
+    # Combine the indicators into an alpha factor
+    # Weighing components based on their predictive power
+    alpha_factor = (momentum * 0.2 + 
+                    2 * vol_change * weighted_price_diff * 0.15 + 
+                    (ma_5 - df['close']) / (df['close'] + 1e-7) * 0.1 + 
+                    (vol_ma_5 - df['volume']) / (df['volume'] + 1e-7) * 0.05 + 
+                    rsi * 0.1 + 
+                    bollinger_width * 0.05 + 
+                    (ma_50 - df['close']) / (df['close'] + 1e-7) * 0.05 +
+                    (vol_ma_50 - df['volume']) / (df['volume'] + 1e-7) * 0.05 +
+                    adx * 0.15 -
+                    short_term_volatility * 0.05 - 
+                    medium_term_volatility * 

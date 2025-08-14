@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=10, M=5):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices) - np.log(close_prices.shift(1))
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=N).sum()
+    
+    # Apply Dynamic Thresholds
+    upper_threshold = momentum.quantile(0.9)
+    lower_threshold = momentum.quantile(0.1)
+    momentum = np.clip(momentum, lower_threshold, upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    volume_relative = volumes / volumes.mean()
+    volume_adjusted_momentum = momentum * volume_relative
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Final Factor Calculation
+    weighted_momentum = volume_adjusted_momentum * 0.5
+    weighted_volatility = (std_abs_price_changes + ema_abs_price_changes + iqr_abs_price_changes) / 3 * 0.5
+    alpha_factor = weighted_momentum + weighted_volatility
+    
+    return alpha_factor
+
+# Example usage:
+# df = pd.read_csv('your_market_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

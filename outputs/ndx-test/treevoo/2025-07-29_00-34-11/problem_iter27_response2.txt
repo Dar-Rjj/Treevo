@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Difference
+    df['price_diff'] = df['high'] - df['low']
+
+    # Determine Gain and Loss
+    df['gain'] = (df['close'].diff() > 0) * df['close'].diff()
+    df['loss'] = (df['close'].diff() < 0) * df['close'].diff().abs()
+
+    # Aggregate Gains and Losses over a period (e.g., 14 days)
+    window = 14
+    df['sum_gain'] = df['gain'].rolling(window=window).sum()
+    df['sum_loss'] = df['loss'].rolling(window=window).sum()
+
+    # Calculate Relative Strength
+    df['rs'] = df['sum_gain'] / df['sum_loss']
+
+    # Convert to ARSI
+    df['arsi'] = 100 - (100 / (1 + df['rs']))
+    df['arsi'] = df['arsi'] * df['volume'].rolling(window=window).mean()
+
+    # Calculate Intraday Price Movement Ratio
+    df['high_low_ratio'] = df['high'] / df['low']
+    df['open_close_ratio'] = df['close'] / df['open']
+    df['weighted_high_low'] = df['high_low_ratio'] * df['volume']
+    df['weighted_open_close'] = df['open_close_ratio'] * df['volume']
+    df['intraday_movement'] = (df['weighted_high_low'] + df['weighted_open_close']) / (df['volume'] + df['volume'])
+
+    # Measure Price-Volatility Alignment
+    df['intraday_volatility'] = df['high'] - df['low']
+    df['volatility_weighted'] = df['intraday_volatility'] * df['volume']
+    df['alignment_sentiment'] = df['intraday_movement'] / df['volatility_weighted']
+
+    # Calculate Short-Term Return
+    df['short_term_return'] = df['close'].pct_change(5)
+
+    # Calculate Long-Term Return
+    df['long_term_return'] = df['close'].pct_change(20)
+
+    # Calculate Volume-Weighted Returns
+    df['vol_weighted_short'] = df['volume'] * df['short_term_return']
+    df['vol_weighted_long'] = df['volume'] * df['long_term_return']
+
+    # Adjust for Volatility
+    df['adjusted_short'] = df['vol_weighted_short'] / df['intraday_volatility']
+    df['adjusted_long'] = df['vol_weighted_long'] / df['intraday_volatility']
+    df['vol_adjusted'] = df['adjusted_short'] - df['adjusted_long']
+
+    # Adjust based on Intraday Sentiment
+    df['sentiment_adjusted'] = df['vol_adjusted'] * df['alignment_sentiment']
+
+    # Incorporate Momentum
+    df['momentum'] = df['close'] - df['close'].shift(1)
+    df['momentum_adjusted'] = df['sentiment_adjusted'] * df['momentum']
+
+    # Final Volume Adjustment
+    df['final_factor'] = df['momentum_adjusted'] / df['volume']
+
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+
+    # Compute VWMA of High-Low Spread
+    df['vwm_high_low'] = (df['high_low_spread'] * df['volume']).ewm(span=window).mean()
+
+    # Incorporate Close-to-Close Return
+    df['close_to_close'] = df['close'] - df['close'].shift(1)
+    df['vwm_adjusted'] = df['vwm_high_low'] * df['close_to_close']
+
+    # Adjust with Volume Change
+    df['volume_change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['final_factor'] = df['vwm_adjusted'] * df['volume_change']
+
+    return df['final_factor']
+```

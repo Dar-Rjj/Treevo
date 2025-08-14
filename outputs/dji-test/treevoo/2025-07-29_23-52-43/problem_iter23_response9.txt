@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Measure Intraday Volatility
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_volatility'] = df['intraday_range'] / (df['close'] - df['open'])
+    
+    # Analyze Closing Price Momentum
+    df['short_term_momentum'] = (df['close'].diff() / df['close'].shift(1)).fillna(0)
+    df['long_term_momentum'] = (df['close'] - df['close'].rolling(window=5).mean().shift(1)) / df['close'].rolling(window=5).mean().shift(1)
+    
+    # Examine Trading Volume Changes
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    spike_threshold = df['volume_change_ratio'].rolling(window=21).quantile(0.75) * 1.5
+    df['volume_spike'] = (df['volume_change_ratio'] > spike_threshold).astype(int)
+    
+    # Evaluate High and Low Prices
+    df['high_low_ratio'] = df['high'] / df['low']
+    df['price_range'] = df['high'] - df['low']
+    df['trend_strength'] = df['price_range'].rolling(window=21).max() - df['price_range'].rolling(window=21).min()
+    df['ma_high_low_diff'] = df['price_range'].rolling(window=10).mean()
+    
+    # Analyze Amount Traded
+    df['amount_change_ratio'] = df['amount'] / df['amount'].shift(1)
+    
+    # Intermediate Composite Factor
+    df['intermediate_composite'] = (df['volume_change_ratio'] * 
+                                    (df['close'] - df['close'].rolling(window=5).mean().shift(1)) / 
+                                    df['intraday_range'])
+    
+    # Volume Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = (df['close'] - df['open']) * (df['volume'] / df['volume'].shift(1))
+    
+    # Extended Composite Factor
+    df['extended_composite'] = (df['intermediate_composite'] + 
+                                df['ma_high_low_diff'] + 
+                                df['trend_strength'] + 
+                                df['intraday_volatility'] + 
+                                df['volume_weighted_intraday_return'])
+    
+    # Final Composite Factor
+    df['final_composite'] = (df['extended_composite'] * df['volume_spike'] * df['volume_change_ratio'])
+    
+    # Intraday and Breakout Intensity Composite
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    df['close_to_previous_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['high_low_breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['high_low_breakout_intensity'] = df['high_low_breakout_intensity'].apply(lambda x: max(x, 0))
+    df['combined_metrics'] = (df['intraday_return'] + 
+                              df['close_to_previous_close_return'] + 
+                              df['high_low_breakout_intensity'])
+    df['adjusted_combined_metrics'] = df['combined_metrics'] * df['volume'] / df['price_range'].rolling(window=21).std()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['final_composite'] + df['adjusted_combined_metrics']).fillna(0)
+    
+    return df['alpha_factor']
+```

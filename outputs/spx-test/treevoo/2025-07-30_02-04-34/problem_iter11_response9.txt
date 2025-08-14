@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    """
+    Generate a novel and interpretable alpha factor based on the given DataFrame.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with columns (open, high, low, close, volume) and index (date).
+    
+    Returns:
+    pd.Series: A Series with the calculated alpha factor values indexed by (date).
+    """
+    # Calculate the daily return
+    df['return'] = df['close'].pct_change()
+    
+    # Calculate the 5-day moving average of the daily returns
+    df['5_day_return_ma'] = df['return'].rolling(window=5).mean()
+    
+    # Calculate the 20-day standard deviation of the daily returns
+    df['20_day_return_std'] = df['return'].rolling(window=20).std()
+    
+    # Calculate the 10-day exponentially weighted moving average of the daily returns
+    df['10_day_ewma'] = df['return'].ewm(span=10, adjust=False).mean()
+    
+    # Calculate the 50-day moving average of the closing prices
+    df['50_day_close_ma'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate the 200-day moving average of the closing prices
+    df['200_day_close_ma'] = df['close'].rolling(window=200).mean()
+    
+    # Calculate the distance between the 50-day and 200-day moving averages
+    df['ma_distance'] = df['50_day_close_ma'] - df['200_day_close_ma']
+    
+    # Calculate the relative strength indicator (RSI)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Combine all the factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['5_day_return_ma'] * 0.3 +
+        (df['ma_distance'] / df['20_day_return_std']) * 0.2 +
+        df['10_day_ewma'] * 0.1 +
+        (50 - df['rsi']) * 0.4
+    )
+    
+    # Return the alpha factor as a Series
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'open': [100, 102, 101, 99, 103],
+#     'high': [105, 106, 104, 102, 105],
+#     'low': [98, 100, 99, 97, 100],
+#     'close': [104, 103, 102, 101, 104],
+#     'volume': [1000, 1500, 1200, 1300, 1400]
+# }, index=pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04', '2023-01-05']))
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

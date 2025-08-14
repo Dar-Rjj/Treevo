@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Evaluate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Intraday Return with Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Compute Enhanced High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    
+    # Evaluate Volume Trend
+    volume_ma_10 = df['volume'].rolling(window=10).mean()
+    volume_trend = np.where(df['volume'] > volume_ma_10, 1, -1)
+    
+    # Integrate Volume Trend with Adjusted Range
+    integrated_adjusted_high_low_range = adjusted_high_low_range * volume_trend
+    
+    # Calculate Momentum Signal
+    momentum_signal = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Combine Adjusted Range, Momentum, and Volume Trend
+    combined_factor_1 = integrated_adjusted_high_low_range - momentum_signal
+    
+    # Identify Volume Shock
+    volume_shock = np.where(df['volume'] > 1.5 * df['volume'].rolling(window=30).mean(), 1, 0)
+    
+    # Integrate Momentum and Volume Shock
+    integrated_momentum_volume_shock = combined_factor_1 * volume_shock
+    
+    # Calculate 20-day Price Momentum
+    price_momentum_20 = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Combine High-Low Range and Close Price Momentum
+    close_price_momentum_30 = (df['close'] - df['close'].shift(30)) / df['close'].shift(30)
+    combined_factor_2 = (high_low_range + close_price_momentum_30) / 2
+    
+    # Adjust Intraday Return with Intraday Volatility
+    adjusted_intraday_return_volatility = adjusted_intraday_return
+    
+    # Combine Intraday and Historical Factors
+    volume_displacement = df['volume'] - df['volume'].shift(1)
+    combined_intraday_historical_factors = adjusted_intraday_return_volatility * volume_displacement
+    
+    # Final Factor Combination
+    final_factor = (combined_intraday_historical_factors * integrated_momentum_volume_shock
+                    + price_momentum_20
+                    + (df['volume'] - df['volume'].shift(10))
+                    + df[['high', 'low', 'close']].max(axis=1).rolling(window=20).mean())
+    
+    return final_factor
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

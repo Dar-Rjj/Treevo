@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['Daily_Price_Change'] = df['close'].diff()
+    
+    # Calculate Raw Momentum over past 5 days
+    n = 5
+    df['Raw_Momentum'] = df['Daily_Price_Change'].rolling(window=n).sum() / n
+    
+    # Identify Volume Spikes
+    m = 20
+    df['Volume_Moving_Avg'] = df['volume'].rolling(window=m).mean()
+    df['Volume_Spike'] = (df['volume'] > df['Volume_Moving_Avg'] * 1.75).astype(int)
+    
+    # Adjust Momentum by Volume Spike
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * (1 - 0.5 * df['Volume_Spike'])
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-Open Spread
+    df['Close_Open_Spread'] = df['close'] - df['open']
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['open']
+    
+    # Smooth Intraday Return with EMA
+    span = 5
+    df['Smoothed_Intraday_Return'] = df['Intraday_Return'].ewm(span=span, adjust=False).mean()
+    df['Intraday_Return_Diff'] = df['Intraday_Return'] - df['Smoothed_Intraday_Return'].shift(1)
+    
+    # Incorporate Volume Intensity
+    df['Average_Volume_5D'] = df['volume'].rolling(window=5).mean()
+    df['Inverse_Average_Volume'] = 1 / df['Average_Volume_5D']
+    df['Intraday_Momentum_Diff'] = df['Intraday_Return_Diff'] * df['Inverse_Average_Volume']
+    
+    # Combine Intraday Factors
+    df['Combined_Intraday_Factor'] = df['Intraday_High_Low_Spread'] + df['Close_Open_Spread']
+    
+    # Compute Smoothed Price Momentum
+    df['Smoothed_Price_Momentum'] = df['Daily_Price_Change'].rolling(window=5).sum() / 5
+    
+    # Calculate Weighted Price Movement
+    df['Weighted_Price_Movement'] = (df['close'] - df['open']) * df['volume']
+    df['Average_Volume'] = df['volume'].rolling(window=5).mean()
+    df['Weighted_Price_Movement_Normalized'] = df['Weighted_Price_Movement'] / df['Average_Volume']
+    
+    # Incorporate Close Price Trend
+    df['Close_Price_Change'] = df['close'].diff()
+    df['Smoothed_Close_Price_Change'] = df['Close_Price_Change'].ewm(span=5, adjust=False).mean()
+    df['Close_Price_Change_Diff'] = df['Close_Price_Change'] - df['Smoothed_Close_Price_Change'].shift(1)
+    
+    # Introduce Reversal Indicator
+    df['Long_Term_Momentum'] = df['Daily_Price_Change'].rolling(window=20).sum() / 20
+    df['Short_Term_Momentum'] = df['Daily_Price_Change'].rolling(window=5).sum() / 5
+    df['Reversal_Indicator'] = df['Short_Term_Momentum'] - df['Long_Term_Momentum']
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (
+        df['Adjusted_Momentum'] * df['Combined_Intraday_Factor'] * 
+        df['Weighted_Price_Movement_Normalized'] + 
+        df['Close_Price_Change_Diff'] + 
+        df['Reversal_Indicator']
+    )
+    
+    return df['Alpha_Factor'].dropna()
+```

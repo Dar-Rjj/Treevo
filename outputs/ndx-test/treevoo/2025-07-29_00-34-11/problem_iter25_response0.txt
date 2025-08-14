@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Logarithmic Return
+    short_term_log_return = df['close'].apply(lambda x: (x / df['close'].shift(5)).apply(lambda y: y if y > 0 else 1)).apply(lambda z: np.log(z))
+    
+    # Calculate Long-Term Logarithmic Return
+    long_term_log_return = df['close'].apply(lambda x: (x / df['close'].shift(20)).apply(lambda y: y if y > 0 else 1)).apply(lambda z: np.log(z))
+
+    # Volume-Weighted Intraday Ratios
+    high_low_ratio = df['high'] / df['low']
+    open_close_ratio = df['open'] / df['close']
+    avg_ratios = (high_low_ratio + open_close_ratio) / 2
+    volume_weighted_ratios = avg_ratios * df['volume']
+
+    # Adjust for Volatility with Intraday Sentiment
+    intraday_volatility = df['high'] - df['low']
+    intraday_movement_ratio = (df['close'] - df['open']) / (df['high'] - df['low'])
+    sentiment_adjusted_short_term_return = short_term_log_return / intraday_volatility - long_term_log_return
+
+    # Combine Intraday Volatility, Close-to-Close Return, and Momentum
+    close_to_close_return = (df['close'] / df['close'].shift(1)) - 1
+    intraday_momentum = (df['close'] / df['open']) - 1
+    combined_volatility_return_momentum = (df['high'] - df['low']) * close_to_close_return + intraday_momentum
+
+    # Aggregate Volume Changes
+    daily_volume_change = df['volume'] - df['volume'].shift(1)
+    aggregated_volume_changes = daily_volume_change.rolling(window=5).sum()
+
+    # Final Adjustment
+    final_factor = (sentiment_adjusted_short_term_return 
+                    + combined_volatility_return_momentum 
+                    * aggregated_volume_changes 
+                    + volume_weighted_ratios)
+
+    return final_factor
+```

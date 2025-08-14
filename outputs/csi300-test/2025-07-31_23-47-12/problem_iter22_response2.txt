@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=60, M=20, K=10, L=30):
+    # Calculate Log Returns
+    df['log_return'] = np.log(df['close']).diff()
+    
+    # Compute Momentum
+    df['cum_log_return'] = df['log_return'].rolling(window=N).sum()
+    rolling_mean = df['log_return'].rolling(window=N).mean()
+    rolling_std = df['log_return'].rolling(window=N).std()
+    upper_threshold = rolling_mean + 2 * rolling_std
+    lower_threshold = rolling_mean - 2 * rolling_std
+    df['clipped_momentum'] = df['cum_log_return'].clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volume_mean = df['volume'].rolling(window=N).mean()
+    df['vol_adj_momentum'] = df['clipped_momentum'] * (df['volume'] / volume_mean)
+    
+    # Determine Absolute Price Changes
+    df['abs_price_change'] = df['close'].diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    df['std_abs_price_change'] = df['abs_price_change'].rolling(window=M).std()
+    df['ema_abs_price_change'] = df['abs_price_change'].ewm(span=K, min_periods=K).mean()
+    df['iqr_abs_price_change'] = df['abs_price_change'].rolling(window=L).quantile(0.75) - df['abs_price_change'].rolling(window=L).quantile(0.25)
+    
+    # Final Factor Calculation
+    weights = [0.4, 0.3, 0.2, 0.1]  # Weights for vol_adj_momentum, std_abs_price_change, ema_abs_price_change, iqr_abs_price_change
+    df['factor_value'] = (
+        df['vol_adj_momentum'] * weights[0] +
+        df['std_abs_price_change'] * weights[1] +
+        df['ema_abs_price_change'] * weights[2] +
+        df['iqr_abs_price_change'] * weights[3]
+    )
+    
+    return df['factor_value']
+```

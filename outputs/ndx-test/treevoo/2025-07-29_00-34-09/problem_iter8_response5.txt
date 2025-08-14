@@ -1,0 +1,43 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Adjusted Return
+    high_low_ratio = (df['high'] - df['low']) / df['low']
+    intraday_trading_activity = df['volume'] / (df['high'] + df['low'])
+    intraday_adjusted_return = high_low_ratio * intraday_trading_activity
+
+    # Measure 14-Day Logarithmic Return
+    close_prices = df['close']
+    log_returns = np.log(close_prices / close_prices.shift(1))
+    adjusted_log_returns = ((close_prices - df['low'].shift(1)) / (df['high'].shift(1) - df['low'].shift(1))) * 100
+
+    # Combine Intraday and 14-Day Adjusted Returns
+    fourteen_day_avg_volume = df['volume'].rolling(window=14).mean()
+    combined_adjusted_return = (intraday_adjusted_return * fourteen_day_avg_volume) + (adjusted_log_returns * df['volume'])
+
+    # Apply Volume Smoothing
+    exp_weighted_vol = df['volume'].ewm(span=7, adjust=False).mean()
+    normalized_volume = df['volume'] / exp_weighted_vol
+
+    # Weighted Returns Calculation
+    weighted_returns = combined_adjusted_return * normalized_volume
+    sum_weighted_returns = weighted_returns.rolling(window=14).sum()
+
+    # Separate Positive and Negative Weights
+    positive_weighted_returns = sum_weighted_returns.where(sum_weighted_returns > 0, 0)
+    negative_weighted_returns = sum_weighted_returns.abs().where(sum_weighted_returns < 0, 0)
+
+    # Compute Dynamic RSI
+    relative_strength = positive_weighted_returns.rolling(window=14).sum() / negative_weighted_returns.rolling(window=14).sum()
+    dynamic_rsi = 100 - (100 / (1 + relative_strength))
+
+    # Calculate Cumulative Weighted Momentum
+    cumulative_weighted_momentum = sum_weighted_returns.rolling(window=5).sum() / df['amount'].rolling(window=5).mean()
+
+    # Final Alpha Factor
+    final_factor = dynamic_rsi + cumulative_weighted_momentum + combined_adjusted_return
+
+    return final_factor
+```

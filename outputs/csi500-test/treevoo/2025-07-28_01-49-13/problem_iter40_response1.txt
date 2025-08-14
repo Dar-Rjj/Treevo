@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-based factors
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_diff_5_20'] = df['SMA_5'] - df['SMA_20']
+    df['ROC_5'] = (df['close'] / df['close'].shift(5) - 1) * 100
+    df['ROC_10'] = (df['close'] / df['close'].shift(10) - 1) * 100
+
+    # Volume-based factors
+    df['avg_vol_5'] = df['volume'].rolling(window=5).mean()
+    df['avg_vol_20'] = df['volume'].rolling(window=20).mean()
+    df['vol_ratio_5'] = df['volume'] / df['avg_vol_5']
+    df['vol_ratio_20'] = df['volume'] / df['avg_vol_20']
+    df['vol_change_prev_day'] = df['volume'] / df['volume'].shift(1)
+    df['vol_roc_5'] = (df['volume'] / df['volume'].shift(5) - 1) * 100
+
+    # Price and volume combined factors
+    df['obv'] = (df['close'].diff() > 0).astype(int) * df['volume'] - (df['close'].diff() < 0).astype(int) * df['volume']
+    df['obv'] = df['obv'].cumsum()
+    df['vwap_5'] = (df['volume'] * df['close']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    df['vwap_20'] = (df['volume'] * df['close']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    df['vwap_diff_5'] = df['close'] - df['vwap_5']
+    df['vwap_diff_20'] = df['close'] - df['vwap_20']
+
+    # Volatility-based factors
+    df['std_5'] = df['close'].rolling(window=5).std()
+    df['std_20'] = df['close'].rolling(window=20).std()
+    df['range_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['range_20'] = (df['high'] - df['low']).rolling(window=20).mean()
+    
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi_14'] = 100 - (100 / (1 + rs))
+
+    # Pattern recognition factors
+    df['doji'] = (abs(df['close'] - df['open']) / (df['high'] - df['low']) < 0.1) & ((df['high'] - df['low']) != 0)
+    df['hammer'] = (df['high'] - df['close']) < (2 * (df['close'] - df['low'])) & (df['close'] > df['open'])
+    df['shooting_star'] = (df['close'] - df['low']) < (2 * (df['high'] - df['close'])) & (df['close'] < df['open'])
+    df['engulfing_bullish'] = (df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+    df['engulfing_bearish'] = (df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))
+    df['consecutive_up_days'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['consecutive_down_days'] = (df['close'] < df['close'].shift(1)).astype(int)
+
+   

@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Reversal
+    df['intraday_reversal'] = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    
+    # Adjust for Open Interest
+    df['volume_diff'] = df['volume'] - df['volume'].shift(1)
+    df['volume_ratio'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['intraday_reversal_adjusted'] = df['intraday_reversal'] * (1 + df['volume_ratio'])
+    
+    # Consider Day-to-Day Open Price Change
+    df['day_to_day_open_change'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Combine Reversal and Open Interest Adjustments
+    df['combined_reversal'] = df['intraday_reversal_adjusted'] + df['day_to_day_open_change']
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(1)
+    df['price_momentum_ema'] = df['price_momentum'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust by Volume Change
+    df['volume_ratio_rolling'] = df['volume'] / df['volume'].shift(1)
+    df['volume_ratio_sma'] = df['volume_ratio_rolling'].rolling(window=10, min_periods=1).mean()
+    df['momentum_volume_adjusted'] = df['price_momentum_ema'] * df['volume_ratio_sma']
+    
+    # Integrate Combined Momentum, Volume Ratio, and Reversal
+    df['integrated_factor'] = 0.5 * df['combined_reversal'] + 0.5 * df['momentum_volume_adjusted']
+    
+    # Calculate High-Low Price Difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Compute Volume Influence Ratio
+    df['upward_volume'] = df.apply(lambda x: x['volume'] if x['close'] > x['open'] else 0, axis=1)
+    df['downward_volume'] = df.apply(lambda x: x['volume'] if x['close'] < x['open'] else 0, axis=1)
+    df['upward_volume_sum'] = df['upward_volume'].rolling(window=10, min_periods=1).sum()
+    df['downward_volume_sum'] = df['downward_volume'].rolling(window=10, min_periods=1).sum()
+    df['volume_influence_ratio'] = df['upward_volume_sum'] / (df['downward_volume_sum'] + 1e-6)  # Avoid division by zero
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['integrated_factor'] * df['volume_influence_ratio'] * df['high_low_diff']
+    
+    return df['alpha_factor']
+```

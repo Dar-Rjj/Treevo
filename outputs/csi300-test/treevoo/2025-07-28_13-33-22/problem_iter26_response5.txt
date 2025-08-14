@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Identify Spikes
+    volume_spike = df['volume'] > (df['volume'].shift(1) * 1.5)
+    price_spike = abs(df['close'] - df['close'].shift(1)) > (df['close'].shift(1) * 0.05)
+    combined_spikes = volume_spike | price_spike
+    
+    # Introduce Dynamic Volatility Adjustment
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    rolling_volatility = log_returns.rolling(window=30).std()
+    
+    # Scale Intraday Momentum
+    scaled_intraday_momentum = intraday_range / (combined_spikes + 1)
+    dynamic_threshold = 10
+    scaled_intraday_momentum = np.clip(scaled_intraday_momentum, -dynamic_threshold, dynamic_threshold)
+    
+    # Calculate Intraday Midpoint
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    
+    # Calculate Opening Gap
+    opening_gap = df['open'] - df['close'].shift(1)
+    
+    # Combine Intraday Features
+    combined_intraday_features = (df['open'] - intraday_midpoint) - opening_gap
+    
+    # Calculate Close-to-Open Return
+    close_to_open_return = df['close'] - df['open']
+    
+    # Enhance with Recent Volatility
+    absolute_price_change = abs(df['close'] - df['close'].shift(1))
+    avg_absolute_price_change = absolute_price_change.rolling(window=10).mean()
+    
+    # Adjust for Dynamic Volume Spikes
+    volume_spike_factor = (df['volume'] / df['volume'].shift(1)).clip(lower=1, upper=5)
+    adjusted_feature = combined_intraday_features / volume_spike_factor
+    
+    # Weight by Volume
+    weighted_feature = adjusted_feature * df['volume']
+    
+    # Incorporate Accumulated Volume
+    accumulated_volume = df['volume'].rolling(window=30).sum()
+    normalized_feature = weighted_feature / accumulated_volume
+    
+    # Integrate Long-Term Momentum
+    long_term_momentum = df['close'].rolling(window=252).mean()
+    final_feature = normalized_feature + np.sign(normalized_feature) * long_term_momentum
+    
+    # Apply Adaptive Moving Average Smoothing
+    adaptive_moving_average = final_feature.ewm(span=20, adjust=False).mean()
+    
+    return adaptive_moving_average
+```

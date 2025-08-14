@@ -1,0 +1,30 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Price Movement
+    df['intraday_move'] = df['high'] - df['low']
+    
+    # Advanced Intraday Volatility Index
+    df['true_range'] = df['high'] - df['low']
+    df['atr_14'] = df['true_range'].rolling(window=14).mean()
+    df['ema_atr_5'] = df['atr_14'].ewm(span=5, adjust=False).mean()
+    
+    # Dynamic Volume Adjustment
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['volume_trend_factor'] = np.where(df['volume_change'] > 0, 1.2, 0.8)
+    df['average_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['adjusted_volume_change'] = (df['volume_change'] * df['volume_trend_factor']) / df['average_volume_20']
+    
+    # Market Sentiment Integration
+    obv = (np.sign(df['close'].diff()) * df['volume']).cumsum()
+    df['obv'] = obv
+    df['obv_change'] = df['obv'] - df['obv'].shift(1)
+    df['sentiment_score'] = np.where(df['obv_change'] > 0, 1.1, 0.9)
+    
+    # Combine Intraday Momentum, Volume, and Sentiment
+    df['alpha_factor'] = (df['intraday_move'] * df['adjusted_volume_change']) / df['ema_atr_5'] * df['sentiment_score']
+    
+    return df['alpha_factor']
+```

@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Daily Delta of Intraday Range
+    df['delta_intraday_range'] = df['intraday_range'] - df['intraday_range'].shift(1)
+    
+    # Calculate Opening Gaps
+    df['open_gap_up'] = df['open'] - df['close'].shift(1)
+    df['open_gap_down'] = df['close'].shift(1) - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['vwap'] = (df['volume'] * (df['high'] + df['low']) / 2).cumsum() / df['volume'].cumsum()
+    
+    # Identify Days with Significant Volume Increase
+    df['volume_spike'] = df['volume'] > df['volume'].rolling(window=10).mean() * 2
+    
+    # Calculate Trading Amount Volatility
+    df['trading_amount_volatility'] = df['volume'].pct_change().abs()
+    
+    # Correlate Trading Amount with Price Changes
+    df['amount_to_price_change_ratio'] = df['volume'] / (df['close'] - df['close'].shift(1)).abs()
+    
+    # Combine Intraday Range, Opening Gaps, and VWAP Trends
+    df['composite_alpha_score'] = (df['intraday_range'] + df['open_gap_up'] - df['open_gap_down'] + df['vwap']).rank(pct=True)
+    
+    # Create a Combined Factor Using Volume Spikes and Trading Amount
+    df['enhanced_alpha_factor'] = df['volume_spike'] * df['trading_amount_volatility']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Intraday Volume Proportion
+    df['intraday_volume_proportion'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Intraday Volume Intensity
+    df['intraday_volume_intensity'] = df['intraday_volume_proportion'] / df['intraday_range']
+    
+    # Calculate Volume Impact Score
+    df['volume_impact_score'] = (df['high'].rolling(window=10).mean() - df['low'].rolling(window=10).mean()) / df['volume'].rolling(window=10).sum()
+    
+    # Intermediate Factor 1
+    df['intermediate_factor_1'] = df['intraday_return'] * df['volume_impact_score']
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(10)
+    
+    # Adjust Price Momentum by Volume
+    df['adjusted_momentum'] = df['price_momentum'] / df['volume'].rolling(window=10).sum()
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    df['cumulative_volume_weighted_momentum'] = df['adjusted_momentum'] * df['volume'].rolling(window=10).sum()
+    
+    # Confirm with Volume Trend
+    df['average_volume_5_days'] = df['volume'].rolling(window=5).mean()
+    df['volume_ratio'] = df['volume'] / df['average_volume_5_days']
+    
+    # Combined Momentum
+    df['combined_momentum'] = df['price_momentum'] * df['intraday_return']
+    
+    # Aggregated Momentum Over M Days
+    df['aggregated_momentum'] = df['cumulative_volume_weighted_momentum'].rolling(window=10).sum()
+    
+    # Final Factor
+    df['final_factor'] = df['intermediate_factor_1'] * df['aggregated_momentum'] * (df['volume_ratio'] > 1)
+    
+    return df['final_factor']
+```

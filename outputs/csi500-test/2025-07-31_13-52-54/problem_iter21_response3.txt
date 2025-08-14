@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Daily VWAP Change
+    df['VWAP_Change'] = df['VWAP'] - df['VWAP'].shift(1)
+    
+    # Separate Positive and Negative Changes
+    positive_changes = df['VWAP_Change'].where(df['VWAP_Change'] > 0, 0)
+    negative_changes = -df['VWAP_Change'].where(df['VWAP_Change'] < 0, 0)
+    
+    # 14-Day Averages for RSI
+    df['Avg_Positive_Change_14'] = positive_changes.rolling(window=14).mean()
+    df['Avg_Negative_Change_14'] = negative_changes.rolling(window=14).mean()
+    
+    # Calculate RSI
+    relative_strength = df['Avg_Positive_Change_14'] / df['Avg_Negative_Change_14']
+    df['RSI'] = 100 - (100 / (1 + relative_strength))
+    
+    # Intraday Range Growth
+    df['Intraday_Range'] = df['high'] - df['low']
+    df['Prev_Intraday_Range'] = df['Intraday_Range'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Intraday_Range'] - df['Prev_Intraday_Range']) / df['Prev_Intraday_Range']
+    
+    # Volume-Weighted Moving Average (VWMA)
+    df['Volume_Adjusted_Close'] = df['close'] * df['volume']
+    df['Total_Volume'] = df['volume'].rolling(window=30).sum()
+    df['VWMA'] = df['Volume_Adjusted_Close'].rolling(window=30).sum() / df['Total_Volume']
+    
+    # Long-Term and Short-Term Volume-Weighted Returns
+    df['Daily_Returns'] = df['close'].pct_change()
+    df['Long_Term_VW_Return'] = (df['Daily_Returns'].rolling(window=90).sum() * df['volume'].rolling(window=90).sum()) / df['volume'].rolling(window=90).sum()
+    df['Short_Term_VW_Return'] = (df['Daily_Returns'].rolling(window=5).sum() * df['volume'].rolling(window=5).sum()) / df['volume'].rolling(window=5).sum()
+    df['Adjusted_VW_Return'] = df['Long_Term_VW_Return'] - df['Short_Term_VW_Return']
+    
+    # Volatility-Adjusted Alpha Factor
+    df['Volatility'] = df['Daily_Returns'].rolling(window=30).std()
+    df['Volatility_Adjusted_Alpha'] = (df['RSI'] + df['Intraday_Range_Growth'] + df['VWMA'] + df['Adjusted_VW_Return']) / df['Volatility']
+    
+    # Trend-Enhanced Alpha Factor
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['Trend_Score'] = np.where(df['EMA_20'] > df['VWMA'], 1, -1)
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = (df['RSI'] + df['Intraday_Range_Growth'] + df['VWMA'] + df['Adjusted_VW_Return'] + df['Volatility_Adjusted_Alpha']) * df['Trend_Score']
+    
+    return df['Final_Alpha_Factor']
+```

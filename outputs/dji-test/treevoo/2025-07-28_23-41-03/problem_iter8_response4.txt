@@ -1,0 +1,36 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Price Momentum Component
+    sma_50 = df['close'].rolling(window=50).mean()
+    sma_100 = df['close'].rolling(window=100).mean()
+    sma_200 = df['close'].rolling(window=200).mean()
+    
+    price_momentum = (sma_50 - sma_100) + (sma_100 - sma_200)
+    
+    # Intraday Reversal Momentum Component
+    intraday_return = df['open'] / df['close'].shift(1) - 1
+    reversal_signal = intraday_return.apply(lambda x: -1 if x > 0 else 1)
+    
+    atr = (df['high'] - df['low']).abs() + (df['high'] - df['close'].shift(1)).abs() + (df['low'] - df['close'].shift(1)).abs()
+    atr /= 3
+    
+    atr_reversal = atr * reversal_signal
+    ema_atr_reversal = atr_reversal.ewm(span=5, adjust=False).mean()
+    
+    # High-Low Range Momentum with Volume Adjustment
+    high_low_range = df['high'] - df['low']
+    high_low_momentum = high_low_range - high_low_range.shift(1)
+    
+    avg_volume = df['volume'].rolling(window=20).mean()
+    
+    high_low_adj = high_low_momentum / avg_volume
+    
+    # Final Alpha Factor Combination
+    w1 = 0.7
+    w2 = 0.3
+    alpha_factor = (price_momentum + ema_atr_reversal) * w1 + high_low_adj * w2
+    
+    return alpha_factor
+```

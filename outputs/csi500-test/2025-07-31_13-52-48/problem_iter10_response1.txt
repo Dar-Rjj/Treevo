@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['price_momentum'] = df['log_returns'].rolling(window=5).sum().shift(1)
+
+    # Apply Combined Volume and Amount Shock Filter
+    df['volume_change'] = abs(df['volume'] - df['volume'].shift(1))
+    df['amount_change'] = abs(df['amount'] - df['amount'].shift(1))
+    volume_75th = df['volume_change'].quantile(0.75)
+    amount_75th = df['amount_change'].quantile(0.75)
+    filter_mask = (df['volume_change'] < volume_75th) & (df['amount_change'] < amount_75th)
+    df['price_momentum_filtered'] = df['price_momentum'].where(filter_mask, np.nan)
+
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+
+    # Calculate Volume-Weighted Moving Average of Intraday Volatility
+    df['vol_weighted_intraday_volatility'] = df['intraday_volatility'] * df['volume']
+    df['vol_weighted_avg_intraday_volatility'] = df['vol_weighted_intraday_volatility'].rolling(window=10).mean()
+
+    # Calculate Intraday Reversal Score
+    df['intraday_reversal_score'] = df['close_to_open_return'] / df['vol_weighted_avg_intraday_volatility']
+
+    # Apply Exponential Decay to Reversal Score
+    half_life = 5
+    decay_factor = np.exp(-np.log(2) / half_life)
+    df['reversal_score_decayed'] = df['intraday_reversal_score'].ewm(alpha=decay_factor, adjust=False).mean()
+
+    return df['reversal_score_decayed']
+```

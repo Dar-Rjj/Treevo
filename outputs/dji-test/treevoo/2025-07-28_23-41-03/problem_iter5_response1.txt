@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Adjusted High-Low Range
+    high_low_range = df['high'] - df['low']
+    avg_volume_n_days = df['volume'].rolling(window=10).mean()
+    adjusted_high_low_range = high_low_range / avg_volume_n_days
+    
+    # Calculate Intraday Price Range Percentage
+    intraday_price_range_pct = (df['high'] - df['low']) / df['low'] * 100
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    vwap = ((df['open'] + df['high'] + df['low'] + df['close']) / 4) * df['volume']
+    vwap = vwap.cumsum() / df['volume'].cumsum()
+    
+    # Analyze Volume Direction
+    volume_flow = df['volume'].copy()
+    volume_flow[df['close'] > df['open']] = df['volume'][df['close'] > df['open']]
+    volume_flow[df['close'] <= df['open']] = -df['volume'][df['close'] <= df['open']]
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    raw_money_flow = typical_price * df['volume']
+    positive_money_flow = raw_money_flow.copy()
+    negative_money_flow = raw_money_flow.copy()
+    
+    positive_money_flow[typical_price < typical_price.shift(1)] = 0
+    negative_money_flow[typical_price >= typical_price.shift(1)] = 0
+    
+    positive_money_flow = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow = negative_money_flow.abs().rolling(window=14).sum()
+    
+    money_flow_ratio = positive_money_flow / negative_money_flow
+    mfi = 100 - (100 / (1 + money_flow_ratio))
+    
+    # Analyze Intraday Momentum
+    momentum = (df['close'] - df['open']) / df['open'] * 100
+    momentum_category = momentum.apply(lambda x: 'Positive' if x > 0 else 'Negative')
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        adjusted_high_low_range +
+        intraday_price_range_pct +
+        vwap +
+        volume_flow +
+        intraday_volatility +
+        mfi
+    )
+    
+    return alpha_factor
+```

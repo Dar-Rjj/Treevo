@@ -1,0 +1,82 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Previous Day Overnight Return
+    overnight_return = df['close'].pct_change()
+    
+    # Aggregate Returns
+    aggregate_returns = (intraday_return + overnight_return) / 2
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['open']
+    
+    # Weight by Intraday Volatility
+    weighted_aggregate_returns = aggregate_returns * intraday_volatility
+    
+    # Adjust for Volume
+    volume_adjusted_returns = weighted_aggregate_returns * df['volume']
+    
+    # Smoothed Moving Average
+    sma = volume_adjusted_returns.rolling(window=5).mean()
+    exp_sma = sma.ewm(alpha=0.2).mean()
+    
+    # Compute Price Momentum
+    log_returns = np.log(df['close']).diff()
+    price_momentum = log_returns.rolling(window=20).sum()
+    
+    # Apply Volume Confirmation
+    volume_confirmation = (df['volume'] > df['volume'].shift(1)).astype(int)
+    
+    # Generate Final Momentum Factor
+    final_momentum_factor = price_momentum * volume_confirmation
+    
+    # Incorporate High-Low Volatility into Final Factor
+    high_low_volatility = high_low_range * intraday_volatility
+    
+    # Integrate All Components
+    combined_factor = exp_sma + final_momentum_factor + high_low_volatility
+    
+    # Calculate Short-Term and Long-Term Price Momentum
+    short_term_momentum = df['close'] - df['close'].shift(5)
+    long_term_momentum = df['close'] - df['close'].shift(20)
+    
+    # Volume Change Indicator
+    volume_change = df['volume'] - df['volume'].shift(5)
+    
+    # Price Momentum Ratio
+    price_momentum_ratio = short_term_momentum / long_term_momentum
+    
+    # Integrate Additional Factors
+    prev_day_close_open_return = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    integrated_factor = intraday_return * prev_day_close_open_return * price_momentum_ratio
+    integrated_factor = integrated_factor.where(df['volume'] > df['volume'].mean(), integrated_factor * 0.5).fillna(integrated_factor * 1.5)
+    
+    # Combine Momentum and Volatility
+    combined_momentum_volatility = price_momentum + high_low_range * df['volume']
+    
+    # Incorporate Historical Volatility
+    historical_volatility = df['close'].pct_change().rolling(window=20).std()
+    weighted_historical_volatility = historical_volatility * df['volume']
+    
+    # Incorporate Intraday Volatility into Final Factor
+    intraday_volatility_weighted = intraday_volatility * df['volume']
+    
+    # Calculate Previous Day Intraday Return
+    prev_intraday_return = (df['close'].shift(1) - df['open'].shift(1)) / df['open'].shift(1)
+    
+    # Combine Intraday and Overnight Returns
+    combined_returns = (intraday_return + prev_intraday_return) / 2
+    
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor + integrated_factor + combined_momentum_volatility + weighted_historical_volatility + intraday_volatility_weighted + combined_returns
+    
+    return final_alpha_factor
+```

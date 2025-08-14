@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['open']
+    
+    # Volume Change
+    df['volume_change'] = np.where(df['volume'] > df['volume'].shift(1), 1, -1)
+    
+    # Price Trend
+    df['short_ema'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['price_trend'] = np.where(df['short_ema'] > df['long_ema'], 1, -1)
+    
+    # High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Price Movement Ratio
+    df['price_movement_ratio'] = (df['close'] - df['open']) / df['open']
+    
+    # Momentum Indicator
+    df['momentum_indicator'] = (df['price_movement_ratio'].rolling(window=5).sum() / 
+                                df['high_low_range'].rolling(window=5).sum())
+    
+    # Combine Indicators
+    df['combined_indicators'] = (df['high_low_range'] * 
+                                 df['volume_change'] * 
+                                 df['price_trend'])
+    df['smoothed_combined_indicators'] = df['combined_indicators'].ewm(span=10, adjust=False).mean()
+    
+    # Adjust for Volume
+    df['adjusted_combined_indicators'] = df['smoothed_combined_indicators'] * np.log(df['volume'] + 1)
+    
+    # 5-day Moving Average
+    df['5_day_ma'] = df['close'].rolling(window=5).mean()
+    
+    # Relative Strength
+    df['relative_strength'] = df['close'] / df['5_day_ma']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['momentum_indicator'] + 
+                           df['adjusted_combined_indicators'] * 
+                           df['relative_strength'])
+    
+    return df['alpha_factor']
+```

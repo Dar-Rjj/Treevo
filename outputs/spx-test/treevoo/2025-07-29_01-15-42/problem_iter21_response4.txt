@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Change
+    close_to_open_change = df['close'] - df['open']
+    
+    # Incorporate Volume Impact
+    volume_adjusted_spread = intraday_high_low_spread * df['volume']
+    volume_adjusted_close_to_open = close_to_open_change * df['volume']
+    
+    # Analyze Volume Trends
+    daily_volume = df['volume']
+    moving_average_volume = df['volume'].rolling(window=20).mean()
+    
+    # Combine Weighed Components
+    combined_value = (volume_adjusted_spread + volume_adjusted_close_to_open) / 2
+    
+    # Identify Price-Volume Imbalances
+    price_range_over_ma_volume = (df['high'] - df['low']) / moving_average_volume
+    threshold = 0.5
+    positive_imbalance = (price_range_over_ma_volume > threshold).astype(int)
+    negative_imbalance = (price_range_over_ma_volume < -threshold).astype(int)
+    
+    # Generate Preliminary Alpha Signal
+    preliminary_alpha_signal = np.where(positive_imbalance, 1, np.where(negative_imbalance, -1, 0))
+    
+    # Calculate Momentum Score
+    momentum_score = combined_value.diff().fillna(0)
+    
+    # Compute Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Generate Adjusted Price-Volume Signal
+    adjusted_price_volume_signal = daily_price_range / df['volume']
+    
+    # Calculate Realized Volatility
+    realized_volatility = df['close'].pct_change().rolling(window=20).std() * np.sqrt(252)
+    
+    # Apply Volatility Filter
+    volatility_filtered_signal = np.where(realized_volatility < realized_volatility.median(), 
+                                          preliminary_alpha_signal, 0)
+    
+    # Introduce Volume Shock Factor
+    volume_shock_factor = np.where(daily_volume > 2 * moving_average_volume, 2, 1)
+    adjusted_preliminary_alpha = volatility_filtered_signal * volume_shock_factor
+    
+    # Incorporate Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = intraday_return * df['volume']
+    
+    # Generate Final Alpha Signal
+    final_alpha_signal = np.where(positive_imbalance, 
+                                  adjusted_preliminary_alpha + momentum_score,
+                                  np.where(negative_imbalance, 
+                                           adjusted_preliminary_alpha - momentum_score,
+                                           momentum_score))
+    
+    return pd.Series(final_alpha_signal, index=df.index)
+```

@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate High-Low Price Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Volume Adjusted Intraday Return
+    volume_adjusted_intraday_return = intraday_return * df['volume']
+    
+    # Calculate Volume Adjusted High-Low Range
+    volume_adjusted_high_low_range = high_low_range * df['volume']
+    
+    # Calculate Smoothed Intraday Momentum
+    smoothed_intraday_momentum = volume_adjusted_intraday_return.ewm(span=10, adjust=False).mean()
+    recent_volume_avg = df['volume'].rolling(window=5).mean()
+    smoothed_intraday_momentum = smoothed_intraday_momentum * recent_volume_avg
+    
+    # Calculate Volume Weighted Average True Range (VWATR)
+    true_range = df[['high', 'low', 'close']].diff().abs().max(axis=1)
+    vwatr = true_range * df['volume']
+    
+    # Calculate High-Low Breakout Potential
+    breakout_potential = volume_adjusted_high_low_range.ewm(span=20, adjust=False).mean()
+    recent_volume_avg_10 = df['volume'].rolling(window=10).mean()
+    breakout_potential = breakout_potential * recent_volume_avg_10
+    
+    # Calculate Price Momentum
+    price_momentum = df['close'] - df['close'].shift(10)
+    
+    # Adjust Price Momentum by VWATR
+    adjusted_price_momentum = price_momentum / vwatr
+    
+    # Calculate Momentum Reversal Indicator
+    momentum_reversal_indicator = (intraday_return - smoothed_intraday_momentum) / breakout_potential
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    typical_price = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Combine Intraday Range and VWAP
+    vwap_based_intraday_range = (df['high'] - vwap) + (vwap - df['low'])
+    
+    # VWAP-based Momentum
+    vwap_momentum = vwap - vwap.shift(1)
+    
+    # Combine Indicators
+    combined_indicators = smoothed_intraday_momentum + breakout_potential + vwap_based_intraday_range + vwap_momentum
+    
+    # Apply a moving average to smooth the factor
+    smoothed_factor = combined_indicators.rolling(window=10).mean()
+    
+    # Calculate Volume Adjusted Momentum
+    price_momentum_adj = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    volume_ratio = df['volume'] / df['volume'].shift(10)
+    volume_adjusted_momentum = price_momentum_adj * volume_ratio
+    
+    # Combine Momentum and Volume Ratio
+    combined_momentum = price_momentum_adj + volume_adjusted_momentum
+    
+    # Final Alpha Factor
+    alpha_factor = (adjusted_price_momentum * breakout_potential + momentum_reversal_indicator + 
+                    volume_adjusted_momentum + smoothed_factor)
+    
+    return alpha_factor
+```

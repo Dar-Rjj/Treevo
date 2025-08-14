@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    df['midpoint_to_open_ratio'] = df['intraday_midpoint'] / df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = df['amount'] / df['volume']
+    
+    # Calculate Close-to-Next Day Open Return
+    df['close_to_next_open_return'] = (df['open'].shift(-1) - df['vwap']) / df['vwap']
+    
+    # Weighted Sum of Returns by Volume
+    df['weighted_sum_returns'] = df['close_to_next_open_return'] * df['volume']
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    window = 20  # example window size
+    df['max_adj_close'] = df['close'].rolling(window=window).max()
+    df['min_open'] = df['open'].rolling(window=window).min()
+    
+    # Introduce Volatility Factor
+    df['daily_volatility'] = df['high'] - df['low']
+    df['smoothed_volatility'] = df['daily_volatility'].ewm(span=window).mean()
+    
+    # Combine Factors
+    df['combined_factor'] = df['midpoint_to_open_ratio'] * df['weighted_sum_returns']
+    df['combined_envelopes'] = df['max_adj_close'] - df['min_open']
+    df['volatility_adjusted_factor'] = df['combined_factor'] * (df['smoothed_volatility'] / df['daily_volatility'])
+    
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Compute Cumulative Price Change
+    df['cumulative_price_change'] = df['daily_price_change'].cumsum()
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    df['adjusted_close_to_open_return'] = df['close_to_next_open_return'] / df['intraday_range']
+    
+    # Combine Metrics
+    df['volume_weighted_momentum'] = df['intraday_range'] * df['weighted_sum_returns']
+    df['adjusted_intraday_range'] = df['volume_weighted_momentum'] + df['adjusted_close_to_open_return']
+    
+    # Final Factor Adjustment
+    df['final_factor'] = df['adjusted_intraday_range'] + df['cumulative_price_change']
+    
+    # Compute Cumulative Price Momentum
+    df['ema_daily_price_change'] = df['daily_price_change'].ewm(span=window).mean()
+    
+    # Incorporate Short-Term Price Momentum
+    short_term_window = 10  # example short-term window
+    long_term_window = 30  # example long-term window
+    df['short_term_ema'] = df['close'].ewm(span=short_term_window).mean()
+    df['long_term_ema'] = df['close'].ewm(span=long_term_window).mean()
+    
+    # Synthesize Composite Alpha Factor
+    df['composite_alpha_factor'] = df['final_factor'] + df['ema_daily_price_change'] + (df['short_term_ema'] - df['long_term_ema'])
+    
+    # Introduce Trend Reversal Indicator
+    df['trend_reversal_indicator'] = df['short_term_ema'] - df['long_term_ema']
+    df['final_composite_alpha_factor'] = df['composite_alpha_factor'] + df['trend_reversal_indicator']
+    
+    return df['final_composite_alpha_factor'].dropna()
+```

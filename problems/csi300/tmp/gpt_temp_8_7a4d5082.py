@@ -1,0 +1,72 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight by Volume
+    df['weighted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Intraday Momentum
+    df['close_open_diff'] = df['close'] - df['open']
+    df['intraday_momentum'] = df['close_open_diff'].rolling(window=5).sum()
+    
+    # Adaptive Weighting based on recent performance
+    def adaptive_weighting(returns, vola):
+        if returns > 0:
+            return 0.4, 0.6  # More weight on momentum
+        else:
+            return 0.6, 0.4  # More weight on volatility
+    
+    # Apply Dynamic Exponential Smoothing
+    smoothing_factor = 0.2 + (df['intraday_volatility'].rolling(window=10).mean() / df['intraday_volatility'].rolling(window=10).std()).fillna(0.2)
+    smoothing_factor = np.clip(smoothing_factor, 0.2, 0.5)
+    
+    # Integrate Momentum and Volatility with adaptive weighting
+    integrated_values = []
+    for i in range(len(df)):
+        if i < 5:  # Skip first 5 days due to rolling window
+            integrated_values.append(np.nan)
+            continue
+        
+        # Calculate recent returns for adaptive weighting
+        recent_returns = df['close'].iloc[i] - df['close'].iloc[i-5]
+        
+        # Adaptive weights
+        w_vol, w_mom = adaptive_weighting(recent_returns, df['intraday_volatility'].iloc[i])
+        
+        # Integrated value
+        integrated_value = (w_vol * df['weighted_volatility'].iloc[i]) + (w_mom * df['intraday_momentum'].iloc[i])
+        
+        # Dynamic Exponential Smoothing
+        if i == 5:
+            smoothed_value = integrated_value
+        else:
+            alpha = smoothing_factor.iloc[i]
+            smoothed_value = alpha * integrated_value + (1 - alpha) * integrated_values[-1]
+        
+        integrated_values.append(smoothed_value)
+    
+    df['integrated_value'] = integrated_values
+    
+    # Ensure Positive Values
+    df['positive_value'] = df['integrated_value'] + 1e-6
+    
+    # Apply Logarithmic Transformation
+    df['factor'] = np.log(df['positive_value'])
+    
+    return df['factor']
+
+# Example usage
+# df = pd.DataFrame({
+#     'open': [...],
+#     'high': [...],
+#     'low': [...],
+#     'close': [...],
+#     'amount': [...],
+#     'volume': [...]
+# }, index=pd.to_datetime([...]))
+# factor_values = heuristics_v2(df)

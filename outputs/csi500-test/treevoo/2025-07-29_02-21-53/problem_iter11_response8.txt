@@ -1,0 +1,38 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, short_window=20, long_window=50, high_volume_threshold=1.5, ema_smooth_window=14):
+    # Calculate Enhanced Intraday Price Movement
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Close_Open_Change'] = df['close'] - df['open']
+
+    # Aggregate and Smooth Price Movements
+    df['Sum_High_Low_Diff'] = df['High_Low_Diff'].rolling(window=short_window).sum()
+    df['Sum_Close_Open_Change'] = df['Close_Open_Change'].rolling(window=short_window).sum()
+    
+    df['Smoothed_High_Low_Range'] = df['High_Low_Diff'].ewm(span=short_window, adjust=False).mean()
+    df['Long_Term_High_Low_Range'] = (df['high'].rolling(window=long_window).max() - 
+                                      df['low'].rolling(window=long_window).min())
+
+    # Calculate Integrated Price and High-Low Range Momentum
+    df['Integrated_Momentum'] = (df['Sum_High_Low_Diff'] + df['Sum_Close_Open_Change']) / 2
+    df['Price_Volatility'] = df['close'].rolling(window=short_window).std()
+    df['Weight_Adjustment'] = 1 / (1 + df['Price_Volatility'])
+    df['Adjusted_Momentum'] = df['Integrated_Momentum'] * df['Weight_Adjustment']
+
+    df['Momentum_Score'] = df['Long_Term_High_Low_Range'] - df['Smoothed_High_Low_Range']
+
+    # Evaluate Volume Activity
+    df['Volume_MA'] = df['volume'].rolling(window=short_window).mean()
+    df['High_Volume_Indicator'] = (df['volume'] > df['Volume_MA'] * high_volume_threshold).astype(int)
+
+    # Integrate Price, High-Low Range, and Volume Activity
+    df['Combined_Measure'] = (df['High_Low_Diff'] * 0.6 + df['Close_Open_Change'] * 0.4) * df['High_Volume_Indicator']
+    df['Final_Alpha_Factor'] = df['Momentum_Score'] * df['Combined_Measure']
+
+    # Smooth Oscillation with Exponential Moving Average
+    df['Final_Smoothed_Alpha'] = df['Final_Alpha_Factor'].ewm(span=ema_smooth_window, adjust=False).mean()
+
+    return df['Final_Smoothed_Alpha'].dropna()
+```

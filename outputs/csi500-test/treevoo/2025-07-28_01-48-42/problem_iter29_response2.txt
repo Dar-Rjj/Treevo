@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Compute Intraday Reversal Score
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    df['Intraday_Reversal_Score'] = 1 / df['Intraday_Return']
+    
+    # Adjust for Volume and Amount
+    df['5D_Avg_Volume'] = df['volume'].rolling(window=5).mean()
+    df['5D_Avg_Amount'] = df['amount'].rolling(window=5).mean()
+    df['Volume_Adjusted_Range'] = df['High_Low_Range'] * (df['5D_Avg_Volume'] / df['5D_Avg_Amount'])
+    
+    # Integrate Momentum and Reversal
+    df['Momentum_Reversal'] = df['High_Low_Range'].diff() * df['Intraday_Reversal_Score']
+    
+    # Price Change
+    df['Price_Change'] = df['close'] - df['close'].shift(1)
+    
+    # Price Change Momentum
+    df['Price_Change_Momentum'] = df['close'] - df['open'].shift(1)
+    
+    # Volume Delta
+    df['Volume_Delta'] = df['volume'] - df['volume'].shift(1)
+    
+    # Daily Volume Rank
+    df['Volume_Rank'] = df['volume'].rank(pct=True, method='dense', ascending=False)
+    
+    # Daily Amount Rank
+    df['Amount_Rank'] = df['amount'].rank(pct=True, method='dense', ascending=False)
+    
+    # Close-to-Open Movement
+    df['Close_to_Open'] = df['close'] - df['open']
+    
+    # Combined High-Low and Reversal
+    df['Combined_HL_Reversal'] = df['Momentum_Reversal'] * df['Volume_Adjusted_Range']
+    
+    # Integrated Factor
+    df['Integrated_Factor'] = df['Combined_HL_Reversal'] * df['Close_to_Open'] * df['Volume_Rank'] * df['Amount_Rank']
+    
+    # Smoothing Filter (EMA)
+    df['Smoothed_Factor'] = df['Integrated_Factor'].ewm(span=5, adjust=False).mean()
+    
+    # Second Smoothing Layer (SMA)
+    df['Final_Factor'] = df['Smoothed_Factor'].rolling(window=10).mean()
+    
+    # Daily Volatility
+    df['Daily_Volatility'] = np.sqrt(((df['high'] - df['low']) ** 2) / 4 + ((df['close'] - df['open']) ** 2) / 4)
+    
+    # Integrate Volatility into the Final Factor
+    df['Volatility_Adjusted_Factor'] = df['Final_Factor'] * df['Daily_Volatility']
+    
+    # Daily Liquidity
+    df['Daily_Liquidity'] = (df['amount'] / df['volume']) * 1000
+    
+    # Integrate Liquidity into the Final Factor
+    df['Liquidity_Adjusted_Factor'] = df['Volatility_Adjusted_Factor'] * df['Daily_Liquidity']
+    
+    return df['Liquidity_Adjusted_Factor'].dropna()
+```

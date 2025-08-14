@@ -1,0 +1,29 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Smooth Intraday Return using EMA
+    df['smoothed_intraday_return'] = df['intraday_return'].ewm(span=5, adjust=False).mean().shift(1)
+    df['intraday_momentum_diff'] = df['intraday_return'] - df['smoothed_intraday_return']
+    
+    # Detect Volume Spikes
+    df['volume_change'] = df['volume'] / df['volume'].shift(1) - 1
+    avg_volume_change = df['volume_change'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume_change'] > 1.5 * avg_volume_change).astype(int)
+    
+    # Incorporate Close Price Trend
+    df['close_price_change'] = df['close'] / df['close'].shift(1) - 1
+    df['smoothed_close_price_change'] = df['close_price_change'].ewm(span=5, adjust=False).mean().shift(1)
+    df['close_price_change_diff'] = df['close_price_change'] - df['smoothed_close_price_change']
+    
+    # Combine Factors
+    df['combined_factor'] = (df['intraday_momentum_diff'] * df['volume_spike']) + df['close_price_change_diff']
+    
+    # Smooth the combined factor using simple moving average
+    df['final_factor'] = df['combined_factor'].rolling(window=3, min_periods=1).mean().shift(1)
+    
+    return df['final_factor']
+```

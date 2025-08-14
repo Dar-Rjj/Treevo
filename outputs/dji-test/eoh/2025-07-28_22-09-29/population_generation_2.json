@@ -1,0 +1,62 @@
+[
+     {
+          "algorithm": "The new algorithm calculates a composite factor by combining the difference between the fast and slow simple moving averages of the closing price (SMA line) with the rate of change (ROC) of the high price, then adjusting this combined value by its own exponential moving average to generate a smoothed heuristic factor.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    def sma_line(price, fast=15, slow=40):\n        sma_fast = price.rolling(window=fast).mean()\n        sma_slow = price.rolling(window=slow).mean()\n        return sma_fast - sma_slow\n\n    def roc(series, periods=25):\n        return series.pct_change(periods=periods)\n\n    def ema_line(series, span=18):\n        return series.ewm(span=span, adjust=False).mean()\n\n    sma_signal = sma_line(df['close'])\n    roc_high = roc(df['high'])\n    combined_factor = (sma_signal + roc_high).rename('combined_factor')\n    heuristics_matrix = ema_line(combined_factor).rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03585,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a composite factor by combining the difference between the fast and slow simple moving averages of the closing price (SMA line) with the rate of change (ROC) of the low price, then adjusting this combined value by its own simple moving average to generate a smoothed heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def sma_line(price, fast=10, slow=30):\n        sma_fast = price.rolling(window=fast).mean()\n        sma_slow = price.rolling(window=slow).mean()\n        return sma_fast - sma_slow\n\n    def roc(series, periods=20):\n        return series.pct_change(periods=periods)\n\n    sma_signal = sma_line(df['close'])\n    roc_low = roc(df['low'])\n    combined_factor = (sma_signal + roc_low).rename('combined_factor')\n    heuristics_matrix = combined_factor.rolling(window=18).mean().rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03469,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a composite factor by combining the difference between the fast and slow exponential moving averages of the closing price (MACD line) with the rate of change (ROC) of the high price, then adjusting this combined value by its own exponential moving average to generate a smoothed heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def macd_line(price, fast=10, slow=30):\n        ema_fast = price.ewm(span=fast, adjust=False).mean()\n        ema_slow = price.ewm(span=slow, adjust=False).mean()\n        return ema_fast - ema_slow\n\n    def roc(series, periods=20):\n        return series.pct_change(periods=periods)\n\n    macd_signal = macd_line(df['close'])\n    roc_high = roc(df['high'])\n    combined_factor = (macd_signal + roc_high).rename('combined_factor')\n    heuristics_matrix = combined_factor.ewm(span=18, adjust=False).mean().rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.0339,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a modified composite factor by incorporating the difference between the 12 and 26-day exponential moving averages of the closing price (MACD line) with the percentage change in volume over the past 9 days, then further adjusts this composite by its rolling 7-day standard deviation to highlight volatility-adjusted signal strength.",
+          "code": "import pandas as pd\n\ndef heuristics_v2(df):\n    def macd_line(price, fast=12, slow=26):\n        ema_fast = price.ewm(span=fast, adjust=False).mean()\n        ema_slow = price.ewm(span=slow, adjust=False).mean()\n        return ema_fast - ema_slow\n\n    def pct_change_9(series, periods=9):\n        return series.pct_change(periods=periods)\n\n    macd_signal = macd_line(df['close'])\n    pct_change_volume = pct_change_9(df['volume'])\n    combined_factor = (macd_signal + pct_change_volume).rename('combined_factor')\n    heuristics_matrix = (combined_factor / combined_factor.rolling(window=7).std()).rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03325,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm introduces a smoothing effect on the momentum and volatility through exponential moving averages, then combines these with a weighted average volume over 10 days to generate a more stable heuristic factor.",
+          "code": "def heuristics_v2(df):\n    # Calculate 10-day exponential moving average for return (momentum)\n    df['Momentum'] = df['close'].pct_change().ewm(span=10, adjust=False).mean()\n    \n    # Calculate 10-day exponential moving average for standard deviation (volatility)\n    df['Volatility'] = df['close'].rolling(window=10).std().ewm(span=10, adjust=False).mean()\n    \n    # Calculate 10-day weighted average volume\n    df['Volume_avg'] = df['volume'].ewm(span=10, adjust=False).mean()\n    \n    # Generate the heuristics factor\n    df['Heuristic_Factor'] = (df['Momentum'] / df['Volatility']) * df['Volume_avg']\n    \n    heuristics_matrix = df['Heuristic_Factor'].dropna()\n    return heuristics_matrix",
+          "objective": -0.03267,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm modifies the original by incorporating a 20-day simple moving average of the closing prices into the heuristic factor, aiming to capture a longer-term trend alongside the existing momentum, volatility, and volume considerations.",
+          "code": "def heuristics_v2(df):\n    # Calculate 10-day exponential moving average for return (momentum)\n    df['Momentum'] = df['close'].pct_change().ewm(span=10, adjust=False).mean()\n    \n    # Calculate 10-day exponential moving average for standard deviation (volatility)\n    df['Volatility'] = df['close'].rolling(window=10).std().ewm(span=10, adjust=False).mean()\n    \n    # Calculate 10-day weighted average volume\n    df['Volume_avg'] = df['volume'].ewm(span=10, adjust=False).mean()\n    \n    # Calculate 20-day simple moving average of close price\n    df['SMA_20'] = df['close'].rolling(window=20).mean()\n    \n    # Generate the heuristics factor\n    df['Heuristic_Factor'] = ((df['Momentum'] / df['Volatility']) * df['Volume_avg']) + df['SMA_20']\n    \n    heuristics_matrix = df['Heuristic_Factor'].dropna()\n    return heuristics_matrix",
+          "objective": -0.03265,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a composite factor by combining the difference between the fast (5 days) and slow (40 days) simple moving averages of the closing price with the momentum (15 periods) of the high price, then adjusting this combined value using a weighted moving average (window=20, std=4) to generate an interpretable heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def sma_diff(price, fast=5, slow=40):\n        sma_fast = price.rolling(window=fast).mean()\n        sma_slow = price.rolling(window=slow).mean()\n        return sma_fast - sma_slow\n\n    def momentum(series, periods=15):\n        return series.diff(periods)\n\n    sma_signal = sma_diff(df['close'])\n    mom_high = momentum(df['high'])\n    combined_factor = (sma_signal + mom_high).rename('combined_factor')\n    heuristics_matrix = combined_factor.rolling(window=20, win_type='gaussian').mean(std=4).rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03251,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm calculates a composite factor by combining the difference between the fast and slow simple moving averages of the closing price (SMA Difference) with the momentum of the low price, then adjusting this combined value using its own weighted moving average to generate an interpretable heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def sma_diff(price, fast=10, slow=30):\n        sma_fast = price.rolling(window=fast).mean()\n        sma_slow = price.rolling(window=slow).mean()\n        return sma_fast - sma_slow\n\n    def momentum(series, periods=20):\n        return series.diff(periods)\n\n    sma_signal = sma_diff(df['close'])\n    mom_low = momentum(df['low'])\n    combined_factor = (sma_signal + mom_low).rename('combined_factor')\n    heuristics_matrix = combined_factor.rolling(window=18, win_type='gaussian').mean(std=3).rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03246,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm combines the difference between the fast and slow exponential moving averages of the closing price (MACD line) with the true range (TR) over a specified period, then adjusts this combined value by its own simple moving average to generate a smoothed heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def macd_line(price, fast=12, slow=26):\n        ema_fast = price.ewm(span=fast, adjust=False).mean()\n        ema_slow = price.ewm(span=slow, adjust=False).mean()\n        return ema_fast - ema_slow\n\n    def tr(df):\n        tr = df['high'] - df['low']\n        return tr\n\n    macd_signal = macd_line(df['close'])\n    tr_value = tr(df)\n    combined_factor = (macd_signal + tr_value).rename('combined_factor')\n    heuristics_matrix = combined_factor.rolling(window=20, min_periods=1).mean().rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03176,
+          "other_inf": null
+     },
+     {
+          "algorithm": "The new algorithm combines the difference between fast and slow exponential moving averages of the closing price with the rate of change (ROC) of the high price, then applies a weighted moving average to this combination for generating an enhanced heuristic factor.",
+          "code": "def heuristics_v2(df):\n    def ema_diff(price, fast=10, slow=30):\n        ema_fast = price.ewm(span=fast, adjust=False).mean()\n        ema_slow = price.ewm(span=slow, adjust=False).mean()\n        return ema_fast - ema_slow\n\n    def roc(series, periods=20):\n        return (series / series.shift(periods) - 1) * 100\n\n    ema_signal = ema_diff(df['close'])\n    roc_high = roc(df['high'])\n    combined_factor = (ema_signal + roc_high).rename('combined_factor')\n    heuristics_matrix = combined_factor.rolling(window=18, win_type='gaussian').mean(std=3).rename('heuristic_factor')\n\n    return heuristics_matrix",
+          "objective": -0.03174,
+          "other_inf": null
+     }
+]

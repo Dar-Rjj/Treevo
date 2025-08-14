@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define lookback periods
+    sma_short_period = 20
+    sma_long_period = 50
+    vol_adjusted_vol_period = 20
+    price_momentum_period = 20
+    percentage_change_period = 5
+    daily_turnover_period = 20
+    avg_dollar_volume_period = 20
+    liquidity_ratio_period = 20
+
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short_period).mean()
+    df['SMA_Long'] = df['close'].rolling(window=sma_long_period).mean()
+
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Vol'] = df['High_Low_Diff'] * df['volume']
+    df['Vol_Adjusted_Vol_Rolling_Avg'] = df['Volume_Adjusted_Vol'].rolling(window=vol_adjusted_vol_period).mean()
+
+    # Compute Price Momentum
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / df['close'].rolling(window=price_momentum_period).mean()
+
+    # Incorporate Additional Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(periods=percentage_change_period)
+    df['High_Low_Range'] = df['high'] - df['low']
+
+    # Consider Market Trend Alignment
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily_Turnover'] = df['volume'] * df['close']
+    df['Rolling_Avg_Daily_Turnover'] = df['Daily_Turnover'].rolling(window=daily_turnover_period).mean()
+    df['Average_Dollar_Volume'] = df['volume'] * df['close']
+    df['Rolling_Avg_Dollar_Volume'] = df['Average_Dollar_Volume'].rolling(window=avg_dollar_volume_period).mean()
+    df['Liquidity_Ratio'] = df['volume'] / df['close']
+    df['Rolling_Avg_Liquidity_Ratio'] = df['Liquidity_Ratio'].rolling(window=liquidity_ratio_period).mean()
+
+    # Adjust Weights Based on Liquidity
+    df['Liquidity_Factor'] = (df['Rolling_Avg_Daily_Turnover'] + df['Rolling_Avg_Dollar_Volume'] + df['Rolling_Avg_Liquidity_Ratio']) / 3
+
+    # Define the Weights for Each Component
+    momentum_weight = 0.3
+    vol_weight = 0.2
+    price_change_weight = 0.1
+    trend_weight = 0.2
+    liquidity_weight = 0.2
+
+    # Combine components into the final alpha factor
+    df['Alpha_Factor'] = (
+        momentum_weight * df['Price_Momentum'] +
+        vol_weight * df['Vol_Adjusted_Vol_Rolling_Avg'] +
+        price_change_weight * df['Percentage_Change'] +
+        trend_weight * df['Trend_Indicator'] +
+        liquidity_weight * df['Liquidity_Factor']
+    )
+
+    # Adjust Weights Dynamically based on trends and liquidity
+    df['Alpha_Factor'] = df['Alpha_Factor'] * (1 + df['Trend_Indicator'] * 0.1) * (1 + df['Liquidity_Factor'] * 0.1)
+
+    return df['Alpha_Factor']
+```

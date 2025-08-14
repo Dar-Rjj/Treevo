@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    intraday_return = (df['close'] - df['open']) / df['open']
+    ema_intraday_return = intraday_return.ewm(alpha=0.1, adjust=False).mean()
+
+    # Incorporate Volatility Component
+    intraday_price_range = df['high'] - df['low']
+    std_intraday_range = intraday_price_range.rolling(window=20).std()
+    intraday_momentum_volatility_adjusted = ema_intraday_return / (std_intraday_range + 1e-8)
+
+    # Introduce Enhanced Volume Impact
+    volume_weighted_intraday_return = (df['close'] - df['open']) * df['volume'] / df['volume'].rolling(window=20).mean()
+    ema_volume_weighted_intraday_return = volume_weighted_intraday_return.ewm(alpha=0.2, adjust=False).mean()
+    
+    volume_rate_of_change = df['volume'] / df['volume'].shift(1) - 1
+    enhanced_intraday_momentum = ema_volume_weighted_intraday_return * volume_rate_of_change.rolling(window=5).mean()
+
+    # Calculate Daily Price Momentum
+    daily_log_returns = np.log(df['close'] / df['close'].shift(1))
+    daily_price_momentum = daily_log_returns.rolling(window=5).sum()
+
+    # Apply Volume-Adjusted Momentum Filter
+    daily_volume_adjusted_momentum = (df['volume'] - df['volume'].shift(1)) * daily_price_momentum
+    rolling_sum_volume_adjusted_momentum = daily_volume_adjusted_momentum.rolling(window=20).sum()
+    high_vol_adj_mom_threshold = daily_volume_adjusted_momentum.abs().quantile(0.75)
+    high_vol_adj_mom_filter = (daily_volume_adjusted_momentum.abs() < high_vol_adj_mom_threshold)
+
+    # Calculate Close to High Ratio
+    close_to_high_ratio = df['close'] / df['high']
+
+    # Calculate Close to Low Ratio
+    close_to_low_ratio = df['close'] / df['low']
+
+    # Combine Ratios
+    combined_ratios = 0.5 * close_to_high_ratio + 0.5 * close_to_low_ratio
+
+    # Combine Adjusted Momentum and Combined Ratio
+    combined_factor = combined_ratios + rolling_sum_volume_adjusted_momentum
+
+    # Compute Dynamic Price Momentum Oscillator
+    dynamic_pmo = rolling_sum_volume_adjusted_momentum - rolling_sum_volume_adjusted_momentum.rolling(window=60).mean()
+
+    # Apply Volume Shock Filter
+    daily_volume_change = (df['volume'] - df['volume'].shift(1)).abs()
+    high_vol_shock_threshold = daily_volume_change.quantile(0.75)
+    high_vol_shock_filter = (daily_volume_change < high_vol_shock_threshold)
+
+    # Final Alpha Factor
+    final_alpha_factor = combined_factor[high_vol_adj_mom_filter & high_vol_shock_filter]
+
+    return final_alpha_factor
+```

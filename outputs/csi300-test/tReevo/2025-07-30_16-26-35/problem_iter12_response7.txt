@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['Prev_Close'] = df['close'].shift(1)
+    df['Close_to_Open_Return'] = np.log(df['close'] / df['Prev_Close'])
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Price_Volume'] = df['close'] * df['volume']
+    total_price_volume = df['Price_Volume'].rolling(window=1).sum()
+    total_volume = df['volume'].rolling(window=1).sum()
+    df['VWAP'] = total_price_volume / total_volume
+    
+    # Compute Exponential Moving Average (EMA) of Close Prices
+    df['EMA'] = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Assign weights based on recent trends and volume
+    recent_weights = {'Intraday_Range': 0.6, 'Close_to_Open_Return': 0.3, 'VWAP': 0.1}
+    older_weights = {'Intraday_Range': 0.5, 'Close_to_Open_Return': 0.4, 'VWAP': 0.1}
+    
+    # Adjust weights dynamically based on EMA
+    df['Alpha_Factor'] = (
+        recent_weights['Intraday_Range'] * df['Intraday_Range'] +
+        recent_weights['Close_to_Open_Return'] * df['Close_to_Open_Return'] +
+        recent_weights['VWAP'] * df['VWAP']
+    )
+    
+    # Use older weights for days where EMA is lower than the current close
+    df.loc[df['EMA'] < df['close'], 'Alpha_Factor'] = (
+        older_weights['Intraday_Range'] * df['Intraday_Range'] +
+        older_weights['Close_to_Open_Return'] * df['Close_to_Open_Return'] +
+        older_weights['VWAP'] * df['VWAP']
+    )
+    
+    return df['Alpha_Factor']
+
+# Example usage
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

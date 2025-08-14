@@ -1,0 +1,79 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate VWAP
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Compute Daily Log Returns for VWAP
+    df['VWAP_log_returns'] = np.log(df['VWAP'] / df['VWAP'].shift(1))
+    
+    # 20-Day EMA of VWAP Log Returns, weighted by Volume
+    df['VWAP_log_returns_ema'] = df['VWAP_log_returns'].ewm(span=20).mean() * df['volume']
+    
+    # Compute Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate 20-Day Moving SD of High-Low Ranges
+    df['high_low_range_volatility'] = df['high_low_range'].rolling(window=20).std()
+    
+    # Intraday Volatility Metric
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['volume']
+    
+    # Adjust by Inverse of 14-Day High-to-Low Range Sum and Intraday Volatility
+    df['high_low_range_sum_14'] = df['high_low_range'].rolling(window=14).sum()
+    df['composite_volatility'] = 1 / (df['high_low_range_sum_14'] + df['intraday_volatility'])
+    
+    # Integrate High-to-Low Range Momentum Adjusted by Composite Volatility
+    df['adjusted_high_low_momentum'] = df['high_low_range'].diff() * df['composite_volatility']
+    
+    # Incorporate Recent Price Momentum
+    df['14_day_momentum'] = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    df['60_day_momentum'] = (df['close'] - df['close'].shift(60)) / df['close'].shift(60)
+    
+    # Determine 10-Day Simple Moving Average (SMA) of the Close Price
+    df['10_day_sma'] = df['close'].rolling(window=10).mean()
+    
+    # Define a Momentum Factor
+    df['momentum_factor'] = df['close'] - df['10_day_sma']
+    
+    # Identify High-Activity Days
+    df['30_day_volume_sma'] = df['volume'].rolling(window=30).mean()
+    df['high_activity_day'] = df['volume'] > df['30_day_volume_sma']
+    
+    # Calculate Percentage Change in Close Price on High-Activity Days
+    df['close_pct_change'] = df['close'].pct_change()
+    df['high_activity_momentum'] = df['close_pct_change'] * df['high_activity_day']
+    
+    # Analyze Intraday Market Sentiment
+    df['daily_midpoint'] = (df['high'] + df['low']) / 2
+    df['directional_bias'] = np.where(df['close'] > df['daily_midpoint'], 1, -1)
+    
+    # Combine Momentum and Sentiment for Composite Signal
+    df['composite_signal'] = df['momentum_factor'] * df['directional_bias']
+    
+    # Filter by Volume
+    volume_threshold = df['volume'].quantile(0.75)
+    df['filtered_signal'] = np.where(df['volume'] > volume_threshold, df['composite_signal'], 0)
+    
+    # Analyze Price Reversals Using High, Low, and Open Prices
+    df['price_reversal'] = (df['high'] - df['low']) / df['open']
+    df['220_day_price_reversal'] = df['price_reversal'].rolling(window=220).sum()
+    
+    # Assess Volume Impact on Price Movement
+    df['volume_weighted_close'] = (df['close'] * df['volume']).ewm(span=20).mean()
+    
+    # Final Alpha Factor Combination
+    df['alpha_factor'] = (
+        df['VWAP_log_returns_ema'] +
+        df['adjusted_high_low_momentum'] +
+        df['14_day_momentum'] +
+        df['60_day_momentum'] +
+        df['filtered_signal'] +
+        df['220_day_price_reversal'] +
+        df['volume_weighted_close']
+    )
+    
+    return df['alpha_factor']
+```

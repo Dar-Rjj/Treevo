@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / intraday_range
+    
+    # Calculate Intraday Volume Intensity
+    volume_intensity = df['volume'] / df['volume'].rolling(window=10).sum()
+    
+    # Intraday Price Change
+    intraday_price_change = (df['close'] - df['open']) / intraday_range
+    
+    # Intraday Range Percentage
+    intraday_range_percentage = intraday_range / df['close']
+    
+    # Close-to-Open Momentum Shift
+    close_to_open_momentum = (df['close'] - df['open']) / df['open']
+    
+    # Volume Activity Ratio
+    volume_activity_ratio = df['volume'].rolling(window=10).sum() / df['volume'].rolling(window=10).mean()
+    
+    # Daily Return Volatility
+    daily_return = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    daily_return_volatility = daily_return / daily_return.rolling(window=20).std()
+    
+    # Combine Intraday Components
+    combined_intraday = (volume_intensity * closing_position) + intraday_price_change + close_to_open_momentum
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_trend_adjustment = df['close'] - ema_20
+    
+    # Incorporate Daily Return Volatility
+    volatility_adjusted = combined_intraday * daily_return_volatility + recent_trend_adjustment
+    
+    # Trend Reversal Potential
+    rsi = 100 - (100 / (1 + (df['close'] - df['close'].shift(1)).rolling(window=14).mean() / (df['close'] - df['close'].shift(1)).abs().rolling(window=14).mean()))
+    overbought_flag = (rsi > 70).astype(int)
+    oversold_flag = (rsi < 30).astype(int)
+    roc = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    trend_reversal_potential = (overbought_flag * (roc < 0).astype(int)) - (oversold_flag * (roc > 0).astype(int))
+    
+    # Final Alpha Factor
+    final_alpha = (0.5 * volatility_adjusted) + (0.3 * recent_trend_adjustment) + (0.2 * trend_reversal_potential)
+    
+    return final_alpha
+```

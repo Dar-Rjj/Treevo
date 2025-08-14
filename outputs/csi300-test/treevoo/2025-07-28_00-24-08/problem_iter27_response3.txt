@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Identify Trends in Daily Returns (sum of daily returns over the past 5 days)
+    df['5_day_return_sum'] = df['daily_return'].rolling(window=5).sum()
+
+    # Analyze Price Volatility (standard deviation of high and low prices over the last 20 days)
+    df['price_volatility'] = df[['high', 'low']].std(axis=1).rolling(window=20).mean()
+
+    # Explore Trading Volume Patterns (average trading volume over the past 10 days)
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    
+    # Evaluate the ratio of today's volume to the 10-day average volume
+    df['volume_ratio'] = df['volume'] / df['avg_volume_10d']
+
+    # Consider Price Momentum (difference between today's close and the lowest low over the last 30 days)
+    df['price_momentum'] = df['close'] - df['low'].rolling(window=30).min()
+
+    # Investigate the Relationship Between Price Change and Volume (correlation between daily return and volume over the last 60 days)
+    df['return_volume_corr'] = df['daily_return'].rolling(window=60).corr(df['volume'])
+
+    # Examine Market Strength (number of days in the last 10 where the closing price was higher than the opening price)
+    df['market_strength'] = (df['close'] > df['open']).rolling(window=10).sum()
+
+    # Look for Buying or Selling Pressure (closing price is within the top third of the (high, low) range more often than not in the past 7 days)
+    df['in_top_third'] = (df['close'] > (df['high'] + df['low']) / 3 * 2).rolling(window=7).mean() > 0.5
+
+    # Short-Term Price Momentum (subtract the 5-day ago Close price from the Current Close price)
+    df['short_term_momentum'] = df['close'] - df['close'].shift(5)
+
+    # Long-Term Price Momentum (subtract the 20-day ago Close price from the Current Close price)
+    df['long_term_momentum'] = df['close'] - df['close'].shift(20)
+
+    # Price Momentum Ratio (divide Short-Term Price Momentum by Long-Term Price Momentum)
+    df['momentum_ratio'] = df['short_term_momentum'] / df['long_term_momentum'].replace(0, 1e-6)
+
+    # Volume-Weighted High-Low Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['vol_weighted_high_low'] = df['high_low_range'] * df['volume']
+    df['avg_vol'] = df['volume'].rolling(window=20).mean()
+    df['vol_weighted_volatility'] = df['vol_weighted_high_low'] / df['avg_vol']
+
+    # Conditionally Adjust by Volume Metrics
+    df['adjusted_volatility'] = df.apply(lambda row: row['vol_weighted_volatility'] * 1.5 if row['volume'] > row['avg_volume_10d'] else row['vol_weighted_volatility'] * 0.5, axis=1)
+
+    # Incorporate Opening Price Impact (calculate the gap between today's open and yesterday's close)
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    df['adjusted_daily_return'] = df['daily_return'] + df['opening_gap'] / df['close']
+
+    # Relative Strength Index (RSI) over the last 14 days
+    df['gain'] = df['daily_return'].apply(lambda x: max(x, 0))
+    df['loss'] = -df['daily_return'].apply(lambda x: min(x, 0))
+    df['avg_gain'] = df['gain'].rolling(window=14).mean()
+    df['avg_loss'] = df['loss'].rolling(window=14).mean()
+    df['rsi'] = 100 - (100 / (1 + df['avg_gain'] / df['avg_loss']))
+
+    # Price-Volume Divergence (difference between the trend of prices and the trend of volumes)
+    df['price_trend'] = df['close'].rolling(window=14).mean()
+    df['volume_trend'] = df['volume'].rolling(window=14).mean()
+    df['divergence'] = df['price_trend'] - df['volume_trend']
+
+    # Accumulation-Distribution

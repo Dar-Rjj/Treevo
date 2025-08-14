@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, n_days=5):
+    # Calculate Volume-Weighted High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Volume_Weighted_High_Low_Spread'] = df['High_Low_Spread'] * df['volume']
+    df['Sum_Volume_Weighted_High_Low_Spread'] = df['Volume_Weighted_High_Low_Spread'].rolling(window=lookback_period).sum()
+
+    # Calculate Volume-Averaged Close Price
+    df['Volume_Averaged_Close'] = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    df['Volume_Weighted_High_Low_Spread_Ratio'] = df['Sum_Volume_Weighted_High_Low_Spread'] / df['Volume_Averaged_Close']
+
+    # Generate Short-Term Trend Signal
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['Short_Term_Trend_Signal'] = (df['close'] > df['SMA_20']).astype(int)
+
+    # Generate Long-Term Trend Signal
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    df['Long_Term_Trend_Signal'] = (df['close'] > df['SMA_200']).astype(int)
+
+    # Calculate Momentum Component
+    df['Average_Past_N_Days_Volume_Weighted_High_Low_Spread'] = df['Volume_Weighted_High_Low_Spread'].rolling(window=n_days).mean()
+    df['Momentum_Component'] = df['Volume_Weighted_High_Low_Spread'] - df['Average_Past_N_Days_Volume_Weighted_High_Low_Spread'].shift(1)
+
+    # Calculate Momentum Score
+    df['Momentum_Score'] = (df['high'] - df['high'].shift(1)) + (df['low'] - df['low'].shift(1))
+
+    # Calculate Daily Volume Percentage Change
+    df['Daily_Volume_Percentage_Change'] = df['volume'].pct_change()
+
+    # Calculate Return Multiplied by Volume
+    df['Return_Open_to_Close'] = (df['close'] / df['open']) - 1
+    df['Market_Participant_Intensity'] = df['Return_Open_to_Close'] * df['volume']
+
+    # Generate Final Factor
+    df['Advanced_Composite_Alpha_Factor'] = (
+        df['Volume_Weighted_High_Low_Spread_Ratio'] +
+        df['Short_Term_Trend_Signal'] +
+        df['Long_Term_Trend_Signal'] +
+        df['Momentum_Score'] +
+        df['Market_Participant_Intensity']
+    ) * df['Daily_Volume_Percentage_Change']
+
+    return df['Advanced_Composite_Alpha_Factor']
+```

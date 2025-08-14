@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate basic price patterns
+    df['price_range'] = df['high'] - df['low']
+    df['daily_return_close'] = df['close'].pct_change()
+    df['daily_return_open_close'] = (df['close'] - df['open']) / df['open']
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['avg_close_5d'] = df['close'].rolling(window=5).mean()
+
+    # Explore relationships between price and volume
+    df['volume_to_price_ratio'] = df['volume'] / df['close']
+    df['avg_volume_to_price_ratio_5d'] = df['volume_to_price_ratio'].rolling(window=5).mean()
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+
+    # Investigate intraday momentum
+    df['intraday_momentum'] = df['close'] - df['open']
+    df['avg_intraday_momentum_5d'] = df['intraday_momentum'].rolling(window=5).mean()
+    df['cumulative_intraday_momentum_5d'] = df['intraday_momentum'].rolling(window=5).sum()
+
+    # Analyze price gaps
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['avg_gap_5d'] = df['gap'].rolling(window=5).mean()
+    df['total_gap_5d'] = df['gap'].rolling(window=5).sum()
+
+    # Introduce new factors based on trading behavior
+    def rsi(series, periods=14):
+        delta = series.diff(1)
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=periods, min_periods=1).mean()
+        avg_loss = loss.rolling(window=periods, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    df['rsi'] = rsi(df['close'])
+
+    exp1 = df['close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = macd - signal
+
+    df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = df['typical_price'] * df['volume']
+    positive_money_flow = money_flow.where(df['typical_price'] > df['typical_price'].shift(1), 0)
+    negative_money_flow = money_flow.where(df['typical_price'] < df['typical_price'].shift(1), 0)
+    money_ratio = positive_money_flow.rolling(window=14).sum() / negative_money_flow.rolling(window=14).sum()
+    df['mfi'] = 100 - (100 / (1 + money_ratio))
+
+    # Incorporate volatility measures
+    df['std_close_20d'] = df['close'].rolling(window=20).std()
+    tr = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr'] = tr.rolling(window=14).mean()
+    df['roc'] = df['close'].pct_change(periods=14)
+
+    # Synthesize all factors into a final composite alpha factor
+    df['composite_factor'] = (
+        0.15 * df['price_range'] +
+        0.15 * df['daily_return_close'] +
+        0.1 * df['daily_return_open_close'] +
+        0.05 * df['avg_volume_5d'] +
+        0.05 * df['avg_close_5d'] +
+        0.1 * df['volume_to_price_ratio'] +
+        0.05 * df['avg_volume_to_price_ratio_5d'] +
+        0.1 * df['vwap'] +
+        0.05 * df['intraday_momentum'] +
+        0.05 * df['avg_intraday_momentum_5d'] +
+        0.05

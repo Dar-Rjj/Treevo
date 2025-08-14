@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Close-Open Spread
+    close_open_spread = df['close'] - df['open']
+    
+    # Calculate Smoothed Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['close']
+    smoothed_intraday_return = intraday_return.ewm(span=5, adjust=False).mean().shift(1)
+    
+    # Incorporate Volume Intensity
+    avg_volume_5 = df['volume'].rolling(window=5).mean()
+    volume_intensity = 1 / avg_volume_5
+    intraday_momentum_difference = smoothed_intraday_return * volume_intensity
+    
+    # Detect Volume Spikes
+    volume_change = df['volume'].pct_change()
+    avg_volume_change = volume_change.rolling(window=25).mean()
+    volume_spike = (volume_change > 1.75 * avg_volume_change).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    combined_factor = intraday_momentum_difference * volume_spike
+    smoothed_combined_factor = combined_factor.rolling(window=4).mean().shift(1)
+    
+    # Integrate Next Day Open to Current Day Close
+    next_day_open = df['open'].shift(-1)
+    overnight_return = next_day_open - df['close']
+    
+    # Final Alpha Signal
+    final_alpha_signal = smoothed_combined_factor + overnight_return
+    
+    return final_alpha_signal
+```

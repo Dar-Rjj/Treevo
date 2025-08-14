@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute the daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Sum the daily returns over a 5-day window to capture short-term momentum
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum()
+    
+    # Determine the True Range
+    df['true_range'] = df[['high', 'low', 'close']].join(
+        df['close'].shift(1), rsuffix='_prev').apply(
+            lambda x: max(x['high'] - x['low'], 
+                          abs(x['high'] - x['close_prev']), 
+                          abs(x['low'] - x['close_prev'])), axis=1)
+    
+    # Calculate an Average True Range over a 14-day period
+    df['avg_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Identify days with unusually high volume compared to a 20-day average
+    df['avg_vol_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = df['volume'] > df['avg_vol_20']
+    
+    # Examine if high volume days coincide with positive or negative price changes
+    df['price_change'] = df['close'] - df['open']
+    df['buy_signal'] = (df['volume_spike'] & (df['price_change'] > 0)).astype(int)
+    df['sell_signal'] = (df['volume_spike'] & (df['price_change'] < 0)).astype(int)
+    
+    # Detect upward and downward gaps
+    df['upward_gap'] = (df['open'] > df['close'].shift(1)) & (df['open'] - df['close'].shift(1) > 0.01 * df['close'].shift(1))
+    df['downward_gap'] = (df['open'] < df['close'].shift(1)) & (df['close'].shift(1) - df['open'] > 0.01 * df['close'].shift(1))
+    
+    # Calculate the rate of change between current close and previous close
+    df['rate_of_change'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Categorize this rate of change into bins and assign scores
+    bins = [-float('inf'), -0.1, -0.05, -0.01, 0.01, 0.05, 0.1, float('inf')]
+    labels = [-3, -2, -1, 0, 1, 2, 3]
+    df['roc_score'] = pd.cut(df['rate_of_change'], bins=bins, labels=labels)
+    
+    # Measure the correlation coefficient between daily volume and close prices over a 30-day window
+    df['vol_price_corr'] = df['volume'].rolling(window=30).corr(df['close'])
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['short_term_momentum'] + 
+                          df['avg_true_range'] + 
+                          df['buy_signal'] - df['sell_signal'] + 
+                          df['upward_gap'].astype(int) - df['downward_gap'].astype(int) + 
+                          df['roc_score'].astype(float) + 
+                          df['vol_price_corr'])
+    
+    return df['alpha_factor']
+```

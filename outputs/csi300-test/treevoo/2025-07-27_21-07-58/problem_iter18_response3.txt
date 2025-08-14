@@ -1,0 +1,97 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change Percentage
+    df['price_change'] = df['close'].pct_change()
+
+    # Compute 5-Day Moving Average of Price Change
+    df['price_momentum_5d'] = df['price_change'].rolling(window=5).mean()
+
+    # Calculate Daily Volume Change
+    df['volume_change'] = df['volume'].diff()
+
+    # Compute 10-Day Moving Average of Volume Change
+    df['volume_change_10d'] = df['volume_change'].rolling(window=10).mean()
+
+    # Combine Price Momentum and Volume Surge
+    df['price_vol_momentum'] = df['price_momentum_5d'] * df['volume_change_10d']
+
+    # Calculate 1-Period Price Momentum
+    df['price_momentum_1d'] = df['close'].pct_change()
+
+    # Adjust by Average Volume
+    n = 21
+    df['avg_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume']
+
+    # Combine Momentum and Volume Adjustment
+    df['vol_adj_momentum'] = df['price_momentum_1d'] * df['volume_ratio']
+    
+    # Calculate Cumulative Volume
+    df['cum_volume'] = df['volume'].rolling(window=21).sum()
+    
+    # Multiply Moving Sum of Positive Returns by Cumulative Volume
+    df['positive_returns'] = df['close'].pct_change().apply(lambda x: x if x > 0 else 0)
+    df['positive_returns_cum_vol'] = df['positive_returns'].rolling(window=21).sum() * df['cum_volume']
+    
+    # Add Volume Adjusted Momentum
+    df['combined_momentum_vol_adj'] = (df['positive_returns_cum_vol'] / 21) + df['vol_adj_momentum']
+
+    # Calculate True Range
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = (df['high'] - df['close'].shift(1)).abs()
+    df['tr3'] = (df['low'] - df['close'].shift(1)).abs()
+    df['true_range'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Compute 14-Day Simple Moving Average of True Range
+    df['atr_14d'] = df['true_range'].rolling(window=14).mean()
+
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Change in High-Low Range
+    df['change_high_low_range'] = df['high_low_range'].diff()
+
+    # Combine High-Low Range and Volume
+    df['high_low_vol'] = df['change_high_low_range'] * df['volume'] / df['close']
+
+    # Adjust by Amount
+    m = 21
+    df['avg_amount'] = df['amount'].rolling(window=m).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount']
+
+    # Combine Momentum, Volatility, and High-Low Range Components
+    df['combined_momentum_volatility_hl'] = (
+        df['price_momentum_5d'] + 
+        df['price_momentum_1d'] * (1 / df['atr_14d']) + 
+        df['high_low_vol']
+    )
+
+    # Final Combined Alpha Factor
+    df['final_alpha_factor'] = (
+        df['price_vol_momentum'] + 
+        df['combined_momentum_vol_adj'] + 
+        df['combined_momentum_volatility_hl']
+    ) * df['amount_ratio']
+
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Compute 5-Day Exponential Moving Average of Log Return
+    df['ema_log_return_5d'] = df['log_return'].ewm(span=5, adjust=False).mean()
+
+    # Combine Log Momentum and Volume Surge
+    df['log_vol_momentum'] = df['ema_log_return_5d'] * df['volume_change_10d']
+
+    # Combine All Components
+    df['final_combined_alpha_factor'] = (
+        df['price_vol_momentum'] + 
+        df['log_vol_momentum'] + 
+        df['combined_momentum_vol_adj'] + 
+        df['combined_momentum_volatility_hl']
+    ) * df['amount_ratio']
+
+    return df['final_combined_alpha_factor']
+```

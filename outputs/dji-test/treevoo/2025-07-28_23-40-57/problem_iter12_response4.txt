@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Divide by Previous Close
+    df['previous_close'] = df['close'].shift(1)
+    df['intraday_momentum'] = df['high_low_spread'] / df['previous_close']
+    
+    # Calculate Price Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(20)
+    
+    # Adjust by Volume
+    df['cumulative_volume'] = df['volume'].rolling(window=10).sum()
+    df['adjusted_momentum'] = df['price_momentum'] / df['cumulative_volume']
+    
+    # Calculate Cumulative Volume-Weighted Momentum
+    df['volume_weighted_momentum'] = (df['adjusted_momentum'] * df['volume']).rolling(window=10).sum()
+    
+    # Confirm with Volume Trend
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_5d']
+    df['confirmed_momentum'] = df.apply(lambda row: row['price_momentum'] * row['intraday_momentum'] if row['volume_ratio'] > 1.2 else 0, axis=1)
+    df['aggregated_momentum'] = df['confirmed_momentum'].rolling(window=10).sum()
+    
+    # Calculate EMAs
+    df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate EMA Difference
+    df['ema_diff'] = df['ema_9'] - df['ema_26']
+    
+    # Calculate Volume Rate of Change (VROC)
+    df['vroc_14'] = df['volume'].pct_change(14)
+    
+    # Combine Indicators
+    df['indicator'] = df.apply(lambda row: row['ema_diff'] * row['vroc_14'] if row['price_momentum'] > 0 and row['ema_diff'] > 0 else 0, axis=1)
+    
+    return df['indicator']
+```

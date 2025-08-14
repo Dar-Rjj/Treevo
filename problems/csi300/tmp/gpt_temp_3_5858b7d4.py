@@ -1,0 +1,44 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Determine short-term and long-term window sizes based on recent market conditions
+    short_window = 5 if df['close'].iloc[-1] > df['close'].rolling(20).mean().iloc[-1] else 10
+    long_window = 20 if df['close'].iloc[-1] > df['close'].rolling(50).mean().iloc[-1] else 50
+    
+    # Calculate short-term and long-term SMAs
+    sma_short = df['close'].rolling(window=short_window).mean()
+    sma_long = df['close'].rolling(window=long_window).mean()
+    
+    # Calculate returns from the current close price to the SMA
+    return_short = (df['close'] - sma_short) / sma_short
+    return_long = (df['close'] - sma_long) / sma_long
+    
+    # Volume-weighted exponential smoothing
+    alpha = 0.1
+    smoothed_prices = [df['close'].iloc[0]]
+    for i in range(1, len(df)):
+        weight = df['volume'].iloc[i] / df['volume'].rolling(window=short_window).sum().iloc[i]
+        smoothed_price = alpha * (df['close'].iloc[i] * weight) + (1 - alpha) * smoothed_prices[-1]
+        smoothed_prices.append(smoothed_price)
+    
+    # Adjust for volatility
+    std_dev = df['close'].rolling(window=20).std()
+    volatility_adjustment = 1 / std_dev
+    
+    # Incorporate sentiment
+    intraday_sentiment = (df['high'] - df['low']) / df['open']
+    
+    # Liquidity adjustment factor
+    avg_volume = df['volume'].rolling(window=20).mean()
+    liquidity_adjustment = df['volume'] / avg_volume
+    
+    # Adjusted momentum
+    adjusted_momentum = (return_short + return_long) * liquidity_adjustment
+    
+    # Final alpha factor
+    alpha_factor = (adjusted_momentum * volatility_adjustment * (1 + intraday_sentiment)).dropna()
+    
+    return alpha_factor

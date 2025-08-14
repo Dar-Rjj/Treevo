@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate simple moving average (SMA) of closing prices
+    window = 20
+    df['SMA'] = df['close'].rolling(window=window).mean()
+    
+    # Calculate exponential moving average (EMA) of closing prices
+    df['EMA'] = df['close'].ewm(span=window, adjust=False).mean()
+    
+    # Determine the difference between EMA and SMA
+    df['EMA_SMA_diff'] = df['EMA'] - df['SMA']
+    
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Calculate the sum of positive daily returns over a fixed period
+    df['positive_returns_sum'] = df['daily_return'].apply(lambda x: x if x > 0 else 0).rolling(window=window).sum()
+    
+    # Calculate the sum of negative daily returns over a fixed period
+    df['negative_returns_sum'] = df['daily_return'].apply(lambda x: x if x < 0 else 0).rolling(window=window).sum()
+    
+    # Determine the ratio of positive to negative returns
+    df['pos_neg_ratio'] = df['positive_returns_sum'] / (-df['negative_returns_sum']).fillna(0)
+    
+    # Calculate the change in volume compared to the previous day
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Identify days with significant volume changes (e.g., more than 20% increase)
+    significant_volume_change = df['volume_change'] > 0.2
+    
+    # Count the number of such high-volume change days within a fixed period
+    df['high_volume_days'] = significant_volume_change.rolling(window=window).sum()
+    
+    # Calculate the product of the difference between EMA and SMA and the volume change
+    df['EMA_SMA_diff_vol_chg_product'] = df['EMA_SMA_diff'] * df['volume_change']
+    
+    # Determine the weighted sum of daily returns, where weights are based on the volume
+    df['weighted_return'] = df['daily_return'] * df['volume']
+    df['weighted_return_sum'] = df['weighted_return'].rolling(window=window).sum()
+    
+    # Calculate the range (high - low) for each day
+    df['range'] = df['high'] - df['low']
+    
+    # Compute the ratio of the range to the closing price
+    df['range_to_close_ratio'] = df['range'] / df['close']
+    
+    # Identify days with unusually high ranges (e.g., more than 2 standard deviations from the mean)
+    range_mean = df['range'].mean()
+    range_std = df['range'].std()
+    df['high_range_days'] = (df['range'] > range_mean + 2 * range_std).astype(int)
+    
+    # Calculate the gap (open_t - close_{t-1})
+    df['gap'] = df['open'] - df['close'].shift(1)
+    
+    # Determine the direction of the gap (positive or negative)
+    df['gap_direction'] = df['gap'].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
+    
+    # Count the number of consecutive days with gaps in the same direction
+    df['consecutive_gap_days'] = (df['gap_direction'] != df['gap_direction'].shift(1)).cumsum()
+    df['consecutive_gap_days'] = df.groupby('consecutive_gap_days')['gap_direction'].transform('count')
+    
+    # Combine all factors into a single alpha factor
+    alpha_factor = (
+        df['EMA_SMA_diff_vol_chg_product'] +
+        df['weighted_return_sum'] +
+        df['pos_neg_ratio'] +
+        df['high_volume_days'] +
+        df['high_range_days'] +
+        df['consecutive_gap_days']
+    )
+    
+    return alpha_factor
+```

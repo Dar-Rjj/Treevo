@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, M=20):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices).diff()
+    
+    # Compute Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Define Upper and Lower Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    
+    # Clip Log Returns to Thresholds
+    clipped_cum_log_returns = np.clip(cum_log_returns, lower_threshold, upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    volume_relative_to_mean = volumes / volumes.rolling(window=N).mean()
+    momentum_adjusted_volume = clipped_cum_log_returns * volume_relative_to_mean
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    std_abs_price_changes = abs_price_changes.rolling(window=M).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=M, adjust=False).mean()
+    iqr_abs_price_changes = abs_price_changes.rolling(window=M).quantile(0.75) - abs_price_changes.rolling(window=M).quantile(0.25)
+    
+    # Combine Weighted Components
+    weights = {'momentum': 0.4, 'volatility_std': 0.3, 'volatility_ema': 0.2, 'volatility_iqr': 0.1}
+    combined_factor = (weights['momentum'] * momentum_adjusted_volume +
+                       weights['volatility_std'] * std_abs_price_changes +
+                       weights['volatility_ema'] * ema_abs_price_changes +
+                       weights['volatility_iqr'] * iqr_abs_price_changes)
+    
+    # Ensure Weights Sum to 1
+    assert sum(weights.values()) == 1.0
+    
+    return combined_factor

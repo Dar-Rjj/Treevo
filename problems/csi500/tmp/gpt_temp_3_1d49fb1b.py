@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Adaptive Exponential Moving Average of Volume-Weighted Intraday Return
+    def adaptive_ema(series, window, alpha=None):
+        if alpha is None:
+            alpha = 2 / (window + 1)
+        ema = series.ewm(alpha=alpha).mean()
+        return ema
+    
+    recent_volatility = df['intraday_return'].rolling(window=5).std()
+    dynamic_alpha = 2 / (30 + 1 + 10 * recent_volatility)
+    df['adaptive_ema_volume_weighted_return'] = adaptive_ema(df['volume_weighted_intraday_return'], window=30, alpha=dynamic_alpha)
+    
+    # Calculate Intraday Volatility
+    df['squared_intraday_return'] = df['intraday_return'] ** 2
+    df['intraday_volatility'] = np.sqrt(df['squared_intraday_return'].rolling(window=10).sum())
+    
+    # Simple Moving Average of Intraday Volatility
+    df['sma_intraday_volatility'] = df['intraday_volatility'].rolling(window=10).mean()
+    
+    # Adjust for Recent Volatility
+    df['recent_volatility_sma'] = df['intraday_volatility'].rolling(window=5).mean()
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    df['volume_weighted_intraday_momentum'] = df['intraday_return'] * df['volume']
+    
+    # Adaptive Exponential Moving Average of Volume-Weighted Intraday Momentum
+    df['adaptive_ema_volume_weighted_momentum'] = adaptive_ema(df['volume_weighted_intraday_momentum'], window=30, alpha=dynamic_alpha)
+    
+    # Combine Factors
+    df['final_factor'] = (
+        df['adaptive_ema_volume_weighted_return'] +
+        df['sma_intraday_volatility'] -
+        df['recent_volatility_sma'] +
+        df['adaptive_ema_volume_weighted_momentum']
+    )
+    
+    # Balance Final Factor (if necessary)
+    df['final_factor'] = df['final_factor'] / df['final_factor'].abs().rolling(window=30).mean()
+    
+    return df['final_factor']

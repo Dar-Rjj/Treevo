@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    vol_adjusted_range = (df['high'] - df['low']) * df['volume']
+    
+    # Incorporate Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_10day_high = df['close'] / ten_day_high
+    proximity_to_10day_low = df['close'] / ten_day_low
+    min_proximity = pd.DataFrame({'proximity_high': proximity_to_10day_high, 'proximity_low': proximity_to_10day_low}).min(axis=1)
+    inverted_proximity = 1 / min_proximity
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    enhanced_reversion = inverted_proximity / twenty_day_volatility
+    
+    # Integrate Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_open_high_low = (open_high_diff + open_low_diff) * df['volume']
+    
+    # Moving Sum of 30-Day High-Low Spreads
+    high_low_spread = df['high'] - df['low']
+    thirty_day_sum_high_low_spread = high_low_spread.rolling(window=30).sum()
+    
+    # Spread Momentum
+    spread_momentum = thirty_day_sum_high_low_spread - thirty_day_sum_high_low_spread.shift(1)
+    
+    # Trend Strength Indicator
+    ma50 = df['close'].rolling(window=50).mean()
+    ma20 = df['close'].rolling(window=20).mean()
+    trend_strength = (ma50 - ma20) / ma20
+    
+    # Momentum Factor
+    ten_day_return = (df['close'] / df['close'].shift(10)) - 1
+    thirty_day_return = (df['close'] / df['close'].shift(30)) - 1
+    combined_momentum = ten_day_return + thirty_day_return
+    
+    # Relative Strength Index (RSI)
+    close_diff = df['close'].diff()
+    gain = close_diff.where(close_diff > 0, 0)
+    loss = -close_diff.where(close_diff < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Final Alpha Factor
+    alpha_factor = (vol_adjusted_range * enhanced_reversion * weighted_open_high_low * spread_momentum * trend_strength * combined_momentum * rsi)
+    
+    return alpha_factor
+```

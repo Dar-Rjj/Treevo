@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    n = 20  # lookback period for volume mean and momentum
+    m = 5   # smoothing period for momentum
+    short_term = 5  # short-term moving average period
+    long_term = 20  # long-term moving average period
+
+    # Compute Close Price Difference
+    df['Close_Diff'] = df['close'] - df['close'].shift(n)
+
+    # Smoothing the Momentum
+    df['Raw_Momentum'] = df['Close_Diff'].rolling(window=m).mean()
+
+    # Volume Weighing Process
+    df['Mean_Volume'] = df['volume'].rolling(window=n).mean()
+    df['Volume_Ratio'] = df['volume'] / df['Mean_Volume']
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * df['Volume_Ratio']
+
+    # Calculate Intraday Movement
+    df['Intraday_Movement'] = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'] - df['open']
+
+    # Calculate Price Range Ratio
+    df['Price_Range_Ratio'] = (df['high'] - df['low']) / df['high'] * 100
+
+    # Combine Factors
+    df['Combined_Factor'] = (df['Intraday_Movement'] + df['Close_to_Open_Return']) * df['Price_Range_Ratio']
+
+    # Integrate Volume Adjusted Momentum
+    df['Integrated_Factor'] = df['Combined_Factor'] + df['Adjusted_Momentum']
+
+    # Calculate Price Momentum
+    df['Short_Term_MA'] = df['close'].rolling(window=short_term).mean()
+    df['Long_Term_MA'] = df['close'].rolling(window=long_term).mean()
+
+    # Determine Trend Direction
+    df['Trend_Direction'] = (df['Short_Term_MA'] > df['Long_Term_MA']).astype(int) * 2 - 1
+
+    # Confirm with Volume
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Confirmed_Momentum'] = df['Trend_Direction'] * df['Volume_Change']
+
+    # Calculate Relative Strength
+    df['Relative_Strength'] = df['Short_Term_MA'] - df['Long_Term_MA']
+
+    # Momentum Signal
+    df['Momentum_Signal'] = df['Integrated_Factor'] + df['Confirmed_Momentum'] + df['Relative_Strength']
+    
+    # Interpreting the Alpha Factor
+    df['Alpha_Factor'] = df['Momentum_Signal'].apply(lambda x: 'Positive' if x > 0 else 'Negative or Neutral')
+
+    return df['Momentum_Signal']
+```

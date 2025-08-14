@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Short-term momentum: Simple return from t-1 to t-30
+    short_term_momentum = df['close'].pct_change(30).shift(1)
+    
+    # Medium-term momentum: Logarithmic return from t-1 to t-90
+    medium_term_momentum = (np.log(df['close']) - np.log(df['close'].shift(90))).shift(1)
+    
+    # Long-term momentum: Compounded return from t-1 to t-180
+    long_term_momentum = (df['close'] / df['close'].shift(180)).apply(np.log).shift(1)
+
+    # Reversal strategies
+    highest_high_21 = df['high'].rolling(window=21).max()
+    distance_from_high = df['close'] - highest_high_21
+    distance_from_ma250 = df['close'] - df['close'].rolling(window=250).mean()
+    ema40 = df['close'].ewm(span=40, adjust=False).mean()
+    ratio_to_ema = df['close'] / ema40
+
+    # Volume indicators
+    obv = ((df['close'] - df['close'].shift(1)) > 0).astype(int) * df['volume']
+    obv.cumsum().shift(1)
+    volume_delta = ((df['close'] - df['open']) * df['volume']).cumsum().shift(1)
+    volume_surprise = (df['volume'] - df['volume'].rolling(window=15).mean()) / df['volume'].rolling(window=15).mean()
+
+    # Volatility and trend strength
+    daily_returns = df['close'].pct_change()
+    volatility = daily_returns.rolling(window=25).std()
+    atr = (df['high'] - df['low']).rolling(window=21).mean() + abs(df['close'] - df['open'])
+    trend_strength, _, _, _, _ = linregress(range(75), df['close'].iloc[-75:])
+
+    # Composite scores
+    composite_momentum = (short_term_momentum + medium_term_momentum + long_term_momentum) / 3
+    composite_reversal = (distance_from_high + distance_from_ma250 + ratio_to_ema) / 3
+    combined_volume_factors = (obv + volume_delta + volume_surprise) / 3
+
+    # Final Alpha Factor
+    alpha_factor = (composite_momentum - composite_reversal) + combined_volume_factors - volatility + trend_strength
+
+    return alpha_factor
+```

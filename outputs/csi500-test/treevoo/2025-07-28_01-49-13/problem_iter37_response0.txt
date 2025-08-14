@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    intraday_range = df['high'] - df['low']
+    
+    # Calculate Intraday Midpoint to Open Ratio
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    mid_to_open_ratio = intraday_midpoint / df['open']
+    
+    # Calculate Volume Weighted Average Price (VWAP)
+    vwap = df['amount'] / df['volume']
+    
+    # Calculate Close-to-Next Day Open Return
+    close_to_next_open_return = (vwap.shift(-1) - df['open'].shift(-1)) / vwap
+    
+    # Weighted Sum of Returns by Volume
+    weighted_sum_returns = close_to_next_open_return * df['volume']
+    
+    # Calculate Adjusted Close-to-Open Envelope
+    max_adj_close = df['close'].rolling(window=5).max()
+    min_open = df['open'].rolling(window=5).min()
+    
+    # Introduce Volatility Factor
+    daily_volatility = (df['high'] - df['low']).abs()
+    smoothed_volatility = daily_volatility.ewm(span=5, adjust=False).mean()
+    
+    # Combine Factors
+    combined_factor = mid_to_open_ratio * weighted_sum_returns
+    combined_envelopes = max_adj_close - min_open
+    integrated_volatility_factor = combined_factor * (1 + smoothed_volatility)
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'] - df['close'].shift(1)
+    
+    # Compute Cumulative Price Change
+    cumulative_price_change = daily_price_change.cumsum()
+    
+    # Adjust Close-to-Open Return by Intraday Range
+    adjusted_close_to_open_return = close_to_next_open_return / intraday_range
+    
+    # Combine Metrics
+    weighted_intraday_range = intraday_range * weighted_sum_returns
+    final_combined_metrics = weighted_intraday_range + adjusted_close_to_open_return
+    
+    # Final Factor Adjustment
+    final_factor = final_combined_metrics + cumulative_price_change
+    
+    # Incorporate Short-Term Price Momentum
+    short_term_ema = df['close'].ewm(span=10, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=30, adjust=False).mean()
+    
+    # Synthesize Composite Alpha Factor
+    composite_alpha_factor = final_factor + (short_term_ema - long_term_ema)
+    
+    # Introduce Trend Reversal Indicator
+    trend_reversal = short_term_ema - long_term_ema
+    composite_alpha_factor += trend_reversal
+    
+    return composite_alpha_factor
+```

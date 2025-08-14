@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Short-term Price Movement
+    df['short_term_momentum'] = df['daily_return'].rolling(window=5).sum()
+    df['short_term_momentum_rank'] = df['short_term_momentum'].rank(pct=True) * 100
+    
+    # Long-term Price Movement
+    df['monthly_return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['long_term_momentum_rank'] = df['monthly_return'].rank(pct=True) * 100
+    
+    # Price Momentum Score
+    df['price_momentum_score'] = (df['short_term_momentum_rank'] + df['long_term_momentum_rank']) / 2
+    
+    # Daily Volume Change
+    df['daily_volume_change'] = df['volume'].pct_change()
+    
+    # Short-term Volume Activity
+    df['avg_daily_volume_change'] = df['daily_volume_change'].rolling(window=5).mean()
+    df['short_term_volume_activity_rank'] = df['avg_daily_volume_change'].rank(pct=True) * 100
+    
+    # Long-term Volume Activity
+    df['sum_20_day_volume'] = df['volume'].rolling(window=20).sum()
+    df['long_term_volume_activity_rank'] = df['sum_20_day_volume'].rank(pct=True) * 100
+    
+    # Volume Activity Score
+    df['volume_activity_score'] = (df['short_term_volume_activity_rank'] + df['long_term_volume_activity_rank']) / 2
+    
+    # Intraday High-Low Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Closing Position in Intraday Range
+    df['closing_position'] = (df['close'] - df['open']) / df['intraday_range']
+    
+    # Intraday Volume Intensity
+    df['avg_10_day_volume'] = df['volume'].rolling(window=10).mean()
+    df['intraday_volume_intensity'] = df['volume'] / df['avg_10_day_volume']
+    
+    # Adjust for Recent Price Trend
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['recent_price_trend'] = df['ema_20'] - df['close']
+    
+    # Combine Factors
+    df['combined_factors'] = df['intraday_volume_intensity'] * df['closing_position'] * df['recent_price_trend']
+    
+    # Weighted Sum of Scores
+    df['weighted_scores'] = 0.5 * df['price_momentum_score'] + 0.3 * df['volume_activity_score'] + 0.2 * df['intraday_range']
+    
+    # Final Alpha Factor Combination
+    df['final_alpha_factor'] = df['combined_factors'] * df['weighted_scores']
+    
+    # Add a Sentiment Score (Assuming a sentiment score column 'sentiment' is available)
+    df['sentiment_rank'] = df['sentiment'].rank(pct=True) * 100
+    df['final_alpha_factor'] = df['final_alpha_factor'] + 0.2 * df['sentiment_rank']
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=20):
+    """
+    Generate a set of alpha factors based on the given DataFrame.
+
+    :param df: pandas DataFrame with columns ['open', 'high', 'low', 'close', 'amount', 'volume']
+               and indexed by (date).
+    :param n: Short-term lookback period.
+    :param m: Long-term lookback period.
+    :return: A pandas Series representing the factor values, indexed by (date).
+    """
+    
+    # Price Movement Analysis
+    df['daily_price_change'] = df['close'] - df['open']
+    df['high_low_spread'] = df['high'] - df['low']
+    df['close_high_gap'] = df['high'] - df['close']
+    
+    # Volume Analysis
+    df['volume_change'] = df['volume'].diff()
+    df['avg_volume_n_days'] = df['volume'].rolling(window=n).mean()
+    df['vol_to_avg_vol_ratio'] = df['volume'] / df['avg_volume_n_days'].shift(1)
+    
+    # Amount Analysis
+    df['amount_change'] = df['amount'].diff()
+    df['avg_amount_n_days'] = df['amount'].rolling(window=n).mean()
+    df['amt_to_avg_amt_ratio'] = df['amount'] / df['avg_amount_n_days'].shift(1)
+    
+    # Momentum and Reversal Indicators
+    df['short_term_momentum'] = (df['close'] - df['close'].shift(n)) / n
+    df['long_term_momentum'] = (df['close'] - df['close'].shift(m)) / m
+    df['short_term_reversal'] = (df['low'] - df['high'].shift(1)) / (df['high'].shift(1) - df['low'].shift(1))
+    
+    # Market Sentiment Indicators
+    df['up_down_ratio'] = (df['high'] - df['open']) / (df['open'] - df['low'])
+    df['buying_pressure'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Liquidity Indicators
+    df['price_to_volume_corr'] = df[['close', 'volume']].rolling(window=n).corr().iloc[::2, 1]
+    df['price_to_amount_corr'] = df[['close', 'amount']].rolling(window=n).corr().iloc[::2, 1]
+    
+    # Volatility Indicators
+    df['historical_volatility'] = df['close'].rolling(window=n).std()
+    df['intraday_volatility'] = df[['open', 'high', 'low', 'close']].rolling(window=1).std().sum(axis=1)
+    
+    # Combine all indicators into a single alpha factor
+    alpha_factor = (
+        0.2 * (df['daily_price_change'] + df['high_low_spread'] + df['close_high_gap']) +
+        0.3 * (df['volume_change'] + df['vol_to_avg_vol_ratio'] + df['amount_change'] + df['amt_to_avg_amt_ratio']) +
+        0.2 * (df['short_term_momentum'] + df['long_term_momentum'] + df['short_term_reversal']) +
+        0.1 * (df['up_down_ratio'] + df['buying_pressure']) +
+        0.1 * (df['price_to_volume_corr'] + df['price_to_amount_corr']) +
+        0.1 * (df['historical_volatility'] + df['intraday_volatility'])
+    )
+    
+    return alpha_factor
+```

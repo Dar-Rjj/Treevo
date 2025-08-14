@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_spread'] = df['high'] - df['low']
+    
+    # Calculate Previous Day's High-Low Spread
+    df['prev_intraday_spread'] = df['high'].shift(1) - df['low'].shift(1)
+    
+    # Compare Intraday and Previous Day Spreads
+    df['intraday_spread_ratio'] = df['intraday_spread'] / df['prev_intraday_spread']
+    
+    # Signal: Strong or Weak Intraday Momentum
+    df['intraday_momentum_signal'] = (df['intraday_spread'] > df['prev_intraday_spread']).astype(int)
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Identify Volume Spikes
+    K = 1.5  # Threshold for volume spike
+    df['volume_spike_indicator'] = (df['volume'] > K * df['volume'].shift(1)).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['multiplied_combined_return'] = df['open_to_close_return'] * df['volume_spike_indicator']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Previous Close Return
+    df['close_to_prev_close_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate Average High-Low Range for the past 5 days
+    df['avg_high_low_range'] = df['high_low_range'].rolling(window=5).mean()
+    
+    # Calculate High-Low Range Over Average
+    df['high_low_range_over_avg'] = df['high_low_range'] / df['avg_high_low_range']
+    
+    # Calculate Volume Difference
+    df['volume_difference'] = df['volume'] - df['volume'].shift(1)
+    
+    # Weight by Volume Change
+    df['volume_change_weight'] = df['volume_difference'] / df['volume'].shift(1)
+    
+    # Integrate Moving Averages
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Calculate SMA Ratios
+    df['sma_5_over_sma_20'] = df['sma_5'] / df['sma_20']
+    df['sma_20_over_sma_50'] = df['sma_20'] / df['sma_50']
+    
+    # Combine Signals for Alpha Factor
+    weights = {
+        'intraday_spread_ratio': 0.1,
+        'open_to_close_return': 0.1,
+        'multiplied_combined_return': 0.1,
+        'high_low_range_over_avg': 0.1,
+        'volume_change_weight': 0.1,
+        'close_to_prev_close_return': 0.1,
+        'sma_5_over_sma_20': 0.2,
+        'sma_20_over_sma_50': 0.2
+    }
+    
+    alpha_factor = sum(df[col] * weight for col, weight in weights.items())
+    
+    return alpha_factor
+```

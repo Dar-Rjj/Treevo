@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Log Returns
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # 20-Day EMA of Log Returns, Weigh by Volume
+    df['volume_weighted_returns'] = df['log_returns'] * df['volume']
+    df['volume_ema_returns'] = df['volume_weighted_returns'].ewm(span=20).mean()
+    
+    # High-Low Range Volatility
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_volatility'] = df['high_low_range'].rolling(window=20).std()
+    
+    # Weight by High-Low Range Volatility
+    df['volume_adjusted_momentum'] = df['volume_ema_returns'] / df['high_low_volatility']
+    
+    # 10-day Simple Moving Average (SMA) of the Close Price
+    df['sma_10_close'] = df['close'].rolling(window=10).mean()
+    
+    # Define a Momentum Factor
+    df['momentum_factor'] = df['close'] - df['sma_10_close']
+    
+    # Identify High-Activity Days
+    df['volume_30_sma'] = df['volume'].rolling(window=30).mean()
+    df['is_high_activity'] = df['volume'] > df['volume_30_sma']
+    
+    # Calculate Percentage Change in Close Price on High-Activity Days
+    df['high_activity_pct_change'] = df['close'].pct_change()
+    df['high_activity_pct_change'] = df['high_activity_pct_change'].where(df['is_high_activity'], 0)
+    
+    # Adjust the momentum score based on the percentage change
+    df['adjusted_momentum_score'] = df['momentum_factor'] + df['high_activity_pct_change']
+    
+    # Analyze Intraday Market Sentiment
+    df['daily_midpoint'] = (df['high'] + df['low']) / 2
+    df['directional_bias'] = np.where(df['close'] > df['daily_midpoint'], 1, -1)
+    
+    # Combine Momentum and Sentiment for Composite Signal
+    df['composite_sentiment_momentum'] = df['momentum_factor'] * df['directional_bias']
+    
+    # Filter by Volume
+    volume_threshold = df['volume_30_sma'].mean()
+    df['composite_sentiment_momentum'] = df['composite_sentiment_momentum'].where(df['volume'] > volume_threshold, 0)
+    
+    # Opening Gap Volatility
+    df['open_to_prev_close_diff'] = df['open'] - df['close'].shift(1)
+    df['opening_gap_volatility'] = df['open_to_prev_close_diff'].rolling(window=20).std()
+    
+    # Volume-Weighted Close
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    df['volume_ema_close'] = df['volume_weighted_close'].ewm(span=20).mean() / df['volume'].ewm(span=20).mean()
+    
+    # Final Alpha
+    df['final_alpha'] = (
+        0.4 * df['volume_adjusted_momentum'] +
+        0.1 * df['momentum_factor'] +
+        0.1 * df['composite_sentiment_momentum'] +
+        0.15 * df['high_low_volatility'] +
+        0.15 * df['opening_gap_volatility'] +
+        0.1 * df['volume_ema_close']
+    )
+    
+    return df['final_alpha']
+```

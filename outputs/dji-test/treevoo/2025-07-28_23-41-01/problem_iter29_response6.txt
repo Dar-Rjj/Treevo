@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate 21-Day Rolling Sum of High-Low Range
+    df['rolling_sum_high_low'] = df['high_low_range'].rolling(window=21).sum()
+    
+    # Calculate Breakout Strength
+    df['breakout_strength'] = df['high_low_range'] / df['rolling_sum_high_low']
+    
+    # Calculate Close-to-Open Return
+    df['close_open_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Weight Close-to-Open Return by Volume
+    df['weighted_close_open_return'] = df['close_open_return'] * df['volume']
+    
+    # Combine Breakout Strength with Weighted Close-to-Open Return
+    df['combined_breakout_weighted_return'] = (df['breakout_strength'] * 0.6) + (df['weighted_close_open_return'] * 0.4)
+    
+    # Calculate Price Momentum
+    df['7_day_return'] = (df['close'] / df['close'].shift(7)) - 1
+    df['21_day_return'] = (df['close'] / df['close'].shift(21)) - 1
+    df['price_momentum'] = df['7_day_return'] + df['21_day_return']
+    
+    # Calculate Volume Activity
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).mean()
+    df['21_day_avg_volume'] = df['volume'].rolling(window=21).mean()
+    df['volume_activity'] = df['7_day_avg_volume'] / df['21_day_avg_volume']
+    
+    # Integrate Combined Return and Momentum with Volume Activity
+    df['integrated_component'] = (df['combined_breakout_weighted_return'] * 0.7) + (df['price_momentum'] * 0.5) + (df['volume_activity'] * 0.8)
+    
+    # Derive High-Low Range Signal
+    df['high_low_signal'] = (df['high_low_range'] > df['high_low_range'].rolling(window=21).mean()).astype(int)
+    
+    # Integrate Integrated Component with High-Low Range Signal
+    df['integrated_with_signal'] = (df['integrated_component'] * 0.7) + (df['high_low_signal'] * 0.3)
+    
+    # Calculate Close Position in Range
+    df['intraday_range'] = df['high'] - df['low']
+    df['close_position_in_range'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Weighted by Volume
+    df['weighted_daily_return'] = df['volume'] * df['daily_return']
+    
+    # Combine Initial Factors
+    df['combined_initial_factors'] = df['close_position_in_range'] + df['weighted_daily_return']
+    
+    # Calculate Intraday Reversal Score
+    df['intraday_close_to_open_delta'] = df['close'] - df['open']
+    df['intraday_reversal_score'] = (df['intraday_close_to_open_delta'] / df['intraday_range']) * df['volume']
+    
+    # Combine Breakout and Intraday Factors
+    df['combined_breakout_intraday'] = df['combined_initial_factors'] + df['breakout_strength'] + df['intraday_reversal_score']
+    
+    # Determine Volume Impact
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=21).mean()
+    df['volume_impact'] = df['combined_breakout_intraday'] * df['volume_ratio']
+    
+    # Introduce Trend Indicator
+    df['50_day_ma'] = df['close'].rolling(window=50).mean()
+    df['200_day_ma'] = df['close'].rolling(window=200).mean()
+    df['trend_indicator'] = (df['50_day_ma'] > df['200_day_ma']).astype(int)
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['volume_impact'] * df['volume_activity']
+    df['final_alpha_factor'] = df['final_alpha_factor'] * (df['trend_indicator'] * 2 - 1)
+    
+    return df['final_alpha_factor']
+```

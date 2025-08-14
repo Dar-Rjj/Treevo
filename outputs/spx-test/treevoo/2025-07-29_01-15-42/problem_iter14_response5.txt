@@ -1,0 +1,92 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Close-to-Open Return
+    df['Close_to_Open_Return'] = df['close'].shift(-1) - df['open']
+    
+    # Smooth with Exponential Moving Average (EMA)
+    ema_window = 20
+    df['EMA_Close_to_Open_Return'] = df['Close_to_Open_Return'].ewm(span=ema_window, adjust=False).mean()
+    
+    # Adjust for Volume and Amount
+    df['Total_Volume'] = df['volume'].rolling(window=ema_window).sum()
+    df['Total_Amount'] = df['amount'].rolling(window=ema_window).sum()
+    df['Combined_Volume_Amount'] = df['Total_Volume'] + df['Total_Amount']
+    df['Momentum_to_Volume_Amount_Ratio'] = df['EMA_Close_to_Open_Return'] / df['Combined_Volume_Amount']
+    
+    # Calculate Daily Price Range
+    df['Daily_Price_Range'] = df['high'] - df['low']
+    
+    # Compute Moving Average Volume
+    df['Moving_Average_Volume'] = df['volume'].rolling(window=20).mean()
+    
+    # Generate Volume-Adjusted Price Range
+    df['Volume_Adjusted_Price_Range'] = df['Daily_Price_Range'] / df['Moving_Average_Volume']
+    
+    # Calculate Long-Term Price Momentum
+    df['Long_Term_Momentum'] = df['close'] - df['close'].shift(14)
+    
+    # Calculate Short-Term Price Momentum
+    df['Short_Term_Momentum'] = df['close'] - df['close'].shift(5)
+    
+    # Combine Long-Term and Short-Term Momentum
+    df['Combined_Momentum'] = df['Long_Term_Momentum'] + df['Short_Term_Momentum']
+    
+    # Calculate Realized Volatility
+    df['Realized_Volatility'] = df['close'].rolling(window=20).std()
+    
+    # Calculate Intraday Price Range
+    df['Intraday_Price_Range'] = df['high'] - df['low']
+    
+    # Calculate Close to Range Midpoint Deviation
+    df['Range_Midpoint'] = (df['high'] + df['low']) / 2
+    df['Close_to_Range_Midpoint_Deviation'] = df['close'] - df['Range_Midpoint']
+    
+    # Incorporate Volume and Amount Trends
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    df['Amount_Change'] = df['amount'] - df['amount'].shift(1)
+    
+    # Calculate Intraday High-Low Spread
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Movement
+    df['Close_to_Open_Movement'] = df['close'] - df['open'].shift(-1)
+    
+    # Weighted Average of Momentum, Intraday, and Volume-Amount Components
+    weights = {
+        'Combined_Momentum': 0.3,
+        'Intraday_High_Low_Spread': 0.2,
+        'Close_to_Open_Movement': 0.1,
+        'Volume_Adjusted_Price_Range': 0.1,
+        'Realized_Volatility': 0.1,
+        'Close_to_Range_Midpoint_Deviation': 0.2
+    }
+    df['Weighted_Average'] = sum(df[col] * weight for col, weight in weights.items())
+    
+    # Calculate Volume Acceleration
+    df['Volume_Acceleration'] = df['volume'] - df['volume'].shift(5)
+    
+    # Generate Alpha Signal
+    df['Momentum_Volume_Adjusted_Signal'] = df['Weighted_Average'] * df['Volume_Acceleration']
+    
+    # Final Alpha Factor
+    threshold = 0.5
+    df['Alpha_Factor'] = np.where(
+        df['Momentum_Volume_Adjusted_Signal'] > threshold,
+        1 * df['Momentum_Volume_Adjusted_Signal'],
+        np.where(
+            df['Momentum_Volume_Adjusted_Signal'] < -threshold,
+            -1 * df['Momentum_Volume_Adjusted_Signal'],
+            0
+        )
+    )
+    
+    # Refine Final Alpha Factor
+    price_range_threshold = 0.5
+    df['Refined_Alpha_Factor'] = np.where(
+        df['Volume_Adjusted_Price_Range'] > price_range_threshold,
+        1 * df['Alpha_Factor'],
+        np.where(
+            df['Volume_Adjusted_Price_Range'] < -price_range_threshold

@@ -1,0 +1,45 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day, 20-day, and 50-day moving averages of the close price
+    ma_5 = df['close'].rolling(window=5).mean()
+    ma_20 = df['close'].rolling(window=20).mean()
+    ma_50 = df['close'].rolling(window=50).mean()
+    
+    # Momentum factors: differences between the moving averages
+    momentum_short_term = ma_5 - ma_20
+    momentum_long_term = ma_20 - ma_50
+    
+    # Weighted sum of the open, high, low, and close prices
+    weighted_prices = (0.1 * df['open'] + 0.3 * df['high'] + 0.3 * df['low'] + 0.3 * df['close'])
+    
+    # Volatility factor: ratio of the range (high - low) to the 5-day moving average
+    volatility_ratio = (df['high'] - df['low']) / (ma_5 + 1e-7)
+    
+    # Volume trend: 10-day exponential moving average of volume
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+    
+    # Liquidity factor: ratio of current volume to the 10-day EMA of volume
+    liquidity_ratio = df['volume'] / (ema_volume + 1e-7)
+    
+    # Relative Strength Index (RSI) for 14 periods
+    delta = df['close'].diff(1)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / (avg_loss + 1e-7)
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Adaptive weighting based on market trends and RSI
+    adaptive_weight_short_term = (momentum_short_term > 0).astype(int) * 0.5 + (volatility_ratio < 0.1).astype(int) * 0.5
+    adaptive_weight_long_term = (momentum_long_term > 0).astype(int) * 0.5 + (rsi < 70).astype(int) * 0.5
+    adaptive_weight = (adaptive_weight_short_term + adaptive_weight_long_term) / 2
+    
+    # Market sentiment factor: difference between the close and open prices
+    market_sentiment = df['close'] - df['open']
+    
+    # Final alpha factor as a combination of the above metrics
+    alpha_factor = (adaptive_weight * (weighted_prices - ma_5) / (volatility_ratio + 1e-7)) + \
+                   ((1 - adaptive_weight) * liquidity_ratio) + 0.2 * market_sentiment
+    return alpha_factor
+```

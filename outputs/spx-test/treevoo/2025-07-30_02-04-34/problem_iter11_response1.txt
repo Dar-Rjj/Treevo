@@ -1,0 +1,39 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = (df['high'] - df['low']) / df['close']
+    
+    # Smooth Intraday Return with EMA
+    ema_intraday_return = intraday_return.ewm(span=7, adjust=False).mean().shift(1)
+    diff_intraday_return = intraday_return - ema_intraday_return
+    
+    # Compute Next Day Open to Current Day Close
+    next_day_open_to_close = df['open'].shift(-1) - df['close']
+    
+    # Combine for Initial Alpha Signal
+    volume_weighted_return = intraday_return * df['volume']
+    initial_alpha_signal = volume_weighted_return.cumsum()
+    
+    # Incorporate Volume Intensity
+    avg_volume = df['volume'].rolling(window=10).mean()
+    volume_intensity = intraday_return * (1 / avg_volume)
+    
+    # Detect Volume Spikes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    avg_vol_change = volume_change.rolling(window=30).mean()
+    volume_spike = (volume_change > 2 * avg_vol_change).astype(int)
+    
+    # Combine Factors
+    combined_factor = diff_intraday_return * volume_spike
+    sma_combined_factor = combined_factor.rolling(window=5).mean().shift(1)
+    final_smoothed_factor = sma_combined_factor * (1 / avg_volume)
+    final_factor = final_smoothed_factor * volume_intensity
+    
+    # Final Alpha Signal
+    final_alpha_signal = initial_alpha_signal + final_factor
+    
+    return final_alpha_signal
+```

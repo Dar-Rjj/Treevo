@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    df['intraday_high_low_spread'] = df['high'] - df['low']
+    
+    # Calculate Previous Day's High-Low Spread
+    df['prev_day_high_low_spread'] = df['high'].shift(1) - df['low'].shift(1)
+    
+    # Compute Volume-Weighted Average Price (VWAP)
+    df['daily_vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['prev_day_vwap'] = df['daily_vwap'].shift(1)
+    
+    # Incorporate Open and Close Prices
+    df['intraday_open_close_spread'] = df['open'] - df['close']
+    df['prev_day_open_close_spread'] = df['open'].shift(1) - df['close'].shift(1)
+    
+    # Calculate High-Low Breakout Intensity
+    df['breakout_intensity'] = (df['high'] - df['low']) / df['close']
+    df['breakout_intensity'] = df['breakout_intensity'].apply(lambda x: max(x, 0))
+    
+    # Weight by Volume
+    df['volume_weighted_breakout_intensity'] = df['volume'] * df['breakout_intensity']
+    
+    # Combine Intraday Momentum, VWAP, and Open-Close Spread
+    df['momentum_difference'] = df['intraday_high_low_spread'] - df['prev_day_high_low_spread']
+    df['vwap_difference'] = df['daily_vwap'] - df['prev_day_vwap']
+    df['open_close_spread_difference'] = df['intraday_open_close_spread'] - df['prev_day_open_close_spread']
+    df['final_alpha_factor'] = (df['momentum_difference'] * df['vwap_difference'] + 
+                                df['open_close_spread_difference'] + 
+                                df['volume_weighted_breakout_intensity'])
+    
+    # Calculate Daily High-Low Difference
+    df['daily_high_low_difference'] = df['high'] - df['low']
+    
+    # Calculate Moving Average of High-Low Differences
+    df['ma_high_low_diff'] = df['daily_high_low_difference'].rolling(window=10).mean()
+    
+    # Combine Intraday Momentum and VWAP
+    df['combined_indicator'] = df['momentum_difference'] * df['vwap_difference']
+    
+    # Add Price Trend Confirmation
+    df['5_day_sma'] = df['close'].rolling(window=5).mean()
+    df['20_day_sma'] = df['close'].rolling(window=20).mean()
+    df['price_trend'] = df.apply(lambda row: 1 if row['5_day_sma'] > row['20_day_sma'] else -1, axis=1)
+    
+    # Synthesize Final Alpha Factor
+    df['final_combined_indicator'] = df['combined_indicator'] + df['ma_high_low_diff']
+    df['final_alpha_factor'] += df['final_combined_indicator'] * df['price_trend']
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate IntradayRange
+    df['IntradayRange'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Close Return
+    df['CloseToCloseReturn'] = df['close'].pct_change()
+    
+    # Calculate VolumeChange
+    df['VolumeChange'] = df['volume'].diff()
+    
+    # Integrate IntradayMomentumScore
+    df['IntradayMomentumScore'] = df['IntradayRange'] * df['VolumeChange']
+    
+    # Calculate 5-Day Average High-Low Spread
+    df['5DayAvgHighLowSpread'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Finalize Alpha Factor for Intraday and High-Low Spread Momentum
+    df['5DayMomentum'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['HighLowSpreadMomentum'] = df['5DayAvgHighLowSpread'] * df['5DayMomentum']
+    df['IntegratedMomentumFactor'] = df['IntradayMomentumScore'] + df['HighLowSpreadMomentum']
+    
+    # Calculate Volume Weighted Average Price
+    df['VWAP'] = (df[['open', 'high', 'low', 'close']].sum(axis=1) / 4) * df['volume']
+    df['VWAP'] = df['VWAP'].rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Combine Factors with Volume-Adjusted Price Trend
+    df['CombinedFactor'] = (df['CloseToCloseReturn'] * df['IntradayRange']) / df['VWAP']
+    
+    # Filter for Recent Price Trend
+    df['5DayMA'] = df['close'].rolling(window=5).mean()
+    df['RecentPriceTrend'] = df['close'] - df['5DayMA']
+    
+    # Introduce VolumeTrendAdjustedFactor
+    df['5DaySumVolume'] = df['volume'].rolling(window=5).sum()
+    df['VolumeRatio'] = df['volume'] / df['5DaySumVolume']
+    df['VolumeTrendAdjustedFactor'] = df['CombinedFactor'] * df['VolumeRatio']
+    
+    # Calculate Volatility Adjusted Momentum
+    df['5DayStdDev'] = df['close'].rolling(window=5).std()
+    df['VolatilityAdjustedMomentum'] = df['5DayMomentum'] / df['5DayStdDev']
+    
+    # Combine All Factors
+    df['FinalAlphaFactor'] = df['IntegratedMomentumFactor'] + df['VolumeTrendAdjustedFactor'] + df['VolatilityAdjustedMomentum']
+    
+    return df['FinalAlphaFactor'].dropna()
+```

@@ -1,0 +1,77 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate price momentum indicators
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Compute the difference between the close price and its 5-day SMA
+    df['price_momentum_short'] = df['close'] - df['SMA_5']
+    
+    # Compute the difference between the 5-day SMA and the 20-day SMA
+    df['price_momentum_medium'] = df['SMA_5'] - df['SMA_20']
+    
+    # Analyze trading volume patterns
+    # Calculate the VWAP
+    df['VWAP'] = (df['high'] + df['low'] + df['close']) / 3 * df['volume'] / df['volume'].rolling(window=1).sum()
+    df['VWAP'] = df['VWAP'].rolling(window=1).sum()  # Sum to get cumulative VWAP
+    
+    # Compute the ratio of the close price to the VWAP
+    df['value_vs_VWAP'] = df['close'] / df['VWAP']
+    
+    # Calculate the sum of volumes over a short period (e.g., 5 days)
+    df['volume_5_sum'] = df['volume'].rolling(window=5).sum()
+    
+    # Compare this sum with the volume of the current day
+    df['recent_trading_intensity'] = df['volume'] / df['volume_5_sum']
+    
+    # Evaluate market sentiment
+    # Calculate the percentage change in the close price from the previous day
+    df['close_pct_change'] = df['close'].pct_change()
+    
+    # Categorize the change as positive or negative
+    df['positive_change'] = df['close_pct_change'] > 0
+    df['negative_change'] = df['close_pct_change'] < 0
+    
+    # Count the number of consecutive positive or negative changes
+    df['consecutive_positive'] = df['positive_change'].groupby((df['positive_change'] != df['positive_change'].shift()).cumsum()).cumsum()
+    df['consecutive_negative'] = df['negative_change'].groupby((df['negative_change'] != df['negative_change'].shift()).cumsum()).cumsum()
+    
+    # Use the count as an alpha factor
+    df['market_sentiment_persistence'] = df['consecutive_positive'] - df['consecutive_negative']
+    
+    # Calculate the average true range (ATR) over a short period (e.g., 14 days)
+    df['TR'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Compute the ratio of the ATR to the closing price
+    df['volatility_ratio'] = df['ATR_14'] / df['close']
+    
+    # Examine price range and gaps
+    # Calculate the daily price range
+    df['daily_range'] = df['high'] - df['low']
+    
+    # Sum the daily price ranges over a short period (e.g., 5 days)
+    df['price_volatility_5'] = df['daily_range'].rolling(window=5).sum()
+    
+    # Identify days where the open price is significantly different from the previous day's close price
+    df['gap_opening'] = abs(df['open'] - df['close'].shift(1)) > 0.05 * df['close'].shift(1)
+    
+    # Count the number of such gap openings over a short period (e.g., 5 days)
+    df['gap_count_5'] = df['gap_opening'].rolling(window=5).sum()
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (
+        df['price_momentum_short'] +
+        df['price_momentum_medium'] +
+        df['value_vs_VWAP'] +
+        df['recent_trading_intensity'] +
+        df['market_sentiment_persistence'] +
+        df['volatility_ratio'] +
+        df['price_volatility_5'] +
+        df['gap_count_5']
+    )
+    
+    return df['alpha_factor']
+```

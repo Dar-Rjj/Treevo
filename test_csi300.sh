@@ -7,9 +7,9 @@
 python main.py \
     problem=csi300 \
     init_pop_size=10 \
-    pop_size=4 \
+    pop_size=10 \
     max_fe=200 \
     timeout=20 \
-    algorithm=eoh \
+    algorithm=treevo \
     llm_client=qwen3_api \
     llm_client.api_key='sk-fb4917a77b7d4a2b88369204d7435aba'

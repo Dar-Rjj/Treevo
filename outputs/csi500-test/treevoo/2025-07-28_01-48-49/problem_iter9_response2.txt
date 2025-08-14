@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Next-Open Difference
+    close_to_next_open_diff = df['close'].shift(-1) - df['open']
+    
+    # Adjust High-to-Low Movement by Open Adjustment
+    open_adj = df['open'] - df['open'].shift(1)
+    high_low_movement = (df['high'] - df['low']) / open_adj
+    
+    # Calculate Close Difference
+    close_diff = df['close'] - df['close'].shift(1)
+    
+    # Weight by Volume and Close Difference
+    weighted_high_low_movement = high_low_movement * (df['volume'] * close_diff)
+    
+    # Aggregate Price Movement with Volume
+    volume_weighted_diff = df['volume'] * close_to_next_open_diff
+    sum_weighted_diff = volume_weighted_diff.rolling(window=5).sum()
+    
+    # Enhance with Exponential Moving Average Filter
+    ema_weighted_sums = sum_weighted_diff.ewm(span=10, adjust=False).mean()
+    
+    # Standard Deviation of Returns as a Proxy for Volatility
+    returns = df['close'].pct_change()
+    std_dev = returns.rolling(window=14).std()
+    
+    # Normalize the Alpha Factor by Dividing by Standard Deviation
+    normalized_ema = ema_weighted_sums / std_dev
+    
+    # Combine Enhanced Factors
+    intraday_volatility = daily_range.rolling(window=5).mean()
+    volume_weighted_return = df['volume'] * (df['close'] - df['open'])
+    
+    # Integrate Price Trend Indicator
+    sma_close = df['close'].rolling(window=20).mean()
+    trend_direction = (df['close'] > sma_close).astype(int) * 2 - 1
+    
+    # Final Alpha Factor
+    alpha_factor = (weighted_high_low_movement + intraday_volatility + volume_weighted_return) * trend_direction
+    
+    return alpha_factor
+```

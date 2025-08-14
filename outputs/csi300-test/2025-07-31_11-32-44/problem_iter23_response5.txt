@@ -1,0 +1,35 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Raw Momentum
+    N = 21  # Choose N (e.g., 5, 10, 21)
+    close_pct_change = df['close'].pct_change(periods=N).fillna(0)
+    exp_weighted_momentum = (df['close'] - df['close'].shift(30)).ewm(span=30, adjust=False).mean()
+    enhanced_raw_momentum = close_pct_change * exp_weighted_momentum
+
+    # Calculate Volume-Adjusted Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']) / df['close']
+    volume_adjusted_intraday_volatility = intraday_volatility / np.sqrt(df['volume'])
+
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+
+    # Combine Enhanced Raw Momentum, Volume-Adjusted Intraday Volatility, and High-Low Range
+    combined_factor = enhanced_raw_momentum * volume_adjusted_intraday_volatility * high_low_range
+
+    # Confirm with Volume Delta
+    volume_delta = df['volume'] - df['volume'].shift(30)
+    combined_factor *= abs(volume_delta)
+
+    # Integrate with Trend Continuity and Filter
+    trend_continuity = np.sign(df['close'] - df['close'].shift(1))
+    combined_factor *= trend_continuity
+
+    # Introduce a threshold to filter out low signal-to-noise ratio
+    threshold = 0.7
+    combined_factor = combined_factor.where(np.abs(combined_factor) >= threshold, 0)
+
+    return combined_factor
+```

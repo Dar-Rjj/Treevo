@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Exponential Moving Average (EMA) of Close Prices
+    ema_close = df['close'].ewm(span=20).mean()
+    
+    # Calculate Momentum Factor
+    momentum = df['close'] - ema_close
+    
+    # Calculate Average Volume Over 20 Days
+    avg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average True Range (ATR) Over 20 Days
+    tr = df[['high', 'low']].diff(axis=1).iloc[:, 1].abs()
+    atr = tr.rolling(window=20).mean()
+    
+    # Combine Volume and ATR
+    weight = avg_volume * atr
+    weighted_momentum = momentum * weight
+    
+    # Calculate Intraday High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Momentum
+    open_close_momentum = df['close'] - df['open']
+    
+    # Combine Intraday Indicators
+    combined_intraday_indicators = high_low_spread * open_close_momentum + open_close_momentum
+    
+    # Calculate Daily Price Range
+    daily_price_range = df['high'] - df['low']
+    
+    # Calculate 20-Day Moving Average of Price Range
+    ma_price_range = daily_price_range.rolling(window=20).mean()
+    
+    # Calculate N-Day Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    roll_up = up.ewm(alpha=1/14, min_periods=14).mean()
+    roll_down = down.ewm(alpha=1/14, min_periods=14).mean().abs()
+    rs = roll_up / roll_down
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Volume-Adjusted Momentum
+    volume_adjusted_momentum = ma_price_range * df['volume'] + rsi * df['volume']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = df['close'] / high_low_spread
+    
+    # Volume-Weighted Close-to-Range Momentum
+    volume_weighted_close_to_range_momentum = df['volume'] * close_to_range_ratio
+    
+    # Final Combination
+    final_combination = combined_intraday_indicators * volume_weighted_close_to_range_momentum + volume_adjusted_momentum
+    
+    # Adjust for Volume Impact
+    volume_trend = df['volume'] - df['volume'].shift(1)
+    alpha_factor = final_combination * volume_trend
+    
+    return alpha_factor
+```

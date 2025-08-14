@@ -1,0 +1,59 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Smooth Intraday Return with EMA (span=7) and calculate the difference
+    ema_intraday_return = intraday_return.ewm(span=7, adjust=False).mean()
+    intraday_momentum_diff = intraday_return - ema_intraday_return
+    
+    # Incorporate Volume Intensity
+    avg_volume_7 = df['volume'].rolling(window=7).mean()
+    volume_intensity = 1 / avg_volume_7
+    intraday_momentum_impact = intraday_momentum_diff * volume_intensity
+    
+    # Detect Volume Spikes
+    volume_change = df['volume'].pct_change()
+    avg_volume_change_30 = volume_change.rolling(window=30).mean()
+    volume_spike = (volume_change > 2 * avg_volume_change_30).astype(int)
+    
+    # Combine Intraday Momentum and Volume Impact
+    combined_intraday_vol_impact = intraday_momentum_impact * volume_spike
+    
+    # Calculate Daily Price Change
+    daily_price_change = df['close'].diff()
+    
+    # Compute Smoothed Price Momentum
+    smoothed_price_momentum = daily_price_change.rolling(window=7).mean()
+    
+    # Adjust Momentum by Volume Spike
+    adjusted_momentum = smoothed_price_momentum * (0.8 if volume_spike else 1)
+    
+    # Calculate Weighted Price Movement
+    weighted_price_movement = (df['close'] - df['open']) * df['volume']
+    weighted_price_indicator = weighted_price_movement / avg_volume_7
+    
+    # Incorporate Close Price Trend
+    close_price_change = df['close'].diff()
+    ema_close_price_change = close_price_change.ewm(span=7, adjust=False).mean()
+    smoothed_close_price_change = close_price_change - ema_close_price_change
+    
+    # Introduce Reversal Indicator
+    long_term_momentum = daily_price_change.rolling(window=25).mean()
+    short_term_momentum = daily_price_change.rolling(window=7).mean()
+    reversal_indicator = short_term_momentum - long_term_momentum
+    
+    # Final Alpha Signal
+    final_alpha_signal = (
+        adjusted_momentum * smoothed_price_momentum * weighted_price_indicator
+        + combined_intraday_vol_impact
+        + smoothed_close_price_change
+        + reversal_indicator
+    )
+    
+    return final_alpha_signal

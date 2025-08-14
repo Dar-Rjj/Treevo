@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=20, n_days=5):
+    # Calculate Volume-Weighted High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    volume_weighted_spread = high_low_spread * df['volume']
+    volume_weighted_spread_sum = volume_weighted_spread.rolling(window=lookback_period).sum()
+    
+    # Compute Volume-Averaged Price
+    volume_averaged_price = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    volume_weighted_high_low_ratio = volume_weighted_spread_sum / volume_averaged_price
+    
+    # Calculate Momentum Component
+    current_spread = high_low_spread
+    past_average_spread = volume_weighted_spread.rolling(window=n_days).mean()
+    momentum_component = current_spread - past_average_spread
+    
+    # Generate Initial Factor
+    initial_factor = volume_weighted_high_low_ratio + momentum_component
+    
+    # Incorporate Price Trend
+    moving_avg_close = df['close'].rolling(window=n_days).mean()
+    price_trend = df['close'] - moving_avg_close
+    factor_with_trend = initial_factor * price_trend
+    
+    # Calculate Price Momentum
+    price_momentum = np.log(df['close'] / df['close'].shift(n_days))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    log_volume = np.log(df['volume'])
+    volatility = df[['open', 'high', 'low', 'close']].std(axis=1).rolling(window=n_days).mean()
+    enhanced_volatility = volatility * log_volume
+    
+    # Calculate Trade Frequency Adjusted Return
+    trade_frequency = df['volume'].rolling(window=n_days).count()
+    adjusted_return = (df['close'] / df['close'].shift(n_days) - 1) / np.sqrt(trade_frequency)
+    
+    # Combine Factors
+    combined_factor = (price_momentum * enhanced_volatility) + adjusted_return
+    nonlinear_transformed_factor = combined_factor ** 2
+    
+    # Final Alpha Factor
+    final_alpha_factor = factor_with_trend * nonlinear_transformed_factor
+    
+    return final_alpha_factor
+```

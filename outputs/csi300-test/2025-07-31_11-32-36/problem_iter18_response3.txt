@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=14):
+    # Calculate daily return
+    df['daily_return'] = df['close'] / df['open']
+    
+    # Calculate the difference between closing and opening price
+    df['price_diff'] = df['close'] - df['open']
+    
+    # Analyze the trend of closing over opening price for the past n days
+    df['closing_trend'] = df['close'] / df['open'].shift(1)
+    df['closing_trend'] = df['closing_trend'].rolling(window=n).mean()
+    
+    # Compute the average true range (ATR) over the last n days
+    df['true_range'] = df[['high', 'low']].apply(lambda x: max(x['high'] - x['low'], 
+                                                               abs(x['high'] - df['close'].shift(1)), 
+                                                               abs(x['low'] - df['close'].shift(1))), axis=1)
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Calculate the simple moving average of the ATR
+    df['atr_sma'] = df['atr'].rolling(window=n).mean()
+    
+    # Calculate the on-balance volume (OBV) incrementally
+    df['obv'] = 0
+    df.loc[df['close'] > df['close'].shift(1), 'obv'] = df['volume']
+    df.loc[df['close'] < df['close'].shift(1), 'obv'] = -df['volume']
+    df['obv'] = df['obv'].cumsum()
+    
+    # Examine the ratio of current day's volume to the n-day moving average volume
+    df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=n).mean()
+    
+    # Identify significant volume changes compared to the prior day
+    df['volume_change_pct'] = df['volume'].pct_change()
+    
+    # Create a factor that combines price movement and volume surge
+    df['price_change_pct'] = df['close'].pct_change()
+    df['combined_factor'] = df['price_change_pct'] * df['volume_change_pct']
+    
+    # Develop a factor that measures the strength of a move
+    df['price_strength'] = df['price_diff'].abs() / df['atr']
+    df['price_strength'] = df['price_strength'] * df['price_diff'].apply(lambda x: 1 if x > 0 else -1)
+    
+    # Construct a factor using the relative position of the close price within the high-low range
+    df['close_position'] = (df['close'] - df['low']) / (df['high'] - df['low'])
+    df['close_position_trend'] = df['close_position'].rolling(window=n).mean()
+    
+    # Select the final alpha factor
+    alpha_factor = df['price_strength'] * df['volume_ratio']
+    
+    return alpha_factor.dropna()
+```

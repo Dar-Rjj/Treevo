@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, N=5, M=5, K=5):
+    # Calculate Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Calculate Average Intraday High-Low Spread
+    df['AvgIntradayHighLowSpread'] = df['IntradayHighLowSpread'].rolling(window=N).mean()
+    
+    # Compute High-Low Momentum Score
+    df['HighLowMomentumScore'] = (df['IntradayHighLowSpread'] > df['AvgIntradayHighLowSpread']).astype(int) * 2 - 1
+    df['HighLowMomentumScore'] *= df['volume']
+    
+    # Calculate Price Momentum
+    df['PriceChange'] = df['close'] - df['close'].shift(1)
+    df['PriceMomentum'] = df['PriceChange'].rolling(window=N).sum()
+    
+    # Calculate Volume Trend
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolumeTrend'] = df['VolumeChange'].rolling(window=N).sum()
+    
+    # Enhance Market Sentiment
+    df['DailyRange'] = df['high'] - df['low']
+    df['AvgDailyRange'] = df['DailyRange'].rolling(window=M).mean()
+    df['RangeMomentumScore'] = (df['DailyRange'] > df['AvgDailyRange']).astype(int) * 2 - 1
+    
+    df['OpenCloseDiff'] = df['close'] - df['open']
+    df['OpenCloseMomentum'] = df['OpenCloseDiff'].rolling(window=M).sum()
+    
+    # Incorporate Intraday Volatility
+    df['IntradayVolatility'] = 0.5 * ((df['high'] - df['low']) ** 2) - (2 * math.log(2) - 1) * ((df['close'] - df['open']) ** 2)
+    df['AvgIntradayVolatility'] = df['IntradayVolatility'].rolling(window=K).mean()
+    df['IntradayVolatilityScore'] = (df['IntradayVolatility'] > df['AvgIntradayVolatility']).astype(int) * 2 - 1
+    
+    # Combine Factors
+    alpha_factor = (0.3 * df['HighLowMomentumScore'] 
+                    + 0.2 * df['PriceMomentum'] 
+                    + 0.1 * df['VolumeTrend'] 
+                    + 0.2 * df['RangeMomentumScore'] 
+                    + 0.1 * df['OpenCloseMomentum'] 
+                    + 0.1 * df['IntradayVolatilityScore'])
+    
+    # Incorporate Open-Price Change
+    df['OpenPriceChange'] = df['open'] - df['open'].shift(N)
+    df['OpenPriceMomentum'] = df['OpenPriceChange'].rolling(window=N).sum()
+    alpha_factor += 0.2 * df['OpenPriceMomentum']
+    
+    return alpha_factor
+```

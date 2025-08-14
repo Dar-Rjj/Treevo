@@ -1,0 +1,66 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=10, m=20, k=50, trend_period=20):
+    # Calculate Daily Close-to-Close Returns
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Sum Last N Days' Volume
+    df['volume_sum_n'] = df['volume'].rolling(window=n).sum()
+    
+    # Calculate Volume-Adjusted Return
+    df['volume_adjusted_return'] = df['daily_return'] * df['volume_sum_n']
+    
+    # Apply Moving Average on Volume-Adjusted Return
+    df['moving_avg_m'] = df['volume_adjusted_return'].rolling(window=m).mean()
+    df['moving_avg_k'] = df['volume_adjusted_return'].rolling(window=k).mean()
+    
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Calculate Close Position in Range
+    df['close_position_in_range'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Calculate Daily Return
+    df['daily_return'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Weighted by Volume
+    df['weighted_daily_return'] = df['daily_return'] * df['volume']
+    
+    # Combine Initial Factors
+    df['combined_initial_factors'] = df['close_position_in_range'] + df['weighted_daily_return']
+    
+    # Calculate Short-Term Momentum
+    df['7_day_return'] = (df['close'] - df['close'].shift(7)) / df['close'].shift(7)
+    df['14_day_return'] = (df['close'] - df['close'].shift(14)) / df['close'].shift(14)
+    df['short_term_momentum'] = df['7_day_return'] + df['14_day_return']
+    
+    # Calculate Long-Term Momentum
+    df['21_day_return'] = (df['close'] - df['close'].shift(21)) / df['close'].shift(21)
+    df['63_day_return'] = (df['close'] - df['close'].shift(63)) / df['close'].shift(63)
+    df['long_term_momentum'] = df['21_day_return'] + df['63_day_return']
+    
+    # Calculate Volume Activity
+    df['7_day_vol_avg'] = df['volume'].rolling(window=7).mean()
+    df['21_day_vol_avg'] = df['volume'].rolling(window=21).mean()
+    df['volume_ratio'] = df['7_day_vol_avg'] / df['21_day_vol_avg']
+    
+    # Subtract Long-Term Moving Average from Short-Term Moving Average
+    df['momentum_diff'] = df['moving_avg_m'] - df['moving_avg_k']
+    
+    # Determine Volume Impact
+    mean_volume = df['volume'].mean()
+    df['volume_impact'] = df['volume'] / mean_volume
+    df['adjusted_factor'] = df['combined_initial_factors'] * df['volume_impact']
+    
+    # Incorporate Momentum
+    df['momentum_adjusted_factor'] = df['adjusted_factor'] + df['short_term_momentum'] + df['long_term_momentum']
+    
+    # Adjust for Trend
+    df['trend_adjustment'] = df['close'] - df['close'].rolling(window=trend_period).mean()
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = df['momentum_adjusted_factor'] + df['trend_adjustment']
+    
+    return df['final_alpha_factor']
+```

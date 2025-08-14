@@ -1,0 +1,80 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    
+    # Calculate Weighted Intraday Momentum
+    df['weighted_intraday_momentum'] = (df['intraday_return'] * df['volume']).ewm(span=12).mean()
+    recent_volume = df['volume'].rolling(window=7).mean()
+    df['weighted_intraday_momentum'] *= recent_volume
+    
+    # Calculate Adjusted High-Low Breakout Potential
+    df['adjusted_high_low_breakout'] = (df['high_low_range'] * df['volume']).ewm(span=25).mean()
+    recent_volume_long = df['volume'].rolling(window=15).mean()
+    df['adjusted_high_low_breakout'] *= recent_volume_long
+    
+    # Calculate Daily Price Changes
+    df['daily_close_change'] = df['close'].diff()
+    df['daily_high_change'] = df['high'].diff()
+    df['daily_low_change'] = df['low'].diff()
+    
+    # Calculate Multi-Day Price Trends
+    df['3_day_trend'] = df['daily_close_change'].rolling(window=3).mean()
+    df['7_day_trend'] = df['daily_close_change'].rolling(window=7).mean()
+    df['21_day_trend'] = df['daily_close_change'].rolling(window=21).mean()
+    
+    # Measure Volatility
+    df['volatility_close'] = df['daily_close_change'].rolling(window=21).std()
+    df['volatility_high_low'] = df['high_low_range'].rolling(window=21).std()
+    
+    # Calculate Daily Volume Changes
+    df['daily_volume_change'] = df['volume'].diff()
+    
+    # Calculate Multi-Day Volume Trends
+    df['3_day_volume_trend'] = df['daily_volume_change'].rolling(window=3).mean()
+    df['7_day_volume_trend'] = df['daily_volume_change'].rolling(window=7).mean()
+    df['21_day_volume_trend'] = df['daily_volume_change'].rolling(window=21).mean()
+    
+    # Measure Liquidity
+    df['avg_amount_traded'] = df['amount'].rolling(window=21).mean()
+    df['total_volume_traded'] = df['volume'].rolling(window=21).sum()
+    
+    # Identify Daily Gaps
+    df['up_gap'] = (df['open'] - df['close'].shift(1)) > 0
+    df['down_gap'] = (df['open'] - df['close'].shift(1)) < 0
+    
+    # Measure Gap Intensity
+    df['gap_size_up'] = df['open'] - df['close'].shift(1)
+    df['gap_size_down'] = df['open'] - df['close'].shift(1)
+    df['gap_size_down'] = -df['gap_size_down'].clip(upper=0)
+    
+    # Identify Breakouts
+    df['upper_breakout'] = df['high'] > df['high'].rolling(window=21).max().shift(1)
+    df['lower_breakout'] = df['low'] < df['low'].rolling(window=21).min().shift(1)
+    
+    # Measure Breakout Intensity
+    df['breakout_size_upper'] = df['high'] - df['high'].rolling(window=21).max().shift(1)
+    df['breakout_size_lower'] = df['low'].rolling(window=21).min().shift(1) - df['low']
+    
+    # Measure Intraday Patterns
+    df['intraday_range'] = df['high'] - df['low']
+    df['intraday_momentum'] = df['close'] - df['open']
+    df['strength_relative_open'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Calculate Momentum Reversal Indicator
+    df['momentum_reversal_indicator'] = (df['intraday_return'] - df['weighted_intraday_momentum']) / df['adjusted_high_low_breakout']
+    
+    # Calculate Volume Impact Factor
+    df['volume_impact_factor'] = (df['volume'] - df['volume'].rolling(window=10).mean()) * df['momentum_reversal_indicator']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['momentum_reversal_indicator'] +
+        df['adjusted_high_low_breakout'] +
+        df['volume_impact_factor'] +
+        df['21

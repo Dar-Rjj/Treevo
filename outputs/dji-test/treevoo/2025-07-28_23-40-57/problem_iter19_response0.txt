@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    n_days = 10
+    short_term_period = 5
+
+    # Calculate Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate Volume Impact Score
+    volume_sum_n_days = df['volume'].rolling(window=n_days).sum()
+    avg_high_n_days = df['high'].rolling(window=n_days).mean()
+    avg_low_n_days = df['low'].rolling(window=n_days).mean()
+    price_range_n_days = avg_high_n_days - avg_low_n_days
+    volume_impact_score = price_range_n_days / volume_sum_n_days
+
+    # Intermediate Factor 1a
+    intermediate_factor_1a = intraday_return * volume_impact_score
+
+    # Calculate Adjusted Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    vwap = (df['close'] * df['volume']).rolling(window=n_days).sum() / df['volume'].rolling(window=n_days).sum()
+    adjusted_intraday_price_range = intraday_price_range - vwap
+
+    # Intermediate Factor 1b
+    price_change = df['close'] - df['open']
+    volume_weighted_price_impact = (df['high'] + df['low'] + df['open'] + df['close']) * df['volume'] / df['volume']
+    intermediate_factor_1b = (price_change * adjusted_intraday_price_range) / volume_weighted_price_impact
+
+    # Final Factor 1
+    final_factor_1 = intermediate_factor_1a * intermediate_factor_1b
+
+    # Calculate Short-Term Volume Variability
+    short_term_volume_variability = df['volume'].rolling(window=short_term_period).std()
+
+    # Final Factor 2
+    final_factor_2 = (intraday_return * df['volume']).rolling(window=n_days).sum()
+
+    # Volume-Adjusted Breakout Momentum
+    high_low_spread = df['high'] - df['low']
+    prev_close = df['close'].shift(1)
+    breakout_momentum = high_low_spread / prev_close
+    average_volume_n_days = df['volume'].rolling(window=n_days).mean()
+    volume_adjusted_breakout_momentum = breakout_momentum * average_volume_n_days
+
+    # Combined Factor
+    combined_factor = (final_factor_1 + final_factor_2 - short_term_volume_variability + volume_adjusted_breakout_momentum)
+
+    return combined_factor
+```

@@ -1,0 +1,39 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted Intraday Return
+    df['volume_weighted_intraday_return'] = df['intraday_return'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Return
+    ema_vol_weighted_intraday_return = df['volume_weighted_intraday_return'].ewm(span=30, adjust=False).mean()
+    
+    # Calculate Intraday Volatility
+    df['squared_intraday_return'] = df['intraday_return'] ** 2
+    intraday_volatility = (df['squared_intraday_return'].rolling(window=60).sum()) ** 0.5
+    
+    # Calculate Simple Moving Average of Intraday Volatility
+    sma_intraday_volatility = intraday_volatility.rolling(window=60).mean()
+    
+    # Adjust for Recent Volatility
+    recent_sma_intraday_volatility = intraday_volatility.rolling(window=10).mean()
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    df['volume_weighted_intraday_momentum'] = df['intraday_return'] * df['volume']
+    
+    # Calculate Exponential Moving Average of Volume-Weighted Intraday Momentum
+    ema_vol_weighted_intraday_momentum = df['volume_weighted_intraday_momentum'].ewm(span=30, adjust=False).mean()
+    
+    # Combine Factors
+    final_factor = ema_vol_weighted_intraday_return + sma_intraday_volatility + recent_sma_intraday_volatility
+    
+    # Apply Adaptive Smoothing
+    dynamic_smoothing_factor = 0.1 + 0.05 * (recent_sma_intraday_volatility / sma_intraday_volatility)
+    final_alpha_factor = final_factor.ewm(alpha=dynamic_smoothing_factor, adjust=False).mean()
+    
+    return final_alpha_factor

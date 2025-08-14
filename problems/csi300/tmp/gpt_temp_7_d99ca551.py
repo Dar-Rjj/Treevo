@@ -1,0 +1,43 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Volatility
+    df['intraday_volatility'] = df['high'] - df['low']
+    
+    # Weight by Volume
+    df['weighted_volatility'] = df['intraday_volatility'] * df['volume']
+    
+    # Calculate Intraday Momentum
+    df['close_open_diff'] = df['close'] - df['open']
+    window_size = 5
+    df['intraday_momentum'] = df['close_open_diff'].rolling(window=window_size).sum()
+    
+    # Integrate Momentum and Volatility
+    df['momentum_volatility_sum'] = df['weighted_volatility'] + df['intraday_momentum']
+    
+    # Apply Adaptive Exponential Smoothing
+    initial_smoothing_factor = 0.9
+    log_returns = np.log(df['close']).diff().dropna()
+    historical_volatility = log_returns.rolling(window=20).std()
+    adaptive_smoothing_factor = initial_smoothing_factor / (1 + historical_volatility)
+    
+    smoothed_value = df['momentum_volatility_sum'].ewm(alpha=adaptive_smoothing_factor, adjust=False).mean()
+    
+    # Ensure Values are Positive
+    smoothed_value = smoothed_value + 1e-6
+    
+    # Apply Logarithmic Transformation
+    transformed_value = np.log(smoothed_value)
+    
+    # Incorporate Additional Market Features
+    avg_volume_window = 10
+    df['avg_volume'] = df['volume'].rolling(window=avg_volume_window).mean()
+    df['price_to_volume_ratio'] = df['close'] / df['avg_volume']
+    
+    # Integrate Price-to-Volume Ratio
+    factor = transformed_value + df['price_to_volume_ratio']
+    
+    return factor

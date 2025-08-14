@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Price and Intraday Momentum
+    df['price_momentum'] = df['close'] - df['close'].shift(20)
+    intraday_momentum = (df['high'] - df['low']) / df['low']
+    df['adjusted_momentum'] = df['price_momentum'] + intraday_momentum
+
+    # Adjust Momentum by Average Volume and Amount
+    avg_volume = df['volume'].rolling(window=20).mean()
+    avg_amount = df['amount'].rolling(window=20).mean()
+    df['adjusted_momentum'] *= avg_volume * avg_amount
+    df['adjusted_momentum'] /= df['volume'] * df['amount']
+
+    # Calculate High-Low Price Range
+    high_low_range = df['high'] - df['low']
+
+    # Calculate Volume Adjusted High-Low Range
+    volume_adjusted_high_low = high_low_range * np.log(df['volume'])
+
+    # Rolling Average of Volume Adjusted High-Low Range
+    rolling_avg_high_low = volume_adjusted_high_low.rolling(window=20).mean()
+
+    # Calculate Daily Log Return
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+
+    # Rolling Average of Daily Log Return
+    rolling_avg_log_return = df['log_return'].rolling(window=20).mean()
+
+    # Calculate Volume Change
+    volume_change = df['volume'] / df['volume'].shift(1)
+
+    # Integrate Log Return with Volume Change
+    integrated_log_return = (df['log_return'] * volume_change).rolling(window=10).sum()
+
+    # Enhance with Moving Average Crossover
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    crossover_signal = (ema_5 > ema_20) * 1 - (ema_5 < ema_20) * 1
+
+    # Combine All Factors
+    combined_factors = rolling_avg_high_low - rolling_avg_log_return + crossover_signal + df['adjusted_momentum']
+
+    # Calculate Simple Moving Average (SMA)
+    sma_10 = df['close'].rolling(window=10).mean()
+
+    # Calculate Price Momentum
+    price_momentum = df['close'] - sma_10
+
+    # Calculate Volume Adjusted Spread
+    spread = df['high'] - df['low']
+    relative_volume = df['volume'] / df['volume'].rolling(window=10).mean()
+    volume_adjusted_spread = spread * relative_volume
+
+    # Calculate Range Volatility
+    daily_range = df['high'] - df['low']
+    range_volatility = daily_range.rolling(window=10).mean()
+
+    # Calculate Price Oscillator
+    sma_5 = df['close'].rolling(window=5).mean()
+    price_oscillator = sma_5 - sma_10
+
+    # Final Alpha Factor
+    final_alpha_factor = (
+        combined_factors
+        + price_momentum
+        - volume_adjusted_spread
+        - range_volatility
+        + price_oscillator
+    )
+
+    return final_alpha_factor
+```

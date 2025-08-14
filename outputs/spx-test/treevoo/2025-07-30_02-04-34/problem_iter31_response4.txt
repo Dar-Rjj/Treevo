@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate simple moving averages (SMA)
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Calculate the ratio of 5-day SMA to 20-day SMA
+    df['SMA_Ratio'] = df['SMA_5'] / df['SMA_20']
+    
+    # Identify bullish and bearish candlestick patterns
+    df['Hammer'] = ((df['high'] - df['low']) > 3 * (df['open'] - df['close'])) & \
+                   ((df['close'] - df['low']) / (df['high'] - df['low']) > 0.6) & \
+                   ((df['open'] - df['low']) / (df['high'] - df['low']) > 0.6)
+    
+    df['Shooting_Star'] = ((df['high'] - df['low']) > 3 * (df['open'] - df['close'])) & \
+                          ((df['high'] - df['close']) / (df['high'] - df['low']) > 0.6) & \
+                          ((df['high'] - df['open']) / (df['high'] - df['low']) > 0.6)
+    
+    # Rolling count of hammer and shooting star formations in the last 5 days
+    df['Hammer_Count'] = df['Hammer'].rolling(window=5).sum()
+    df['Shooting_Star_Count'] = df['Shooting_Star'].rolling(window=5).sum()
+    
+    # Calculate typical price
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    
+    # Compute the difference between consecutive typical prices
+    df['Typical_Price_Diff'] = df['Typical_Price'].diff()
+    
+    # Volume-weighted price movement over the last 5 days
+    df['Volume_Weighted_Movement'] = (df['Typical_Price_Diff'] * df['volume']).rolling(window=5).sum()
+    
+    # Calculate the average transaction size
+    df['Transaction_Size'] = df['amount'] / df['volume']
+    df['Avg_Transaction_Size'] = df['Transaction_Size'].rolling(window=5).mean()
+    
+    # Compare the current transaction size to the 5-day average
+    df['Transaction_Size_Above_Avg'] = df['Transaction_Size'] > df['Avg_Transaction_Size']
+    
+    # Standard deviation of volume over the last 5 days
+    df['Volume_Std'] = df['volume'].rolling(window=5).std()
+    
+    # Combine all alpha factors into a single factor
+    df['Alpha_Factor'] = (df['SMA_Ratio'] + 
+                          df['Hammer_Count'] - df['Shooting_Star_Count'] + 
+                          df['Volume_Weighted_Movement'] + 
+                          df['Transaction_Size_Above_Avg'].astype(int) - 
+                          df['Volume_Std'])
+    
+    return df['Alpha_Factor']
+```

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=10, n_days=10, m_days=20):
+    # Calculate High-Low Spread
+    df['high_low_spread'] = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    df['volume_weighted_high_low_spread'] = df['high_low_spread'] * df['volume']
+    volume_weighted_high_low_spread = df['volume_weighted_high_low_spread'].rolling(window=lookback_period).sum()
+    
+    # Calculate Volume-Weighted Close Price
+    df['volume_weighted_close'] = df['close'] * df['volume']
+    volume_weighted_close = df['volume_weighted_close'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    ratio = volume_weighted_high_low_spread / volume_weighted_close
+    
+    # Calculate Momentum Component
+    current_day_vw_high_low_spread = df['volume_weighted_high_low_spread']
+    past_avg_vw_high_low_spread = df['volume_weighted_high_low_spread'].rolling(window=n_days).mean()
+    momentum_component = current_day_vw_high_low_spread - past_avg_vw_high_low_spread
+    
+    # Generate Interim Factor
+    interim_factor = (volume_weighted_high_low_spread + momentum_component) / volume_weighted_close
+    
+    # Incorporate Price Trend
+    n_day_moving_avg_close = df['close'].rolling(window=n_days).mean()
+    price_trend = df['close'] - n_day_moving_avg_close
+    price_trend_factor = price_trend * interim_factor
+    
+    # Calculate Price-Volume Momentum
+    high_volume_product = df['high'] * df['volume']
+    low_volume_product = df['low'] * df['volume']
+    price_volume_momentum = high_volume_product.rolling(window=n_days).sum() - low_volume_product.rolling(window=n_days).sum()
+    
+    # Calculate Price-Volume Smoothed Average
+    close_volume_product = df['close'] * df['volume']
+    total_volume = df['volume'].rolling(window=m_days).sum()
+    smoothed_average = close_volume_product.rolling(window=m_days).sum() / total_volume
+    
+    # Compute Momentum to Smoothed Average Ratio
+    momentum_to_smoothed_ratio = price_volume_momentum / smoothed_average
+    
+    # Calculate Price Momentum
+    log_return = np.log(df['close'] / df['close'].shift(n_days))
+    
+    # Calculate Enhanced Volume-Weighted Volatility
+    volatility = df[['open', 'high', 'low', 'close']].std(axis=1).rolling(window=n_days).std()
+    enhanced_volatility = volatility * np.log(df['volume'])
+    
+    # Calculate Trade Frequency Adjusted Return
+    trade_frequency = df['volume'].rolling(window=n_days).count()
+    adjusted_return = (df['close'] / df['close'].shift(n_days) - 1) * np.sqrt(trade_frequency)
+    
+    # Combine Factors
+    combined_factor = log_return * enhanced_volatility + adjusted_return
+    transformed_combined_factor = combined_factor ** 2
+    
+    # Final Alpha Factor
+    final_alpha_factor = price_trend_factor * transformed_combined_factor * momentum_to_smoothed_ratio
+    
+    return final_alpha_factor
+```

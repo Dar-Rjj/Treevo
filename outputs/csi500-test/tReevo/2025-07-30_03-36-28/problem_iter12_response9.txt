@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Define the lookback periods
+    sma_short = 20
+    vol_adj_volatility_lookback = 10
+    price_momentum_n = 5
+    long_sma_long = 100
+    percentage_change_lookback = 1
+    
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA_Short'] = df['close'].rolling(window=sma_short).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High_Low_Diff'] = df['high'] - df['low']
+    df['Volume_Adjusted_Volatility'] = (df['High_Low_Diff'] * df['volume']).rolling(window=vol_adj_volatility_lookback).mean()
+    
+    # Compute Price Momentum
+    avg_close = df['close'].rolling(window=price_momentum_n).mean()
+    df['Price_Momentum'] = (df['close'] - df['SMA_Short']) / avg_close
+    
+    # Incorporate Additional Price Change Metrics
+    df['Percentage_Change'] = df['close'].pct_change(periods=percentage_change_lookback)
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['SMA_Long'] = df['close'].rolling(window=long_sma_long).mean()
+    df['Trend_Indicator'] = (df['SMA_Short'] > df['SMA_Long']).astype(int)
+    
+    # Adaptive Lookback Periods
+    # For simplicity, we'll assume fixed lookback periods in this example
+    # In a more advanced implementation, you could adjust these based on market volatility or other indicators
+    
+    # Dynamic Weight Adjustments
+    # Assign weights based on market trend
+    df['Weight_Price_Momentum'] = df['Trend_Indicator'].apply(lambda x: 0.5 if x == 1 else 0.3)
+    df['Weight_Volume_Adjusted_Volatility'] = df['Trend_Indicator'].apply(lambda x: 0.25 if x == 1 else 0.4)
+    df['Weight_Additional_Price_Change'] = df['Trend_Indicator'].apply(lambda x: 0.15 if x == 1 else 0.15)
+    df['Weight_Market_Trend'] = df['Trend_Indicator'].apply(lambda x: 0.1 if x == 1 else 0.15)
+    
+    # Final Alpha Factor
+    df['Alpha_Factor'] = (df['Price_Momentum'] * df['Weight_Price_Momentum'] +
+                          df['Volume_Adjusted_Volatility'] * df['Weight_Volume_Adjusted_Volatility'] +
+                          (df['Percentage_Change'] + df['High_Low_Range']) * df['Weight_Additional_Price_Change'] +
+                          df['Trend_Indicator'] * df['Weight_Market_Trend'])
+    
+    return df['Alpha_Factor']
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=5, m=10, N=14):
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=n).mean()
+
+    # Calculate Daily Return
+    daily_return = df['close'].pct_change()
+
+    # Calculate Cumulative Return over a specified window (e.g., 5 days)
+    cumulative_return = daily_return.rolling(window=n).sum()
+
+    # Adjust by Volume
+    average_volume = df['volume'].rolling(window=n).mean()
+    adjusted_cumulative_return = cumulative_return * average_volume
+
+    # Adjust by Price Volatility
+    price_volatility = df['close'].rolling(window=n).std()
+    final_adjusted_cumulative_return = (adjusted_cumulative_return / price_volatility) + 1
+
+    # Calculate Momentum
+    momentum = np.log(df['close'] / df['close'].shift(m)).rolling(window=m).sum()
+
+    # Adjust by Intraday Volatility and Volume
+    weighted_momentum = (momentum * average_volume) / intraday_volatility
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    relative_strength = weighted_momentum - df['close'].rolling(window=50).mean()
+    integrated_factor = relative_strength + final_adjusted_cumulative_return
+
+    # Calculate Intraday Movement
+    intraday_movement = df['high'] - df['low']
+
+    # Calculate Close-to-Open Return
+    close_to_open_return = (df['close'] - df['open']) / df['open']
+
+    # Combine Factors
+    combined_sum = intraday_movement + close_to_open_return
+    price_range_ratio = (df['high'] - df['low']) / df['close']
+    weighted_combined_sum = combined_sum * price_range_ratio
+
+    # Calculate the difference between the closing price and the opening price
+    close_greater_than_open = (df['close'] > df['open']).astype(int)
+    consecutive_days = close_greater_than_open.rolling(window=N).sum()
+    atr = (df['high'] - df['low']).rolling(window=N).mean()
+    close_open_difference = (df['close'] - df['open']) * atr
+
+    # Explore the relationship between the closing price and the typical price
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    close_typical_difference = df['close'] - typical_price
+    accumulated_difference = close_typical_difference.rolling(window=N).sum()
+    rate_of_change = typical_price.pct_change().rolling(window=N).mean()
+    enhanced_accumulated_difference = accumulated_difference * (1 + rate_of_change)
+
+    # Synthesize Final Alpha Factor
+    final_alpha_factor = integrated_factor + weighted_combined_sum + enhanced_accumulated_difference
+
+    # Incorporate Volume-Weighted Momentum
+    volume_weighted_momentum = (np.log(df['close'] / df['close'].shift(m)) * df['volume']).rolling(window=m).sum()
+    final_alpha_factor += volume_weighted_momentum
+
+    return final_alpha_factor
+```

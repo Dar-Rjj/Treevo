@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Compute Exponentially Smoothed Moving Average of Daily Returns
+    n = 20
+    alpha = 0.1
+    df['ema_daily_return'] = df['daily_return'].ewm(span=n, adjust=False).mean()
+
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'].pct_change()
+
+    # Compute Price Momentum Factor
+    m = 20
+    df['price_momentum'] = df['daily_return'].rolling(window=m).sum()
+
+    # Compute Volume Momentum Factor
+    df['volume_momentum'] = df['volume_change'].rolling(window=m).sum()
+
+    # Calculate High-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Price Breakout Ratio
+    df['price_breakout_ratio'] = (df['high'] - df['open']) / df['high_low_range']
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Calculate Volume Breakout Indicator
+    df['volume_breakout_indicator'] = df['volume'] * (df['close'] - df['open'])
+
+    # Aggregate Breakout Indicators
+    df['weighted_price_breakout_ratio'] = df['price_breakout_ratio'] * df['volume']
+    df['aggregate_breakout_indicators'] = df['weighted_price_breakout_ratio'].rolling(window=m).sum()
+
+    # Determine Daily Return Deviation from VWAP
+    df['deviation_from_vwap'] = df['close'] - df['vwap']
+
+    # Identify Trend Reversal Potential
+    df['trend_reversal_potential'] = df['deviation_from_vwap'].diff() > 0
+    df['volume_increase'] = df['volume'] > df['volume'].rolling(window=14).mean()
+
+    # Combine Price and Volume Momentum
+    k1 = 1.0
+    k2 = 1.0
+    df['combined_momentum'] = k1 * df['price_momentum'] + k2 * df['volume_momentum']
+
+    # Calculate Volume Weight
+    df['average_volume'] = df['volume'].rolling(window=n).mean()
+    df['volume_weight'] = df['volume'] / df['average_volume']
+
+    # Combine Weighted Momentum and Exponentially Smoothed Moving Average
+    df['weighted_ema_daily_return'] = df['volume_weight'] * df['ema_daily_return']
+    df['combined_factor'] = df['combined_momentum'] + df['weighted_ema_daily_return']
+
+    # Final Composite Factor Calculation
+    df['composite_factor'] = 0
+    df.loc[df['trend_reversal_potential'] & df['volume_increase'], 'composite_factor'] += 1
+    df['composite_factor'] += df['combined_factor']
+    
+    # Incorporate Aggregate Breakout Indicators
+    df['smoothed_aggregate_breakout_indicators'] = df['aggregate_breakout_indicators'].ewm(span=n, adjust=False).mean()
+    df['composite_factor'] += df['smoothed_aggregate_breakout_indicators']
+
+    return df['composite_factor']
+```

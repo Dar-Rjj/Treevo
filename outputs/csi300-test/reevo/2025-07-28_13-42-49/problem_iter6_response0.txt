@@ -1,0 +1,37 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the difference between today's close and yesterday's close
+    df['close_diff'] = df['close'].diff()
+    
+    # Calculate the average volume over an adaptive window, here it is 10 days for demonstration
+    df['avg_volume_10d'] = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the weighted moving average of the close price using a dynamic window (e.g., 15 days)
+    weights = [i for i in range(1, 16)]
+    df['wma_15d'] = df['close'].rolling(window=15).apply(lambda prices: sum(w * p for w, p in zip(weights, prices)) / sum(weights), raw=True)
+    
+    # Calculate the ratio of today's volume to the average volume over the past 10 days
+    df['vol_ratio'] = df['volume'] / df['avg_volume_10d']
+    
+    # Calculate the trend component by taking the difference between the current close and the weighted moving average
+    df['trend'] = df['close'] - df['wma_15d']
+    
+    # Integrate market sentiment by calculating the average amount over the past 5 days
+    df['avg_amount_5d'] = df['amount'].rolling(window=5).mean()
+    
+    # Calculate the volume-weighted close price change over 5 days
+    df['vw_close_diff'] = (df['close'].diff() * df['volume']).rolling(window=5).sum() / df['volume'].rolling(window=5).sum()
+    
+    # Calculate the average true range (volatility) over 14 days
+    df['tr'] = df[['high', 'low', 'close']].apply(lambda x: max(x) - min(x), axis=1)
+    df['atr_14d'] = df['tr'].rolling(window=14).mean()
+    
+    # Incorporate adaptive windows for the trend and volatility
+    df['trend_adaptive'] = df['close'] - df['close'].ewm(span=5, adjust=False).mean()
+    df['volatility_adaptive'] = df['close'].pct_change().ewm(span=14, adjust=False).std()
+    
+    # Combine the close price difference, volume ratio, trend, volume-weighted close price change, and market sentiment into a single factor
+    factor = (df['close_diff'] + (df['amount'] * df['vol_ratio']) - df['trend_adaptive'] + df['vw_close_diff']) * (df['amount'] / df['avg_amount_5d']) - (df['close'] / df['volatility_adaptive'])
+    
+    return factor.dropna()
+```

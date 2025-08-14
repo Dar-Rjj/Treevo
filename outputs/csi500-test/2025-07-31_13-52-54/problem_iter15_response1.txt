@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # Daily VWAP Change
+    df['VWAP_Change'] = df['VWAP'].diff()
+    
+    # Separate Positive and Negative Changes
+    df['Positive_Change'] = df['VWAP_Change'].apply(lambda x: x if x > 0 else 0)
+    df['Negative_Change'] = df['VWAP_Change'].apply(lambda x: -x if x < 0 else 0)
+    
+    # 14-Day Averages for RSI
+    df['Avg_Positive_14'] = df['Positive_Change'].rolling(window=14).mean()
+    df['Avg_Negative_14'] = df['Negative_Change'].rolling(window=14).mean()
+    
+    # Calculate RSI
+    df['Relative_Strength'] = df['Avg_Positive_14'] / df['Avg_Negative_14']
+    df['RSI'] = 100 - (100 / (1 + df['Relative_Strength']))
+    
+    # Intraday Range Growth
+    df['Today_High_Low_Range'] = df['high'] - df['low']
+    df['Prev_Day_High_Low_Range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['Intraday_Range_Growth'] = (df['Today_High_Low_Range'] - df['Prev_Day_High_Low_Range']) / df['Prev_Day_High_Low_Range']
+    
+    # Volume-Weighted Moving Average (VWMA)
+    n_days = 20  # Example: 20-day VWMA
+    df['VWMA'] = (df['close'] * df['volume']).rolling(window=n_days).sum() / df['volume'].rolling(window=n_days).sum()
+    
+    # Daily Returns
+    df['Daily_Return'] = df['close'].pct_change()
+    
+    # Long-Term and Short-Term Volume-Weighted Returns
+    long_term_days = 90
+    short_term_days = 5
+    
+    # Long-Term VW-Return (Momentum Component)
+    df['Long_Term_VW_Return'] = (df['Daily_Return'] * df['volume']).rolling(window=long_term_days).sum() / df['volume'].rolling(window=long_term_days).sum()
+    
+    # Short-Term VW-Return (Reversal Component)
+    df['Short_Term_VW_Return'] = (df['Daily_Return'] * df['volume']).rolling(window=short_term_days).sum() / df['volume'].rolling(window=short_term_days).sum()
+    
+    # Adjusted VW-Return
+    df['Adjusted_VW_Return'] = df['Long_Term_VW_Return'] - df['Short_Term_VW_Return']
+    
+    # Volatility-Adjusted Alpha Factor
+    df['Volatility'] = df['Daily_Return'].rolling(window=30).std()
+    df['Volatility_Adjusted_Alpha'] = (df['RSI'] + df['Intraday_Range_Growth'] + df['VWMA'] + df['Adjusted_VW_Return']) / df['Volatility']
+    
+    # Final Alpha Factor
+    df['Final_Alpha_Factor'] = df['Volatility_Adjusted_Alpha']
+    
+    return df['Final_Alpha_Factor'].dropna()
+
+# Example usage:
+# df = pd.DataFrame(...)  # Load your DataFrame here
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

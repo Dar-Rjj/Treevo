@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Short-Term Return
+    df['short_term_return'] = (df['close'] / df['close'].shift(5)) - 1
+    
+    # Calculate Long-Term Return
+    df['long_term_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Relative Strength
+    df['relative_strength'] = df['short_term_return'] - df['long_term_return']
+    
+    # Calculate Intraday Return
+    df['intraday_return'] = df['high'] - df['low']
+    
+    # Calculate Open-to-Close Return
+    df['open_to_close_return'] = df['close'] - df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_return'] = df['intraday_return'] + df['open_to_close_return']
+    
+    # Identify Volume Spikes
+    df['volume_std'] = df['volume'].rolling(window=20).std()
+    df['mean_volume'] = df['volume'].rolling(window=20).mean()
+    k = 2  # Define the threshold for volume spike
+    df['volume_spike_indicator'] = (df['volume'] > (df['mean_volume'] + k * df['volume_std'])).astype(int)
+    
+    # Multiply Combined Return by Volume Spike Indicator
+    df['spiked_combined_return'] = df['combined_return'] * df['volume_spike_indicator']
+    
+    # Calculate Volume Difference
+    df['volume_difference'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Average High-Low Range
+    df['avg_high_low_range'] = (df['high'] - df['low']).rolling(window=5).mean()
+    
+    # Integrate Volume and Price Information
+    df['adjusted_close_change'] = df['close'] - df['close'].shift(1)
+    integrated_info = 0.5 * df['volume_difference'] + 0.3 * df['avg_high_low_range'] + df['adjusted_close_change']
+    
+    # Compute Volume Average
+    df['volume_average'] = df['volume'].rolling(window=5).mean()
+    
+    # Compute Volatility
+    df['daily_returns'] = (df['close'] - df['open']) / df['open']
+    df['volatility'] = df['daily_returns'].rolling(window=20).std()
+    
+    # Weight by Volume and Volatility
+    df['weighted_relative_strength'] = df['relative_strength'] * (df['volume_average'] * df['volatility'])
+    
+    # Final Alpha Factor
+    alpha_factor = df['spiked_combined_return'] + integrated_info + df['weighted_relative_strength']
+    return alpha_factor
+```

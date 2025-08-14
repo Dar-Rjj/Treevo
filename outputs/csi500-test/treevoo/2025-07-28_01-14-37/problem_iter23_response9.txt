@@ -1,0 +1,37 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Short-Term (5-day) and Long-Term (20-day) Moving Averages
+    short_term_ma = df['close'].rolling(window=5).mean()
+    long_term_ma = df['close'].rolling(window=20).mean()
+    
+    # Determine Trend Direction
+    trend_direction = (short_term_ma > long_term_ma).astype(int)
+    trend_direction = trend_direction.replace({1: 1, 0: -1})
+    
+    # Confirm with Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_threshold = 0.1 * df['volume'].shift(1)
+    adjusted_trend = trend_direction * volume_change.where(volume_change > volume_threshold, other=0)
+    
+    # Validate Trend with Price Action
+    price_range = df['high'] - df['low']
+    confidence_adjustment = ((price_range < short_term_ma) & (price_range > long_term_ma)).astype(int) * 2 - 1
+    validated_trend = adjusted_trend * confidence_adjustment
+    
+    # Calculate Volume-Weighted Price Movement
+    weighted_price = (df[['high', 'low', 'close']].mean(axis=1) * df['volume'])
+    total_weighted_price = weighted_price.sum()
+    total_volume = df['volume'].sum()
+    volume_weighted_movement = total_weighted_price / total_volume if total_volume != 0 else 0
+    
+    # Calculate Relative Strength
+    momentum = short_term_ma - long_term_ma
+    relative_strength = momentum / volume_weighted_movement
+    
+    # Final alpha factor
+    alpha_factor = relative_strength * validated_trend
+    
+    return alpha_factor
+```

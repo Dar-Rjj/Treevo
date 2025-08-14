@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Adjusted High-Low Spread
+    volume_adjusted_hl_spread = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate 10-Day Moving Sum of Volume-Adjusted High-Low Spread
+    moving_sum_volume_adjusted_hl_spread = volume_adjusted_hl_spread.rolling(window=10).sum()
+    
+    # Calculate Short-Term and Long-Term EMAs
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    
+    # Daily Price Change
+    daily_price_change = df['close'].pct_change()
+    
+    # Cumulative Daily Price Change
+    cumulative_daily_price_change = daily_price_change.rolling(window=14).sum()
+    
+    # Volume-Weighted Adjusted Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    volume_weighted_adjusted_return = df['volume'] * intraday_return
+    
+    # Volume Reversal Indicator
+    volume_rate_of_change = df['volume'].pct_change(periods=10)
+    smoothed_volume_rate_of_change = volume_rate_of_change.rolling(window=5).mean()
+    volume_reversal_indicator = cumulative_daily_price_change / (smoothed_volume_rate_of_change + 1e-6)  # Avoid division by zero
+    
+    # Volume Confirmation
+    daily_volume_change = df['volume'].diff()
+    positive_volume_changes = daily_volume_change[daily_volume_change > 0]
+    avg_volume_increase = positive_volume_changes.rolling(window=10).sum() / (positive_volume_changes > 0).rolling(window=10).sum().replace(0, np.nan)
+    
+    # Final Alpha Factor
+    alpha_factor = (
+        moving_sum_volume_adjusted_hl_spread +
+        cumulative_daily_price_change +
+        volume_weighted_adjusted_return +
+        volume_reversal_indicator +
+        avg_volume_increase
+    )
+    
+    return alpha_factor
+```

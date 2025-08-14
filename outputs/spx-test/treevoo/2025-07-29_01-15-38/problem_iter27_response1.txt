@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 7-Day Price Momentum
+    df['7_day_price_momentum'] = df['close'].rolling(window=7).sum() / 7
+    
+    # Incorporate Volume Influence
+    df['7_day_avg_volume'] = df['volume'].rolling(window=7).sum() / 7
+    df['relative_volume'] = df['volume'] / df['7_day_avg_volume']
+    df['adjusted_7_day_momentum'] = df['7_day_price_momentum'] * df['relative_volume']
+    
+    # Calculate Intraday Returns
+    df['intraday_returns'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Open-to-Close Returns
+    df['open_to_close_returns'] = (df['close'] - df['open']) / df['open']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_returns'] = df['intraday_returns'] + df['open_to_close_returns']
+    
+    # Analyze Volume Change
+    df['volume_change_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    conditions = [
+        (df['volume_change_ratio'] > 2.5),
+        (df['volume_change_ratio'] >= 2.0) & (df['volume_change_ratio'] <= 2.5),
+        (df['volume_change_ratio'] >= 1.5) & (df['volume_change_ratio'] < 2.0),
+        (df['volume_change_ratio'] >= 0.8) & (df['volume_change_ratio'] < 1.5),
+        (df['volume_change_ratio'] >= 0.6) & (df['volume_change_ratio'] < 0.8),
+        (df['volume_change_ratio'] >= 0.4) & (df['volume_change_ratio'] < 0.6),
+        (df['volume_change_ratio'] < 0.4)
+    ]
+    choices = [4, 3, 2, 0, -1, -2, -3]
+    df['volume_trend_classification'] = pd.np.select(conditions, choices, default=0)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['adjusted_combined_returns'] = df['combined_returns'] * df['volume_trend_classification']
+    
+    # Calculate Short-Term Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=10).mean()
+    
+    # Calculate Long-Term Momentum
+    df['long_term_momentum'] = df['close'].rolling(window=30).mean()
+    
+    # Calculate Momentum Oscillator
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['high_low_spread_adjusted'] = (df['high'] - df['low']) * df['relative_volume']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['adjusted_combined_returns'] * df['momentum_oscillator'] 
+                          + df['high_low_spread_adjusted'] * df['volume_trend_classification'])
+    
+    # Apply Cumulative Movement
+    df['final_alpha_factor'] = df['alpha_factor'].rolling(window=10).sum()
+    
+    return df['final_alpha_factor']
+```

@@ -1,0 +1,35 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, lookback_period=10):
+    # Calculate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Calculate Volume-Adjusted Typical Price (VATP)
+    typical_price = (df['high'] + df['low'] + 2 * df['close']) / 4
+    volume_adjusted_tp = typical_price * np.sqrt(df['volume'])
+    sum_volume = df['volume'].rolling(window=lookback_period).sum()
+    vatp = (volume_adjusted_tp.rolling(window=lookback_period).sum()) / sum_volume
+    
+    # Calculate Momentum
+    momentum = (df['close'] - df['close'].shift(lookback_period)) / df['close'].shift(lookback_period)
+    
+    # Adjust for Volume Changes
+    volume_ratio = df['volume'] / df['volume'].shift(lookback_period)
+    volume_adjusted_momentum = momentum + (momentum * volume_ratio)
+    
+    # Calculate Intraday Price Range
+    intraday_price_range = df['high'] - df['low']
+    
+    # Combine Intraday Volatility, VATP, and Intraday Price Range
+    diff_high_vatp = df['high'] - vatp
+    diff_vatp_low = vatp - df['low']
+    combined_factor = diff_high_vatp + diff_vatp_low + intraday_price_range
+    
+    # Apply a weighted moving average to smooth the factor
+    weights = df['volume'].rolling(window=lookback_period).apply(lambda x: x / x.sum(), raw=False)
+    smoothed_factor = (combined_factor * weights).rolling(window=lookback_period).sum()
+    
+    return smoothed_factor

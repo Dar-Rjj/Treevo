@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n_days=20, m_days=10):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Calculate Log Returns
+    log_returns = np.log(close_prices) - np.log(close_prices.shift(1))
+    
+    # Compute Momentum
+    momentum = log_returns.rolling(window=n_days).sum()
+    
+    # Apply Dynamic Thresholds
+    upper_threshold = 0.05
+    lower_threshold = -0.05
+    momentum_clipped = np.clip(momentum, lower_threshold, upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    volume_mean = volumes.rolling(window=n_days).mean()
+    volume_adjusted_momentum = momentum_clipped * (volumes / volume_mean)
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices - close_prices.shift(1)
+    
+    # Calculate Advanced Volatility Measures
+    std_dev = abs_price_changes.rolling(window=m_days).std()
+    ema_abs_price_changes = abs_price_changes.ewm(span=m_days, adjust=False).mean()
+    iqr = abs_price_changes.rolling(window=m_days).quantile(0.75) - abs_price_changes.rolling(window=m_days).quantile(0.25)
+    
+    # Final Factor Calculation
+    # Weights for each component
+    weight_momentum = 0.4
+    weight_volatility = 0.3
+    weight_ema = 0.2
+    weight_iqr = 0.1
+    
+    # Ensure weights sum to 1
+    assert np.isclose(weight_momentum + weight_volatility + weight_ema + weight_iqr, 1.0)
+    
+    # Combine Weighted Components
+    final_factor = (
+        weight_momentum * volume_adjusted_momentum +
+        weight_volatility * std_dev +
+        weight_ema * ema_abs_price_changes +
+        weight_iqr * iqr
+    )
+    
+    return final_factor
+```

@@ -1,0 +1,62 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-Day Average High-Low Spread
+    df['High_Low_Spread'] = df['high'] - df['low']
+    df['Avg_High_Low_Spread'] = df['High_Low_Spread'].rolling(window=5).mean()
+
+    # Calculate 5-Day Momentum
+    df['Momentum_5D'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+
+    # Multiply High-Low Spread and Momentum
+    df['Spread_Momentum'] = df['Avg_High_Low_Spread'] * df['Momentum_5D']
+
+    # Calculate Enhanced Intraday Price Movement
+    df['Intraday_Price_Movement'] = (df['high'] - df['low']) / (df['open'] - df['open'].shift(1))
+
+    # Weight by Volume and Close Difference
+    df['Close_Diff'] = df['close'] - df['close'].shift(1)
+    df['IntradayMomentumScore'] = df['Intraday_Price_Movement'] * (df['volume'] * df['Close_Diff'])
+    df['IntradayMomentumScore'] = df['IntradayMomentumScore'].apply(lambda x: max(x, 0))
+
+    # Integrate Intraday Volatility
+    df['Daily_Range'] = df['high'] - df['low']
+    df['Intraday_Volatility'] = df['Daily_Range'].rolling(window=20).mean()
+
+    # Incorporate Close-to-Open Reversal Signal
+    df['Reversal_Signal'] = (df['close'] - df['open']) / df['open']
+
+    # Calculate Volume-Weighted Return
+    df['Volume_Weighted_Return'] = df['volume'] * df['Reversal_Signal']
+
+    # Construct Weighted Intraday Return and Reversal Signal
+    df['Intraday_Return_Weight'] = df['amount'] / (df['amount'].max())
+    df['Reversal_Signal_Weight'] = df['volume'] / (df['volume'].max())
+    df['Weighted_Intraday_Return_Reversal'] = (df['Intraday_Return_Weight'] * df['IntradayMomentumScore']) + (df['Reversal_Signal_Weight'] * df['Reversal_Signal'])
+
+    # Combine Enhanced Factors
+    df['Combined_Factor'] = (0.3 * df['IntradayMomentumScore']) + (0.3 * df['Intraday_Volatility']) + (0.4 * df['Volume_Weighted_Return'])
+
+    # Adjust by Average Volume
+    df['Avg_Volume_20D'] = df['volume'].rolling(window=20).mean()
+    df['Adjusted_Combined_Factor'] = df['Combined_Factor'] / df['Avg_Volume_20D']
+
+    # Incorporate Close Price Momentum
+    df['Close_Momentum'] = df['close'] / df['close'].rolling(window=10).mean()
+
+    # Adjust Momentum by Intraday Volatility
+    df['Adjusted_Close_Momentum'] = df['Close_Momentum'] * df['Intraday_Volatility']
+
+    # Final Factor Calculation
+    df['Final_Alpha_Factor'] = (0.5 * df['Adjusted_Combined_Factor']) + (0.5 * df['Weighted_Intraday_Return_Reversal'])
+
+    # Introduce Volume Trend
+    df['Volume_Sum_5D'] = df['volume'].rolling(window=5).sum()
+    df['Volume_Ratio'] = df['volume'] / df['Volume_Sum_5D']
+
+    # Final Factor Computation
+    df['VolumeTrendAdjustedFactor'] = df['Final_Alpha_Factor'] * df['Volume_Ratio']
+
+    return df['VolumeTrendAdjustedFactor'].dropna()
+```

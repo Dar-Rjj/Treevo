@@ -1,0 +1,56 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    
+    # Moving Averages of Log Returns
+    df['short_term_ma'] = df['log_return'].rolling(window=5).mean()
+    df['long_term_ma'] = df['log_return'].rolling(window=20).mean()
+    df['momentum_factor'] = df['short_term_ma'] - df['long_term_ma']
+    
+    # Historical Volatility
+    df['historical_volatility'] = df['log_return'].rolling(window=20).std()
+    
+    # Exponential Weighted Moving Average of Log Returns
+    df['ewma_log_returns'] = df['log_return'].ewm(span=12, adjust=False).mean()
+    
+    # Price Patterns
+    df['bullish_engulfing'] = (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))
+    df['bearish_engulfing'] = (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1))
+    df['inside_bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+    df['hammer_formation'] = (df['close'] > df['open']) & ((df['close'] - df['open']) > 2 * (df['high'] - df['close'])) & ((df['close'] - df['open']) > 2 * (df['open'] - df['low']))
+    
+    # Volume Data
+    df['volume_change'] = df['volume'] / df['volume'].shift(1) - 1
+    df['volume_short_term_ma'] = df['volume_change'].rolling(window=5).mean()
+    df['volume_long_term_ma'] = df['volume_change'].rolling(window=20).mean()
+    df['volume_momentum'] = df['volume_short_term_ma'] - df['volume_long_term_ma']
+    
+    # Volume Patterns
+    df['volume_spike'] = df['volume'] > 2 * df['volume'].shift(1)
+    df['volume_divergence'] = (df['volume'] > df['volume'].shift(1)) & (df['close'] < df['close'].shift(1))
+    df['relative_volume_spike'] = df['volume'] > 3 * df['volume'].rolling(window=10).mean()
+    
+    # Amount Data
+    df['dollar_volume'] = df['close'] * df['volume']
+    df['dollar_volume_change'] = df['dollar_volume'] / df['dollar_volume'].shift(1) - 1
+    df['dollar_volume_spike'] = df['dollar_volume'] > 2 * df['dollar_volume'].shift(1)
+    df['dollar_volume_divergence'] = (df['dollar_volume'] > df['dollar_volume'].shift(1)) & (df['close'] < df['close'].shift(1))
+    df['large_dollar_volume_spike'] = df['dollar_volume'] > 3 * df['dollar_volume'].shift(1)
+    
+    # Composite Factors
+    df['combined_momentum'] = 0.5 * df['momentum_factor'] + 0.25 * df['volume_momentum'] + 0.25 * df['dollar_volume_change']
+    
+    # Combined Indicators
+    df['combined_price_volume_indicator'] = (df['bullish_engulfing'] & df['volume_spike']) | (df['bearish_engulfing'] & df['volume_spike']) | (df['inside_bar'] & df['volume_divergence'])
+    df['new_combined_indicator'] = (df['hammer_formation'] & df['volume_spike']) | (df['hammer_formation'] & df['volume_divergence'])
+    
+    df['combined_price_dollar_volume_indicator'] = (df['bullish_engulfing'] & df['dollar_volume_spike']) | (df['bearish_engulfing'] & df['dollar_volume_spike']) | (df['inside_bar'] & df['dollar_volume_divergence'])
+    df['new_combined_dollar_volume_indicator'] = (df['hammer_formation'] & df['large_dollar_volume_spike']) | (df['hammer_formation'] & df['dollar_volume_divergence'])
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (df['combined_momentum'] + 
+                          df['combined_price_volume

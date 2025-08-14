@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=14):
+    # Calculate Volume Change
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Determine Price Momentum
+    df['daily_range'] = df['high'] - df['low']
+    df['close_to_open_return'] = (df['close'] - df['open']) / df['open']
+    df['price_momentum'] = df['daily_range'] * df['close_to_open_return']
+    
+    # Combine Volume and Price Momentum
+    df['combined_metric'] = df['volume_change'] * df['price_momentum']
+    
+    # Adjust for Volatility: Calculate Average True Range (ATR)
+    df['true_range'] = df[['high', 'low', 'close']].apply(
+        lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), 
+        axis=1
+    )
+    df['atr'] = df['true_range'].rolling(window=n).mean()
+    
+    # Final Factor
+    df['factor'] = df['combined_metric'] / df['atr']
+    
+    return df['factor']
+
+# Example usage:
+# df = pd.DataFrame({
+#     'date': pd.date_range(start='2023-01-01', periods=50),
+#     'open': np.random.rand(50) * 100,
+#     'high': np.random.rand(50) * 100,
+#     'low': np.random.rand(50) * 100,
+#     'close': np.random.rand(50) * 100,
+#     'volume': np.random.randint(1000, 5000, size=50)
+# })
+# df.set_index('date', inplace=True)
+# factor_values = heuristics_v2(df)

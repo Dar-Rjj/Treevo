@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate True Range
+    df['TrueRange'] = df[['High', 'Low', 'Close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - x[2]), abs(x[1] - x[2])), axis=1)
+    
+    # Adjust for Volume Impact on Price
+    df['VolumeAdjustedHL'] = (df['High'] - df['Low']) * df['Volume']
+    
+    # Calculate Open-Close Momentum
+    df['OpenCloseMomentum'] = df['Close'] - df['Open']
+    
+    # Aggregate Price Movements
+    df['SumHL'] = df['High'] - df['Low']
+    df['SumCO'] = df['Close'] - df['Open']
+    
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['WeightedAverage'] = (df['VolumeAdjustedHL'] + df['OpenCloseMomentum']) / 2
+    
+    # Introduce Volume Trend Analysis
+    df['VolumeTrend'] = df['Volume'].pct_change().fillna(0)
+    df['VolumeTrendAdjustment'] = df['WeightedAverage'] * (1 + df['VolumeTrend'])
+    
+    # Dynamic Momentum Indicator
+    df['PrevAlphaFactor'] = df['VolumeTrendAdjustment'].shift(1).fillna(0)
+    df['MomentumChange'] = df['VolumeTrendAdjustment'] - df['PrevAlphaFactor']
+    df['SmoothedMomentum'] = df['MomentumChange'] / df['Close'].pct_change().rolling(window=5).std().fillna(1)
+    
+    # Evaluate Volume Activity
+    df['AvgVolume'] = df['Volume'].rolling(window=5).mean()
+    df['HighVolume'] = (df['Volume'] > df['AvgVolume']).astype(int)
+    
+    # Detect Volume Spike
+    df['Spike'] = (df['Volume'] > 2 * df['AvgVolume']).astype(int)
+    
+    # Adjust Momentum Based on Volume
+    df['AdjustedMomentum'] = df['SmoothedMomentum'] * (0.8 if df['Spike'] else 1)
+    
+    # Calculate Rolling Average True Range (ATR)
+    df['ATR'] = df['TrueRange'].rolling(window=14).sum() / 14
+    
+    # Adjust Price Momentum by ATR
+    df['AdjustedMomentumByATR'] = df['SumHL'] / df['ATR']
+    
+    # Generate Final Alpha Factor
+    df['RecentPriceTrend'] = df['Close'].rolling(window=5).mean()
+    df['TrendMultiplier'] = df['RecentPriceTrend'].pct_change().fillna(0)
+    df['FinalAlphaFactor'] = (df['AdjustedMomentumByATR'] + df['VolumeTrendAdjustment'] + df['OpenCloseMomentum']) * (1 + df['TrendMultiplier']) * df['HighVolume']
+    
+    return df['FinalAlphaFactor']
+```

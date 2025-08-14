@@ -1,0 +1,39 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 100-day and 500-day exponential moving averages of the closing price
+    df['close_100_ema'] = df['close'].ewm(span=100, adjust=False).mean()
+    df['close_500_ema'] = df['close'].ewm(span=500, adjust=False).mean()
+    
+    # Calculate the 300-day standard deviation of the closing price for a more robust volatility measure
+    df['close_300_std'] = df['close'].rolling(window=300).std()
+    
+    # Calculate the 400-day standard deviation of the volume for a more robust volatility measure
+    df['volume_400_std'] = df['volume'].rolling(window=400).std()
+    
+    # Non-linear transformation: Cube root of the difference between the closing price and the 100-day EMA
+    factor_1 = ((df['close'] - df['close_100_ema']) / df['close_300_std']).apply(np.cbrt)
+    
+    # Non-linear transformation: Exponential of the difference between the 100-day EMA and the 500-day EMA
+    factor_2 = ((df['close_100_ema'] - df['close_500_ema']) / df['close_300_std']).apply(np.exp)
+    
+    # Non-linear transformation: Square of the volume divided by its 400-day standard deviation
+    factor_3 = (df['volume'] / df['volume_400_std']).pow(2)
+    
+    # Calculate the rate of change over 90 days for the 100-day EMA
+    factor_4 = df['close_100_ema'].pct_change(periods=90)
+    
+    # Calculate the market sentiment as the difference between the 100-day EMA and the 500-day EMA
+    market_sentiment = df['close_100_ema'] - df['close_500_ema']
+    
+    # Dynamic weighting: Use the absolute value of the 90-day percentage change in the 100-day EMA to weight the factors
+    dynamic_weight = abs(factor_4)
+    
+    # Adjust the dynamic weights to ensure they sum up to 1
+    total_weight = 0.5 * dynamic_weight + 0.3 * dynamic_weight + 0.1 * dynamic_weight + 0.05 * dynamic_weight + 0.05 * dynamic_weight
+    normalized_weight = dynamic_weight / total_weight
+    
+    # Combine the factors into a single factor value with dynamically weighted contributions, including market sentiment
+    factor_values = (0.5 * factor_1 + 0.3 * factor_2 + 0.1 * factor_3 + 0.05 * factor_4 + 0.05 * market_sentiment) * normalized_weight
+    
+    return factor_values
+```

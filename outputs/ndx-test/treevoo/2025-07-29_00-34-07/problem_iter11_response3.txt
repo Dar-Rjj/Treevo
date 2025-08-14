@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Price Momentum
+    df['1_day_return'] = df['close'].pct_change()
+    df['5_day_return'] = df['close'].pct_change(5)
+    df['20_day_return'] = df['close'].pct_change(20)
+    df['average_momentum'] = (df['1_day_return'] + df['5_day_return'] + df['20_day_return']) / 3
+    
+    # Calculate Adjusted Relative Volume
+    n_days = 20  # Define the lookback period for average volume
+    df['avg_volume'] = df['volume'].rolling(window=n_days).mean()
+    df['relative_volume'] = df['volume'] / df['avg_volume']
+    df['volume_filtered'] = df['relative_volume'] > 1.5
+    
+    # Adjusted High-Low Cumulative Return and Weighted Price Gaps
+    df['price_range'] = df['high'] - df['low']
+    df['price_range_sum'] = df[df['volume_filtered']]['price_range'].rolling(window=n_days).sum()
+    
+    df['high_low_ratio'] = df['high'] / df['low']
+    
+    df['volume_growth'] = df['volume'] / df['volume'].shift(1)
+    df['weighted_price_gap'] = (df['close'] - df['open']) * df['volume_growth']
+    df['weighted_price_gap_sum'] = df[df['volume_filtered']]['weighted_price_gap'].rolling(window=n_days).sum()
+    
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['volume_weighted_co_return'] = (df['close'] - df['open']) * df['volume']
+    df['volume_weighted_co_return_sum'] = df['volume_weighted_co_return'].rolling(window=n_days).sum()
+    
+    # Generate Final Alpha Factor
+    df['alpha_factor'] = (
+        (df['price_range_sum'] + df['weighted_price_gap_sum']) 
+        * df['average_momentum'] 
+        * df['high_low_ratio'] 
+        * df['volume_weighted_co_return_sum']
+    )
+    
+    return df['alpha_factor']
+```

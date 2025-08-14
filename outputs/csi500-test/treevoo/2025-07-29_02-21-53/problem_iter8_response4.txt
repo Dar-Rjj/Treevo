@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute Averages
+    df['10_day_avg_close'] = df['close'].rolling(window=10).mean()
+    df['30_day_avg_close'] = df['close'].rolling(window=30).mean()
+
+    # Determine Price Momentum
+    df['price_momentum'] = df['10_day_avg_close'] - df['30_day_avg_close']
+
+    # Calculate Intraday High-Low Range and True Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['true_range'] = (df['high'] - df['low']).combine((df['high'] - df['close'].shift(1)).abs(), max).combine((df['close'].shift(1) - df['low']).abs(), max)
+
+    # Adjust for Volume Impact on Price
+    df['volume_adjusted_high_low'] = df['high_low_range'] * df['volume']
+
+    # Detect Volume Spike
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['volume_spike'] = (df['volume'] > 2 * df['5_day_avg_volume']).astype(int)
+
+    # Adjust Momentum Based on Spike
+    df['adjusted_momentum'] = df['price_momentum'].where(df['volume_spike'] == 0, df['price_momentum'] * 0.8)
+
+    # Aggregate Price Movements
+    df['sum_high_low_diff'] = df['high_low_range'].rolling(window=10).sum()
+    df['sum_close_open_diff'] = (df['close'] - df['open']).rolling(window=10).sum()
+
+    # Combine Volume-Adjusted High-Low with Open-Close
+    df['combined_measure'] = 0.5 * df['volume_adjusted_high_low'] + 0.5 * (df['close'] - df['open'])
+
+    # Dynamic Momentum Indicator
+    df['crossover_enhanced_alpha_factor'] = df['adjusted_momentum'].shift(1)
+    df['crossover_enhanced_alpha_factor'] += df['adjusted_momentum']
+    df['daily_returns'] = df['close'].pct_change()
+    df['std_daily_returns'] = df['daily_returns'].rolling(window=10).std()
+    df['crossover_enhanced_alpha_factor'] /= df['std_daily_returns']
+
+    # Evaluate Volume Activity
+    df['average_volume'] = df['volume'].rolling(window=30).mean()
+    df['high_volume_indicator'] = (df['volume'] > 1.5 * df['average_volume']).astype(int)
+
+    # Generate Final Alpha Factor
+    df['final_alpha_factor'] = df['crossover_enhanced_alpha_factor'] * df['high_volume_indicator']
+
+    return df['final_alpha_factor']
+```

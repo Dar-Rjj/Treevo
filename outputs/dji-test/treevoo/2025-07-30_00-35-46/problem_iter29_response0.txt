@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] / df['open']) - 1
+    weighted_high_low = 0.5 * high_low_diff
+    weighted_open_close = 0.5 * open_close_return
+    intraday_momentum = (weighted_high_low + weighted_open_close) ** 3
+
+    # Analyze Price Trends and Momentum
+    short_sma = df['close'].rolling(window=5).mean()
+    long_sma = df['close'].rolling(window=20).mean()
+    sma_crossover_signal = (short_sma > long_sma).astype(int) * 2 - 1
+
+    roc = df['close'].pct_change(periods=5)
+    rsi = 100 - (100 / (1 + (df['close'].diff().clip(lower=0).rolling(window=14).mean() / df['close'].diff().clip(upper=0).rolling(window=14).abs().mean())))
+
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    ema_crossover_signal = (short_ema > long_ema).astype(int) * 2 - 1
+
+    # Apply Integrated Volume and Amount Shock Filter
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    amount_ratio = df['amount'] / df['amount'].shift(1)
+    volume_ema = volume_ratio.ewm(alpha=0.2, adjust=False).mean()
+    amount_ema = amount_ratio.ewm(alpha=0.2, adjust=False).mean()
+    volume_shock_threshold = 1.5
+    amount_shock_threshold = 1.5
+    shock_filter = (volume_ema > volume_shock_threshold) & (amount_ema > amount_shock_threshold)
+
+    # Measure Synchronized Volume and Price Changes
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    synchronized_changes = np.sign(volume_change * price_change)
+    synchronized_magnitude = np.abs(volume_change * price_change)
+
+    # Investigate Trading Volume
+    short_avg_volume = df['volume'].rolling(window=5).mean()
+    long_avg_volume = df['volume'].rolling(window=20).mean()
+    volume_signal = (df['volume'] > long_avg_volume).astype(int) * 2 - 1
+
+    # Combine Multiple Factors
+    alpha_factor = (
+        0.3 * sma_crossover_signal +
+        0.2 * ema_crossover_signal +
+        0.2 * rsi +
+        0.1 * roc +
+        0.1 * synchronized_changes * (shock_filter | (volume_signal == 1))
+    )
+
+    return alpha_factor
+```

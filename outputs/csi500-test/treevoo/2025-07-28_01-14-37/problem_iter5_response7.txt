@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, window=5, short_term=5, long_term=20):
+    # Calculate Daily Return
+    df['daily_return'] = df['close'].pct_change()
+
+    # Calculate Cumulative Return
+    df['cumulative_return'] = df['daily_return'].rolling(window=window).sum()
+
+    # Adjust by Volume
+    df['average_volume'] = df['volume'].rolling(window=window).mean()
+    df['vol_adjusted_cumulative_return'] = df['cumulative_return'] * df['average_volume']
+
+    # Adjust by Price Volatility
+    df['std_close'] = df['close'].rolling(window=window).std()
+    df['vol_adjusted_cumulative_return'] = (df['vol_adjusted_cumulative_return'] / df['std_close']) + 1
+
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+
+    # Calculate Close Price Change
+    df['close_price_change'] = df['close'] - df['close'].shift(1)
+
+    # Calculate Volume-Weighted Price (VWP)
+    df['vwp'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
+
+    # Compute Weighted Momentum
+    df['weighted_momentum'] = df['close_price_change'] / df['vwp']
+
+    # Adjust for Volatility
+    df['vol_adjusted_weighted_momentum'] = df['weighted_momentum'] / df['high_low_range']
+
+    # Calculate Short-Term and Long-Term Moving Averages
+    df['short_ma'] = df['close'].rolling(window=short_term).mean()
+    df['long_ma'] = df['close'].rolling(window=long_term).mean()
+
+    # Determine Trend Direction
+    df['trend_direction'] = (df['short_ma'] > df['long_ma']).astype(int) * 2 - 1
+
+    # Confirm with Volume
+    df['volume_change'] = df['volume'] - df['volume'].shift(1)
+    df['adjusted_momentum'] = df['trend_direction'] * df['volume_change']
+    df['combined_momentum'] = (df['vol_adjusted_weighted_momentum'] + df['adjusted_momentum']) / 2
+
+    # Integrate Relative Strength and Adjusted Cumulative Return
+    df['relative_strength'] = df['combined_momentum'] - df['short_ma']
+    df['factor'] = df['relative_strength'] / df['vwp'] + df['vol_adjusted_cumulative_return']
+
+    return df['factor']
+```

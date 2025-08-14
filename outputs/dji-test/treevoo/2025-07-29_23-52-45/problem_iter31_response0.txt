@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Momentum Indicators
+    # Simple Moving Average (SMA) of Close Price
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # Volume-Based Indicators
+    # On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'][i] > df['close'][i-1]:
+            obv.append(obv[-1] + df['volume'][i])
+        elif df['close'][i] < df['close'][i-1]:
+            obv.append(obv[-1] - df['volume'][i])
+        else:
+            obv.append(obv[-1])
+    df['OBV'] = obv
+    
+    # Chaikin Money Flow (CMF)
+    mf_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    mf_volume = mf_multiplier * df['volume']
+    df['CMF_20'] = mf_volume.rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Volatility and Range Indicators
+    # Bollinger Bands
+    df['BB_Middle_Band_20'] = df['close'].rolling(window=20).mean()
+    df['BB_Std_20'] = df['close'].rolling(window=20).std()
+    df['BB_Upper_Band_20'] = df['BB_Middle_Band_20'] + 2 * df['BB_Std_20']
+    df['BB_Lower_Band_20'] = df['BB_Middle_Band_20'] - 2 * df['BB_Std_20']
+    
+    # Average True Range (ATR)
+    df['tr_hl'] = df['high'] - df['low']
+    df['tr_hc'] = abs(df['high'] - df['close'].shift())
+    df['tr_lc'] = abs(df['low'] - df['close'].shift())
+    df['TR'] = df[['tr_hl', 'tr_hc', 'tr_lc']].max(axis=1)
+    df['ATR_14'] = df['TR'].rolling(window=14).mean()
+    
+    # Market Sentiment and Trend Indicators
+    # Moving Average Convergence Divergence (MACD)
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+    
+    # Williams %R
+    l14 = df['low'].rolling(window=14).min()
+    h14 = df['high'].rolling(window=14).max()
+    df['Williams_R_14'] = -100 * (h14 - df['close']) / (h14 - l14)
+    
+    # Pattern Recognition
+    # Doji Candlestick Pattern
+    df['Doji'] = (abs(df['open'] - df['close']) / (df['high'] - df['low']) < 0.1) & (df['high'] - df['low'] > 0)
+    
+    # Engulfing Pattern
+    df['Engulfing'] = (df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & \
+                     (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1)) | \
+                     (df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & \
+                     (df['close'] < df['open'].shift(1)) & (df['open'] > df['close

@@ -1,0 +1,26 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the volume-weighted close price
+    vw_close = df['close'] * df['volume']
+    
+    # Calculate the 10-day and 30-day moving averages of volume-weighted close
+    vw_close_10 = vw_close.rolling(window=10).mean()
+    vw_close_30 = vw_close.rolling(window=30).mean()
+    
+    # Calculate the adaptive window based on the volatility of the close price
+    vol = df['close'].rolling(window=14).std()
+    adaptive_window = (vol / vol.rolling(window=14).mean()).apply(lambda x: max(5, min(30, int(x * 30))))
+    
+    # Calculate the adaptive moving average of the volume-weighted close
+    vw_close_adaptive = vw_close.rolling(window=adaptive_window, min_periods=1).mean()
+    
+    # Calculate the factor as the ratio of the adaptive moving average to the 30-day moving average
+    factor = (vw_close_adaptive / (vw_close_30 + 1e-7)).fillna(0)
+    
+    # Incorporate market sentiment by calculating the percentage change in amount
+    amount_change = df['amount'].pct_change().fillna(0)
+    
+    # Combine the factor with market sentiment
+    final_factor = factor * (1 + amount_change)
+    
+    return final_factor

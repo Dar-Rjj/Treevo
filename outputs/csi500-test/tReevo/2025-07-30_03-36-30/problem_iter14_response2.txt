@@ -1,0 +1,44 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Compute 3-day and 5-day rolling returns
+    df['3_day_return'] = df['close'].pct_change(3)
+    df['5_day_return'] = df['close'].pct_change(5)
+    
+    # Compute return variances for 3-day and 5-day
+    df['3_day_var'] = df['close'].rolling(3).var()
+    df['5_day_var'] = df['close'].rolling(5).var()
+    
+    # Weight the returns by their inverse variance
+    df['w_3_day_return'] = df['3_day_return'] * (1 / df['3_day_var'])
+    df['w_5_day_return'] = df['5_day_return'] * (1 / df['5_day_var'])
+    
+    # Normalize weights
+    total_weight = df['w_3_day_return'] + df['w_5_day_return']
+    df['w_3_day_return'] /= total_weight
+    df['w_5_day_return'] /= total_weight
+    
+    # Combine the weighted returns
+    df['weighted_return'] = df['w_3_day_return'] * df['3_day_return'] + df['w_5_day_return'] * df['5_day_return']
+    
+    # Compute 5-day volume moving average and volume trend
+    df['5_day_vol_ma'] = df['volume'].rolling(5).mean()
+    df['volume_trend'] = df['volume'] / df['5_day_vol_ma']
+    
+    # Adjust the weighted return by volume trend
+    df['volume_adjusted_momentum'] = df['weighted_return'] * df['volume_trend']
+    
+    # Calculate Open-High-Low Volatility Index
+    df['high_low_spread'] = df['high'] - df['low']
+    df['open_close_spread'] = abs(df['open'] - df['close'])
+    df['average_spread'] = (df['high_low_spread'] + df['open_close_spread']) / 2
+    df['mean_price'] = (df['open'] + df['close']) / 2
+    df['ohl_volatility_index'] = df['average_spread'] / df['mean_price']
+    
+    # Final factor calculation
+    df['final_factor'] = df['volume_adjusted_momentum'] - df['ohl_volatility_index']
+    
+    # Return the final factor as a Series
+    return df['final_factor'].dropna()
+```

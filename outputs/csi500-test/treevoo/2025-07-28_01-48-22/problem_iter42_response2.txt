@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Integrated Momentum Indicators
+    df['Intraday_Momentum'] = (df['close'] - df['open']) / df['open'] * df['volume']
+    df['Historical_Momentum'] = (df['close'] - df['close'].shift(10)) / df['close'].shift(10)
+    df['Combined_Momentum'] = df['Intraday_Momentum'] + df['Historical_Momentum']
+
+    # Smoothed Momentum
+    df['Smoothed_Momentum'] = df['Combined_Momentum'].ewm(span=5).mean()
+
+    # Volatility-Adjusted Momentum
+    df['Daily_High_Low_Range'] = (df['high'] - df['low']) / df['close']
+    df['Average_Daily_Range'] = df['Daily_High_Low_Range'].rolling(window=10).mean()
+    df['Adjusted_Smoothed_Momentum'] = df['Smoothed_Momentum'] / (df['Average_Daily_Range'] + 1)
+
+    # Volume-Price Indicator
+    df['Volume_Change'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Avg_High_Low_Range_5_days'] = (df['high'] - df['low']).rolling(window=5).sum() / (5 * df['close'])
+    df['Volume_Price_Factor'] = df['Volume_Change'] + 0.3 * df['Avg_High_Low_Range_5_days'] + (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Return-Based Strength
+    df['Short_Term_Return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['Long_Term_Return'] = (df['close'] / df['close'].shift(20)) - 1
+    df['Relative_Strength'] = df['Short_Term_Return'] - df['Long_Term_Return']
+
+    # Combined Factors
+    df['Weighted_Intraday_Return'] = 0.4 * (df['close'] - df['open']) / df['open']
+    df['Volume_Spike_Indicator'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    df['Multiplication_with_Relative_Strength'] = df['Relative_Strength'] * df['Volume_Spike_Indicator']
+    df['Add_Close_Price_Change'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Enhanced Volume-Price Indicator
+    df['Volume_Trend'] = (df['volume'] - df['volume'].shift(5)) / df['volume'].shift(5)
+    df['Price_Trend'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['Enhanced_Volume_Price_Factor'] = df['Volume_Trend'] + 0.5 * df['Price_Trend']
+
+    # Final Alpha Factor
+    alpha_factor = df['Adjusted_Smoothed_Momentum'] + \
+                   df['Volume_Price_Factor'] + \
+                   df['Multiplication_with_Relative_Strength'] + \
+                   0.5 * df['Add_Close_Price_Change'] + \
+                   0.2 * df['Enhanced_Volume_Price_Factor']
+
+    return alpha_factor.dropna()
+```

@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, N=20, upper_threshold=0.05, lower_threshold=-0.05, vol_window=10, interest_rate=0.02, gdp_growth_rate=0.03):
+    # Obtain Close Prices
+    close_prices = df['close']
+    
+    # Compute Log Return over N Days
+    log_returns = np.log(close_prices).diff(N)
+    
+    # Calculate Momentum
+    cum_log_returns = log_returns.rolling(window=N).sum()
+    
+    # Apply Dynamic Thresholds
+    clipped_log_returns = cum_log_returns.clip(lower=lower_threshold, upper=upper_threshold)
+    
+    # Adjust for Volume
+    volumes = df['volume']
+    mean_volume = volumes.rolling(window=N).mean()
+    volume_adjusted_momentum = (volumes / mean_volume) * clipped_log_returns
+    
+    # Determine Absolute Price Changes
+    abs_price_changes = close_prices.diff().abs()
+    
+    # Calculate Advanced Volatility Measures
+    ema_volatility = abs_price_changes.ewm(span=vol_window, adjust=False).mean()
+    
+    # Final Factor Calculation
+    # Define weights for each component
+    momentum_weight = 0.5
+    volume_weight = 0.3
+    volatility_weight = 0.2
+    
+    # Ensure Weights Sum to 1
+    weights_sum = momentum_weight + volume_weight + volatility_weight
+    momentum_weight /= weights_sum
+    volume_weight /= weights_sum
+    volatility_weight /= weights_sum
+    
+    # Integrate Key Economic Indicators
+    key_indicators_factor = (interest_rate - 0.01) * (gdp_growth_rate - 0.01)
+    
+    # Combine Weighted Components
+    final_factor = (
+        momentum_weight * volume_adjusted_momentum +
+        volume_weight * (volumes / mean_volume) +
+        volatility_weight * ema_volatility
+    ) * key_indicators_factor
+    
+    return final_factor
+```

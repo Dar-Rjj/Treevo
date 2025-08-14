@@ -1,0 +1,25 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum with non-linear weighting
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_weight = 1 / (1 + np.exp(-(short_term_momentum - long_term_momentum)))
+    adaptive_momentum = adaptive_weight * short_term_momentum + (1 - adaptive_weight) * long_term_momentum
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over the last 14 days
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Volume anomaly detection
+    volume_zscore = (df['volume'] - df['volume'].rolling(window=30).mean()) / df['volume'].rolling(window=30).std()
+    volume_anomaly = np.where(volume_zscore > 2, 1, 0)
+
+    # Market sentiment using the ratio of high to low prices as a proxy
+    market_sentiment = (df['high'] - df['low']) / df['close']
+
+    # Combining the four factors into a single alpha factor
+    # Weights are adjusted based on their perceived importance and impact
+    factor_values = 0.5 * adaptive_momentum - 0.2 * dynamic_volatility + 0.2 * volume_anomaly + 0.1 * market_sentiment
+
+    return factor_values
+```

@@ -1,0 +1,53 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute 5-Day and 10-Day Rolling Returns
+    df['5D_Return'] = (df['close'].shift(-4) - df['close']) / df['close']
+    df['10D_Return'] = (df['close'].shift(-9) - df['close']) / df['close']
+    
+    # Combine 5-Day and 10-Day Returns with dynamic weights
+    conditions = [
+        (df['5D_Return'] > df['10D_Return']),
+        (df['5D_Return'] <= df['10D_Return'])
+    ]
+    choices = [
+        df['5D_Return'] * 0.6 + df['10D_Return'] * 0.4,
+        df['5D_Return'] * 0.4 + df['10D_Return'] * 0.6
+    ]
+    df['Combined_Return'] = np.select(conditions, choices, default=0)
+    
+    # Volume-Adjusted Multi-Day Price Momentum
+    df['Volume_Adjusted_Momentum'] = df['Combined_Return'] * df['volume']
+    
+    # Calculate Enhanced Open-High-Low Volatility Index
+    df['20D_High_Low_Range'] = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    df['20D_Open_Close_Range'] = df['open'].rolling(window=20).mean() - df['close'].rolling(window=20).mean()
+    df['20D_Mean_Price'] = (df['open'].rolling(window=20).sum() + df['close'].rolling(window=20).sum()) / 40
+    df['Volatility_Index'] = (df['20D_High_Low_Range'] + df['20D_Open_Close_Range']) / df['20D_Mean_Price']
+    
+    # Integrate Market Sentiment
+    df['Daily_Change_in_Amount'] = df['amount'] - df['amount'].shift(1)
+    df['Normalized_Daily_Change'] = df['Daily_Change_in_Amount'] / df['amount']
+    df['5D_MA_Amount'] = df['amount'].rolling(window=5).mean()
+    df['20D_MA_Amount'] = df['amount'].rolling(window=20).mean()
+    df['MA_Difference'] = df['5D_MA_Amount'] - df['20D_MA_Amount']
+    df['Normalized_MA_Difference'] = df['MA_Difference'] / df['20D_MA_Amount']
+    df['Sentiment_Adjusted_Momentum'] = df['Volume_Adjusted_Momentum'] + df['Normalized_Daily_Change'] + df['Normalized_MA_Difference']
+    
+    # Incorporate Liquidity and Trend Strength
+    df['20D_Volume_EMA'] = df['volume'].ewm(span=20, adjust=False).mean()
+    df['50D_Volume_EMA'] = df['volume'].ewm(span=50, adjust=False).mean()
+    df['Volume_Trend'] = df['20D_Volume_EMA'] - df['50D_Volume_EMA']
+    df['Normalized_Volume'] = df['volume'] / df['20D_Volume_EMA']
+    
+    df['50D_MA_Close'] = df['close'].rolling(window=50).mean()
+    df['200D_MA_Close'] = df['close'].rolling(window=200).mean()
+    df['Trend_Strength'] = np.where(df['50D_MA_Close'] > df['200D_MA_Close'], 1, -1)
+    
+    # Final Factor Calculation
+    df['Final_Factor'] = (df['Sentiment_Adjusted_Momentum'] * df['Normalized_Volume'] * df['Trend_Strength']) - df['Volatility_Index']
+    
+    return df['Final_Factor'].dropna()
+```

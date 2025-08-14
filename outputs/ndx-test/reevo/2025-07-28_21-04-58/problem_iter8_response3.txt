@@ -1,0 +1,52 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 5-day and 10-day return as a momentum indicator
+    momentum_5 = df['close'] / df['close'].shift(5) - 1
+    momentum_10 = df['close'] / df['close'].shift(10) - 1
+    
+    # Calculate the average volume over the last 10 days
+    avg_volume = df['volume'].rolling(window=10).mean()
+    
+    # Calculate the 10-day price range to capture price movement
+    range_10 = df['high'].rolling(window=10).max() - df['low'].rolling(window=10).min()
+    
+    # Calculate the 10-day and 30-day moving averages of the close price
+    ma_10 = df['close'].rolling(window=10).mean()
+    ma_30 = df['close'].rolling(window=30).mean()
+    
+    # Calculate the interaction between the momentum and the relative position of the 10-day MA to the 30-day MA, normalized by close price
+    trend_strength = (ma_10 - ma_30) / df['close']
+    
+    # Calculate the 20-day high-low range to capture price movement
+    range_20 = df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min()
+    
+    # Calculate the dynamic price trend using the rate of change in the 10-day moving average
+    dynamic_trend = ma_10.pct_change()
+    
+    # Calculate the 14-day RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    rsi_14 = 100 - (100 / (1 + rs))
+    
+    # Calculate the 14-day Money Flow Index (MFI)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    money_flow = typical_price * df['volume']
+    positive_money_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+    negative_money_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+    positive_money_flow_sum = positive_money_flow.rolling(window=14).sum()
+    negative_money_flow_sum = negative_money_flow.rolling(window=14).sum()
+    money_ratio = positive_money_flow_sum / negative_money_flow_sum
+    mfi_14 = 100 - (100 / (1 + money_ratio))
+    
+    # Calculate the On-Balance Volume (OBV)
+    obv = (df['close'] > df['close'].shift(1)).astype(int) * df['volume'] - (df['close'] < df['close'].shift(1)).astype(int) * df['volume']
+    obv = obv.cumsum()
+    
+    # Combine the factors into a single alpha signal
+    factor = (momentum_5 * momentum_10 * (avg_volume + 1e-7)**(-1) * (range_10 + 1e-7)**(-1) * (range_20 + 1e-7)**(-1) * 
+              trend_strength * dynamic_trend * rsi_14 * mfi_14 * obv).rank(pct=True)
+    
+    return factor
+```

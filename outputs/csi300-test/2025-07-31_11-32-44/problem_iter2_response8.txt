@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['close'].pct_change(20)
+    
+    # Calculate Volume Delta
+    df['Volume_Delta'] = (df['volume'] - df['volume'].shift(20)) / df['volume'].shift(20)
+    
+    # Combine Momentum and Volume
+    df['Combined_MV'] = df['Raw_Momentum'] * df['Volume_Delta']
+    df['Combined_MV'] = df['Combined_MV'].apply(lambda x: -x if x < 0 else x)
+    
+    # Add a smoothing factor using a simple moving average over 5 days
+    df['Smoothed_MV'] = df['Combined_MV'].rolling(window=5).mean()
+    
+    # Calculate Intraday Return
+    df['Intraday_Return'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Intraday Range
+    df['Intraday_Range'] = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility (Average True Range over a period)
+    df['True_Range'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['close'].shift(1)), abs(x['low'] - x['close'].shift(1))), axis=1)
+    df['Intraday_Volatility'] = df['True_Range'].rolling(window=14).mean()
+    
+    # Calculate Volume Trend (Exponential Moving Average of Volume)
+    df['Volume_EMA'] = df['volume'].ewm(span=14, adjust=False).mean()
+    
+    # Compute Volume Reversal Component
+    df['Volume_Sentiment'] = df.apply(lambda x: 1 if x['volume'] > x['Volume_EMA'] else -1, axis=1)
+    df['Volume_Reversal'] = df['Volume_Sentiment'] * df['Intraday_Return']
+    
+    # Synthesize Factors
+    df['Factor'] = (df['Smoothed_MV'] * df['Intraday_Return'] * df['Intraday_Range'] * df['Intraday_Volatility'] + df['Volume_Reversal'])
+    
+    # Drop NaN values
+    df.dropna(inplace=True)
+    
+    return df['Factor']
+```

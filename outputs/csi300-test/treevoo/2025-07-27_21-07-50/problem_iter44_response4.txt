@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Short-Term Momentum
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    
+    # Medium-Term Trend
+    medium_term_trend = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Volatility and Mean Reversion Indicator
+    daily_range = df['high'] - df['low']
+    mean_reversion_indicator = daily_range.rolling(window=20).mean()
+    
+    # Institutional Activity Indicator (20-day VWAP)
+    vwap = (df['close'] * df['volume']).rolling(window=20).sum() / df['volume'].rolling(window=20).sum()
+    
+    # Liquidity Proxy
+    liquidity_proxy = df['amount'].rolling(window=20).mean()
+    
+    # Volume-Weighted Intraday Return
+    volume_weighted_intraday_return = (df['close'] - df['open']) * np.sqrt(df['volume'])
+    
+    # Price Volatility
+    price_volatility = df['close'].pct_change().rolling(window=20).std()
+    
+    # Volume Volatility
+    volume_volatility = df['volume'].rolling(window=20).std()
+    
+    # Corrected Intraday Momentum with Adjustments
+    corrected_intraday_momentum = volume_weighted_intraday_return - price_volatility - volume_volatility
+    
+    # High-Low Spread Ratio
+    high_low_spread_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Composite Alpha Factor Components
+    volume_weighted_close_open_diff = (df['close'] - df['open']) * df['volume']
+    ema_21 = df['close'].ewm(span=21, adjust=False).mean()
+    subtract_ema = (df['close'] - ema_21) * df['volume']
+    aggregate_past_10_day_returns = df['close'].pct_change().rolling(window=10).sum()
+    composite_alpha_factor = volume_weighted_close_open_diff + subtract_ema + aggregate_past_10_day_returns
+    
+    # Combine Core Factors
+    core_factors = (short_term_momentum + 
+                    medium_term_trend + 
+                    mean_reversion_indicator + 
+                    vwap + 
+                    liquidity_proxy + 
+                    corrected_intraday_momentum + 
+                    high_low_spread_ratio + 
+                    composite_alpha_factor)
+    
+    # Long-Term and Short-Term Trend Adjustment
+    long_term_trend = df['close'].rolling(window=100).mean()
+    short_term_trend = df['close'].ewm(span=20, adjust=False).mean()
+    trend_adjustment = 1.7 if (short_term_trend - long_term_trend).iloc[-1] > 0 else 0.3
+    final_alpha_factor = core_factors * trend_adjustment
+    
+    return final_alpha_factor
+```

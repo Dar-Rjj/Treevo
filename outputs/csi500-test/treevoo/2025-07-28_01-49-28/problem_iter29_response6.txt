@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close_movement = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range * df['volume']) + open_to_close_movement
+    
+    # Spread Momentum
+    high_low_spreads = df['high'] - df['low']
+    rolling_sum_high_low_spreads = high_low_spreads.rolling(window=20).sum()
+    spread_momentum = rolling_sum_high_low_spreads - rolling_sum_high_low_spreads.shift(1)
+    
+    # Volume-Adjusted Momentum
+    simple_momentum = df['close'] - df['close'].shift(1)
+    avg_volume = (df['volume'] + df['volume'].shift(1)) / 2
+    volume_adjusted_momentum = simple_momentum * (df['volume'] / avg_volume)
+    
+    # Incorporate Relative Strength
+    avg_close_20_day = df['close'].rolling(window=20).mean()
+    relative_strength = df['close'] / avg_close_20_day
+    
+    # Enhanced Price Reversion
+    highest_high_10_day = df['high'].rolling(window=10).max()
+    lowest_low_10_day = df['low'].rolling(window=10).min()
+    proximity_to_high = (highest_high_10_day - df['close']) / highest_high_10_day
+    proximity_to_low = (df['close'] - lowest_low_10_day) / lowest_low_10_day
+    min_proximity = proximity_to_high.min(axis=1)
+    inverted_proximity = 1 / min_proximity
+    std_dev_daily_returns = df['close'].pct_change().rolling(window=20).std()
+    enhanced_price_reversion = inverted_proximity / std_dev_daily_returns
+    
+    # Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    weighted_avg_volatility = (open_high_diff + open_low_diff) * df['volume']
+    
+    # High-Low Return with Spread Momentum
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    high_low_spread_momentum = spread_momentum
+    
+    # Amount per Unit Close Price Rate of Change with Volume-Weighted Adjustments
+    amount_per_unit_close = df['amount'].rolling(window=20).sum() / df['close']
+    amount_per_unit_close_prev = df['amount'].rolling(window=40).sum().shift(20) / df['close'].shift(20)
+    amount_rate_of_change = amount_per_unit_close - amount_per_unit_close_prev
+    
+    # Combined Indicators
+    combined_indicator = (volume_adjusted_breakout_strength * 0.5) + spread_momentum + volume_adjusted_momentum
+    combined_indicator *= relative_strength
+    final_alpha_factor = (combined_indicator * 
+                          enhanced_price_reversion * 
+                          weighted_avg_volatility * 
+                          high_low_return * 
+                          amount_rate_of_change)
+    
+    # Filter for Strong Moves
+    dynamic_threshold = combined_indicator.median()
+    strong_moves = (combined_indicator > dynamic_threshold).astype(int)
+    
+    return final_alpha_factor
+```

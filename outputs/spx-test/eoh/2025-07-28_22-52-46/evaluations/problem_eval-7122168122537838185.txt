@@ -1,0 +1,29 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Compute exponential moving averages for close price
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    # Calculate EMA crossover
+    df['ema_crossover'] = df['ema_20'] - df['ema_50']
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Historical betas
+    beta_ema_crossover = (df['ema_crossover'] * df['daily_return'].shift(-1)).cov() / df['daily_return'].var()
+    beta_rsi = (df['rsi'] * df['daily_return'].shift(-1)).cov() / df['daily_return'].var()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['ema_crossover'] * beta_ema_crossover + 
+                         df['rsi'] * beta_rsi)
+    
+    return heuristics_matrix

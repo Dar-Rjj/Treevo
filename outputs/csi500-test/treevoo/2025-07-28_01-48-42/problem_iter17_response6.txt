@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Daily Open-Close Price Spread
+    open_close_spread = df['close'] - df['open']
+    
+    # Compute 5-Day Momentum
+    price_change = df['close'].diff()
+    five_day_momentum = price_change.rolling(window=5).sum()
+    
+    # Adjust for Volume and Amount
+    volume_adjusted_range = high_low_range * df['volume']
+    amount_adjusted_range = high_low_range * np.sqrt(df['amount'])
+    combined_adjusted_range = volume_adjusted_range + amount_adjusted_range
+    
+    # Adjust Momentum by Open-Close Spread
+    adjusted_momentum = five_day_momentum * np.abs(open_close_spread)
+    
+    # Combine Momentum and Volume-Amount-Adjusted Range
+    combined_signal = adjusted_momentum / combined_adjusted_range
+    
+    # Enhance Combined Signal with Smoothing
+    ema_span = 5
+    smoothed_signal = combined_signal.ewm(span=ema_span, adjust=False).mean()
+    
+    # Calculate Weighted Price Change
+    weighted_price_change = price_change * df['volume'] * np.sqrt(df['amount'])
+    
+    # Calculate Intraday Reversal Score
+    intraday_return = (df['high'] - df['low']) / df['open']
+    intraday_reversal = -intraday_return  # Invert for reversal
+    
+    # Integrate Momentum, Reversal, and Volume-Amount Adjustment
+    high_low_momentum = high_low_range.diff().rolling(window=5).sum()
+    integrated_signal = high_low_momentum * intraday_reversal
+    
+    # Adjust by Volume and Amount Relative Strength
+    daily_volume_rank = df['volume'].rank(pct=True).rolling(window=20).mean()
+    daily_amount_rank = df['amount'].rank(pct=True).rolling(window=20).mean()
+    relative_strength = (daily_volume_rank + daily_amount_rank) * integrated_signal
+    
+    # Consider Close-to-Open Price Change
+    close_to_open_diff = df['open'].shift(-1) - df['close']
+    co_adjusted_signal = relative_strength * close_to_open_diff
+    
+    # Calculate Volume Spike Factor
+    day_to_day_volume_change = df['volume'] - df['volume'].shift(1)
+    volume_spike_threshold = 2 * df['volume'].rolling(window=20).std()
+    volume_spike_factor = (day_to_day_volume_change > volume_spike_threshold).astype(int)
+    
+    # Final Alpha Factor
+    final_factor = smoothed_signal * adjusted_momentum * volume_spike_factor * co_adjusted_signal
+    
+    return final_factor
+```

@@ -1,0 +1,76 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate intraday volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate simple moving average of close prices over 20 days
+    df['sma_close'] = df['close'].rolling(window=20).mean()
+    df['sma_ratio'] = df['close'] / df['sma_close']
+    
+    # Calculate exponential moving average of close prices over 20 days
+    df['ema_close'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_ratio'] = df['close'] / df['ema_close']
+    
+    # Calculate average volume over 20 days
+    df['sma_volume'] = df['volume'].rolling(window=20).mean()
+    df['volume_ratio'] = df['volume'] / df['sma_volume']
+    
+    # Calculate price-volume momentum
+    df['price_volume_momentum'] = (df['close'] - df['open']) * df['volume']
+    
+    # Calculate large trade indicator
+    df['large_trade_indicator'] = np.where(df['volume'] > 2 * df['sma_volume'], 1, 0)
+    
+    # Calculate high-low difference
+    df['high_low_diff'] = df['high'] - df['low']
+    
+    # Calculate SMA of high-low difference over 14 days
+    df['sma_high_low_diff'] = df['high_low_diff'].rolling(window=14).mean()
+    
+    # Calculate raw momentum
+    df['raw_momentum'] = df['high_low_diff'] - df['sma_high_low_diff']
+    
+    # Apply smoothing with a factor of 0.2
+    df['smoothed_momentum'] = df['raw_momentum'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Transform to bounded range without normalization
+    df['dynamic_momentum'] = (df['smoothed_momentum'] + abs(df['smoothed_momentum'].min())) * 100 / (df['smoothed_momentum'].max() - df['smoothed_momentum'].min())
+    
+    # Apply rolling window volatility filter
+    df['volatility'] = df['high_low_diff'].rolling(window=20).std()
+    df['dynamic_momentum_filtered'] = df['dynamic_momentum'] / df['volatility'].replace(0, np.nan)
+    
+    # Integrate volume-weighted momentum
+    df['volume_weighted_high_low_diff'] = df['high_low_diff'] * df['volume']
+    df['sma_volume_weighted_high_low_diff'] = df['volume_weighted_high_low_diff'].rolling(window=30).mean()
+    df['dynamic_momentum'] = df['dynamic_momentum_filtered'] + df['sma_volume_weighted_high_low_diff']
+    
+    # Combine factors for more robust signals
+    weights = {
+        'sma_ratio': 0.15,
+        'ema_ratio': 0.15,
+        'intraday_volatility': 0.1,
+        'volume_ratio': 0.1,
+        'price_volume_momentum': 0.2,
+        'large_trade_indicator': 0.1,
+        'dynamic_momentum': 0.2
+    }
+    
+    df['composite_factor'] = (
+        df['sma_ratio'] * weights['sma_ratio'] +
+        df['ema_ratio'] * weights['ema_ratio'] +
+        df['intraday_volatility'] * weights['intraday_volatility'] +
+        df['volume_ratio'] * weights['volume_ratio'] +
+        df['price_volume_momentum'] * weights['price_volume_momentum'] +
+        df['large_trade_indicator'] * weights['large_trade_indicator'] +
+        df['dynamic_momentum'] * weights['dynamic_momentum']
+    )
+    
+    return df['composite_factor'].dropna()
+```

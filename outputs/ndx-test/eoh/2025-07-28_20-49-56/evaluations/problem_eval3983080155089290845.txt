@@ -1,0 +1,34 @@
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate 5-day and 20-day Exponential Moving Averages (EMAs)
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    ema_crossover = short_term_ema - long_term_ema
+
+    # Calculate Rate of Change (ROC) over 14 days
+    roc = df['close'].pct_change(periods=14) * 100
+
+    # Calculate Accumulation/Distribution Line (ADL)
+    money_flow_multiplier = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'])
+    money_flow_volume = money_flow_multiplier * df['volume']
+    adl = money_flow_volume.cumsum()
+
+    # Calculate the 14-day rolling standard deviation of the close price
+    std_close = df['close'].rolling(window=14).std()
+
+    # Calculate weights based on the recent performance of each indicator
+    weight_ema = (ema_crossover.rolling(window=14).std() / std_close).fillna(0)
+    weight_roc = (roc.rolling(window=14).std() / std_close).fillna(0)
+    weight_adl = (adl.diff().rolling(window=14).std() / std_close).fillna(0)
+
+    # Normalize the weights so they sum to 1
+    total_weight = weight_ema + weight_roc + weight_adl
+    weight_ema /= total_weight
+    weight_roc /= total_weight
+    weight_adl /= total_weight
+
+    # Combine the indicators into a single heuristics measure
+    heuristics_matrix = (weight_ema * ema_crossover + weight_roc * roc + weight_adl * adl.diff())
+    
+    return heuristics_matrix

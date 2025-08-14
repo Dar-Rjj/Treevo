@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, sma_lookback=20, vol_lookback=20, momentum_n=20, pct_change_lookback=10, long_sma_lookback=50, liquidity_lookback=20, recent_period=30):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    df['SMA'] = df['close'].rolling(window=sma_lookback).mean()
+    
+    # Compute Volume-Adjusted Volatility
+    df['High-Low'] = df['high'] - df['low']
+    df['Volume-Weighted-High-Low'] = df['High-Low'] * df['volume']
+    df['Volume-Adjusted-Volatility'] = df['Volume-Weighted-High-Low'].rolling(window=vol_lookback).mean()
+    
+    # Compute Price Momentum
+    df['Price-Momentum'] = (df['close'] - df['SMA']) / df['close'].rolling(window=momentum_n).mean()
+    
+    # Incorporate Additional Price Change Metrics
+    df['Pct-Change-Close'] = df['close'].pct_change(periods=pct_change_lookback)
+    df['High-Low-Range'] = df['high'] - df['low']
+    
+    # Consider Market Trend Alignment
+    df['Long-SMA'] = df['close'].rolling(window=long_sma_lookback).mean()
+    df['Trend-Indicator'] = (df['SMA'] > df['Long-SMA']).astype(int)  # 1 for Bullish, 0 for Bearish
+    
+    # Incorporate Dynamic Liquidity Measures
+    df['Daily-Turnover'] = df['volume'] * df['close']
+    df['Liquidity-Rolling-Avg'] = df['Daily-Turnover'].rolling(window=liquidity_lookback).mean()
+    df['Liquidity-Adj-Weight'] = df['Liquidity-Rolling-Avg'].rank(pct=True)  # Higher liquidity gets higher weight
+    
+    # Combine Components with Initial Weights
+    initial_weights = {
+        'Price-Momentum': 0.3,
+        'Volume-Adjusted-Volatility': 0.2,
+        'Pct-Change-Close': 0.1,
+        'High-Low-Range': 0.1,
+        'Trend-Indicator': 0.1,
+        'Liquidity-Adj-Weight': 0.2
+    }
+    alpha_factor = sum(df[col] * weight for col, weight in initial_weights.items())
+    
+    # Dynamically Adjust Weights
+    def evaluate_recent_performance(df, component, recent_period):
+        returns = df[component].pct_change().rolling(window=recent_period).sum()
+        return returns.rank(pct=True)
+    
+    adjusted_weights = {col: evaluate_recent_performance(df, col, recent_period) for col in initial_weights.keys()}
+    normalized_weights = {col: (weight / sum(adjusted_weights.values())) for col, weight in adjusted_weights.items()}
+    
+    # Final Alpha Factor with Adjusted Weights
+    final_alpha_factor = sum(df[col] * weight for col, weight in normalized_weights.items())
+    
+    return final_alpha_factor.dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

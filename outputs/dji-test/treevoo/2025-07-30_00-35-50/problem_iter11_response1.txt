@@ -1,0 +1,51 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['daily_price_change'] = df['close'].diff()
+    
+    # Evaluate Momentum Over Time (10-day window)
+    momentum_window = 10
+    df['momentum_10d'] = df['daily_price_change'].rolling(window=momentum_window).sum()
+    
+    # Compute Volume Weighted Momentum
+    df['volume_weighted_momentum'] = (df['momentum_10d'] * df['volume']) / df['volume'].rolling(window=momentum_window).mean()
+    
+    # Integrate Volume Spike Indicator
+    volume_ma = df['volume'].rolling(window=momentum_window).mean()
+    df['volume_spike'] = (df['volume'] > 1.5 * volume_ma).astype(float)
+    df['volume_weighted_momentum'] = df['volume_weighted_momentum'] * (1 + 0.2 * df['volume_spike'])
+    
+    # Adjust for Volatility
+    df['historical_volatility'] = df['daily_price_change'].rolling(window=momentum_window).std()
+    volatility_threshold = 2 * df['historical_volatility']
+    df['volatility_adjustment'] = (df['daily_price_change'].abs() > volatility_threshold).astype(float)
+    df['volume_weighted_momentum'] = df['volume_weighted_momentum'] * (1 + 0.3 * df['volatility_adjustment'])
+    
+    # Calculate Price and High-to-Low Range Momentum
+    df['close_ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
+    df['price_momentum'] = df['close_ema_5'] - df['close_ema_5'].shift(1)
+    df['high_low_range'] = df['high'] - df['low']
+    df['high_low_range_momentum'] = df['high_low_range'] - df['high_low_range'].shift(1)
+    
+    # Confirm High-Low Spread with Volume and Adjusted by Amount Acceleration
+    df['volume_change'] = df['volume'].diff()
+    df['amount_ema_5'] = df['amount'].ewm(span=5, adjust=False).mean()
+    df['amount_acceleration'] = df['amount_ema_5'] - df['amount_ema_5'].shift(1)
+    df['high_low_spread_adjusted'] = df['high_low_range'] * df['volume_change'] * df['amount_acceleration']
+    df['high_low_spread_adjusted'] = df['high_low_spread_adjusted'].where(df['volume_change'] > 0, 0)
+    
+    # Smoothing Filter
+    df['smoothed_high_low_spread'] = df['high_low_spread_adjusted'].rolling(window=5).mean()
+    
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['alpha_factor'] = (df['price_momentum'] + df['high_low_range_momentum']) * df['smoothed_high_low_spread']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', parse_dates=['date'], index_col='date')
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)
+```

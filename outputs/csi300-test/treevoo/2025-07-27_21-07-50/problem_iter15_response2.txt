@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(data: pd.DataFrame) -> pd.Series:
+    # Calculate the momentum factor using closing prices
+    data['10_day_return'] = data['close'].pct_change(10)
+    data['20_day_return'] = data['close'].pct_change(20)
+    data['50_day_return'] = data['close'].pct_change(50)
+    data['momentum_score'] = (0.5 * data['10_day_return'] + 
+                              0.3 * data['20_day_return'] + 
+                              0.2 * data['50_day_return'])
+
+    # Calculate the price-volume trend
+    data['avg_volume_10d'] = data['volume'].rolling(window=10).mean()
+    data['price_change_pct'] = data['close'].pct_change()
+    data['price_vol_indicator'] = data['price_change_pct'] * (data['volume'] / data['avg_volume_10d'])
+    data['pvt_ma_20d'] = data['price_vol_indicator'].rolling(window=20).mean()
+
+    # Calculate the volatility factor
+    data['log_returns'] = (data['close'] / data['close'].shift(1)).apply(np.log)
+    data['volatility_30d'] = data['log_returns'].rolling(window=30).std()
+
+    # Calculate the relative strength index (RSI)
+    delta = data['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    data['rsi'] = 100 - (100 / (1 + rs))
+    data['rsi_smoothed'] = data['rsi'].ewm(span=14, adjust=False).mean()
+
+    # Calculate the money flow index (MFI)
+    data['typical_price'] = (data['high'] + data['low'] + data['close']) / 3
+    data['raw_money_flow'] = data['typical_price'] * data['volume']
+    data['pos_money_flow'] = data['raw_money_flow'].where(data['typical_price'] > data['typical_price'].shift(), 0)
+    data['neg_money_flow'] = data['raw_money_flow'].where(data['typical_price'] < data['typical_price'].shift(), 0)
+    pos_mf_sum = data['pos_money_flow'].rolling(window=14).sum()
+    neg_mf_sum = data['neg_money_flow'].rolling(window=14).sum()
+    data['money_flow_ratio'] = pos_mf_sum / neg_mf_sum
+    data['mfi'] = 100 - (100 / (1 + data['money_flow_ratio']))
+
+    # Combine all factors into a single alpha factor
+    data['alpha_factor'] = (data['momentum_score'] + 
+                            2 * data['pvt_ma_20d'] + 
+                            data['volatility_30d'] +
+                            data['rsi_smoothed'] +
+                            data['mfi']) / 5
+
+    return data['alpha_factor']
+```

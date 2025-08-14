@@ -1,0 +1,54 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Thought 1.1.1: Calculate the Range (High - Low) as a measure of volatility
+    df['range'] = df['high'] - df['low']
+    
+    # Thought 1.1.2: Introduce a Factor based on the relationship between Close and Open
+    df['close_open_diff'] = df['close'] - df['open']
+    df['direction'] = (df['close'] > df['open']).astype(int)
+    
+    # Thought 1.2.1: Create a Factor that measures changes in volume relative to the previous day
+    df['volume_change_pct'] = df['volume'].pct_change().fillna(0)
+    
+    # Thought 1.2.2: Assess the impact of volume spikes on price
+    df['avg_volume_20'] = df['volume'].rolling(window=20).mean()
+    df['volume_spike'] = (df['volume'] > df['avg_volume_20']).astype(int)
+    
+    # Thought 2.1.1: Compare the amount traded on a given day to historical values
+    df['avg_amount_30'] = df['amount'].rolling(window=30).mean()
+    df['amount_deviation'] = df['amount'] - df['avg_amount_30']
+    
+    # Thought 2.1.2: Combine Volume and Amount Data
+    df['amount_volume_ratio'] = df['amount'] / df['volume']
+    
+    # Thought 3.1.1: Design a simple momentum factor using the past 5-day returns
+    df['cumulative_return_5d'] = df['close'].pct_change().fillna(0).rolling(window=5).sum()
+    
+    # Thought 3.1.2: Investigate the consistency of momentum
+    df['up_days'] = (df['close'] > df['open']).rolling(window=5).sum()
+    
+    # Thought 3.2.1: Use the long-term moving average (e.g., 200 days) as a baseline
+    df['sma_200'] = df['close'].rolling(window=200).mean()
+    df['distance_from_sma_200'] = df['close'] - df['sma_200']
+    
+    # Thought 3.2.2: Consider the rate of deviation from the mean
+    df['z_score_200'] = (df['close'] - df['sma_200']) / df['close'].rolling(window=200).std()
+    
+    # Final alpha factor: weighted combination of various factors
+    df['alpha_factor'] = (
+        0.2 * df['range'] + 
+        0.2 * df['close_open_diff'] + 
+        0.1 * df['volume_change_pct'] + 
+        0.1 * df['volume_spike'] + 
+        0.1 * df['amount_deviation'] + 
+        0.1 * df['amount_volume_ratio'] + 
+        0.1 * df['cumulative_return_5d'] + 
+        0.1 * df['up_days'] + 
+        0.1 * df['distance_from_sma_200'] + 
+        0.1 * df['z_score_200']
+    )
+    
+    return df['alpha_factor']
+```

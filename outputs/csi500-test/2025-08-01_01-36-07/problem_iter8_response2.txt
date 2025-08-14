@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, n=5, multi_day=[5, 10], long_term=[20, 30]):
+    # Calculate Daily Price Movement
+    df['Price_Range'] = df['high'] - df['low']
+
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close']
+
+    # Calculate Raw Momentum
+    df['Raw_Momentum'] = df['Price_Range'].rolling(window=n).sum()
+
+    # Calculate Volume-Weighted Average Price (VWAP)
+    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Incorporate Market Depth
+    df['Market_Depth'] = df['amount'] / df['volume']
+
+    # Calculate Intraday Volatility
+    df['Intraday_Volatility'] = df['high'] - df['low']
+
+    # Adjust Raw Momentum with VWAP, Market Depth, and Intraday Volatility
+    df['Adjusted_Momentum'] = df['Raw_Momentum'] * (df['VWAP'] + df['Market_Depth']) / df['Intraday_Volatility']
+
+    # Calculate Final Volume-Adjusted Momentum
+    avg_volume = df['volume'].mean()
+    total_avg_volume = df['volume'].expanding().mean()
+    df['Final_Volume_Adjusted_Momentum'] = df['Adjusted_Momentum'] * (avg_volume / total_avg_volume)
+
+    # Integrate Multi-Day Momentum
+    for days in multi_day:
+        df[f'{days}_Day_Return'] = (df['close'] - df['close'].shift(days)) / df['close'].shift(days)
+    df['Multi_Day_Momentum'] = df[[f'{days}_Day_Return' for days in multi_day]].mean(axis=1)
+    df['Integrated_Multi_Day_Momentum'] = df['Final_Volume_Adjusted_Momentum'] + df['Multi_Day_Momentum']
+
+    # Incorporate Long-Term Momentum
+    for days in long_term:
+        df[f'{days}_Day_Return'] = (df['close'] - df['close'].shift(days)) / df['close'].shift(days)
+    df['Long_Term_Momentum'] = df[[f'{days}_Day_Return' for days in long_term]].mean(axis=1)
+    df['Integrated_Long_Term_Momentum'] = df['Integrated_Multi_Day_Momentum'] + df['Long_Term_Momentum']
+
+    # Incorporate Liquidity
+    df['Average_Volume'] = df['volume'].rolling(window=n).mean()
+    total_average_volume = df['volume'].expanding().mean()
+    df['Final_Factor'] = df['Integrated_Long_Term_Momentum'] * (df['Average_Volume'] / total_average_volume)
+
+    return df['Final_Factor']
+```

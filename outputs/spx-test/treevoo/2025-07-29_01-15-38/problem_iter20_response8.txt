@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # 5-Day Price Momentum
+    df['5_day_avg_close'] = df['close'].rolling(window=5).mean()
+    df['5_day_momentum'] = df['close'] - df['5_day_avg_close']
+    
+    # 5-Day Average Volume and Relative Volume
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['relative_volume'] = df['volume'] / df['5_day_avg_volume']
+    
+    # Adjust 5-Day Momentum with Relative Volume
+    df['adjusted_5_day_momentum'] = df['5_day_momentum'] * df['relative_volume']
+    
+    # Intraday Return
+    df['intraday_return'] = df['close'] - df['open']
+    
+    # Weighted High-Low Spread
+    df['weighted_high_low_spread'] = (df['high'] - df['low']) * df['volume']
+    
+    # Combine Intraday and Open-to-Close Returns
+    df['combined_returns'] = df['intraday_return'] + (df['close'] - df['open'])
+    
+    # Analyze Volume Change
+    df['volume_ratio'] = df['volume'] / df['volume'].shift(1)
+    
+    # Classify Volume Trend
+    conditions = [
+        (df['volume_ratio'] > 2.0),
+        (df['volume_ratio'] >= 0.7) & (df['volume_ratio'] <= 2.0),
+        (df['volume_ratio'] < 0.7)
+    ]
+    choices = [3, 1, -3]
+    df['volume_trend_classification'] = pd.np.select(conditions, choices, default=1)
+    
+    # Adjust Combined Returns Based on Volume Classification
+    df['adjusted_combined_returns'] = df['combined_returns'] * df['volume_trend_classification']
+    
+    # Short-Term and Long-Term Momentum
+    df['short_term_momentum'] = df['close'].rolling(window=7).mean()
+    df['long_term_momentum'] = df['close'].rolling(window=25).mean()
+    
+    # Momentum Oscillator
+    df['momentum_oscillator'] = df['short_term_momentum'] - df['long_term_momentum']
+    
+    # Integrate Volume with Intraday Dynamics
+    df['integrated_volume_intraday'] = (df['high'] - df['low']) * df['relative_volume']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['adjusted_combined_returns'] * df['momentum_oscillator'] +
+        df['weighted_high_low_spread'] * df['volume_trend_classification']
+    )
+    
+    return df['alpha_factor']
+```

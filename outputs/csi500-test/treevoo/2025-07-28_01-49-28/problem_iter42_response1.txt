@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Momentum-based alpha factors
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_10'] = df['close'].rolling(window=10).mean()
+    df['SMA_30'] = df['close'].rolling(window=30).mean()
+    
+    df['PriceChangeRatio_10'] = (df['close'] / df['close'].shift(10)) - 1
+    df['PriceChangeRatio_20'] = (df['close'] / df['close'].shift(20)) - 1
+    df['PriceChangeRatio_60'] = (df['close'] / df['close'].shift(60)) - 1
+    
+    # Volatility-based alpha factors
+    df['DailyReturn'] = df['close'].pct_change()
+    df['DailyReturnStd_5'] = df['DailyReturn'].rolling(window=5).std()
+    df['DailyReturnStd_10'] = df['DailyReturn'].rolling(window=10).std()
+    df['DailyReturnStd_30'] = df['DailyReturn'].rolling(window=30).std()
+    
+    df['RangeVolatility_5'] = (df['high'] - df['low']).rolling(window=5).mean()
+    df['RangeVolatility_10'] = (df['high'] - df['low']).rolling(window=10).mean()
+    df['RangeVolatility_30'] = (df['high'] - df['low']).rolling(window=30).mean()
+    
+    # Volume-based alpha factors
+    df['VolumeTrend_5'] = (df['volume'] / df['volume'].shift(5)) - 1
+    df['VolumeTrend_10'] = (df['volume'] / df['volume'].shift(10)) - 1
+    df['VolumeTrend_30'] = (df['volume'] / df['volume'].shift(30)) - 1
+    
+    df['VolumePriceInteraction_5'] = (df['close'] * df['volume']).rolling(window=5).mean()
+    df['VolumePriceInteraction_10'] = (df['close'] * df['volume']).rolling(window=10).mean()
+    df['VolumePriceInteraction_30'] = (df['close'] * df['volume']).rolling(window=30).mean()
+    
+    # Pattern-based alpha factors
+    def doji_pattern(row):
+        return abs(row['open'] - row['close']) < 0.005 * (row['high'] - row['low'])
+    
+    def bullish_engulfing_pattern(row, prev_row):
+        return (prev_row['open'] > prev_row['close']) and (row['open'] < row['close']) and (row['open'] <= prev_row['close']) and (row['close'] >= prev_row['open'])
+    
+    def bearish_engulfing_pattern(row, prev_row):
+        return (prev_row['open'] < prev_row['close']) and (row['open'] > row['close']) and (row['open'] >= prev_row['close']) and (row['close'] <= prev_row['open'])
+    
+    df['DojiPattern'] = df.apply(doji_pattern, axis=1)
+    df['BullishEngulfingPattern'] = [bullish_engulfing_pattern(df.iloc[i], df.iloc[i-1]) if i > 0 else False for i in range(len(df))]
+    df['BearishEngulfingPattern'] = [bearish_engulfing_pattern(df.iloc[i], df.iloc[i-1]) if i > 0 else False for i in range(len(df))]
+    
+    # Relative strength-based alpha factors
+    def rsi(series, window=14):
+        delta = series.diff(1)
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    
+    df['RSI_14'] = rsi(df['close'], window=14)
+    df['RSI_28'] = rsi(df['close'], window=28)
+    
+    # Market sentiment-based alpha factors
+    def accumulation_distribution_line(high, low, close, volume, window=10):
+        money_flow_multiplier = ((close - low) - (high - close)) / (high - low)
+        money_flow_volume = money_flow_multiplier * volume
+        return money_flow_volume.rolling(window=window).sum()
+    
+   

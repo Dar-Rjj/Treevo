@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate the ratio of close to high (C/H)
+    df['C/H'] = df['close'] / df['high']
+    
+    # Calculate the rolling average of C/H ratios
+    df['rolling_C/H'] = df['C/H'].rolling(window=5).mean()
+    
+    # Calculate the cumulative sum of C/H ratios
+    df['cumulative_C/H'] = df['C/H'].rolling(window=10).sum()
+    
+    # Compute a VWAP-like metric by adjusting the price difference (high - low) by volume
+    df['VWAP_like'] = (df['high'] - df['low']) * df['volume']
+    
+    # Calculate the gap between opening and closing prices (O-C)
+    df['O-C'] = df['open'] - df['close']
+    
+    # Calculate the cumulative effect of consecutive O-C gaps
+    df['cumulative_O-C'] = df['O-C'].rolling(window=5).sum()
+    
+    # Develop a simple moving average (SMA) of close prices
+    df['SMA_close'] = df['close'].rolling(window=10).mean()
+    
+    # Compare the current close to the SMA to identify deviations
+    df['SMA_deviation'] = df['close'] - df['SMA_close']
+    
+    # Construct a volume-weighted moving average (VWMA) of close prices
+    df['VWMA_close'] = (df['close'] * df['volume']).rolling(window=10).sum() / df['volume'].rolling(window=10).sum()
+    
+    # Assess the relationship between VWMA and recent price action for predictive power
+    df['VWMA_deviation'] = df['close'] - df['VWMA_close']
+    
+    # Identify significant price levels (support, resistance) using previous high and low points
+    df['support'] = df['low'].rolling(window=10).min()
+    df['resistance'] = df['high'].rolling(window=10).max()
+    
+    # Monitor the volume at these levels to detect potential breakouts or bounces
+    df['volume_at_support'] = (df['low'] == df['support']).astype(int) * df['volume']
+    df['volume_at_resistance'] = (df['high'] == df['resistance']).astype(int) * df['volume']
+    
+    # Integrate multiple factors to create a composite alpha factor
+    df['composite_factor'] = (
+        0.4 * df['rolling_C/H'] + 
+        0.3 * df['VWAP_like'] + 
+        0.2 * df['cumulative_O-C'] + 
+        0.1 * df['SMA_deviation'] + 
+        0.1 * df['VWMA_deviation'] + 
+        0.1 * (df['volume_at_support'] + df['volume_at_resistance'])
+    )
+    
+    # Return the composite factor as a pandas Series
+    return df['composite_factor']
+```

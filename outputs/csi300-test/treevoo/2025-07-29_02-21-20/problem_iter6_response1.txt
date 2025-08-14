@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Close Price Adjustment by Open Price
+    close_price_adjustment = df['close'] - df['open']
+    
+    # Intraday Momentum
+    high_price_indicator = df['high'] - df['open']
+    low_price_indicator = df['open'] - df['low']
+    intraday_momentum = high_price_indicator * low_price_indicator
+    
+    # Adjust for Volume Impact
+    volume_impact = df['volume'] * intraday_momentum
+    
+    # Consolidate Initial Factors
+    consolidated_factors = (close_price_adjustment + volume_impact) / df['open']
+    
+    # Calculate Daily Price Return
+    daily_price_return = df['close'].diff()
+    
+    # Identify Significant Price Increase
+    significant_increase_threshold = 0.01 * df['open']
+    significant_price_increase = (daily_price_return > significant_increase_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    past_week_volume_avg = df['volume'].rolling(window=5).mean()
+    volume_spike = (df['volume'] > past_week_volume_avg).astype(int)
+    
+    # Compute Weighted Price Momentum
+    weighted_momentum_accumulator = 0
+    weighted_momentum = daily_price_return * significant_price_increase
+    weighted_momentum_accumulator += weighted_momentum
+    
+    # Apply Volume Spike Filter
+    filtered_momentum = weighted_momentum_accumulator * volume_spike
+    
+    # Incorporate Price Volatility
+    true_range = (df['high'] - df['low']).combine((df['high'] - df['close'].shift(1)).abs(), max).combine((df['close'].shift(1) - df['low']).abs(), max)
+    avg_true_range = true_range.rolling(window=5).mean()
+    normalized_true_range = true_range / avg_true_range
+    
+    # Final Alpha Factor Synthesis
+    final_alpha_factor = (consolidated_factors + filtered_momentum + normalized_true_range) / df['open']
+    
+    return final_alpha_factor
+```

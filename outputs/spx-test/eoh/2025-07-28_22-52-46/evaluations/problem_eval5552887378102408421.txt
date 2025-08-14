@@ -1,0 +1,37 @@
+def heuristics_v2(df):
+    # Compute daily return
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Rate of Change (ROC)
+    df['roc'] = df['close'].pct_change(periods=10)
+    
+    # Volume Rate of Change
+    df['volume_roc'] = df['volume'].pct_change(periods=10)
+    
+    # Bollinger Bands
+    df['bb_ma'] = df['close'].rolling(window=20).mean()
+    df['bb_std'] = df['close'].rolling(window=20).std()
+    df['bb_upper'] = df['bb_ma'] + 2 * df['bb_std']
+    df['bb_lower'] = df['bb_ma'] - 2 * df['bb_std']
+    df['bb_signal'] = (df['close'] - df['bb_ma']) / (2 * df['bb_std'])
+    
+    # Rolling 60-day historical Information Ratios
+    info_ratios_rsi = (df['rsi'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['daily_return'].rolling(window=60).std()
+    info_ratios_roc = (df['roc'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['daily_return'].rolling(window=60).std()
+    info_ratios_volume_roc = (df['volume_roc'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['daily_return'].rolling(window=60).std()
+    info_ratios_bb_signal = (df['bb_signal'] * df['daily_return'].shift(-1)).rolling(window=60).mean() / df['daily_return'].rolling(window=60).std()
+    
+    # Generate heuristic matrix
+    heuristics_matrix = (df['rsi'] * info_ratios_rsi +
+                         df['roc'] * info_ratios_roc +
+                         df['volume_roc'] * info_ratios_volume_roc +
+                         df['bb_signal'] * info_ratios_bb_signal)
+    
+    return heuristics_matrix

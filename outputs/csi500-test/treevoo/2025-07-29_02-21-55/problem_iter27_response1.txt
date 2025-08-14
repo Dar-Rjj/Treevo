@@ -1,0 +1,45 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    daily_range = df['high'] - df['low']
+    
+    # Calculate Intraday High-to-Low Percentage Change
+    intraday_pct_change = (df['high'] - df['low']) / df['low']
+    
+    # Incorporate Volume Spike
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    combined_intraday_volume = intraday_pct_change * volume_ratio
+    
+    # Confirm with Price Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(20)) / daily_range.rolling(window=20).mean()
+    short_term_momentum = (df['close'] - df['close'].shift(5)) / daily_range.rolling(window=5).mean()
+    combined_momentum = 0.6 * long_term_momentum + 0.4 * short_term_momentum
+    
+    # Apply Moving Averages to Intraday Momentum
+    fast_ema = intraday_pct_change.ewm(span=10, adjust=False).mean()
+    slow_ema = intraday_pct_change.ewm(span=30, adjust=False).mean()
+    macd = fast_ema - slow_ema
+    
+    # Combine Momentum Indicators with MACD
+    weighted_momentum_sum = 0.5 * long_term_momentum + 0.5 * short_term_momentum
+    momentum_macd = weighted_momentum_sum + macd
+    
+    # Incorporate Volume Confirmation
+    avg_vol_20 = df['volume'].rolling(window=20).mean()
+    volume_ratio_confirm = (df['volume'] / avg_vol_20).apply(lambda x: 0 if (x < 1.8) and (x > 0.3) else x)
+    
+    # Adjust Combined Momentum by Volume
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    adjusted_combined_momentum = (fast_ema * log_returns.rolling(window=20).mean()) / df['volume'].ewm(span=20, adjust=False).mean() - slow_ema
+    
+    # Smooth the Adjusted Combined Momentum
+    smoothed_adjusted_momentum = adjusted_combined_momentum.rolling(window=5).mean()
+    
+    # Synthesize Final Indicator
+    final_indicator = 0.4 * combined_intraday_volume + 0.6 * smoothed_adjusted_momentum
+    
+    return final_indicator
+```

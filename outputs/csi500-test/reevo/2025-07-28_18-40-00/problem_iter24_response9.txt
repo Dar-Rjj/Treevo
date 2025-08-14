@@ -1,0 +1,66 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Adaptive momentum considering both short and long-term trends with exponential smoothing
+    short_term_momentum = df['close'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+    long_term_momentum = df['close'].pct_change(periods=30).ewm(span=30, adjust=False).mean()
+    adaptive_momentum = 0.6 * short_term_momentum + 0.4 * long_term_momentum
+
+    # Dynamic volatility using the standard deviation of logarithmic returns over the last 14 days
+    log_returns = np.log(df['close'] / df['close'].shift(1))
+    dynamic_volatility = log_returns.rolling(window=14).std().ewm(span=14, adjust=False).mean()
+
+    # Volume trend as a proxy for liquidity and market interest
+    volume_trend = df['volume'].pct_change(periods=5).ewm(span=5, adjust=False).mean()
+
+    # Market sentiment using the ratio of high to low prices as a proxy
+    market_sentiment = (df['high'] - df['low']) / df['close']
+
+    # Liquidity factor using the ratio of volume to amount
+    liquidity_factor = df['volume'] / df['amount']
+
+    # Sector-specific insight: using the close price relative to the 20-day moving average
+    moving_average_20 = df['close'].rolling(window=20).mean()
+    sector_insight = df['close'] / moving_average_20 - 1
+
+    # Simple macroeconomic indicator: using the 3-month change in the 'close' price
+    macroeconomic_indicator = df['close'].pct_change(periods=90)
+
+    # Non-linear transformations of factors
+    non_linear_adaptive_momentum = np.sign(adaptive_momentum) * adaptive_momentum**2
+    non_linear_dynamic_volatility = np.sign(dynamic_volatility) * dynamic_volatility**2
+    non_linear_volume_trend = np.sign(volume_trend) * volume_trend**2
+    non_linear_market_sentiment = np.sign(market_sentiment) * market_sentiment**2
+    non_linear_liquidity_factor = np.sign(liquidity_factor) * liquidity_factor**2
+    non_linear_sector_insight = np.sign(sector_insight) * sector_insight**2
+    non_linear_macroeconomic_indicator = np.sign(macroeconomic_indicator) * macroeconomic_indicator**2
+
+    # Adaptive weights based on the recent performance of each factor
+    recent_performance = df['close'].pct_change(periods=5)
+    adaptive_weights = {
+        'non_linear_adaptive_momentum': (recent_performance * non_linear_adaptive_momentum).mean(),
+        'non_linear_dynamic_volatility': (recent_performance * -non_linear_dynamic_volatility).mean(),
+        'non_linear_volume_trend': (recent_performance * non_linear_volume_trend).mean(),
+        'non_linear_market_sentiment': (recent_performance * non_linear_market_sentiment).mean(),
+        'non_linear_liquidity_factor': (recent_performance * non_linear_liquidity_factor).mean(),
+        'non_linear_sector_insight': (recent_performance * non_linear_sector_insight).mean(),
+        'non_linear_macroeconomic_indicator': (recent_performance * non_linear_macroeconomic_indicator).mean(),
+    }
+
+    # Normalize the adaptive weights
+    total_weight = sum(adaptive_weights.values())
+    for key in adaptive_weights:
+        adaptive_weights[key] /= total_weight
+
+    # Combining the non-linear transformed factors into a single alpha factor with adaptive weights
+    factor_values = (
+        adaptive_weights['non_linear_adaptive_momentum'] * non_linear_adaptive_momentum
+        - adaptive_weights['non_linear_dynamic_volatility'] * non_linear_dynamic_volatility
+        + adaptive_weights['non_linear_volume_trend'] * non_linear_volume_trend
+        + adaptive_weights['non_linear_market_sentiment'] * non_linear_market_sentiment
+        + adaptive_weights['non_linear_liquidity_factor'] * non_linear_liquidity_factor
+        + adaptive_weights['non_linear_sector_insight'] * non_linear_sector_insight
+        + adaptive_weights['non_linear_macroeconomic_indicator'] * non_linear_macroeconomic_indicator
+    )
+
+    return factor_values
+```

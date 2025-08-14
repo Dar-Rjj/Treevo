@@ -1,0 +1,60 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import linregress
+
+def heuristics_v2(df):
+    # Calculate 5-Day and 20-Day SMA for Close Price
+    df['SMA_5'] = df['close'].rolling(window=5).mean()
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    
+    # Cross Over Factor
+    df['CrossOver'] = (df['SMA_5'] > df['SMA_20']).astype(int)
+    
+    # Calculate 10-Day and 30-Day ROC for Close Price
+    df['ROC_10'] = df['close'].pct_change(periods=10) * 100
+    df['ROC_30'] = df['close'].pct_change(periods=30) * 100
+    
+    # Momentum Factor
+    df['Momentum'] = df['ROC_10'] - df['ROC_30']
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    
+    # OBV Slope
+    df['OBV_Slope'] = df['OBV'].rolling(window=10).apply(lambda x: linregress(range(10), x)[-1], raw=False)
+    
+    # 5-Day and 20-Day EMA of Volume
+    df['EMA_Volume_5'] = df['volume'].ewm(span=5, adjust=False).mean()
+    df['EMA_Volume_20'] = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Volume Trend Factor
+    df['Volume_Trend'] = (df['EMA_Volume_5'] > df['EMA_Volume_20']).astype(int)
+    
+    # True Range
+    df['True_Range'] = df[['high', 'low']].diff(axis=1).max(axis=1).abs()
+    df['True_Range'] = df[['high' - df['low'].shift(1)].abs(), (df['high'] - df['close'].shift(1)).abs(), (df['low'] - df['close'].shift(1)).abs()]].max(axis=1)
+    
+    # Average True Range (ATR)
+    df['ATR_14'] = df['True_Range'].ewm(span=14, adjust=False).mean()
+    df['ATR_50'] = df['True_Range'].rolling(window=50).mean()
+    
+    # Range Volatility Factor
+    df['Range_Volatility'] = df['ATR_14'] / df['ATR_50']
+    
+    # Engulfing Pattern
+    df['Engulfing'] = ((df['open'] > df['close'].shift(1)) & (df['close'] > df['open'].shift(1)) & (df['close'] > df['high'].shift(1)) & (df['open'] < df['low'].shift(1))).astype(int) - \
+                      ((df['open'] < df['close'].shift(1)) & (df['close'] < df['open'].shift(1)) & (df['close'] < df['low'].shift(1)) & (df['open'] > df['high'].shift(1))).astype(int)
+    
+    # Doji Pattern
+    df['Doji'] = ((df['open'] == df['close']) | (df['open'].abs() - df['close'].abs() < 0.01)).astype(int)
+    
+    # Combine Factors into a Composite Score
+    df['Composite_Score'] = 0.4 * df['CrossOver'] + 0.3 * df['Momentum'] + 0.1 * df['OBV_Slope'] + 0.1 * df['Volume_Trend'] + 0.1 * df['Range_Volatility'] + 0.05 * df['Engulfing'] + 0.05 * df['Doji']
+    
+    # Generate Trade Signals
+    threshold = 0.5
+    df['Signal'] = np.where(df['Composite_Score'] > threshold, 1, np.where(df['Composite_Score'] < -threshold, -1, 0))
+    
+    return df['Signal']
+```

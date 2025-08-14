@@ -1,0 +1,65 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Open to Close Movement
+    open_close_movement = df['close'] - df['open']
+    
+    # Calculate Volume-Weighted Average Price (VWAP)
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # VWAP Deviation from Close
+    vwap_deviation = df['close'] - vwap
+    
+    # Calculate Closing Position in Intraday Range
+    closing_position = (df['close'] - df['open']) / (df['high'] - df['low'])
+    
+    # Integrate Volume Activity Ratio
+    n_period_volume_sum = df['volume'].rolling(window=5).sum()
+    n_period_volume_ma = df['volume'].rolling(window=5).mean()
+    volume_activity_ratio = n_period_volume_sum / n_period_volume_ma
+    
+    # Calculate Intraday Volume Intensity
+    median_10_day_volume = df['volume'].rolling(window=10).median()
+    intraday_volume_intensity = df['volume'] / median_10_day_volume
+    
+    # Adjust for Recent Price Trend
+    ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+    recent_trend_adjustment = df['close'] - ema_20
+    
+    # Calculate Short-Term Price Momentum
+    ema_5 = df['close'].ewm(span=5, adjust=False).mean()
+    ema_10 = df['close'].ewm(span=10, adjust=False).mean()
+    short_term_momentum = ema_5 - ema_10
+    
+    # Weighted Sum of Scores
+    weighted_high_low = 0.3 * (high_low_range / np.abs(open_close_movement))
+    weighted_vwap_deviation = 0.3 * vwap_deviation
+    weighted_intraday_volume_intensity = 0.2 * intraday_volume_intensity
+    weighted_closing_position = 0.2 * closing_position
+    
+    weighted_sum = (
+        weighted_high_low +
+        weighted_vwap_deviation +
+        weighted_intraday_volume_intensity +
+        weighted_closing_position
+    )
+    
+    # Incorporate Recent Volatility
+    recent_volatility = df['close'].rolling(window=20).std()
+    volatility_adjusted_trend = recent_trend_adjustment / recent_volatility
+    
+    # Composite Alpha Factor
+    alpha_factor = (
+        weighted_sum +
+        volatility_adjusted_trend +
+        short_term_momentum
+    )
+    
+    return alpha_factor
+```

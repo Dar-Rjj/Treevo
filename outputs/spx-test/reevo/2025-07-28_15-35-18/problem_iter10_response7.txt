@@ -1,0 +1,55 @@
+```python
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    # Calculate the 10-day and 50-day exponential moving averages of the closing price for more responsive long-term trends
+    ema_close_10_days = df['close'].ewm(span=10, adjust=False).mean()
+    ema_close_50_days = df['close'].ewm(span=50, adjust=False).mean()
+
+    # Mean reversion signal: Difference between the current close and the 10-day EMA, scaled by the 10-day standard deviation
+    std_close_10_days = df['close'].rolling(window=10).std()
+    mean_reversion_signal = (df['close'] - ema_close_10_days) / std_close_10_days
+
+    # Long-term trend: Ratio of the 10-day EMA to the 50-day EMA
+    long_term_trend = ema_close_10_days / ema_close_50_days
+
+    # Volume spike: Ratio of the current day's volume to the 5-day exponentially smoothed maximum volume
+    max_volume_5_days = df['volume'].rolling(window=5).max().ewm(span=5, adjust=False).mean()
+    volume_spike = df['volume'] / (max_volume_5_days + 1e-7)
+
+    # Relative strength: Ratio of the current close to the 10-day EMA of the minimum close
+    min_close_10_days = df['close'].rolling(window=10).min().ewm(span=10, adjust=False).mean()
+    relative_strength = df['close'] / min_close_10_days
+
+    # Momentum: Calculate the percentage change in the closing price over a 20-day period, smoothed with EMA
+    momentum = df['close'].pct_change(periods=20).ewm(span=3, adjust=False).mean()
+
+    # Volatility: Calculate the 10-day standard deviation of the closing price
+    volatility = df['close'].rolling(window=10).std()
+
+    # Liquidity: Exponential moving average of the volume over 10 days
+    ema_volume = df['volume'].ewm(span=10, adjust=False).mean()
+
+    # Market depth: Bid-ask spread proxy as the difference between the 10-day EMA of the high and the 10-day EMA of the low
+    bid_ask_spread_proxy = df['high'].ewm(span=10, adjust=False).mean() - df['low'].ewm(span=10, adjust=False).mean()
+
+    # Dynamic trend: Calculate the 20-day EMA of the closing price
+    ema_close_20_days = df['close'].ewm(span=20, adjust=False).mean()
+    dynamic_trend = (ema_close_10_days - ema_close_20_days) / ema_close_20_days
+
+    # Volume trend: Calculate the 10-day EMA of the daily return
+    daily_return = df['close'].pct_change()
+    ema_daily_return = daily_return.ewm(span=10, adjust=False).mean()
+    volume_trend = df['volume'] * ema_daily_return
+
+    # Combine the mean reversion, long-term trend, volume spike, relative strength, momentum, volatility, liquidity, market depth, dynamic trend, and volume trend into a single factor
+    factor = (mean_reversion_signal * 
+              long_term_trend * 
+              volume_spike * 
+              relative_strength * 
+              momentum * 
+              (1 / volatility) * 
+              (ema_volume / bid_ask_spread_proxy) * 
+              (1 + dynamic_trend) * 
+              (1 + volume_trend)).fillna(0)
+    
+    return factor
+```

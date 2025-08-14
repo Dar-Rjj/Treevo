@@ -1,0 +1,73 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate the Exponential Moving Average (EMA) of closing prices
+    ema_period = 50
+    df['EMA'] = df['close'].ewm(span=ema_period, adjust=False).mean()
+    
+    # Generate a signal; 1 if the current close is above the EMA, -1 if below, 0 if equal
+    df['trend_signal'] = np.where(df['close'] > df['EMA'], 1, np.where(df['close'] < df['EMA'], -1, 0))
+    
+    # Calculate the difference between today’s high and the previous day’s high
+    df['high_diff'] = df['high'] - df['high'].shift(1)
+    
+    # Calculate the difference between today’s low and the previous day’s low
+    df['low_diff'] = df['low'] - df['low'].shift(1)
+    
+    # Sum the differences to get a combined momentum score
+    df['momentum_score'] = df['high_diff'] + df['low_diff']
+    
+    # Create a simple threshold to classify stocks as having positive or negative momentum based on the score
+    df['momentum_signal'] = np.where(df['momentum_score'] > 0, 1, -1)
+    
+    # Evaluate the percentage change in volume from the previous day
+    df['volume_change'] = df['volume'].pct_change()
+    
+    # Assign a value indicating strong buying (positive change) or selling (negative change) pressure
+    df['volume_signal'] = np.where(df['volume_change'] > 0, 1, -1)
+    
+    # Multiply the return (close to close) by the square root of the volume traded
+    df['intensity_factor'] = df['close'].pct_change() * np.sqrt(df['volume'])
+    
+    # Long-Term Volume-Weighted Average Return (Momentum Component)
+    long_term_window = 120
+    df['long_term_vol_weighted_return'] = (df['close'].pct_change() * np.sqrt(df['volume'])).rolling(window=long_term_window).sum() / np.sqrt(df['volume']).rolling(window=long_term_window).sum()
+    
+    # Short-Term Volume-Weighted Average Return (Reversal Component)
+    short_term_window = 7
+    df['short_term_vol_weighted_return'] = (df['close'].pct_change() * np.sqrt(df['volume'])).rolling(window=short_term_window).sum() / np.sqrt(df['volume']).rolling(window=short_term_window).sum()
+    
+    # Intraday Return
+    df['intraday_return'] = (df['high'] - df['low']) / df['close']
+    
+    # Intraday Volatility
+    intraday_volatility_window = 20
+    df['intraday_volatility'] = (df['high'] - df['low']).abs().rolling(window=intraday_volatility_window).sum()
+    
+    # Intraday Momentum
+    df['intraday_momentum'] = (df['high'] - df['low']) / df['open'] * df['volume']
+    intraday_momentum_window = 7
+    df['intraday_momentum_sum'] = df['intraday_momentum'].rolling(window=intraday_momentum_window).sum()
+    
+    # Volume-Weighted Intraday Reversal
+    reversal_window = 15
+    df['intraday_reversal'] = -df['intraday_momentum']
+    df['volume_weighted_intraday_reversal'] = df['intraday_reversal'].rolling(window=reversal_window).sum()
+    
+    # Price Momentum
+    n_day = 20
+    df['price_momentum_close'] = df['close'].pct_change(periods=n_day)
+    df['price_momentum_open'] = df['open'].pct_change(periods=n_day)
+    
+    # Calculate Weighted High-Low Spread Adjusted for Volume
+    avg_volume_window = 5
+    df['avg_sqrt_volume'] = np.sqrt(df['volume']).rolling(window=avg_volume_window).mean()
+    df['weighted_high_low_spread'] = (df['high'] - df['low']) * (np.sqrt(df['volume']) / df['avg_sqrt_volume'])
+    
+    # Divide Price Momentum by Weighted High-Low Spread Adjusted for Volume
+    df['price_momentum_divided'] = df['price_momentum_close'] / df['weighted_high_low_spread']
+    
+    # Combined Alpha Factor
+    df['combined_alpha_factor'] = (df['long_term_vol_weighted_return'] - df['short_term_vol_weighted_return']) + (df['intraday

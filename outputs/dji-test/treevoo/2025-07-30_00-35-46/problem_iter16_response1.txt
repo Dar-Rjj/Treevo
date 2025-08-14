@@ -1,0 +1,42 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Intraday Momentum
+    high_low_diff = df['high'] - df['low']
+    open_close_return = (df['close'] - df['open']) / df['open']
+    intraday_momentum = (high_low_diff + open_close_return) / 2
+    
+    # Synchronized Volume
+    volume_change = df['volume'] - df['volume'].shift(1)
+    price_change = df['close'] - df['close'].shift(1)
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    
+    shock_filter = (volume_ratio > 1.5).astype(int)
+    synchronized_volume = (volume_change * price_change).apply(np.sign) * shock_filter
+    
+    # EMA Cross Signal
+    short_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_ema = df['close'].ewm(span=20, adjust=False).mean()
+    ema_cross_signal = (short_ema > long_ema).astype(int) - (short_ema < long_ema).astype(int)
+    
+    # On-Balance Volume (OBV)
+    obv = [0]
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
+        else:
+            obv.append(obv[-1])
+    obv = pd.Series(obv, index=df.index)
+    
+    # Combined Momentum and OBV Factor
+    weight = (short_ema - long_ema).abs()
+    combined_momentum_obv = obv * weight
+    
+    # Final Alpha Factor
+    alpha_factor = intraday_momentum + synchronized_volume + combined_momentum_obv
+    return alpha_factor
+```

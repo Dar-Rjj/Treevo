@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return using close prices
+    df['daily_return'] = df['close'].pct_change()
+    
+    # Identify consecutive days with positive returns
+    df['positive_return'] = (df['daily_return'] > 0).astype(int)
+    df['consecutive_positive_days'] = df['positive_return'].groupby((df['positive_return'] != df['positive_return'].shift()).cumsum()).cumsum()
+    
+    # Calculate the average return over the consecutive positive days
+    df['avg_return_consecutive_positive'] = df.groupby('consecutive_positive_days')['daily_return'].transform('mean')
+    
+    # Examine high and low prices for volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['rolling_sum_daily_range'] = df['daily_range'].rolling(window=10).sum()
+    df['avg_daily_range'] = df['daily_range'].rolling(window=10).mean()
+    
+    # Use open and close prices to assess market sentiment
+    df['open_close_diff'] = df['close'] - df['open']
+    df['close_higher_than_open'] = (df['close'] > df['open']).astype(int)
+    df['rolling_count_close_higher_open'] = df['close_higher_than_open'].rolling(window=10).sum()
+    df['proportion_close_higher_open'] = df['rolling_count_close_higher_open'] / 10
+    
+    # Calculate the gap between today's open and yesterday's close
+    df['gap'] = df['open'] - df['close'].shift(1)
+    df['gap_magnitude'] = df['gap'].abs()
+    df['gap_direction'] = (df['gap'] > 0).astype(int) - (df['gap'] < 0).astype(int)
+    
+    # Analyze trading volume and amount for changes in investor interest
+    df['volume_change'] = df['volume'].pct_change()
+    df['large_volume_change'] = (df['volume_change'] > 0.20).astype(int)
+    df['volume_percentage_change'] = df['volume_change'] * 100
+    
+    # Calculate the ratio of current volume to average volume over a rolling window
+    df['avg_volume_rolling'] = df['volume'].rolling(window=10).mean()
+    df['volume_ratio'] = df['volume'] / df['avg_volume_rolling']
+    
+    # Calculate the ratio of current amount to average amount over a rolling window
+    df['avg_amount_rolling'] = df['amount'].rolling(window=10).mean()
+    df['amount_ratio'] = df['amount'] / df['avg_amount_rolling']
+    
+    # Create a composite factor based on daily return, daily range, and volume change
+    df['composite_factor_1'] = (df['daily_return'] + df['avg_daily_range'] + df['volume_percentage_change']) / 3
+    
+    # Create a composite factor based on daily return, daily range, and amount change
+    df['amount_change'] = df['amount'].pct_change()
+    df['composite_factor_2'] = (df['daily_return'] + df['avg_daily_range'] + df['amount_change']) / 3
+    
+    # Final alpha factor
+    df['alpha_factor'] = (df['composite_factor_1'] + df['composite_factor_2']) / 2
+    
+    return df['alpha_factor']
+```

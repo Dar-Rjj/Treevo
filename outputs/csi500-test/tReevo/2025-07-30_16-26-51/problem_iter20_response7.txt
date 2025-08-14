@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Volume-Weighted Close-to-Open Return
+    df['Volume_Weighted_Return'] = (df['close'] - df['open'].shift(1)) * df['volume']
+    
+    # Multi-Period Momentum Indicators
+    def moving_average(data, window, type='sma'):
+        if type == 'sma':
+            return data.rolling(window=window).mean()
+        elif type == 'ema':
+            return data.ewm(span=window, adjust=False).mean()
+    
+    df['5_day_SMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 5)
+    df['5_day_EMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 5, 'ema')
+    df['10_day_SMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 10)
+    df['10_day_EMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 10, 'ema')
+    df['20_day_SMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 20)
+    df['20_day_EMA_VW_Return'] = moving_average(df['Volume_Weighted_Return'], 20, 'ema')
+    
+    # Adaptive Volatility Stabilization
+    df['log_returns'] = np.log(df['close']) - np.log(df['close'].shift(1))
+    df['5_day_vol'] = df['log_returns'].rolling(window=5).std()
+    df['10_day_vol'] = df['log_returns'].rolling(window=10).std()
+    df['20_day_vol'] = df['log_returns'].rolling(window=20).std()
+    df['adaptive_vol'] = 0.4 * df['5_day_vol'] + 0.3 * df['10_day_vol'] + 0.3 * df['20_day_vol']
+    
+    # Combine Momentum Signals
+    df['short_term_momentum'] = 0.5 * (df['5_day_SMA_VW_Return'] + df['5_day_EMA_VW_Return'])
+    df['mid_term_momentum'] = 0.3 * (df['10_day_SMA_VW_Return'] + df['10_day_EMA_VW_Return'])
+    df['long_term_momentum'] = 0.2 * (df['20_day_SMA_VW_Return'] + df['20_day_EMA_VW_Return'])
+    df['combined_momentum'] = df['short_term_momentum'] + df['mid_term_momentum'] + df['long_term_momentum']
+    
+    # Market Regime Detection
+    df['5_day_MA_Close'] = df['close'].rolling(window=5).mean()
+    df['20_day_MA_Close'] = df['close'].rolling(window=20).mean()
+    df['price_trend'] = np.where(df['5_day_MA_Close'] > df['20_day_MA_Close'], 1, -1)
+    
+    # Market Regime Adjustment
+    df['bullish_factor'] = 1.2 * df['combined_momentum']
+    df['bearish_factor'] = 0.8 * df['combined_momentum']
+    df['market_regime_adjusted'] = np.where(df['price_trend'] == 1, df['bullish_factor'], df['bearish_factor'])
+    
+    # Integrate High-Low Price Ratio
+    df['high_low_ratio'] = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Final Alpha Factor
+    df['final_alpha_factor'] = (df['5_day_SMA_VW_Return'] + 
+                                df['10_day_EMA_VW_Return'] + 
+                                df['20_day_EMA_VW_Return']) * df['high_low_ratio'] * df['market_regime_adjusted'] / df['adaptive_vol']
+    
+    return df['final_alpha_factor']
+```

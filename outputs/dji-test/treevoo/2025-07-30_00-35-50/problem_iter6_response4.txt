@@ -1,0 +1,40 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Evaluate Momentum Over Time (e.g., 10 days window)
+    momentum_window = 10
+    df['momentum_sum'] = df['price_change'].rolling(window=momentum_window).sum()
+    
+    # Calculate Average Volume Over Time (same 10 days window)
+    df['volume_sum'] = df['volume'].rolling(window=momentum_window).sum()
+    df['average_volume'] = df['volume_sum'] / momentum_window
+    
+    # Compute Volume Weighted Momentum
+    df['volume_weighted_momentum'] = (df['momentum_sum'] * df['volume_sum']) / df['average_volume']
+    
+    # Integrate Volume Spike Indicator
+    df['volume_ma'] = df['volume'].rolling(window=momentum_window).mean()
+    df['volume_spike'] = df['volume'] > 1.5 * df['volume_ma']
+    
+    # Adjust Volume Weighted Momentum based on Volume Spike
+    df['adjusted_volume_weighted_momentum'] = df.apply(
+        lambda row: row['volume_weighted_momentum'] * 1.2 if row['volume_spike'] else row['volume_weighted_momentum'],
+        axis=1
+    )
+    
+    # Integrate Price Spike Indicator
+    df['price_change_ma'] = df['price_change'].rolling(window=momentum_window).mean()
+    df['price_spike'] = df['price_change'] > 1.5 * df['price_change_ma']
+    
+    # Adjust Volume Weighted Momentum based on Price Spike
+    df['final_factor'] = df.apply(
+        lambda row: row['adjusted_volume_weighted_momentum'] * 1.3 if row['price_spike'] else row['adjusted_volume_weighted_momentum'],
+        axis=1
+    )
+    
+    return df['final_factor']
+```

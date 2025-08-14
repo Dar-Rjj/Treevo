@@ -1,0 +1,58 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate daily return
+    df['daily_return'] = (df['close'] - df['open']) / df['open']
+    
+    # Intraday volatility
+    df['intraday_volatility'] = (df['high'] - df['low']) / df['open']
+    
+    # Simple Moving Average (SMA) of Close prices over a 14-day period
+    df['sma_close'] = df['close'].rolling(window=14).mean()
+    df['sma_ratio'] = df['close'] / df['sma_close']
+    
+    # Exponential Moving Average (EMA) of Close prices with a 14-day span
+    df['ema_close'] = df['close'].ewm(span=14, adjust=False).mean()
+    df['ema_ratio'] = df['close'] / df['ema_close']
+    
+    # Average volume over a 14-day period
+    df['sma_volume'] = df['volume'].rolling(window=14).mean()
+    df['volume_ratio'] = df['volume'] / df['sma_volume']
+    
+    # Price-volume momentum
+    df['price_volume_momentum'] = (df['close'] - df['open']) * df['volume']
+    
+    # Large trade indicator
+    df['large_trade_indicator'] = (df['volume'] > 2 * df['sma_volume']).astype(int)
+    
+    # Volume-Weighted High and Low
+    df['vol_weighted_high'] = (df['high'] * df['volume']).rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    df['vol_weighted_low'] = (df['low'] * df['volume']).rolling(window=14).sum() / df['volume'].rolling(window=14).sum()
+    df['vol_weighted_high_low_diff'] = (df['vol_weighted_high'] - df['vol_weighted_low']) / df['volume'].rolling(window=14).sum()
+    
+    # Dynamic Momentum
+    df['high_low_diff'] = df['high'] - df['low']
+    df['sma_high_low_diff'] = df['high_low_diff'].rolling(window=14).mean()
+    df['raw_momentum'] = df['high_low_diff'] - df['sma_high_low_diff']
+    df['smoothed_momentum'] = df['raw_momentum'].ewm(alpha=0.2, adjust=False).mean()
+    
+    # Composite factor
+    df['composite_factor'] = (df['sma_ratio'] + df['ema_ratio'] + df['intraday_volatility'] + 
+                              df['volume_ratio'] + df['price_volume_momentum'] + df['large_trade_indicator'] + 
+                              df['vol_weighted_high_low_diff'] + df['smoothed_momentum']) / 8
+    
+    # EMA Components
+    df['ema_7d'] = df['composite_factor'].ewm(span=7, adjust=False).mean()
+    df['ema_21d'] = df['composite_factor'].ewm(span=21, adjust=False).mean()
+    df['ema_ratio'] = df['ema_7d'] / df['ema_21d']
+    
+    # Amount-Adjusted Return
+    df['amount_adj_return'] = df['daily_return'] * df['amount']
+    df['sma_amount_adj_return'] = df['amount_adj_return'].rolling(window=5).mean()
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['ema_ratio'] * df['sma_amount_adj_return']
+    
+    return df['alpha_factor']
+```

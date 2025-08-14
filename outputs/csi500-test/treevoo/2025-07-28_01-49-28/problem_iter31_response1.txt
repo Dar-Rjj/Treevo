@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Adjusted Daily Range
+    adjusted_daily_range = (df['high'] - df['low']) * df['volume']
+
+    # Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_to_ten_day_range = pd.DataFrame({
+        'proximity': [min(h - c, c - l) for h, l, c in zip(ten_day_high, ten_day_low, df['close'])]
+    }, index=df.index)
+    inverted_proximity = 1 / proximity_to_ten_day_range['proximity']
+    twenty_day_volatility = df['close'].rolling(window=20).std()
+    enhanced_reversion = inverted_proximity / twenty_day_volatility
+
+    # Open-High-Low Volatility
+    weighted_open_high_diff = (df['high'] - df['open']) * df['volume']
+    weighted_open_low_diff = (df['open'] - df['low']) * df['volume']
+    combined_weighted_volatility = (weighted_open_high_diff + weighted_open_low_diff) / 2
+
+    # Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    thirty_day_moving_sum = high_low_spread.rolling(window=30).sum()
+    spread_momentum = thirty_day_moving_sum - thirty_day_moving_sum.shift(1)
+
+    # Trend Strength
+    fifty_day_ma = df['close'].rolling(window=50).mean()
+    twenty_day_ma = df['close'].rolling(window=20).mean()
+    trend_strength = (fifty_day_ma - twenty_day_ma) / twenty_day_ma
+
+    # Momentum Factor
+    ten_day_return = (df['close'] / df['close'].shift(10)) - 1
+    thirty_day_return = (df['close'] / df['close'].shift(30)) - 1
+    momentum_factor = ten_day_return + thirty_day_return
+
+    # Final Alpha Factor
+    alpha_factor = (
+        adjusted_daily_range * 
+        enhanced_reversion * 
+        combined_weighted_volatility * 
+        spread_momentum * 
+        trend_strength * 
+        momentum_factor
+    )
+
+    return alpha_factor
+```

@@ -1,0 +1,40 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Combine Intraday Return and High-Low Range
+    combined_factor = intraday_return * high_low_range
+    combined_factor_smoothed = combined_factor.ewm(span=14, adjust=False).mean()
+    
+    # Apply Volume Weighting
+    volume_weighted_factor = combined_factor_smoothed * df['volume']
+    
+    # Incorporate Previous Day's Closing Gap
+    closing_gap = df['open'].diff()
+    volume_weighted_closing_gap = volume_weighted_factor + closing_gap
+    
+    # Integrate Long-Term Momentum
+    long_term_return = df['close'] - df['close'].shift(50)
+    normalized_long_term_return = long_term_return / high_low_range
+    
+    # Include Enhanced Dynamic Volatility Component
+    rolling_std = intraday_return.rolling(window=20).std()
+    atr = df[['high', 'low', 'close']].apply(lambda x: np.max(np.abs(x.diff())), axis=1).rolling(window=14).mean()
+    combined_volatility = (rolling_std + atr) / 2
+    volume_adjusted_volatility = combined_volatility * df['volume']
+    
+    # Final Factor Calculation
+    final_factor = volume_weighted_closing_gap + normalized_long_term_return + volume_adjusted_volatility
+    
+    # Apply Non-Linear Transformation
+    final_factor_transformed = np.log1p(final_factor)
+    
+    return final_factor_transformed

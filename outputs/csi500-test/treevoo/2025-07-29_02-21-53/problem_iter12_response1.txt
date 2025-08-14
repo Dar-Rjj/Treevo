@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Compute Close-Open Change
+    close_open_change = df['close'] - df['open']
+    
+    # Aggregate Price Movements
+    sum_high_low_ranges = high_low_range.rolling(window=20).sum()
+    sum_close_open_changes = close_open_change.rolling(window=20).sum()
+    
+    # Smooth High-Low Range
+    smoothed_high_low_range = high_low_range.ewm(span=20, adjust=False).mean()
+    
+    # Long-Term High-Low Range
+    long_term_high_low_range = df['high'].rolling(window=50).max() - df['low'].rolling(window=50).min()
+    
+    # Momentum of High-Low Ranges
+    high_low_momentum = long_term_high_low_range - smoothed_high_low_range
+    
+    # Calculate True Range
+    prev_close = df['close'].shift(1)
+    true_range = pd.concat([df['high'] - df['low'], (df['high'] - prev_close).abs(), (df['low'] - prev_close).abs()], axis=1).max(axis=1)
+    
+    # Rolling Average True Range
+    rolling_atr = true_range.rolling(window=14).mean()
+    
+    # Price Momentum Score
+    price_momentum_score = (sum_high_low_ranges + sum_close_open_changes) / df['close'].rolling(window=20).std()
+    
+    # Evaluate Volume Activity
+    avg_volume = df['volume'].rolling(window=20).mean()
+    high_volume_indicator = (df['volume'] > 1.5 * avg_volume).astype(int)
+    
+    # Integrate Price Momentum and Volume Activity
+    interim_alpha_factor = price_momentum_score * high_volume_indicator
+    
+    # Combine ATR and Price Momentum
+    interpretable_factor = high_low_momentum + rolling_atr
+    
+    # Final Alpha Factor
+    final_alpha_factor = (interpretable_factor + interim_alpha_factor) * (df['volume'] / avg_volume)
+    
+    return final_alpha_factor
+```

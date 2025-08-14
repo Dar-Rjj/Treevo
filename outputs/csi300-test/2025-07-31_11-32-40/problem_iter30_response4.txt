@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Intraday Reversal
+    intraday_reversal = 2 * (df['high'] - df['low']) / (df['close'] + df['open'])
+    momentum_adjustment = 1 + (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    adjusted_intraday_reversal = intraday_reversal * momentum_adjustment
+
+    # Calculate Close to Midpoint Deviation
+    intraday_midpoint = (df['high'] + df['low']) / 2
+    close_to_midpoint_deviation = df['close'] - intraday_midpoint
+
+    # Generate Alpha Factor Base
+    alpha_factor_base = (adjusted_intraday_reversal * close_to_midpoint_deviation) + \
+                        (df['high'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Calculate Daily Volume Surprise
+    volume_5_day_ma = df['volume'].rolling(window=5).mean()
+    daily_volume_surprise = df['volume'] - volume_5_day_ma
+
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+
+    # Calculate Intraday Close-Open Return
+    intraday_close_open_return = (df['close'] - df['open']) / df['open']
+
+    # Calculate 5-Day Moving Averages
+    intraday_close_open_return_5_day_ma = intraday_close_open_return.rolling(window=5).mean()
+    intraday_high_low_spread_5_day_ma = intraday_high_low_spread.rolling(window=5).mean()
+
+    # Calculate Weighted Intraday Return
+    weighted_intraday_return = 0.6 * intraday_close_open_return + 0.4 * intraday_high_low_spread
+
+    # Combine Weighted Intraday Return and Moving Averages
+    intraday_momentum = (weighted_intraday_return * intraday_close_open_return_5_day_ma) + \
+                        (intraday_high_low_spread * intraday_high_low_spread_5_day_ma)
+
+    # Compute Volume Influence Ratio
+    upward_volume = df[df['close'] > df['open']]['volume']
+    downward_volume = df[df['close'] < df['open']]['volume']
+    accumulated_upward_volume = upward_volume.rolling(window=5).sum()
+    accumulated_downward_volume = downward_volume.rolling(window=5).sum()
+    volume_influence_ratio = accumulated_upward_volume / accumulated_downward_volume
+
+    # Calculate Adjusted Price Momentum
+    price_difference = df['close'] - df['low'].shift(1)
+    ema_smoothed_momentum = price_difference.ewm(span=5, adjust=False).mean()
+
+    # Combine Adjusted Momentum and Simple Price Momentum
+    simple_price_momentum = (df['close'] - df['close'].shift(1)).ewm(span=5, adjust=False).mean()
+    combined_momentum = ema_smoothed_momentum + simple_price_momentum
+
+    # Adjust by Volume Change
+    volume_ratio = df['volume'] / volume_5_day_ma
+    smoothed_volume_ratio = volume_ratio.rolling(window=5).mean()
+    adjusted_combined_momentum = combined_momentum * smoothed_volume_ratio
+
+    # Combine Price Momentum and Volume Surprise
+    close_price_diff = df['close'] - df['close'].shift(5)
+    combined_price_momentum_volume_surprise = adjusted_combined_momentum * daily_volume_surprise
+
+    # Final Alpha Factor Components
+    final_alpha_factor_components = (
+        intraday_momentum *
+        combined_price_momentum_volume_surprise *
+        volume_influence_ratio +
+        alpha_factor_base *
+        np.sqrt(volume_influence_ratio) +
+        (df['volume'] - df['volume'].shift(1)) * momentum_adjustment
+    )
+
+    # Final Alpha Factor
+    final_alpha_factor = final_alpha_factor_components
+
+    return final_alpha_factor
+```

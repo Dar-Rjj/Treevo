@@ -1,0 +1,59 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Short-Term and Long-Term Returns
+    short_term_return = (df['close'] / df['close'].shift(5)) - 1
+    long_term_return = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Calculate Relative Strength
+    relative_strength = short_term_return - long_term_return
+    
+    # Calculate Intraday and Open-to-Close Returns
+    intraday_return = (df['high'] - df['low']) + (df['close'] - df['open'])
+    
+    # Identify Volume Spikes
+    volume_mean = df['volume'].rolling(window=20).mean()
+    volume_std = df['volume'].rolling(window=20).std()
+    k = 2  # Spike threshold in standard deviations
+    volume_spike = (df['volume'] > (volume_mean + k * volume_std)).astype(int)
+    
+    # Combine returns and volume spike
+    combined_return = relative_strength * volume_spike
+    
+    # Integrate Factors
+    volume_avg = df['volume'].rolling(window=5).mean()
+    volatility = ((df['close'] - df['open']) / df['open']).rolling(window=20).std()
+    integrated_factor = combined_return * (volume_avg * volatility)
+    
+    # Incorporate Advanced Volatility Adjustment
+    daily_range = df['high'] - df['low']
+    ema_range = daily_range.ewm(span=10, adjust=False).mean()
+    volatility_multiplier = 1 / (ema_range + 1)
+    adjusted_combined_momentum = combined_return * volume_avg * volatility_multiplier
+    
+    # Volume Momentum
+    volume_momentum = df['volume'] - df['volume'].rolling(window=7).mean()
+    
+    # High-Low Volatility (5 days)
+    high_low_volatility = (df['high'] - df['low']).rolling(window=5).std()
+    
+    # Close Price Momentum
+    close_price_momentum = df['close'] - df['close'].rolling(window=21).mean() - df['close'].shift(1)
+    
+    # Integrate Hybrid Factors
+    final_factor = (
+        0.5 * volume_momentum +
+        0.3 * high_low_volatility +
+        close_price_momentum
+    )
+    
+    # Trend Following Adjustment
+    sma_10 = df['close'].rolling(window=10).mean()
+    sma_30 = df['close'].rolling(window=30).mean()
+    trend_adjustment = np.where(sma_10 > sma_30, 1.1, 0.9)
+    final_factor *= trend_adjustment * adjusted_combined_momentum
+    
+    return final_factor
+```

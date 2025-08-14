@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Compute Daily Price Change
+    df['price_change'] = df['close'].diff()
+    
+    # Calculate High-to-Low Range
+    df['high_low_range'] = df['high'] - df['low']
+    df['prev_high_low_range'] = df['high_low_range'].shift(1)
+    
+    # Compute High-to-Low Range Momentum
+    df['high_low_range_mom'] = df['high_low_range'] / df['prev_high_low_range']
+    
+    # Adjust Price Change by Volume
+    df['price_change_vol_adj'] = df['price_change'] / df['volume']
+    
+    # Determine Daily Returns
+    df['daily_returns'] = df['close'].pct_change()
+    
+    # Compute Short-Term Momentum
+    df['short_term_momentum'] = df['daily_returns'].rolling(window=5).sum() - df['close'].rolling(window=5).mean()
+    
+    # Compute Long-Term Momentum
+    df['long_term_momentum'] = df['daily_returns'].rolling(window=20).sum() - df['close'].rolling(window=20).mean()
+    
+    # Calculate True Range for Volatility
+    df['true_range'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+    df['avg_true_range'] = df['true_range'].rolling(window=14).mean()
+    
+    # Adjust by Volume
+    df['vol_10_day_ma'] = df['volume'].rolling(window=10).mean()
+    df['vol_ratio'] = df['volume'] / df['vol_10_day_ma']
+    
+    # Adjust by Amount
+    df['amount_7_day_ma'] = df['amount'].rolling(window=7).mean()
+    df['amount_ratio'] = df['amount'] / df['amount_7_day_ma']
+    
+    # Introduce High-to-Low Range Momentum Adjustment
+    df['vol_adj_high_low_range_mom'] = df['high_low_range_mom'] * df['vol_10_day_ma']
+    
+    # Combine Momentum, Volatility, and Volume-Amount Adjustment
+    df['combined_factor'] = (
+        df['price_change_vol_adj'].rolling(window=5).mean() * 
+        df['vol_adj_high_low_range_mom'] * 
+        (df['short_term_momentum'] + df['long_term_momentum']) * 
+        (1 / df['avg_true_range']) * 
+        df['vol_ratio'] * 
+        df['amount_ratio']
+    )
+    
+    # Enhance Signal with Price Change and Volume Ratio
+    df['enhanced_signal'] = df['price_change'] * df['vol_ratio']
+    
+    # Final Alpha Factor
+    df['alpha_factor'] = df['combined_factor'] + df['enhanced_signal']
+    
+    return df['alpha_factor'].dropna()
+
+# Example usage:
+# alpha_factor = heuristics_v2(df)
+```

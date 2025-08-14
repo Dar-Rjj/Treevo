@@ -1,0 +1,68 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Identify Spikes
+    df['volume_spike'] = (df['volume'] > df['volume'].shift(1)).astype(int)
+    df['price_spike'] = (df['close'] > df['close'].shift(1)).astype(int)
+    df['combined_spike'] = df['volume_spike'] + df['price_spike']
+    
+    # Introduce Volatility Adjustment
+    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    df['std_log_returns'] = df['log_returns'].rolling(window=30).std()
+    df['intraday_momentum_adjusted'] = df['intraday_range'] / df['std_log_returns']
+    
+    # Scale Intraday Momentum
+    df['intraday_momentum_scaled'] = df['intraday_momentum_adjusted'] / df['combined_spike']
+    df['intraday_momentum_scaled'] = df['intraday_momentum_scaled'].clip(upper=5)  # Cap at a threshold
+    
+    # Calculate Opening Gap
+    df['opening_gap'] = df['open'] - df['close'].shift(1)
+    
+    # Calculate Close-to-Open Return
+    df['close_to_open_return'] = df['close'] - df['open']
+    
+    # Calculate Price Change
+    df['price_change'] = df['close'] - df['close'].shift(1)
+    
+    # Intraday Midpoint
+    df['intraday_midpoint'] = (df['high'] + df['low']) / 2
+    
+    # Combined Intraday Features
+    df['combined_intraday_features'] = df['open'] - df['intraday_midpoint'] - df['opening_gap']
+    
+    # Enhanced Intraday Factor
+    df['avg_intraday_range'] = df['intraday_range'].rolling(window=10).mean()
+    df['enhanced_intraday_factor'] = df['avg_intraday_range'] * (df['close_to_open_return'] + df['price_change']) + df['combined_intraday_features']
+    
+    # Enhance with Recent Volatility
+    df['abs_price_change'] = abs(df['close'] - df['close'].shift(1))
+    df['avg_abs_price_change'] = df['abs_price_change'].rolling(window=10).mean()
+    df['enhanced_intraday_factor_vol_adjusted'] = df['enhanced_intraday_factor'] * df['avg_abs_price_change']
+    
+    # Weight by Volume
+    df['avg_volume'] = df['volume'].rolling(window=10).mean()
+    df['volume_factor'] = np.where(df['volume'] > df['avg_volume'], 1, 0.5)
+    df['enhanced_intraday_factor_vol_weighted'] = df['enhanced_intraday_factor_vol_adjusted'] * df['volume_factor']
+    
+    # Adjust for Volume Spikes
+    df['volume_spike_factor'] = df['volume'] / df['volume'].shift(1)
+    df['enhanced_intraday_factor_final'] = df['enhanced_intraday_factor_vol_weighted'] * df['volume_spike_factor']
+    df['enhanced_intraday_factor_final'] = df['enhanced_intraday_factor_final'].clip(upper=10)  # Cap at a threshold
+    
+    # Add Recent Amount Trend
+    df['avg_amount'] = df['amount'].rolling(window=10).mean()
+    df['recent_amount_trend'] = df['amount'] / df['avg_amount']
+    df['final_factor'] = df['enhanced_intraday_factor_final'] * df['recent_amount_trend']
+    
+    return df['final_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date')
+# factor_values = heuristics_v2(df)
+# print(factor_values)
+```

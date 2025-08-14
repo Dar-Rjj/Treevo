@@ -1,0 +1,50 @@
+import pandas as pd
+import pandas as pd
+
+def heuristics_v2(df):
+    # Intraday Range
+    df['intraday_range'] = df['high'] - df['low']
+    
+    # Close Location within Intraday Range
+    df['close_location'] = (df['close'] - df['low']) / df['intraday_range']
+    
+    # Weighted Intraday Reversal Potential
+    df['weighted_reversal'] = df['close_location'] * df['volume']
+    
+    # Open-Price Impact
+    df['open_price_impact'] = (df['open'] - df['low']) / df['intraday_range']
+    
+    # Final Intraday Reversal and Momentum Potential
+    df['price_change'] = df['open'] - df['close'].shift(1)
+    df['final_reversal_momentum'] = df['weighted_reversal'] * df['price_change']
+    
+    # Short-Term vs Long-Term Price Momentum
+    df['5_day_return'] = (df['close'] / df['close'].shift(5)) - 1
+    df['20_day_return'] = (df['close'] / df['close'].shift(20)) - 1
+    
+    # Intraday Volatility
+    df['high_low_diff'] = df['high'] - df['low']
+    df['5_day_volatility'] = df['high_low_diff'].rolling(window=5).mean()
+    
+    # Adjust for Volume Intensity
+    df['volume_intensity'] = df['volume'] * df['close_location']
+    
+    # Volume Surge
+    df['5_day_avg_volume'] = df['volume'].rolling(window=5).mean()
+    df['10_day_avg_volume'] = df['volume'].rolling(window=10).mean()
+    
+    # Volume Adjusted Momentum
+    df['close_to_close_return'] = df['close'] / df['close'].shift(1) - 1
+    df['volume_adjusted_momentum'] = df['close_to_close_return'] * df['volume']
+    
+    # Synthesize All Factors
+    df['momentum_intraday_volatility'] = -df['close_to_close_return'] + df['5_day_volatility']
+    df['short_term_long_term_diff'] = (df['5_day_return'] - df['20_day_return']) * (df['5_day_return'] - df['50_day_return'])
+    df['final_factor'] = (
+        df['momentum_intraday_volatility'] +
+        df['final_reversal_momentum'] +
+        df['short_term_long_term_diff'] * 
+        df['volume_adjusted_momentum']
+    )
+    
+    return df['final_factor']

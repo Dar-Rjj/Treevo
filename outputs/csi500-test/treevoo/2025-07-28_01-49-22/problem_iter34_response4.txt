@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Volume-Weighted High-Low Range
+    volume_weighted_high_low_range = high_low_range * df['volume']
+    ema_volume_weighted_high_low_range = volume_weighted_high_low_range.ewm(span=10, adjust=False).mean()
+    
+    # Generate Alpha Factor from Volume-Weighted High-Low Range
+    alpha_factor = ema_volume_weighted_high_low_range.copy()
+    alpha_factor[alpha_factor > 1.3] = 1
+    alpha_factor[alpha_factor < 1.3] = -1
+    
+    # Adjust for Volatility
+    volatility = df['close'].rolling(window=20).std()
+    alpha_factor /= volatility
+    
+    # Calculate Absolute Close-to-Close Return
+    close_to_close_return = abs(df['close'].diff())
+    
+    # Combine High-Low Range and Absolute Close-to-Close Return
+    combined_value = high_low_range - close_to_close_return
+    
+    # Calculate Intraday Volatility
+    intraday_volatility = (df['high'] - df['low']).rolling(window=10).mean()
+    
+    # Calculate Combined Value Momentum
+    combined_value_momentum = combined_value.diff()
+    
+    # Calculate Close Price Momentum
+    close_price_momentum = ((df['close'] / df['close'].shift(1)) - 1).rolling(window=20).sum()
+    
+    # Calculate Intraday Range Ratio
+    intraday_range_ratio = (df['high'] - df['low']) / (df['high'] + df['low'])
+    
+    # Generate Intermediate Alpha Factor
+    intermediate_alpha_factor = ema_volume_weighted_high_low_range + combined_value_momentum + intraday_range_ratio - (df['open'] - df['close'].shift(1))
+    
+    # Adjust Intermediate Alpha Factor
+    intermediate_alpha_factor[alpha_factor == 1] *= 1.8
+    intermediate_alpha_factor[alpha_factor == -1] *= 0.2
+    
+    # Generate Final Alpha Factor
+    final_alpha_factor = intraday_volatility * (intermediate_alpha_factor + close_price_momentum)
+    
+    # Weight by Volume
+    volume_weighted_final_alpha_factor = final_alpha_factor * df['volume']
+    ema_volume_weighted_final_alpha_factor = volume_weighted_final_alpha_factor.ewm(span=5, adjust=False).mean()
+    
+    return ema_volume_weighted_final_alpha_factor
+```

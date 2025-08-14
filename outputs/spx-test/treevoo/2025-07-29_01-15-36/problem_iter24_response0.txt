@@ -1,0 +1,71 @@
+```python
+import pandas as pd
+
+def heuristics(df):
+    # Calculate Simple Moving Average (SMA) of Close Prices
+    sma = df['close'].rolling(window=20).mean()
+    
+    # Calculate Momentum Factor
+    momentum_factor = df['close'] - sma
+    
+    # Calculate Average Volume Over 20 Days
+    avg_volume = df['volume'].rolling(window=20).mean()
+    
+    # Calculate Average True Range Over 20 Days
+    tr = df.eval('tr = high - low').query('tr > abs(high - close)').eval('tr = high - close').query('tr > abs(low - close)').eval('tr = low - close')['tr']
+    atr = tr.rolling(window=20).mean()
+    
+    # Combine Volume and Price Volatility
+    volume_price_volatility = avg_volume * atr
+    momentum_factor_weighted = momentum_factor / volume_price_volatility
+    
+    # Calculate Intraday Return
+    intraday_return = df['close'] - df['open']
+    
+    # Calculate Intraday High-Low Spread
+    intraday_high_low_spread = df['high'] - df['low']
+    
+    # Calculate Intraday Volatility
+    high_low_diff = df['high'] - df['low']
+    mean_high_low = high_low_diff.rolling(window=20).mean()
+    std_high_low = high_low_diff.rolling(window=20).std()
+    intraday_volatility = mean_high_low + std_high_low
+    
+    # Adjust Intraday Return by Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Determine Range-to-Range Ratio
+    prev_high_low_range = df['high'].shift(1) - df['low'].shift(1)
+    current_high_low_range = df['high'] - df['low']
+    range_to_range_ratio = current_high_low_range / prev_high_low_range
+    
+    # Integrate Volume Sensitivity
+    volume_ratio = df['volume'] / df['volume'].shift(1)
+    range_to_range_adjusted = range_to_range_ratio * volume_ratio
+    
+    # Detect Volume Shock
+    volume_change = df['volume'] - df['volume'].shift(1)
+    volume_shock = (volume_change > 1.5 * df['volume'].rolling(window=20).std()).astype(int)
+    
+    # Combine Intraday Indicators
+    combined_intraday_indicators = (intraday_high_low_spread * adjusted_intraday_return) + adjusted_intraday_return
+    
+    # Calculate High-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Calculate Close-to-Range Ratio
+    close_to_range_ratio = df['close'] / high_low_range
+    
+    # Calculate Volume-Weighted Close-to-Range Momentum
+    volume_weighted_close_to_range_momentum = combined_intraday_indicators * close_to_range_ratio
+    
+    # Final Combination
+    final_combination = combined_intraday_indicators * volume_weighted_close_to_range_momentum * momentum_factor_weighted
+    
+    # Adjust for Volume Impact, Enhanced Price Volatility, and Volume Acceleration
+    volume_trend = df['volume'] - df['volume'].shift(1)
+    volume_acceleration = (df['volume'] - df['volume'].shift(1)) - (df['volume'].shift(1) - df['volume'].shift(2))
+    final_adjustment = final_combination * volume_trend * (1 + volume_acceleration)
+    
+    return final_adjustment
+```

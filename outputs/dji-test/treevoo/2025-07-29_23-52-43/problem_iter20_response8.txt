@@ -1,0 +1,72 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['high'] - df['low']) / df['low']
+    
+    # Calculate Close-to-PreviousClose Return
+    df['PrevClose'] = df['close'].shift(1)
+    df['CloseToPrevCloseReturn'] = (df['close'] - df['PrevClose']) / df['PrevClose']
+    
+    # Calculate High-Low Breakout Intensity
+    df['BreakoutIntensity'] = (df['high'] - df['low']) / df['close']
+    df['BreakoutIntensity'] = df['BreakoutIntensity'].apply(lambda x: max(x, 0))
+    
+    # Combine Metrics
+    df['CombinedMetrics'] = df['volume'] * (df['IntradayReturn'] + df['CloseToPrevCloseReturn'] + df['BreakoutIntensity'])
+    
+    # Calculate Daily High-Low Range Percentage
+    df['DailyHighLowRangePct'] = (df['high'] - df['low']) / df['open']
+    
+    # Calculate Volume-Weighted Intraday Momentum
+    df['MaxVolume'] = df['volume'].rolling(window=5).max()
+    df['VolWeightedMomentum'] = (df['close'] - df['open']) * (df['volume'] / df['MaxVolume'])
+    
+    # Combine Intraday High-Low Range and Volume-Weighted Intraday Momentum
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    df['CombinedIntradayMomentum'] = df['DailyHighLowRangePct'] * df['VolWeightedMomentum']
+    
+    # Calculate Momentum Difference
+    df['PrevIntradayHighLowSpread'] = df['IntradayHighLowSpread'].shift(1)
+    df['MomentumDifference'] = df['IntradayHighLowSpread'] - df['PrevIntradayHighLowSpread']
+    
+    # Calculate VWAP Difference
+    df['DailyVWAP'] = (df['close'] * df['volume']).sum() / df['volume'].sum()
+    df['PrevDailyVWAP'] = (df['close'].shift(1) * df['volume'].shift(1)).sum() / df['volume'].shift(1).sum()
+    df['VWAPDifference'] = df['DailyVWAP'] - df['PrevDailyVWAP']
+    
+    # Calculate Open-Close Spread Difference
+    df['OpenCloseSpread'] = df['close'] - df['open']
+    df['PrevOpenCloseSpread'] = df['OpenCloseSpread'].shift(1)
+    df['OpenCloseSpreadDifference'] = df['OpenCloseSpread'] - df['PrevOpenCloseSpread']
+    
+    # Final Combined Indicator
+    df['FinalCombinedIndicator'] = (df['MomentumDifference'] + df['VWAPDifference'] + df['OpenCloseSpreadDifference'])
+    
+    # Adjust for Price Trend
+    df['ShortTermTrend'] = df['close'].rolling(window=5).mean()
+    df['LongTermTrend'] = df['close'].rolling(window=20).mean()
+    df['PriceTrendDifference'] = df['LongTermTrend'] - df['ShortTermTrend']
+    df['AdjustedFinalIndicator'] = df['FinalCombinedIndicator'] * (1 + df['PriceTrendDifference'] / df['LongTermTrend'])
+    
+    # Adjust for Volatility
+    df['RollingVolatility'] = df['high'] - df['low']
+    df['RollingVolatility'] = df['RollingVolatility'].rolling(window=20).std()
+    df['VolatilityAdjustedIndicator'] = df['AdjustedFinalIndicator'] / df['RollingVolatility']
+    
+    # Calculate Cumulative Log Return
+    df['DailyLogReturn'] = np.log(df['close'] / df['close'].shift(1))
+    df['CumulativeLogReturn'] = df['DailyLogReturn'].rolling(window=20).sum()
+    
+    # Identify Volume Shock
+    df['VolumeShock'] = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    
+    # Introduce New Factor: Intraday Price Efficiency
+    df['IntradayEfficiencyRatio'] = (df['close'] - df['open']) / (df['high'] - df['low'])
+    df['AdjustedByEfficiency'] = df['VolatilityAdjustedIndicator'] * df['IntradayEfficiencyRatio']
+    
+    # Combine All Factors
+    df['FinalFactor'] = df['CumulativeLogReturn'] + df['VolumeShock'] + df['AdjustedByEfficiency']
+

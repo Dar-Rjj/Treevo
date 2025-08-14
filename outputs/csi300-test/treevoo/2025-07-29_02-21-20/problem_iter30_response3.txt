@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, intraday_weights=(0.7, 0.3), long_term_n=20, volume_lookback=10, spike_threshold=2.0, volatility_lookback=10):
+    # Calculate Adjusted Close Price
+    adjusted_close = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    high_indicator = df['high'] - df['open']
+    low_indicator = df['open'] - df['low']
+    weighted_intraday_momentum = intraday_weights[0] * high_indicator + intraday_weights[1] * low_indicator
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    ema_volume = df['volume'].ewm(span=volume_lookback).mean()
+    normalized_volume = df['volume'] / ema_volume
+    volume_impacted_intraday_momentum = weighted_intraday_momentum * normalized_volume
+    
+    # Incorporate Volume-Adjusted Long-Term Momentum
+    long_term_momentum = (df['close'] - df['close'].shift(long_term_n)) / df['close'].shift(long_term_n)
+    volume_adjustment_factor = df['volume'] / df['volume'].shift(long_term_n)
+    volume_adjusted_long_term_momentum = long_term_momentum * volume_adjustment_factor
+    
+    # Add Volume Spike Filter
+    volume_spike = df['volume'] / df['volume'].shift(1)
+    filtered_data = (volume_spike < spike_threshold) | (volume_spike.isna())
+    volume_impacted_intraday_momentum[~filtered_data] = 0
+    volume_adjusted_long_term_momentum[~filtered_data] = 0
+    
+    # Consolidate All Factors
+    total_factor = adjusted_close + volume_impacted_intraday_momentum + volume_adjusted_long_term_momentum
+    
+    # Introduce Volatility Component
+    daily_range = df['high'] - df['low']
+    smoothed_daily_range = daily_range.rolling(window=volatility_lookback).mean()
+    total_factor += smoothed_daily_range
+    
+    # Final Alpha Factor
+    final_alpha_factor = total_factor / df['open']
+    
+    return final_alpha_factor
+```

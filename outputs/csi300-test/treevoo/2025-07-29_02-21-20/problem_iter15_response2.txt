@@ -1,0 +1,52 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Adjusted Close Price by Open Price
+    df['Adj_Close'] = df['close'] - df['open']
+    
+    # Enhanced Intraday Momentum
+    df['High_Price_Indicator'] = df['high'] - df['open']
+    df['Low_Price_Indicator'] = df['open'] - df['low']
+    # Define Weights for High and Low
+    weight_high = 0.6
+    weight_low = 0.4
+    # Compute Weighted Average
+    df['Intraday_Momentum'] = (weight_high * df['High_Price_Indicator']) + (weight_low * df['Low_Price_Indicator'])
+    
+    # Adjust for Dynamic Volume Impact on Intraday Momentum
+    lookback_period = 20
+    df['Vol_EMA'] = df['volume'].ewm(span=lookback_period, adjust=False).mean()
+    df['Normalized_Volume'] = df['volume'] / df['Vol_EMA']
+    df['Volume_Adjusted_Intraday_Momentum'] = df['Intraday_Momentum'] * df['Normalized_Volume']
+    
+    # Incorporate Longer-Term Volume-Adjusted Momentum
+    n = 20
+    df['Long_Term_Momentum'] = (df['close'] - df['close'].shift(n)) / df['close'].shift(n)
+    df['Volume_Ratio'] = df['volume'] / df['volume'].shift(n)
+    df['Final_Long_Term_Factor'] = df['Long_Term_Momentum'] * df['Volume_Ratio'] + df['Long_Term_Momentum']
+    
+    # Consolidate All Factors
+    df['Consolidated_Factor'] = (df['Adj_Close'] + df['Volume_Adjusted_Intraday_Momentum'] + df['Final_Long_Term_Factor']) / df['open']
+    
+    # Calculate Daily Price Return
+    df['Daily_Price_Return'] = df['close'] - df['close'].shift(1)
+    
+    # Identify Significant Price Increase
+    positive_threshold = 0.01
+    df['Significant_Price_Increase'] = (df['Daily_Price_Return'] > positive_threshold).astype(int)
+    
+    # Calculate Volume Spike Indicator
+    df['Avg_Past_Week_Volume'] = df['volume'].rolling(window=5).mean()
+    df['Volume_Spike_Indicator'] = (df['volume'] > df['Avg_Past_Week_Volume']).astype(int)
+    
+    # Compute Weighted Price Momentum
+    df['Accumulated_Momentum'] = df['Daily_Price_Return'] * df['Significant_Price_Increase']
+    df['Volume_Spike_Filtered_Momentum'] = df['Accumulated_Momentum'] * df['Volume_Spike_Indicator']
+    
+    # Final Alpha Factor Synthesis
+    df['Final_Alpha_Factor'] = (df['Consolidated_Factor'] + df['Volume_Spike_Filtered_Momentum']) * df['Volume_Spike_Indicator']
+    
+    return df['Final_Alpha_Factor']
+```

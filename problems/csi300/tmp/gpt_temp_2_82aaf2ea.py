@@ -1,0 +1,59 @@
+import pandas as pd
+import numpy as np
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Intraday Momentum
+    df['Intraday_High_Low_Spread'] = df['high'] - df['low']
+    df['Prev_Close_to_Open_Return'] = df['open'] - df['close'].shift(1)
+    df['Intraday_Momentum'] = df['Intraday_High_Low_Spread'] + df['Prev_Close_to_Open_Return']
+
+    # Calculate Volume Weighted Average Price (VWAP)
+    df['Typical_Price'] = (df['high'] + df['low'] + df['close']) / 3
+    df['Price_Volume'] = df['Typical_Price'] * df['volume']
+    df['Cumulative_PV'] = df['Price_Volume'].cumsum()
+    df['Cumulative_Volume'] = df['volume'].cumsum()
+    df['VWAP'] = df['Cumulative_PV'] / df['Cumulative_Volume']
+
+    # Combine Intraday Momentum and VWAP, weighted by intraday volume
+    df['Combined_Value'] = (df['VWAP'] - df['Intraday_High_Low_Spread']) * df['volume']
+
+    # Incorporate Long-Term Momentum
+    df['20_Day_Momentum'] = df['close'] - df['close'].shift(20)
+
+    # Incorporate Price Dynamics
+    df['Prev_Close_to_Open_Return'] = df['open'] - df['close'].shift(1)
+
+    # Enhance with Long-Term Price Trend
+    df['50_Day_MA'] = df['close'].rolling(window=50).mean()
+
+    # Integrate Short-Term Volatility
+    df['TR'] = df[['high', 'low', 'close']].join(
+        df[['high', 'low', 'close']].shift(1)).max(axis=1) - \
+        df[['high', 'low', 'close']].join(df[['high', 'low', 'close']].shift(1)).min(axis=1)
+    df['14_Day_ATR'] = df['TR'].rolling(window=14).mean()
+
+    # Incorporate Short-Term Price Trend
+    df['7_Day_MA'] = df['close'].rolling(window=7).mean()
+
+    # Final Factor Combination
+    df['Final_Factor'] = (
+        df['Intraday_Momentum'] +
+        df['Combined_Value'] +
+        df['20_Day_Momentum'] +
+        df['Prev_Close_to_Open_Return'] +
+        df['50_Day_MA'] +
+        df['14_Day_ATR'] +
+        df['7_Day_MA']
+    )
+
+    # Smooth the Factor using Exponential Moving Average (EMA)
+    df['Alpha_Factor'] = df['Final_Factor'].ewm(span=20, adjust=False).mean()
+
+    return df['Alpha_Factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor = heuristics_v2(df)
+# print(alpha_factor)

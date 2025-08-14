@@ -1,0 +1,57 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Return
+    df['Daily_Return'] = df['close'].pct_change()
+    
+    # Calculate Price Gap
+    df['Price_Gap'] = df['open'] - df['close'].shift(1)
+    
+    # Adjust Daily Return by Price Gap
+    df['Adjusted_Daily_Return'] = df['Daily_Return']
+    df.loc[df['Price_Gap'] > 0, 'Adjusted_Daily_Return'] -= df['Price_Gap'] / df['close'].shift(1)
+    df.loc[df['Price_Gap'] < 0, 'Adjusted_Daily_Return'] += df['Price_Gap'] / df['close'].shift(1)
+    
+    # Calculate High-to-Low Price Range
+    df['High_Low_Range'] = df['high'] - df['low']
+    
+    # Calculate Price Range Momentum
+    df['Price_Range_Momentum'] = df['High_Low_Range'] - df['High_Low_Range'].shift(1)
+    
+    # Calculate Volume Change
+    df['Volume_Change'] = df['volume'] - df['volume'].shift(1)
+    
+    # Calculate Price Change
+    df['Price_Change'] = df['close'] - df['open'].shift(1)
+    
+    # Integrate Momentum, Volume, and Price Change
+    df['Integrated_Momentum'] = df['Price_Range_Momentum'] * df['Volume_Change'] + df['Price_Change']
+    
+    # Calculate Amount Acceleration
+    df['Amount_EMA'] = df['amount'].ewm(span=5).mean()
+    df['Amount_Acceleration'] = df['Amount_EMA'] - df['Amount_EMA'].shift(1)
+    
+    # Confirm High-Low Spread with Volume and Adjusted by Amount Acceleration
+    df['Combined_High_Low_Spread'] = df['High_Low_Range'] * df['Volume_Change']
+    df.loc[df['Volume_Change'] <= 0, 'Combined_High_Low_Spread'] = 0
+    df['Combined_High_Low_Spread_Adjusted'] = df['Combined_High_Low_Spread'] * df['Amount_Acceleration']
+    
+    # Smoothing Filter
+    df['Smoothed_Spread'] = df['Combined_High_Low_Spread_Adjusted'].rolling(window=10).mean()
+    
+    # Integrate Momentum and Smoothed Volume-Adjusted High-Low Spread
+    df['Integrated_Factor'] = df['Price_Range_Momentum'] * df['Smoothed_Spread']
+    
+    # Adjust by Volume Change
+    df['Volume_Change_Factor'] = df['volume'] / df['volume'].shift(1)
+    
+    # Combine Adjusted Daily Return, Integrated Momentum, and Volume Change
+    df['Alpha_Factor'] = df['Adjusted_Daily_Return'] * df['Integrated_Factor'] * df['Volume_Change_Factor']
+    
+    # Ensure Positive Factor
+    df['Alpha_Factor'] = df['Alpha_Factor'].apply(lambda x: max(x, 0))
+    
+    return df['Alpha_Factor']
+```

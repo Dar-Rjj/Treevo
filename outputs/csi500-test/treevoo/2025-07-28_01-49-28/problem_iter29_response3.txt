@@ -1,0 +1,63 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df, n=20, weight_breakout=1.0):
+    # Volume-Adjusted Breakout Strength
+    daily_range = df['high'] - df['low']
+    open_to_close = df['close'] - df['open']
+    volume_adjusted_breakout_strength = (daily_range * df['volume']) + open_to_close
+    
+    # Spread Momentum
+    high_low_spread = df['high'] - df['low']
+    spread_momentum = high_low_spread.rolling(window=20).mean().diff()
+    
+    # Enhanced Momentum Factor
+    simple_momentum = df['close'].diff(periods=n)
+    smoothed_volume = df['volume'].ewm(span=n, adjust=False).mean()
+    adjusted_momentum = simple_momentum * smoothed_volume
+    
+    # High-Low Return
+    high_low_range = df['high'] - df['low']
+    high_low_return = high_low_range / df['close'].shift(1)
+    
+    # Combined Momentum
+    combined_momentum = adjusted_momentum + high_low_return
+    
+    # Enhanced Open-High-Low Volatility
+    open_high_diff = df['high'] - df['open']
+    open_low_diff = df['open'] - df['low']
+    max_volatility = np.maximum(open_high_diff, open_low_diff)
+    volume_pct_change = (df['volume'] - df['volume'].shift(1)) / df['volume'].shift(1)
+    adjusted_volatility = max_volatility * volume_pct_change
+    
+    # Amount per Unit Close Price Rate of Change
+    sum_amounts = df['amount'].rolling(window=n).sum()
+    current_ratio = sum_amounts / df['close']
+    previous_ratio = (df['amount'].shift(n+1).rolling(window=n).sum()) / df['close'].shift(n)
+    differential = current_ratio - previous_ratio
+    
+    # Enhanced Price Reversion
+    ten_day_high = df['high'].rolling(window=10).max()
+    ten_day_low = df['low'].rolling(window=10).min()
+    proximity_high = df['close'] / ten_day_high
+    proximity_low = df['close'] / ten_day_low
+    min_proximity = np.minimum(proximity_high, proximity_low)
+    inverted_proximity = 1 / min_proximity
+    std_dev = df['close'].pct_change().rolling(window=20).std()
+    enhanced_price_reversion = inverted_proximity / std_dev
+    
+    # Combined Indicators
+    combined_indicators = (volume_adjusted_breakout_strength * weight_breakout) + spread_momentum + adjusted_momentum
+    
+    # Final Integrated Alpha Factor
+    final_integrated_alpha_factor = (
+        combined_indicators * 
+        combined_momentum * 
+        enhanced_price_reversion * 
+        adjusted_volatility * 
+        differential
+    )
+    
+    return final_integrated_alpha_factor
+```

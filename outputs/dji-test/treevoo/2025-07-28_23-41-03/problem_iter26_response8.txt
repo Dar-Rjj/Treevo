@@ -1,0 +1,75 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # 20-Day Weighted Moving Average of Returns
+    df['daily_return'] = (df['close'] / df['close'].shift(1)) - 1
+    df['weighted_return'] = df['daily_return'] * df['volume']
+    df['sum_weighted_return'] = df['weighted_return'].rolling(window=20).sum()
+    df['sum_volume'] = df['volume'].rolling(window=20).sum()
+    df['wma_returns'] = df['sum_weighted_return'] / df['sum_volume']
+
+    # Adjust for Price Volatility
+    df['daily_range'] = df['high'] - df['low']
+    df['avg_daily_range'] = df['daily_range'].rolling(window=20).mean()
+    df['adjusted_wma_returns'] = df['wma_returns'] - df['avg_daily_range']
+
+    # Intraday Return Ratio
+    df['intraday_return_ratio'] = df['high'] / df['low']
+
+    # Weighted Open-to-Close Return
+    df['weighted_open_to_close_return'] = (df['close'] - df['open']) * df['volume']
+
+    # High-Low Range Momentum
+    df['hl_range_momentum'] = df['high'] - df['low'] - (df['high'].shift(1) - df['low'].shift(1))
+
+    # Price Trend
+    df['50_sma'] = df['close'].rolling(window=50).mean()
+    df['price_trend'] = df['50_sma'] - df['close']
+
+    # Simple Moving Averages (SMA)
+    df['100_sma'] = df['close'].rolling(window=100).mean()
+    df['200_sma'] = df['close'].rolling(window=200).mean()
+
+    # Momentum Signals
+    df['long_momentum_signal'] = df['100_sma'] - df['200_sma']
+    df['mid_momentum_signal'] = df['50_sma'] - df['100_sma']
+
+    # Intraday Return
+    df['intraday_return'] = (df['close'] - df['open']) / df['open']
+
+    # Reversal Signal
+    df['reversal_signal'] = df['intraday_return'].apply(lambda x: -1 if x > 0 else 1)
+
+    # Combine Momentum and Reversal
+    df['combined_long_momentum'] = df['long_momentum_signal'] * df['reversal_signal']
+    df['combined_mid_momentum'] = df['mid_momentum_signal'] * df['reversal_signal']
+
+    # Volume Adjustment
+    n = 20  # Number of days for volume adjustment
+    df['average_volume'] = df['volume'].rolling(window=n).sum() / n
+
+    # Adjusted High-Low Range Momentum
+    df['adjusted_hl_range_momentum'] = df['hl_range_momentum'] / df['average_volume']
+
+    # Price Change Momentum
+    df['price_change_momentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+
+    # Combined Price and Volume Momentum
+    df['combined_price_volume_momentum'] = df['price_change_momentum'] * df['average_volume']
+
+    # Final Alpha Factor
+    df['alpha_factor'] = (
+        df['adjusted_wma_returns'] + 
+        df['intraday_return_ratio'] + 
+        df['weighted_open_to_close_return'] +
+        df['hl_range_momentum'] +
+        df['price_trend'] +
+        df['combined_long_momentum'] +
+        df['combined_mid_momentum'] +
+        df['adjusted_hl_range_momentum'] +
+        df['combined_price_volume_momentum']
+    )
+
+    return df['alpha_factor']
+```

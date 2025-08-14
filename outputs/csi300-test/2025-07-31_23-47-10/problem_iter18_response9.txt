@@ -1,0 +1,46 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Calculate Daily Volume Trend
+    volume_10d_ma = df['volume'].rolling(window=10).mean()
+    daily_volume_trend = df['volume'] - volume_10d_ma
+    
+    # Determine if positive or negative trend for volume
+    volume_trend = np.where(daily_volume_trend > 0, 1.5, 0.5)
+    
+    # Calculate Price Trend
+    close_10d_ema = df['close'].ewm(span=10, adjust=False).mean()
+    price_trend = df['close'] - close_10d_ema
+    price_trend_multiplier = np.where(price_trend > 0, 1.2, 0.8)
+    
+    # Integrate Momentum and Relative Strength
+    short_term_ema = df['close'].ewm(span=5, adjust=False).mean()
+    long_term_ema = df['close'].ewm(span=20, adjust=False).mean()
+    relative_strength = short_term_ema / long_term_ema
+    
+    # Adaptive Volatility
+    close_20d_std = df['close'].rolling(window=20).std()
+    close_20d_ma = df['close'].rolling(window=20).mean()
+    volatility = close_20d_std / close_20d_ma
+    
+    # Dynamic Weight Adjustment
+    relative_strength_weight = np.where(relative_strength > 1, 1.5, 0.5)
+    volatility_weight = np.where(volatility > 1, 1.2, 0.8)
+    
+    # Incorporate Open-Price Momentum
+    open_close_momentum = df['open'] - df['close']
+    open_price_momentum_weight = np.where(open_close_momentum > 0, 1.1, 0.9)
+    
+    # Combine Spread, Volume, Price Trends, and Dynamic Weights
+    adjusted_spread = high_low_spread * volume_trend
+    adjusted_spread_with_price_trend = adjusted_spread * price_trend_multiplier
+    adjusted_spread_with_weights = adjusted_spread_with_price_trend * relative_strength_weight * volatility_weight
+    final_alpha_factor = adjusted_spread_with_weights * open_price_momentum_weight
+    
+    return final_alpha_factor
+```

@@ -1,0 +1,67 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Daily Momentum
+    df['DailyMomentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    
+    # Calculate 20-Day Raw Momentum
+    df['RawMomentum20'] = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # Calculate 5-Period Moving Average of Price Momentum
+    df['PriceMomentum'] = (df['close'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['5PeriodMA'] = df['PriceMomentum'].rolling(window=5).mean()
+    
+    # Calculate High-Low Range
+    df['HighLowRange'] = df['high'] - df['low']
+    
+    # Generate Initial Alpha Factor
+    df['InitialAlphaFactor'] = df['HighLowRange'] * df['5PeriodMA']
+    
+    # Confirm with Volume
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['VolumeConfirmation'] = df['InitialAlphaFactor'] * np.log(df['VolumeChange'] + 1)
+    
+    # Calculate Volume-Adjusted Intraday Volatility
+    df['IntradayVolatility'] = (df['high'] - df['low']) / df['close']
+    df['VolumeAdjustedVolatility'] = df['IntradayVolatility'] / np.sqrt(df['volume'])
+    
+    # Combine Enhanced Raw Momentum, Volume-Adjusted Intraday Volatility, and High-Low Range
+    df['EnhancedRawMomentum'] = df['RawMomentum20'] * df['VolumeAdjustedVolatility'] * df['HighLowRange']
+    
+    # Calculate Intraday Adjusted Return
+    df['IntradayRange'] = (df['high'] - df['low']) / df['low']
+    df['IntradayVolatilityAdj'] = abs(df['close'] - df['open']) / ((df['high'] + df['low']) / 2)
+    df['IntradayAdjustedReturn'] = df['IntradayRange'] * (df['volume'] / df['volume'].max()) * np.sign(df['close'] - df['close'].shift(1))
+    
+    # Combine Intraday and Multi-Period Momentum
+    df['CombinedMomentum'] = df['IntradayAdjustedReturn'] * df['5PeriodMA']
+    
+    # Generate Alpha Factor Component
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['AmountChange'] = df['amount'] - df['amount'].shift(1)
+    df['AlphaFactorComponent'] = df['5PeriodMA'] * np.sign(df['VolumeChange'] + df['AmountChange'])
+    
+    # Calculate VWAP
+    df['VWAP'] = (df['high'] + df['low']) / 2 * df['volume']
+    df['VWAP'] = df['VWAP'].cumsum() / df['volume'].cumsum()
+    
+    # Calculate VWAP to Close Difference
+    df['VWAPCloseDiff'] = df['close'] - df['VWAP']
+    
+    # Combine Daily Momentum and VWAP-Close Difference
+    df['MomentumVWAP'] = df['DailyMomentum'] * df['VWAPCloseDiff']
+    
+    # Calculate Intraday Reversal
+    df['IntradayReversal'] = (df['close'] - df['open']) - (df['close'].shift(1) - df['open'].shift(1))
+    
+    # Synthesize Enhanced Intraday and Cumulative Momentum Factor
+    df['SynthesizedFactor'] = df['MomentumVWAP'] + df['IntradayReversal']
+    
+    # Final Alpha Factor
+    df['FinalAlphaFactor'] = df['SynthesizedFactor'] * np.sign(df['VolumeChange']) * np.sign(df['close'] - df['close'].shift(1))
+    df['FinalAlphaFactor'] = df['FinalAlphaFactor'].apply(lambda x: x if abs(x) > 0.6 else 0)
+    
+    return df['FinalAlphaFactor']
+```

@@ -1,0 +1,49 @@
+```python
+import pandas as pd
+import numpy as np
+
+def heuristics_v2(df):
+    # Calculate Enhanced Intraday Return
+    intraday_return = (df['close'] - df['open']) / df['open']
+    
+    # Evaluate Intraday Volatility
+    intraday_volatility = df['high'] - df['low']
+    
+    # Adjust Intraday Return with Intraday Volatility
+    adjusted_intraday_return = intraday_return / intraday_volatility
+    
+    # Compute Enhanced High-to-Low Range
+    high_low_range = df['high'] - df['low']
+    
+    # Adjust for Volume
+    adjusted_high_low_range = high_low_range * np.sqrt(df['volume'])
+    
+    # Evaluate Volume Trend
+    volume_trend = np.where(df['volume'].rolling(window=10).mean() < df['volume'], 1, -1)
+    
+    # Integrate Volume Trend with Adjusted Range
+    integrated_adjusted_high_low_range = adjusted_high_low_range * volume_trend
+    
+    # Calculate Momentum Signal
+    momentum_signal = df['close'].ewm(span=10, adjust=False).mean()
+    
+    # Combine Adjusted Range, Momentum, and Volume Trend
+    combined_high_low_momentum = integrated_adjusted_high_low_range - momentum_signal
+    
+    # Identify Volume Shock
+    volume_shock = np.where(df['volume'] > 1.5 * df['volume'].rolling(window=30).mean(), 1, 0)
+    
+    # Integrate Momentum and Volume Shock
+    integrated_momentum_volume_shock = combined_high_low_momentum * volume_shock
+    
+    # Calculate 20-day Price Momentum
+    price_momentum_20d = (df['close'] - df['close'].shift(20)) / df['close'].shift(20)
+    
+    # 10-day Volume Acceleration
+    volume_acceleration_10d = df['volume'].pct_change(10)
+    
+    # Final Factor Combination
+    final_factor = (integrated_momentum_volume_shock * adjusted_intraday_return) + price_momentum_20d + volume_acceleration_10d
+    
+    return final_factor
+```

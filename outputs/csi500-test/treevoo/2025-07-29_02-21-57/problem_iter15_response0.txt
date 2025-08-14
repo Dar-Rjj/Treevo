@@ -1,0 +1,69 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # Calculate Daily Range
+    df['DailyRange'] = df['high'] - df['low']
+    
+    # Calculate 20-Day Moving Average of Daily Range
+    df['20DayAvgDailyRange'] = df['DailyRange'].rolling(window=20).mean()
+    
+    # Identify Breakouts
+    df['UpwardBreakout'] = (df['close'] > df['high'].shift(1)).astype(int)
+    df['DownwardBreakout'] = (df['close'] < df['low'].shift(1)).astype(int)
+    
+    # Calculate Breakout Strength
+    df['BreakoutStrength'] = 0
+    df.loc[df['UpwardBreakout'] == 1, 'BreakoutStrength'] = (df['close'] - df['high'].shift(1)) / df['20DayAvgDailyRange']
+    df.loc[df['DownwardBreakout'] == 1, 'BreakoutStrength'] = (df['low'].shift(1) - df['close']) / df['20DayAvgDailyRange']
+    
+    # Cumulate Breakout Strength over the past 10 days
+    df['CumulatedPosBreakoutStrength'] = df['BreakoutStrength'].clip(lower=0).rolling(window=10).sum()
+    df['CumulatedNegBreakoutStrength'] = df['BreakoutStrength'].clip(upper=0).rolling(window=10).sum()
+    df['CumulatedBreakoutStrength'] = df['CumulatedPosBreakoutStrength'] - df['CumulatedNegBreakoutStrength']
+    
+    # Calculate Intraday High-Low Spread
+    df['IntradayHighLowSpread'] = df['high'] - df['low']
+    
+    # Calculate Close-to-Open Return
+    df['CloseToOpenReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Calculate Volume Weighted Price
+    df['VolumeWeightedPrice'] = (df['open'] * df['volume'] + df['high'] * df['volume'] + df['low'] * df['volume'] + df['close'] * df['volume']) / (4 * df['volume'])
+    
+    # Calculate 5-Day Volume Adjusted Momentum
+    df['5DayClosePriceReturn'] = (df['close'] - df['close'].shift(5)) / df['close'].shift(5)
+    df['5DayVolumeRatio'] = df['volume'].rolling(window=5).sum() / df['volume'].rolling(window=5*20).mean()
+    df['5DayVolumeAdjustedMomentum'] = df['5DayClosePriceReturn'] * df['5DayVolumeRatio']
+    
+    # Calculate High-Low Price Oscillation
+    df['HighLowRange'] = df['high'] - df['low']
+    df['10DayStdHighLowRange'] = df['HighLowRange'].rolling(window=10).std()
+    df['10DayMeanHighLowRange'] = df['HighLowRange'].rolling(window=10).mean()
+    df['AdjustedPriceOscillation'] = (df['HighLowRange'] - df['10DayMeanHighLowRange']) / df['10DayStdHighLowRange']
+    
+    # Calculate Intraday Return
+    df['IntradayReturn'] = (df['close'] - df['open']) / df['open']
+    
+    # Compute Moving Averages
+    df['ShortTermIntradayReturn'] = df['IntradayReturn'].rolling(window=5).mean()
+    df['LongTermIntradayReturn'] = df['IntradayReturn'].rolling(window=20).mean()
+    df['IntradayReturnDifference'] = df['ShortTermIntradayReturn'] - df['LongTermIntradayReturn']
+    
+    # Filter by Volume Change
+    df['VolumeChange'] = df['volume'] - df['volume'].shift(1)
+    df['FilteredIntradayReturnDifference'] = df['IntradayReturnDifference'] * (df['VolumeChange'] > 0)
+    
+    # Calculate Intraday Volatility
+    df['IntradayVolatility'] = (df['high'] - df['low']) / df['open']
+    df['5DayIntradayVolatility'] = df['IntradayVolatility'].rolling(window=5).mean()
+    
+    # Combine Indicators
+    df['FactorValue'] = (
+        df['IntradayHighLowSpread'] +
+        df['CloseToOpenReturn'] +
+        df['VolumeWeightedPrice'] +
+        df['CumulatedBreakoutStrength'] +
+        df['5DayVolumeAdjustedMomentum'] +
+        df['AdjustedPriceOscillation'] +
+        df

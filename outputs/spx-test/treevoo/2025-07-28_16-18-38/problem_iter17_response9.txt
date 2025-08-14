@@ -1,0 +1,48 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df):
+    # 1.1.1: Calculate the daily range (High - Low)
+    df['range'] = df['high'] - df['low']
+    
+    # 1.1.2: Determine if the stock closed higher or lower than it opened
+    df['close_open_diff'] = df['close'] - df['open']
+    df['direction'] = df['close_open_diff'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    
+    # 1.2.1: Calculate the percentage change in volume from one day to the next
+    df['volume_change_pct'] = df['volume'].pct_change()
+    
+    # 1.2.2: Identify days with significantly higher volume compared to a recent average
+    df['avg_volume_5d'] = df['volume'].rolling(window=5).mean()
+    df['volume_spike'] = (df['volume'] / df['avg_volume_5d']) - 1
+    
+    # 1.3.1.1: Calculate the average amount traded over a certain period (e.g., 30 days)
+    df['avg_amount_30d'] = df['amount'].rolling(window=30).mean()
+    df['amount_deviation'] = df['amount'] - df['avg_amount_30d']
+    
+    # 1.3.1.2: Create a ratio of the amount traded to the volume
+    df['amount_to_volume_ratio'] = df['amount'] / df['volume']
+    
+    # 1.4.1.1: Calculate the cumulative return over the last 5 days
+    df['returns_5d'] = df['close'].pct_change(periods=5)
+    
+    # 1.4.2.1: Calculate the distance between the current close and the 200-day moving average
+    df['sma_200d'] = df['close'].rolling(window=200).mean()
+    df['distance_to_sma_200d'] = df['close'] - df['sma_200d']
+    
+    # Combine all factors into a single alpha factor
+    df['alpha_factor'] = (df['range'] * df['direction'] + 
+                          df['volume_change_pct'] + 
+                          df['volume_spike'] + 
+                          df['amount_deviation'] + 
+                          df['amount_to_volume_ratio'] + 
+                          df['returns_5d'] - 
+                          df['distance_to_sma_200d'])
+    
+    # Return the alpha factor as a pandas Series
+    return df['alpha_factor']
+
+# Example usage:
+# df = pd.read_csv('your_data.csv', index_col='date', parse_dates=True)
+# alpha_factor_series = heuristics_v2(df)
+```

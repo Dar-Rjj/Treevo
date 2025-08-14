@@ -1,0 +1,61 @@
+```python
+import pandas as pd
+
+def heuristics_v2(df, lookback_period=20, n_days=10, m_days=5):
+    # Calculate High-Low Spread
+    high_low_spread = df['high'] - df['low']
+    
+    # Compute Volume-Weighted High-Low Spread
+    volume_weighted_high_low = (high_low_spread * df['volume']).rolling(window=lookback_period).sum()
+    
+    # Calculate Volume-Averaged Close Price
+    volume_averaged_close = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Ratio
+    volume_weighted_high_low_ratio = volume_weighted_high_low / volume_averaged_close
+    
+    # Calculate Momentum Component
+    current_volume_weighted_high_low = (high_low_spread * df['volume'])
+    past_average_volume_weighted_high_low = current_volume_weighted_high_low.rolling(window=n_days).mean()
+    momentum_component = current_volume_weighted_high_low - past_average_volume_weighted_high_low
+    
+    # Generate Preliminary Factor
+    preliminary_factor = volume_weighted_high_low_ratio + momentum_component
+    
+    # Incorporate Price Trend
+    close_price_moving_avg = df['close'].rolling(window=n_days).mean()
+    price_trend = df['close'] - close_price_moving_avg
+    factor_with_trend = preliminary_factor * price_trend
+    
+    # Calculate Volume-Average Price
+    volume_averaged_price = (df['close'] * df['volume']).rolling(window=lookback_period).sum() / df['volume'].rolling(window=lookback_period).sum()
+    
+    # Compute Volume-Averaged High-Low Spread Ratio
+    volume_averaged_high_low_ratio = high_low_spread / volume_averaged_price
+    
+    # Calculate Intraday Range Growth
+    today_high_low_range = high_low_spread
+    prev_high_low_range = high_low_spread.shift(1)
+    intraday_range_growth = (today_high_low_range - prev_high_low_range) / prev_high_low_range
+    
+    # Adjust for Volume Surge
+    n_day_volume_change = df['volume'] - df['volume'].shift(n_days)
+    m_day_volume_change = df['volume'] - df['volume'].shift(m_days)
+    combined_volume_change = n_day_volume_change + m_day_volume_change
+    volume_surge_adjustment = combined_volume_change.apply(lambda x: 0.8 * x if x < 0 else x)
+    
+    # Leverage Price and Volume for an Intensity Factor
+    intensity_factor = (df['close'] - df['close'].shift(1)) * df['volume']
+    smoothed_intensity_factor = intensity_factor.rolling(window=20).mean()
+    
+    # Synthesize Factors
+    composite_alpha_factor = (
+        volume_weighted_high_low_ratio +
+        factor_with_trend +
+        intraday_range_growth +
+        volume_surge_adjustment +
+        smoothed_intensity_factor
+    )
+    
+    return composite_alpha_factor
+```

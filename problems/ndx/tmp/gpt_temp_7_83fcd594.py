@@ -1,0 +1,31 @@
+import pandas as pd
+def heuristics_v2(df, N=20):
+    import pandas as pd
+    
+    # Calculate Close Price Change
+    df['Close_Change'] = df['close'].diff()
+    
+    # Sum over N periods for Price Momentum
+    df['Price_Momentum'] = df['Close_Change'].rolling(window=N).sum()
+    
+    # Calculate Volume Adjusted Momentum
+    avg_volume = df['volume'].rolling(window=N).mean()
+    df['Volume_Adjusted_Momentum'] = (df['Close_Change'] * (df['volume'] / avg_volume)).rolling(window=N).sum()
+    
+    # Calculate True Range
+    df['True_Range'] = df[['high', 'low', 'close']].apply(lambda x: max(x[0] - x[1], abs(x[0] - df['close'].shift(1)), abs(x[1] - df['close'].shift(1))), axis=1)
+    
+    # Sum over N periods for True Range
+    df['True_Range_Sum'] = df['True_Range'].rolling(window=N).sum()
+    
+    # Normalize Momentum by Volatility
+    df['Momentum_Volatility_Normalized'] = df['Volume_Adjusted_Momentum'] / df['True_Range_Sum']
+    
+    # Subtract Mean (over N periods) from Volume Adjusted Momentum
+    mean_momentum = df['Volume_Adjusted_Momentum'].rolling(window=N).mean()
+    df['Final_Factor'] = df['Momentum_Volatility_Normalized'] - mean_momentum
+    
+    return df['Final_Factor'].dropna()
+
+# Example usage:
+# factor_values = heuristics_v2(df)
