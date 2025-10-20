@@ -1,6 +1,7 @@
 import hydra
 import logging 
 import os
+import uuid
 from pathlib import Path
 import subprocess
 from utils.utils import init_client, print_hyperlink
@@ -29,18 +30,14 @@ def main(cfg):
     # add treevo(tree)
     if cfg.algorithm == "reevo":
         from reevo import ReEvo as LHH
-    elif cfg.algorithm == "treevo":
-        from treevo import TreEvo as LHH
-    elif cfg.algorithm == "treevoo":
-        from treevoo import TreEvoo as LHH
-    elif cfg.algorithm == "reevou":
-        from reevou import ReEvou as LHH
-    elif cfg.algorithm == "treevou":
-        from treevou import TreEvou as LHH
     elif cfg.algorithm == "ael":
         from baselines.ael.ga import AEL as LHH
     elif cfg.algorithm == "eoh":
         from baselines.eoh import EoH as LHH
+    elif cfg.algorithm == "TReEvo":
+        from TReEvo import TReEvo as LHH
+    elif cfg.algorithm == "TreEvo":
+        from TreEvo import TreEvo as LHH
     else:
         raise NotImplementedError
 
@@ -63,8 +60,12 @@ def main(cfg):
     test_script = f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/eval.py"
     test_script_stdout = "best_code_overall_val_stdout.txt"
     logging.info(f"Running validation script...: {print_hyperlink(test_script)}")
+
+    unique_filename = f"gpt_temp_best_result_{uuid.uuid4().hex[:8]}.py"
+    output_path = os.path.join(cfg.output_dir, unique_filename)
+
     with open(test_script_stdout, 'w') as stdout:
-        subprocess.run(["python", test_script, "-1", ROOT_DIR, "val"], stdout=stdout)
+        subprocess.run(["python", test_script, "-1", ROOT_DIR, "val", output_path], stdout=stdout)
     logging.info(f"Validation script finished. Results are saved in {print_hyperlink(test_script_stdout)}.")
     
     # Print the results

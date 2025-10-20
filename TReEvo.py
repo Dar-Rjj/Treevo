@@ -11,7 +11,7 @@ from utils.utils import *
 from utils.llm_client.base import BaseClient
 
 
-class TreEvo:
+class TReEvo:
     def __init__(
         self, 
         cfg: DictConfig, 

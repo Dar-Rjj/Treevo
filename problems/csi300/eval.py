@@ -12,7 +12,7 @@ from utils.utils import get_heuristic_name
 
 def load_heuristic_func(code_path):
     """
-    动态加载临时生成的个体代码文件（如 gpt_temp_xxxx.py），并获取启发式函数名。
+    动态加载临时生成的个体代码文件(如 gpt_temp_xxxx.py), 并获取启发式函数名。
     """
     spec = importlib.util.spec_from_file_location("gpt_module", code_path)
     module = importlib.util.module_from_spec(spec)
