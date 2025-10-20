@@ -1,8 +1,0 @@
-def heuristics_v2(df):
-    # Calculate Close-to-Open Return
-    close_to_open_return = df['open'] / df['close'].shift(1) - 1
-    
-    # Weight by Volume
-    volume_weighted_return = close_to_open_return * df['volume']
-    
-    return volume_weighted_return
