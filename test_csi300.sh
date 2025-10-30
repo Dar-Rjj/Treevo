@@ -10,6 +10,6 @@ python main.py \
     pop_size=10 \
     max_fe=200 \
     timeout=20 \
-    algorithm=TreEvo \
+    algorithm=TReEvo \
     llm_client=deepseek \
     llm_client.api_key='sk-fbe0a3a999b64026944664c70185c539'

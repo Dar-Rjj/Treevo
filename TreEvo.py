@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 import uuid
+import wandb
+from datetime import datetime
 from omegaconf import DictConfig
 
 from utils.utils import *
@@ -48,6 +50,21 @@ class TreEvo:
         self.best_obj_overall = None
         self.best_code_overall = None
         self.best_code_path_overall = None
+
+        self.best_test_obj = 0
+        self.wandb_log = 0
+
+        self.run = wandb.init(
+            project='TreEvo',
+            name=f'{self.cfg.problem.problem_name}_{self.cfg.algorithm}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+            config={
+                'algo': self.cfg.algorithm,
+                'evaluations': self.cfg.max_fe,
+                'llm_client': self.cfg.llm_client,
+                'pop_size': self.cfg.pop_size,
+            },
+            tags=[self.cfg.problem.problem_name, self.cfg.algorithm],
+        )
         
         self.init_prompt()
         self.init_population()
@@ -308,6 +325,31 @@ class TreEvo:
         block_until_running(individual["stdout_filepath"], log_status=True, iter_num=self.iteration, response_id=response_id)
         return process
     
+    def test_best_individual(self):
+        unique_filename = f"gpt_temp_{uuid.uuid4().hex[:8]}.py"
+        output_path = os.path.join(self.output_dir, unique_filename)
+        with open(output_path, 'w') as file:
+            file.writelines(self.best_code_overall + '\n')
+        test_script = f"{self.root_dir}/problems/{self.cfg.problem.problem_name}/eval.py"
+        test_script_stdout = "best_code_overall_test_stdout.txt"
+
+        with open(test_script_stdout, 'w') as stdout:
+            subprocess.run(["python", test_script, "-1", self.root_dir, "test", output_path], stdout=stdout)
+        block_until_running(test_script_stdout, log_status=True)
+        with open(test_script_stdout, 'r') as f:  # read the stdout file
+            stdout_str = f.read() 
+            traceback_msg = filter_traceback(stdout_str)
+            
+            # Store objective value for each individual
+            if traceback_msg == '': # If execution has no error
+                try:
+                    self.best_test_obj = float(stdout_str.split('\n')[-2]) if self.obj_type == "min" else -float(stdout_str.split('\n')[-2])
+                except:
+                    pass
+            else: # Otherwise, also provide execution traceback error feedback
+                pass
+
+        self.run.log({"best_train_obj": abs(self.best_obj_overall), "best_test_obj": abs(self.best_test_obj)})
     
     def update_iter(self) -> None:
         """
@@ -332,6 +374,11 @@ class TreEvo:
         logging.info(f"Best obj: {self.best_obj_overall}, Best Code Path: {print_hyperlink(best_path, self.best_code_path_overall)}")
         logging.info(f"Iteration {self.iteration} finished...")
         logging.info(f"Function Evals: {self.function_evals}")
+
+        if self.function_evals >= self.wandb_log and self.wandb_log <= self.cfg.max_fe:
+            self.test_best_individual()
+            self.wandb_log += self.cfg.pop_size
+        
         self.iteration += 1
         
     def rank_select(self, population: list[dict]) -> list[dict]:

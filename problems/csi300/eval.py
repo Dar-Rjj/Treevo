@@ -23,7 +23,7 @@ def load_heuristic_func(code_path):
     heuristics = getattr(module, heuristic_name)
     return heuristics
 
-def solve(market_data, heuristics):
+def solve(market_data, heuristics, mood):
     # 计算每只股票的因子值
     market_data['factor'] = market_data.groupby('stock_code').apply(lambda x: heuristics(x)).reset_index(level=0, drop=True)
 
@@ -31,8 +31,13 @@ def solve(market_data, heuristics):
     market_data['future_return_6d'] = market_data.groupby('stock_code')['close'].shift(-6) / market_data['close'] - 1
 
     # 取所有日期
-    start_date = pd.Timestamp('2021-01-01')
-    end_date = pd.Timestamp('2024-01-01')
+    if mood == 'train':
+        start_date, end_date = pd.Timestamp('2016-01-01'), pd.Timestamp('2020-01-01')
+    elif mood == 'val':
+        start_date, end_date = pd.Timestamp('2020-01-01'), pd.Timestamp('2021-01-01')
+    else:
+        start_date, end_date = pd.Timestamp('2021-01-01'), pd.Timestamp('2024-01-01')
+    
     all_dates = market_data.index.get_level_values('date').unique()
     all_dates = all_dates[(all_dates >= start_date) & (all_dates <= end_date)]
     ic_values = []
@@ -41,8 +46,7 @@ def solve(market_data, heuristics):
         daily = market_data.xs(date, level='date')
         factors = daily['factor']
         returns = daily['future_return_6d']
-        mask = factors.notna() & returns.notna()
-        # mask = factors.notna() & returns.notna() & np.isfinite(factors) & np.isfinite(returns)
+        mask = factors.notna() & returns.notna() & np.isfinite(factors) & np.isfinite(returns)
         if mask.sum() >= 2:
             ic, _ = pearsonr(factors[mask], returns[mask])
             if not np.isnan(ic):
@@ -57,17 +61,21 @@ if __name__ == "__main__":
     root_dir = sys.argv[2]
     mood = sys.argv[3]
     code_path = sys.argv[4]
-    assert mood in ['train', 'val']
+    assert mood in ['train', 'val', 'test']
     
     basepath = os.path.dirname(__file__)
-    dataset_path = os.path.join(basepath, "all_stock_data.csv")
+    dataset_path = os.path.join(basepath, f"{mood}_data.csv")
 
     market_data = pd.read_csv(dataset_path, parse_dates=['date'])
     market_data.set_index(['stock_code', 'date'], inplace=True)
     market_data.sort_index(inplace=True)
 
-    heuristics = load_heuristic_func(code_path)
-    mean_ic = solve(market_data, heuristics)
+    try:
+        heuristics = load_heuristic_func(code_path)
+        mean_ic = solve(market_data, heuristics, mood)
+    except Exception as e:
+        mean_ic = 0
+        logging.error(f"Error in evaluating heuristics from {code_path}: {e}")
 
     os.remove(code_path)
     print("[*] Average:")

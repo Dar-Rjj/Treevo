@@ -10,6 +10,6 @@ python main.py \
     pop_size=10 \
     max_fe=200 \
     timeout=20 \
-    algorithm=treevo \
-    llm_client=qwen3_api \
-    llm_client.api_key='sk-fb4917a77b7d4a2b88369204d7435aba'
+    algorithm=TreEvo \
+    llm_client=deepseek \
+    llm_client.api_key='sk-fbe0a3a999b64026944664c70185c539'
