@@ -62,14 +62,14 @@ class InterfaceEC():
     #     parents = random.choices(pop, weights=probs, k=m)
     #     return parents
 
-    def population_generation(self):
+    def population_generation(self, object_n):
         
         n_create = 2
         
         population = []
 
         for i in range(n_create):
-            _,pop = self.get_algorithm([],'i1')
+            _,pop = self.get_algorithm([], 'i1', 'train', object_n)
             for p in pop:
                 population.append(p)
              
@@ -160,13 +160,13 @@ class InterfaceEC():
         return p, offspring
 
     
-    def get_algorithm(self, pop, operator):
+    def get_algorithm(self, pop, operator, mood, object_n):
         offspring_list = []
         for _ in range(self.pop_size):
             offspring = self.get_offspring(pop, operator)
             offspring_list.append(offspring)
             
-        objs = self.interface_eval.batch_evaluate([offspring['code'] for _, offspring in offspring_list], 0)
+        objs = self.interface_eval.batch_evaluate([offspring['code'] for _, offspring in offspring_list], 0, mood, object_n)
         for i, (p, offspring) in enumerate(offspring_list):
             offspring['objective'] = np.round(objs[i], 5)
         

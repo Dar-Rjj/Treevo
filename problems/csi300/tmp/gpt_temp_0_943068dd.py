@@ -1,0 +1,3 @@
+import pandas as pd
+def heuristics_v2(df: pd.DataFrame) -> pd.Series:
+    return (df['close'] - df['low']) / (df['high'] - df['low'] + 1e-7)

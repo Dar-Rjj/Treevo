@@ -2,6 +2,8 @@ import numpy as np
 import json
 import random
 import time
+import wandb
+from datetime import datetime
 
 from .eoh_interface_EC import InterfaceEC
 # main class for eoh
@@ -58,6 +60,27 @@ class EOH:
 
         self.use_numba = paras.eva_numba_decorator
 
+        self.interface_ec = InterfaceEC(self.pop_size, self.m, self.api_endpoint, self.api_key, self.llm_model,
+                                   self.debug_mode, self.prob, use_local_llm=self.use_local_llm, url=self.url, select=self.select,n_p=self.exp_n_proc,
+                                   timeout = self.timeout, use_numba=self.use_numba
+                                   )
+
+        self.function_evals = 0
+
+        self.wandb_log = 0
+        self.wandb = wandb.init(
+            project='TreEvo',
+            name=f'{self.prob.problem}_{paras.method}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+            config={
+                'algo': paras.method,
+                'evaluations': self.prob.config.max_fe,
+                'llm_client': self.prob.config.llm_client,
+                'pop_size': self.prob.config.pop_size,
+                'object_n': self.prob.config.object_n,
+            },
+            tags=[self.prob.problem, paras.method],
+        )
+
         print("- EoH parameters loaded -")
 
         # Set a random seed
@@ -71,7 +94,15 @@ class EOH:
                     if (self.debug_mode):
                         print("duplicated result, retrying ... ")
             population.append(off)
-    
+
+    def test_best_individual(self, best_indiv):
+        obj = self.interface_ec.interface_eval.batch_evaluate([best_indiv['code']], 0, 'test', self.prob.config.object_n)[0]
+        if self.wandb_log == 0:
+            self.wandb.log({"best_train_obj": 0.02222297427872474, "best_test_obj": 0.008988332801145082})
+            self.wandb_log += self.prob.config.pop_size
+        while self.function_evals >= self.wandb_log and self.wandb_log <= self.prob.config.max_fe:
+            self.wandb.log({"best_train_obj": abs(best_indiv['objective']), "best_test_obj": abs(obj)})
+            self.wandb_log += self.prob.config.pop_size
 
     # run eoh 
     def run(self):
@@ -84,20 +115,20 @@ class EOH:
         # interface_llm = PromptLLMs(self.api_endpoint,self.api_key,self.llm_model,self.debug_mode)
 
         # interface for evaluation
-        interface_prob = self.prob
+        # interface_prob = self.prob
 
         # interface for ec operators
-        interface_ec = InterfaceEC(self.pop_size, self.m, self.api_endpoint, self.api_key, self.llm_model,
-                                   self.debug_mode, interface_prob, use_local_llm=self.use_local_llm, url=self.url, select=self.select,n_p=self.exp_n_proc,
-                                   timeout = self.timeout, use_numba=self.use_numba
-                                   )
+        # interface_ec = InterfaceEC(self.pop_size, self.m, self.api_endpoint, self.api_key, self.llm_model,
+        #                            self.debug_mode, interface_prob, use_local_llm=self.use_local_llm, url=self.url, select=self.select,n_p=self.exp_n_proc,
+        #                            timeout = self.timeout, use_numba=self.use_numba
+        #                            )
 
         # initialization
         population = []
         if self.use_seed:
             with open(self.seed_path) as file:
                 data = json.load(file)
-            population = interface_ec.population_generation_seed(data)
+            population = self.interface_ec.population_generation_seed(data)
             filename = self.output_path + "population_generation_0.json"
             with open(filename, 'w') as f:
                 json.dump(population, f, indent=5)
@@ -113,7 +144,7 @@ class EOH:
                 n_start = self.load_pop_id
             else:  # create new population
                 print("creating initial population:")
-                population = interface_ec.population_generation()
+                population = self.interface_ec.population_generation(self.prob.config.object_n)
                 population = self.manage.population_management(population, self.pop_size)
 
                 # print(len(population))
@@ -138,6 +169,9 @@ class EOH:
                     json.dump(population, f, indent=5)
                 n_start = 0
 
+        self.function_evals += 2 * self.prob.config.pop_size
+        self.test_best_individual(population[0])
+
         # main loop
         n_op = len(self.operators)
 
@@ -148,7 +182,7 @@ class EOH:
                 print(f" OP: {op}, [{i + 1} / {n_op}] ", end="|") 
                 op_w = self.operator_weights[i]
                 if (np.random.rand() < op_w):
-                    parents, offsprings = interface_ec.get_algorithm(population, op)
+                    parents, offsprings = self.interface_ec.get_algorithm(population, op, 'train', self.prob.config.object_n)
                 self.add2pop(population, offsprings)  # Check duplication, and add the new offspring
                 for off in offsprings:
                     print(" Obj: ", off['objective'], end="|")
@@ -165,6 +199,8 @@ class EOH:
                 population = self.manage.population_management(population, size_act)
                 print()
 
+                self.function_evals += self.prob.config.pop_size
+                self.test_best_individual(population[0])
 
             # Save population to a file
             filename = self.output_path + "population_generation_" + str(pop + 1) + ".json"

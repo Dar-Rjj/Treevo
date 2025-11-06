@@ -50,8 +50,9 @@ class ReEvo:
 
         self.best_test_obj = 0
         self.wandb_log = 0
+        self.object_n = cfg.object_n
 
-        self.run = wandb.init(
+        self.wandb = wandb.init(
             project='TreEvo',
             name=f'{self.cfg.problem.problem_name}_{self.cfg.algorithm}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
             config={
@@ -59,6 +60,7 @@ class ReEvo:
                 'evaluations': self.cfg.max_fe,
                 'llm_client': self.cfg.llm_client,
                 'pop_size': self.cfg.pop_size,
+                'object_n': self.cfg.object_n,
             },
             tags=[self.cfg.problem.problem_name, self.cfg.algorithm],
         )
@@ -279,7 +281,7 @@ class ReEvo:
         # Execute the python file with flags
         with open(individual["stdout_filepath"], 'w') as f:
             eval_file_path = f'{self.root_dir}/problems/{self.problem}/eval.py' if self.problem_type != "black_box" else f'{self.root_dir}/problems/{self.problem}/eval_black_box.py' 
-            process = subprocess.Popen(['python', '-u', eval_file_path, f'{self.problem_size}', self.root_dir, "train", output_path],
+            process = subprocess.Popen(['python', '-u', eval_file_path, f'{self.problem_size}', self.root_dir, "train", output_path, f'{self.object_n}'],
                                         stdout=f, stderr=f)
 
         block_until_running(individual["stdout_filepath"], log_status=True, iter_num=self.iteration, response_id=response_id)
@@ -294,7 +296,7 @@ class ReEvo:
         test_script_stdout = "best_code_overall_test_stdout.txt"
 
         with open(test_script_stdout, 'w') as stdout:
-            subprocess.run(["python", test_script, "-1", self.root_dir, "test", output_path], stdout=stdout)
+            subprocess.run(["python", test_script, "-1", self.root_dir, "test", output_path, f'{self.object_n}'], stdout=stdout)
         block_until_running(test_script_stdout, log_status=True)
         with open(test_script_stdout, 'r') as f:  # read the stdout file
             stdout_str = f.read() 
@@ -309,7 +311,7 @@ class ReEvo:
             else: # Otherwise, also provide execution traceback error feedback
                 pass
 
-        self.run.log({"best_train_obj": abs(self.best_obj_overall), "best_test_obj": abs(self.best_test_obj)})
+        self.wandb.log({"best_train_obj": abs(self.best_obj_overall), "best_test_obj": abs(self.best_test_obj)})
     
     def update_iter(self) -> None:
         """

@@ -55,17 +55,17 @@ def main(cfg):
     logging.info(f"Best Code Path Overall: {print_hyperlink(best_path, best_code_path_overall)}")
     
     # Run validation and redirect stdout to a file "best_code_overall_stdout.txt"
-    with open(f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/gpt.py", 'w') as file:
+    unique_filename = f"gpt_temp_best_result_{uuid.uuid4().hex[:8]}.py"
+    output_path = os.path.join(f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/tmp", unique_filename)
+
+    with open(output_path, 'w') as file:
         file.writelines(best_code_overall + '\n')
     test_script = f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/eval.py"
-    test_script_stdout = "best_code_overall_val_stdout.txt"
+    test_script_stdout = "best_code_overall_test_stdout.txt"
     logging.info(f"Running validation script...: {print_hyperlink(test_script)}")
 
-    unique_filename = f"gpt_temp_best_result_{uuid.uuid4().hex[:8]}.py"
-    output_path = os.path.join(cfg.output_dir, unique_filename)
-
     with open(test_script_stdout, 'w') as stdout:
-        subprocess.run(["python", test_script, "-1", ROOT_DIR, "val", output_path], stdout=stdout)
+        subprocess.run(["python", test_script, "-1", ROOT_DIR, "test", output_path, f'{cfg.object_n}'], stdout=stdout)
     logging.info(f"Validation script finished. Results are saved in {print_hyperlink(test_script_stdout)}.")
     
     # Print the results

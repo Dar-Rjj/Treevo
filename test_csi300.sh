@@ -9,6 +9,7 @@ python main.py \
     init_pop_size=10 \
     pop_size=10 \
     max_fe=200 \
+    object_n=5 \
     timeout=20 \
     algorithm=TReEvo \
     llm_client=deepseek \
