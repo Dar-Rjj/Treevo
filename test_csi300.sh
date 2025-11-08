@@ -11,6 +11,6 @@ python main.py \
     max_fe=200 \
     object_n=5 \
     timeout=20 \
-    algorithm=TReEvo \
+    algorithm=TreEvo \
     llm_client=deepseek \
     llm_client.api_key='sk-fbe0a3a999b64026944664c70185c539'
